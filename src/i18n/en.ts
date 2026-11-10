@@ -52,7 +52,8 @@ export const en: Messages = {
     eyebrow: 'Lesson 01',
     title: 'Your first Lean proof',
     lead: 'Start from zero: evaluate an expression, read a proposition as a type, then prove it by induction. Every snippet can be sent straight to the editor.',
-    openInEditor: 'Open in the editor',
+    openInEditor: 'Load in editor',
+    editorHint: 'The panel on the right is the real editor. Start Lean, then load any snippet into it and run it while you read.',
     sections: [
       {
         heading: '1. Ask Lean a question',
@@ -105,6 +106,7 @@ export const en: Messages = {
     diagnosticsPlaceholder: 'Diagnostics appear after Lean starts',
     logTitle: 'Log',
     footer: 'A real Lean LSP in the browser · Init only, no Std / Lean / Lake / Mathlib · Chromium first',
+    openFull: 'Open the full playground',
     statusIdle: 'Not started',
     statusLoading: 'Loading runtime… (about 143 MB on first run)',
     statusStarting: 'Starting the LSP…',

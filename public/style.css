@@ -249,6 +249,28 @@ body[data-page="playground"] .page-main {
 
 /* ---------- 课程 ---------- */
 
+.lesson-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  gap: clamp(20px, 3vw, 40px);
+  align-items: start;
+}
+
+.lesson-aside {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lesson-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .lesson { max-width: 780px; }
 
 .lesson-header h1 {
@@ -486,6 +508,57 @@ body[data-page="playground"] .page-main {
   word-break: break-word;
 }
 
+/* ---------- 课程内嵌编辑器 ---------- */
+
+.lean-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.lean-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lean-panel-title { display: flex; flex-direction: column; }
+.lean-panel-title .eyebrow { margin: 0; font-size: 10px; }
+.lean-panel-title strong { font-size: 14px; }
+
+.lean-panel .workspace {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 10px;
+  flex: none;
+}
+
+.lean-panel .editor-pane {
+  height: 340px;
+  min-height: 0;
+}
+
+.lean-panel .side {
+  height: auto;
+  gap: 10px;
+}
+
+.lean-panel .panel { max-height: 150px; }
+.lean-panel .goal { max-height: 88px; }
+.lean-panel .log { max-height: 110px; }
+
+.lean-panel-foot {
+  padding: 6px 14px 12px;
+  text-align: right;
+  font-size: 12px;
+}
+.lean-panel-foot a { color: var(--muted); text-decoration: none; }
+.lean-panel-foot a:hover { color: var(--accent); }
+
 /* ---------- 页脚 ---------- */
 
 .site-footer {
@@ -507,11 +580,17 @@ body[data-page="playground"] .site-footer { max-width: none; }
 
 /* ---------- 响应式 ---------- */
 
+@media (max-width: 960px) {
+  .lesson-layout { grid-template-columns: 1fr; }
+  .lesson-aside { position: static; }
+}
+
 @media (max-width: 900px) {
   .site-header-inner { flex-wrap: wrap; gap: 10px; }
   .site-nav { order: 3; width: 100%; margin-left: 0; }
   .workspace { grid-template-columns: 1fr; }
   .editor-pane { height: 60vh; min-height: 420px; }
+  .lean-panel .editor-pane { height: 300px; min-height: 0; }
   .side { height: auto; }
   .panel { max-height: 320px; }
   .playground-topbar { align-items: flex-start; flex-direction: column; }

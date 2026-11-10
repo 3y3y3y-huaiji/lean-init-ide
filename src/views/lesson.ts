@@ -1,3 +1,4 @@
+import { createLeanPanel } from '../components/lean-panel';
 import { messagesFor, type Locale } from '../i18n';
 import { escapeHtml } from './html';
 
@@ -28,36 +29,44 @@ export const renderLesson = (locale: Locale): string => {
     .join('');
 
   return `
-    <article class="lesson">
-      <header class="lesson-header">
-        <p class="eyebrow">${t.eyebrow}</p>
-        <h1>${t.title}</h1>
-        <p class="lesson-lead">${t.lead}</p>
-      </header>
-      ${sections}
-      <section class="lesson-exercise">
-        <h2>${t.exerciseTitle}</h2>
-        <p>${t.exerciseBody}</p>
-        <button class="button" type="button" data-code-index="${codeIndex}">${t.exerciseCta}</button>
-      </section>
-    </article>
+    <div class="lesson-layout">
+      <article class="lesson">
+        <header class="lesson-header">
+          <p class="eyebrow">${t.eyebrow}</p>
+          <h1>${t.title}</h1>
+          <p class="lesson-lead">${t.lead}</p>
+        </header>
+        ${sections}
+        <section class="lesson-exercise">
+          <h2>${t.exerciseTitle}</h2>
+          <p>${t.exerciseBody}</p>
+          <button class="button" type="button" data-code-index="${codeIndex}">${t.exerciseCta}</button>
+        </section>
+      </article>
+      <aside class="lesson-aside">
+        <p class="lesson-hint">${t.editorHint}</p>
+        <div class="lesson-panel" data-role="lean-panel"></div>
+      </aside>
+    </div>
   `;
 };
 
 export const bindLesson = (root: HTMLElement, locale: Locale) => {
   const t = messagesFor(locale).lesson;
   const codes = [...t.sections.flatMap((section) => (section.code ? [section.code] : [])), t.starter];
+  const host = root.querySelector<HTMLElement>('[data-role="lean-panel"]');
+  if (!host) return;
+
+  const panel = createLeanPanel(host, { variant: 'compact', code: codes[0] ?? t.starter, locale });
+  const narrow = window.matchMedia('(max-width: 960px)');
 
   for (const button of root.querySelectorAll<HTMLButtonElement>('[data-code-index]')) {
     button.addEventListener('click', () => {
       const code = codes[Number(button.dataset.codeIndex)];
       if (code === undefined) return;
-      try {
-        sessionStorage.setItem('lean:code', code);
-      } catch {
-        // 存储不可用时仍然跳转，只是不会带上示例代码。
-      }
-      location.href = `/${locale}/playground`;
+      panel.setCode(code);
+      if (narrow.matches) host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      panel.focus();
     });
   }
 };

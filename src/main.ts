@@ -53,7 +53,7 @@ const renderPage = (page: Page, locale: Locale): string => {
     case 'lesson':
       return renderLesson(locale);
     case 'playground':
-      return renderPlayground(locale);
+      return renderPlayground();
     default:
       return renderNotFound(locale);
   }

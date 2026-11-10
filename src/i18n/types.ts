@@ -40,6 +40,7 @@ export type Messages = {
     title: string;
     lead: string;
     openInEditor: string;
+    editorHint: string;
     sections: LessonSection[];
     exerciseTitle: string;
     exerciseBody: string;
@@ -58,6 +59,7 @@ export type Messages = {
     diagnosticsPlaceholder: string;
     logTitle: string;
     footer: string;
+    openFull: string;
     statusIdle: string;
     statusLoading: string;
     statusStarting: string;

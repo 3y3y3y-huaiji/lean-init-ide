@@ -52,7 +52,8 @@ export const zh: Messages = {
     eyebrow: '入门课 01',
     title: '第一个 Lean 证明',
     lead: '这一课从零开始：先看 Lean 怎么求值，再读懂一条命题，最后用归纳法把它证出来。每段代码都可以直接送进编辑器运行。',
-    openInEditor: '在编辑器中打开',
+    openInEditor: '载入编辑器',
+    editorHint: '右侧是真实编辑器：先点「启动 Lean」，再点任意代码段的「载入编辑器」，就能边读边跑。',
     sections: [
       {
         heading: '1. 先让 Lean 说句话',
@@ -103,6 +104,7 @@ export const zh: Messages = {
     diagnosticsPlaceholder: '启动 Lean 后显示诊断',
     logTitle: '日志',
     footer: '浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先',
+    openFull: '打开完整编辑器',
     statusIdle: '未启动',
     statusLoading: '加载运行时…（首次约 143MB）',
     statusStarting: '启动 LSP…',

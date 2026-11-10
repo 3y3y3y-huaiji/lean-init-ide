@@ -29,7 +29,8 @@ export type LeanPanelOptions = {
 };
 
 export type LeanPanel = {
-  setCode: (code: string) => void;
+  setCode: (code: string, options?: { focus?: boolean }) => void;
+  getCode: () => string;
   focus: () => void;
 };
 
@@ -563,12 +564,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   });
 
   return {
-    setCode: (next: string) => {
+    setCode: (next: string, options?: { focus?: boolean }) => {
       model.setValue(next);
       editor.setPosition({ lineNumber: 1, column: 1 });
       editor.revealLine(1);
-      editor.focus();
+      if (options?.focus ?? true) editor.focus();
     },
+    getCode: () => model.getValue(),
     focus: () => editor.focus(),
   };
 };

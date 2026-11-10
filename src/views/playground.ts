@@ -1,5 +1,6 @@
 import { createLeanPanel } from '../components/lean-panel';
 import type { Locale } from '../i18n';
+import { getAutoStart } from '../settings';
 
 const DEFAULT_CODE = `def bad : Nat := true
 
@@ -16,5 +17,5 @@ export const renderPlayground = (): string => '<div class="playground-page"></di
 export const mountPlayground = (root: HTMLElement, locale: Locale) => {
   const host = root.querySelector<HTMLElement>('.playground-page');
   if (!host) return;
-  createLeanPanel(host, { variant: 'full', code: DEFAULT_CODE, locale, autoStart: true });
+  createLeanPanel(host, { variant: 'full', code: DEFAULT_CODE, locale, autoStart: getAutoStart() });
 };

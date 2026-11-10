@@ -16,6 +16,12 @@ export const en: Messages = {
   language: {
     label: 'Language',
   },
+  settings: {
+    label: 'Settings',
+    title: 'Preferences',
+    autoStart: 'Download Lean automatically when the editor opens',
+    autoStartHint: 'When off you start Lean yourself. The first download is about 143 MB and stays cached in this browser.',
+  },
   home: {
     eyebrow: 'Lean 4 · WebAssembly · LSP in the browser',
     title: 'Learn Lean 4 in your browser',

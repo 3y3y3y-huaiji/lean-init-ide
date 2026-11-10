@@ -57,16 +57,57 @@ export const bindLesson = (root: HTMLElement, locale: Locale) => {
   const host = root.querySelector<HTMLElement>('[data-role="lean-panel"]');
   if (!host) return;
 
-  const panel = createLeanPanel(host, { variant: 'compact', code: codes[0] ?? t.starter, locale });
+  const initialCode = codes[0] ?? t.starter;
+  const panel = createLeanPanel(host, { variant: 'compact', code: initialCode, locale });
   const narrow = window.matchMedia('(max-width: 960px)');
+
+  // 记录最近一次自动载入的代码：只有用户没改过内容时，滚动才继续跟随。
+  let autoLoaded = initialCode;
+
+  const blocks = [...root.querySelectorAll<HTMLElement>('.code-block')];
+  const highlight = (index: number) => {
+    for (const block of blocks) {
+      const button = block.querySelector<HTMLButtonElement>('[data-code-index]');
+      block.classList.toggle('is-loaded', button?.dataset.codeIndex === String(index));
+    }
+  };
+
+  const load = (index: number, options?: { focus?: boolean }) => {
+    const code = codes[index];
+    if (code === undefined) return;
+    panel.setCode(code, { focus: options?.focus ?? true });
+    autoLoaded = code;
+    highlight(index);
+  };
+
+  highlight(0);
 
   for (const button of root.querySelectorAll<HTMLButtonElement>('[data-code-index]')) {
     button.addEventListener('click', () => {
-      const code = codes[Number(button.dataset.codeIndex)];
-      if (code === undefined) return;
-      panel.setCode(code);
+      load(Number(button.dataset.codeIndex));
       if (narrow.matches) host.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      panel.focus();
     });
   }
+
+  // 跟随阅读：滚动到某一节时，如果编辑器内容仍是上次自动载入的代码（用户没改过），
+  // 就把这一节的代码换进去，让左右两边始终对得上。
+  const sections = [...root.querySelectorAll<HTMLElement>('.lesson-section')];
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!visible) return;
+      const button = visible.target.querySelector<HTMLButtonElement>('[data-code-index]');
+      if (!button) return;
+      const index = Number(button.dataset.codeIndex);
+      const code = codes[index];
+      if (code === undefined || code === autoLoaded) return;
+      if (panel.getCode() !== autoLoaded) return;
+      load(index, { focus: false });
+    },
+    { rootMargin: '-20% 0px -55% 0px' },
+  );
+
+  for (const section of sections) observer.observe(section);
 };

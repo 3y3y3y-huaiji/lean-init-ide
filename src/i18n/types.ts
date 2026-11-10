@@ -21,6 +21,12 @@ export type Messages = {
   language: {
     label: string;
   };
+  settings: {
+    label: string;
+    title: string;
+    autoStart: string;
+    autoStartHint: string;
+  };
   home: {
     eyebrow: string;
     title: string;

@@ -16,6 +16,12 @@ export const zh: Messages = {
   language: {
     label: '语言',
   },
+  settings: {
+    label: '设置',
+    title: '偏好设置',
+    autoStart: '打开编辑器页时自动下载 Lean',
+    autoStartHint: '关闭后需要手动点「启动 Lean」。首次下载约 143MB，只在你的浏览器里缓存。',
+  },
   home: {
     eyebrow: 'Lean 4 · WebAssembly · 浏览器内 LSP',
     title: '在浏览器里学 Lean 4',

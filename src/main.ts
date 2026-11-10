@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor/editor/editor.main';
 import editorWorker from '../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
+import { clearRuntimeAssetCache } from '@wasm-idle/core';
 import { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
 import { createMessageConnection, type MessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
@@ -67,6 +68,40 @@ const setStatus = (text: string, kind: 'idle' | 'loading' | 'ready' | 'error' = 
 const setProgress = (ratio: number | null) => {
   barEl.style.width = ratio === null ? '0%' : `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
 };
+
+// Cloudflare Pages 不支持 Range；Service Worker 从 GitHub raw 分片下载 Lean 资产。
+const registerServiceWorker = async () => {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+    await navigator.serviceWorker.ready;
+    log('Service Worker 就绪，Lean 资产走 GitHub 分片下载');
+  } catch (error) {
+    log(`Service Worker 注册失败，回退 Pages：${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+void registerServiceWorker();
+
+navigator.serviceWorker?.addEventListener('message', (event) => {
+  const data = event.data as {
+    type?: string;
+    name?: string;
+    loaded?: number;
+    total?: number;
+    message?: string;
+  };
+  if (data?.type === 'lean-asset-fallback' && data.name) {
+    log(`分片回退 ${data.name}：${data.message ?? 'unknown error'}`);
+    return;
+  }
+  if (data?.type !== 'lean-asset-progress' || !data.name || !data.loaded || !data.total) return;
+  setStatus(
+    `分片下载 ${data.name} ${(data.loaded / 1048576).toFixed(1)}/${(data.total / 1048576).toFixed(1)}MB`,
+    'loading',
+  );
+  setProgress(data.loaded / data.total);
+});
 
 type LspDiagnostic = {
   range: {
@@ -314,6 +349,18 @@ const start = async () => {
   setStatus('加载运行时…（首次约 143MB）', 'loading');
   setProgress(0);
   const startedAt = performance.now();
+
+  if ('serviceWorker' in navigator) {
+    await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<void>((resolve) => window.setTimeout(resolve, 2000)),
+    ]);
+  }
+
+  if (new URLSearchParams(location.search).has('fresh')) {
+    await clearRuntimeAssetCache();
+    log('已清空 Lean 资产缓存（fresh=1）');
+  }
 
   try {
     server = await getLean4LanguageServer({

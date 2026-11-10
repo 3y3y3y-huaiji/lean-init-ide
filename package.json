@@ -13,6 +13,7 @@
     "fetch:assets": "node scripts/fetch-assets.mjs"
   },
   "dependencies": {
+    "@wasm-idle/core": "^1.3.0",
     "@wasm-idle/lsp": "1.3.0",
     "monaco-editor": "^0.57.0",
     "vscode-jsonrpc": "^10.0.0"

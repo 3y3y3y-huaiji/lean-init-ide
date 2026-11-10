@@ -1,5 +1,7 @@
 // editor.api 只带编辑器内核，不注册 80 多种内置语言，主包和内存都小得多。
 import * as monaco from 'monaco-editor/editor/editor.api';
+// 补全、悬停、查找等交互能力需要单独引入，见 monaco-contrib.ts。
+import '../monaco-contrib';
 import editorWorker from '../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
 import type { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
 import { createMessageConnection, type MessageConnection } from 'vscode-jsonrpc/browser';
@@ -539,6 +541,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   startEl.addEventListener('click', start);
+
+  // 仅开发环境：方便在控制台或自动化测试里检查语言注册与补全 UI。
+  if (import.meta.env.DEV) {
+    Object.assign(window as unknown as Record<string, unknown>, { __monaco: monaco, __editor: editor });
+  }
 
   if (autoStart) {
     // 直接排一个短定时器：比 IntersectionObserver 更确定，也让下载尽早开始。

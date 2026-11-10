@@ -12,10 +12,10 @@ theorem add_comm (a b : Nat) : a + b = b + a := by
 #check Nat.add
 `;
 
-export const renderPlayground = (): string => '<div class="playground-page"></div>';
+export const renderPlayground = (): string => '<div data-role="playground"></div>';
 
 export const mountPlayground = (root: HTMLElement, locale: Locale) => {
-  const host = root.querySelector<HTMLElement>('.playground-page');
+  const host = root.querySelector<HTMLElement>('[data-role="playground"]');
   if (!host) return;
   createLeanPanel(host, { variant: 'full', code: DEFAULT_CODE, locale, autoStart: getAutoStart() });
 };

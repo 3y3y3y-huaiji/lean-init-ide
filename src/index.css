@@ -1,0 +1,116 @@
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@source './**/*.ts';
+
+:root {
+  color-scheme: dark;
+  --bg: #0d1016;
+  --bg-elevated: #12161f;
+  --panel: #151a24;
+  --panel-soft: #10141c;
+  --line: #262d3a;
+  --line-strong: #354054;
+  --fg: #e9ecf2;
+  --muted: #98a0b0;
+  --accent: #7c9cff;
+  --accent-soft: rgba(124, 156, 255, 0.12);
+  --accent-contrast: #0b1020;
+  --ok: #67d391;
+  --warn: #f2c14e;
+  --err: #ff8a8a;
+  --editor-bg: #1e1e1e;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f7fb;
+  --bg-elevated: #ffffff;
+  --panel: #ffffff;
+  --panel-soft: #f0f2f8;
+  --line: #dfe3ec;
+  --line-strong: #c3cad9;
+  --fg: #1a1f2b;
+  --muted: #5c6575;
+  --accent: #3b5bdb;
+  --accent-soft: rgba(59, 91, 219, 0.1);
+  --accent-contrast: #ffffff;
+  --ok: #1f8a55;
+  --warn: #a86800;
+  --err: #c03434;
+  --editor-bg: #ffffff;
+  --shadow: 0 18px 40px rgba(21, 32, 64, 0.12);
+}
+
+/*
+ * 设计变量到 Tailwind 语义色的映射：主题切换仍由 data-theme 驱动，
+ * 因此组件里不需要写任何 dark: 变体。
+ */
+@theme {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-panel: var(--panel);
+  --color-panel-soft: var(--panel-soft);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-editor-bg: var(--editor-bg);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/*
+ * 只保留页面的最小重置。刻意不引入 preflight：Monaco 会注入自己的全局样式，
+ * Tailwind 的基础重置会和它打架。
+ */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3 {
+    line-height: 1.25;
+  }
+
+  a {
+    color: var(--accent);
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* 页面的左右留白在各处重复出现，抽成工具类而不是散落的 clamp()。 */
+@utility gutter-x {
+  padding-inline: clamp(16px, 4vw, 40px);
+}

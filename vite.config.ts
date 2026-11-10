@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 const headers = {
@@ -6,6 +7,7 @@ const headers = {
 };
 
 export default defineConfig({
+  plugins: [tailwindcss()],
   server: { headers },
   preview: { headers },
 });

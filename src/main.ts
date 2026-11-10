@@ -1,3 +1,5 @@
+import './index.css';
+import { buttonClass } from './components/ui';
 import { detectLocale, isLocale, messagesFor, type Locale } from './i18n';
 import { bindLayout, renderLayout } from './views/layout';
 import { renderHome } from './views/home';
@@ -36,10 +38,10 @@ const parseRoute = (): Route | null => {
 const renderNotFound = (locale: Locale): string => {
   const t = messagesFor(locale).notFound;
   return `
-    <section class="not-found">
-      <h1>${t.title}</h1>
-      <p>${t.body}</p>
-      <a class="button" href="/${locale}/">${t.cta}</a>
+    <section class="max-w-[560px] py-12">
+      <h1 class="mt-0 mb-3">${t.title}</h1>
+      <p class="mt-0 mb-5 text-muted">${t.body}</p>
+      <a class="${buttonClass}" href="/${locale}/">${t.cta}</a>
     </section>
   `;
 };

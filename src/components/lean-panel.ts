@@ -44,23 +44,71 @@ type LspDiagnostic = {
   source?: string;
 };
 
+const panelClass = (compact: boolean) =>
+  `flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-panel ${
+    compact ? 'max-h-[150px]' : 'max-[900px]:max-h-[320px]'
+  }`;
+
+const panelHeadingClass =
+  'm-0 flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px] text-xs font-[650] uppercase tracking-[0.07em] text-muted';
+
+const pillClass =
+  'inline-flex min-h-8 items-center whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
+
+const mutedItemClass = 'mb-1.5 px-2 py-2.5 text-[13px] text-muted';
+
+const diagnosticClass =
+  'grid w-full [font:inherit] cursor-pointer grid-cols-[auto_1fr] gap-2.5 rounded-lg border border-line bg-transparent px-2.5 py-[9px] text-left text-fg hover:border-line-strong hover:bg-panel-soft';
+
+const diagnosticLocationClass = 'whitespace-nowrap font-mono text-xs leading-normal text-err';
+
+const diagnosticMessageClass = 'text-[13px] leading-normal';
+
 const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compact: boolean) => `
-  <div class="workspace${compact ? ' workspace--compact' : ''}">
-    <section class="editor-pane"><div class="editor-mount"></div></section>
-    <aside class="side">
-      <section class="panel goal-panel">
-        <h2>${t.goalTitle}</h2>
-        <pre class="goal">${t.goalPlaceholder}</pre>
+  <div
+    class="${
+      compact
+        ? 'grid flex-none grid-cols-1 gap-2.5 p-2.5'
+        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
+    }"
+  >
+    <section
+      class="${
+        compact
+          ? 'relative h-[340px] min-h-0 overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[300px]'
+          : 'relative h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[60vh] max-[900px]:min-h-[420px]'
+      }"
+    ><div class="absolute inset-0" data-role="editor"></div></section>
+    <aside
+      class="${
+        compact
+          ? 'flex h-auto flex-col gap-2.5'
+          : 'flex h-[calc(100vh-250px)] min-h-0 flex-col gap-4 max-[900px]:h-auto'
+      }"
+    >
+      <section class="${panelClass(compact)} flex-none">
+        <h2 class="${panelHeadingClass}">${t.goalTitle}</h2>
+        <pre
+          data-role="goal"
+          class="m-0 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-[13px] leading-[1.6] text-fg ${
+            compact ? 'max-h-[88px]' : 'max-h-[170px]'
+          }"
+        >${t.goalPlaceholder}</pre>
       </section>
-      <section class="panel">
-        <h2>${t.diagnosticsTitle} <span class="count">0</span></h2>
-        <ul class="diagnostics">
-          <li class="muted">${t.diagnosticsPlaceholder}</li>
+      <section class="${panelClass(compact)} flex-1 basis-1/2">
+        <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
+        <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2">
+          <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
         </ul>
       </section>
-      <section class="panel">
-        <h2>${t.logTitle}</h2>
-        <pre class="log"></pre>
+      <section class="${panelClass(compact)} flex-1 basis-1/2">
+        <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
+        <pre
+          data-role="log"
+          class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted ${
+            compact ? 'max-h-[110px]' : ''
+          }"
+        ></pre>
       </section>
     </aside>
   </div>
@@ -68,39 +116,41 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
 
 const renderMarkup = (locale: Locale, variant: LeanPanelVariant, t: ReturnType<typeof messagesFor>['playground']) => {
   const compact = variant === 'compact';
-  const status = `<span class="pill" data-role="status">${t.statusIdle}</span>`;
+  const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
   const start = `<button type="button" data-role="start">${t.start}</button>`;
 
   if (!compact) {
     return `
-      <section class="playground">
-        <div class="playground-topbar">
+      <section class="flex min-h-[calc(100vh-61px)] flex-col">
+        <div
+          class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start"
+        >
           <div>
-            <p class="eyebrow">Lean 4.34.1 · WebAssembly · Init only</p>
-            <h1>${t.title}</h1>
-            <p class="hint">${t.hint}</p>
+            <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">Lean 4.34.1 · WebAssembly · Init only</p>
+            <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
+            <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
-          <div class="topbar-actions">${status}${start}</div>
+          <div class="flex items-center gap-3">${status}${start}</div>
         </div>
-        <div class="progress" aria-hidden="true"><div data-role="bar"></div></div>
+        <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         ${renderWorkspace(t, false)}
       </section>
     `;
   }
 
   return `
-    <section class="lean-panel">
-      <div class="lean-panel-head">
-        <div class="lean-panel-title">
-          <span class="eyebrow">Lean 4 · Init</span>
-          <strong>${t.title}</strong>
+    <section class="overflow-hidden rounded-[14px] border border-line bg-panel">
+      <div class="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
+        <div class="flex flex-col">
+          <span class="m-0 text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
+          <strong class="text-sm">${t.title}</strong>
         </div>
-        <div class="topbar-actions">${status}${start}</div>
+        <div class="flex items-center gap-3">${status}${start}</div>
       </div>
-      <div class="progress" aria-hidden="true"><div data-role="bar"></div></div>
+      <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
       ${renderWorkspace(t, true)}
-      <div class="lean-panel-foot">
-        <a href="/${locale}/playground">${t.openFull}</a>
+      <div class="px-3.5 pb-3 pt-1.5 text-right text-xs">
+        <a class="text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
       </div>
     </section>
   `;
@@ -115,14 +165,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const statusEl = host.querySelector<HTMLElement>('[data-role="status"]')!;
   const startEl = host.querySelector<HTMLButtonElement>('[data-role="start"]')!;
   const barEl = host.querySelector<HTMLElement>('[data-role="bar"]')!;
-  const logEl = host.querySelector<HTMLPreElement>('.log')!;
-  const diagnosticsEl = host.querySelector<HTMLUListElement>('.diagnostics')!;
-  const diagCountEl = host.querySelector<HTMLElement>('.count')!;
-  const goalEl = host.querySelector<HTMLPreElement>('.goal')!;
+  const logEl = host.querySelector<HTMLPreElement>('[data-role="log"]')!;
+  const diagnosticsEl = host.querySelector<HTMLUListElement>('[data-role="diagnostics"]')!;
+  const diagCountEl = host.querySelector<HTMLElement>('[data-role="count"]')!;
+  const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
 
   const uri = 'file:///workspace/Main.lean';
   const model = monaco.editor.createModel(code, LEAN_LANGUAGE_ID, monaco.Uri.parse(uri));
-  const editor = monaco.editor.create(host.querySelector<HTMLElement>('.editor-mount')!, {
+  const editor = monaco.editor.create(host.querySelector<HTMLElement>('[data-role="editor"]')!, {
     model,
     theme: getResolvedTheme() === 'light' ? 'vs' : 'vs-dark',
     automaticLayout: true,
@@ -238,7 +288,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
     if (params.diagnostics.length === 0) {
       const item = document.createElement('li');
-      item.className = 'muted';
+      item.className = mutedItemClass;
       item.textContent = t.statusNoDiagnostics(Math.round(latency));
       diagnosticsEl.append(item);
       return;
@@ -246,16 +296,17 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
     for (const diagnostic of params.diagnostics) {
       const item = document.createElement('li');
+      item.className = 'mb-1.5';
       const button = document.createElement('button');
-      button.className = 'diagnostic';
+      button.className = diagnosticClass;
       button.type = 'button';
 
       const location = document.createElement('span');
-      location.className = 'diagnostic-location';
+      location.className = diagnosticLocationClass;
       location.textContent = `${diagnostic.range.start.line + 1}:${diagnostic.range.start.character + 1}`;
 
       const message = document.createElement('span');
-      message.className = 'diagnostic-message';
+      message.className = diagnosticMessageClass;
       message.textContent = diagnostic.message;
 
       button.append(location, message);

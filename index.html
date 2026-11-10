@@ -1,52 +1,33 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lean Init IDE</title>
+    <meta
+      name="description"
+      content="在浏览器里学 Lean 4：Monaco 编辑器 + 运行在 Web Worker 里的 Lean 语言服务器，无需安装工具链。"
+    />
     <link rel="stylesheet" href="/style.css" />
+    <script>
+      // 首屏绘制前确定主题，避免闪白或闪黑。
+      (() => {
+        try {
+          const stored = localStorage.getItem('lean:theme');
+          const pref =
+            stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          const systemLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+          const resolved = pref === 'system' ? (systemLight ? 'light' : 'dark') : pref;
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.dataset.themePreference = pref;
+        } catch {
+          // localStorage 不可用时保留默认暗色。
+        }
+      })();
+    </script>
   </head>
-  <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Lean 4.34.1 · WebAssembly · Init only</p>
-        <h1>Lean Init IDE</h1>
-        <p class="hint">首次启动需下载约 143MB Lean 运行时，之后会持久缓存。</p>
-      </div>
-      <div class="topbar-actions">
-        <span id="status" class="pill">未启动</span>
-        <button id="start">启动 Lean</button>
-      </div>
-    </header>
-
-    <div class="progress" aria-hidden="true"><div id="bar"></div></div>
-
-    <main class="workspace">
-      <section class="editor-pane">
-        <div id="editor"></div>
-      </section>
-      <aside class="side">
-        <section class="panel goal-panel">
-          <h2>Goal</h2>
-          <pre id="goal" class="goal">移动光标到证明内部查看 Goal</pre>
-        </section>
-        <section class="panel">
-          <h2>诊断 <span id="diag-count" class="count">0</span></h2>
-          <ul id="diagnostics" class="diagnostics">
-            <li class="muted">启动 Lean 后显示诊断</li>
-          </ul>
-        </section>
-        <section class="panel">
-          <h2>日志</h2>
-          <pre id="log" class="log"></pre>
-        </section>
-      </aside>
-    </main>
-
-    <footer class="footer">
-      浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先
-    </footer>
-
+  <body data-page="content">
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

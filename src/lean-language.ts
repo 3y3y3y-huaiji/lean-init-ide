@@ -18,7 +18,12 @@ const TACTICS = [
   'suffices', 'trivial', 'unfold',
 ];
 
-export function registerLean(monaco: typeof Monaco): void {
+export function registerLean(monaco: {
+  languages: Pick<
+    typeof Monaco.languages,
+    'getLanguages' | 'register' | 'setLanguageConfiguration' | 'setMonarchTokensProvider'
+  >;
+}): void {
   if (monaco.languages.getLanguages().some((language) => language.id === LEAN_LANGUAGE_ID)) return;
 
   monaco.languages.register({

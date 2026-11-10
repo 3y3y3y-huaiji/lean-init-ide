@@ -1,12 +1,14 @@
-import * as monaco from 'monaco-editor';
+// editor.api 只带编辑器内核，不注册 80 多种内置语言，主包和内存都小得多。
+import * as monaco from 'monaco-editor/editor/editor.api';
 import editorWorker from '../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
-import { clearRuntimeAssetCache } from '@wasm-idle/core';
-import { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
+import type { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
 import { createMessageConnection, type MessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
+
+type Lean4Server = Awaited<ReturnType<typeof getLean4LanguageServer>>;
 
 (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
   getWorker: () => new editorWorker(),
@@ -20,6 +22,8 @@ export type LeanPanelOptions = {
   variant: LeanPanelVariant;
   code: string;
   locale: Locale;
+  /** 面板可见时自动启动，省掉一次点击后的等待。 */
+  autoStart?: boolean;
 };
 
 export type LeanPanel = {
@@ -100,7 +104,7 @@ const renderMarkup = (locale: Locale, variant: LeanPanelVariant, t: ReturnType<t
 };
 
 export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): LeanPanel => {
-  const { variant, code, locale } = options;
+  const { variant, code, locale, autoStart = false } = options;
   const t = messagesFor(locale).playground;
 
   host.innerHTML = renderMarkup(locale, variant, t);
@@ -140,7 +144,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   let connection: MessageConnection | null = null;
-  let server: Awaited<ReturnType<typeof getLean4LanguageServer>> | null = null;
+  let server: Lean4Server | null = null;
   let ready = false;
   let version = 1;
   let lastEditAt = 0;
@@ -430,6 +434,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   });
 
   const start = async () => {
+    if (startEl.disabled) return;
     startEl.disabled = true;
     // 首次下载约 143 MB；在用户手势中申请持久存储，避免浏览器清理已校验的缓存。
     void navigator.storage?.persist?.().catch(() => {});
@@ -445,16 +450,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
 
     if (new URLSearchParams(location.search).has('fresh')) {
+      const { clearRuntimeAssetCache } = await import('@wasm-idle/core');
       await clearRuntimeAssetCache();
       log(t.logCacheCleared);
     }
 
     try {
+      // 运行时约 700KB，按需加载，首屏只留编辑器。
+      const { getLean4LanguageServer } = await import('@wasm-idle/lsp/lean4');
       server = await getLean4LanguageServer({
         rootUrl: '/',
         // 慢网络下 22MB 的 pack 可能超过 10 分钟，放宽超时避免下载中途被中止。
         startupTimeoutMs: 60 * 60_000,
         assetTimeoutMs: 60 * 60_000,
+        // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
         lean4: { maxMemoryBytes: 1024 ** 3 },
         createWorker: () => new LeanWorker(),
         onStatus: (status) => {
@@ -531,10 +540,19 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   startEl.addEventListener('click', start);
 
+  if (autoStart) {
+    // 直接排一个短定时器：比 IntersectionObserver 更确定，也让下载尽早开始。
+    window.setTimeout(() => {
+      void start();
+    }, 400);
+  }
+
   window.addEventListener('pagehide', () => {
     connection?.dispose();
     server?.dispose();
     stopThemeSync();
+    model.dispose();
+    editor.dispose();
   });
 
   return {

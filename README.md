@@ -37,15 +37,18 @@ npm run lint
 ```
 src/
   main.ts            应用外壳：路由、语言与主题切换
+  sw.ts              Range 分片下载 Service Worker（编译为 public/sw.js）
   i18n/              中英文字典与文案读取
   theme.ts           亮/暗/跟随系统
   views/             落地页、课程页、编辑器页
+  components/        可复用的 Lean 编辑器面板
   lean-language.ts   Lean 语法高亮与语言配置
 public/
-  sw.js              Range 分片下载 Service Worker
   wasm-lean4/        Lean 运行时资产（构建时下载，不入库）
 scripts/             资产下载、LSP 补丁
 ```
+
+仓库里只有 TypeScript 源码：`src/sw.ts` 由 `npm run build:sw` 编译成 `public/sw.js`，不手写 JS。
 
 ## 许可证
 

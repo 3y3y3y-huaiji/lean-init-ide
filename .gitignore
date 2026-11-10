@@ -3,4 +3,6 @@ dist/
 .vite/
 .wrangler/
 public/wasm-lean4/
+# 由 src/sw.ts 编译生成
+public/sw.js
 *.log

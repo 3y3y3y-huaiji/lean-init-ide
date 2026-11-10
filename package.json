@@ -6,13 +6,14 @@
   "description": "Browser-native Lean 4 Init IDE: Monaco + the upstream Lean language server running in WebAssembly workers.",
   "scripts": {
     "postinstall": "node scripts/patch-lsp.mjs",
-    "predev": "node scripts/patch-lsp.mjs && node scripts/fetch-assets.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/patch-lsp.mjs && node scripts/fetch-assets.mjs",
+    "predev": "node scripts/patch-lsp.mjs && node scripts/fetch-assets.mjs && npm run build:sw",
     "build": "vite build",
-    "build:web": "vite build",
+    "prebuild": "node scripts/patch-lsp.mjs && node scripts/fetch-assets.mjs && npm run build:sw",
+    "build:web": "npm run build:sw && vite build",
+    "build:sw": "tsc -p tsconfig.sw.json",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.sw.json --noEmit",
     "lint": "eslint .",
     "fetch:assets": "node scripts/fetch-assets.mjs"
   },

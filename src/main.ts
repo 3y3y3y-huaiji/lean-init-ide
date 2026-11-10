@@ -1,8 +1,6 @@
 import { detectLocale, isLocale, messagesFor, type Locale } from './i18n';
 import { bindLayout, renderLayout } from './views/layout';
 import { renderHome } from './views/home';
-import { bindLesson, renderLesson } from './views/lesson';
-import { mountPlayground, renderPlayground } from './views/playground';
 
 type Page = 'home' | 'lesson' | 'playground' | 'notFound';
 
@@ -46,19 +44,6 @@ const renderNotFound = (locale: Locale): string => {
   `;
 };
 
-const renderPage = (page: Page, locale: Locale): string => {
-  switch (page) {
-    case 'home':
-      return renderHome(locale);
-    case 'lesson':
-      return renderLesson(locale);
-    case 'playground':
-      return renderPlayground();
-    default:
-      return renderNotFound(locale);
-  }
-};
-
 const pageTitle = (page: Page, locale: Locale): string => {
   const t = messagesFor(locale);
   switch (page) {
@@ -73,14 +58,40 @@ const pageTitle = (page: Page, locale: Locale): string => {
   }
 };
 
+const boot = async (route: Route, root: HTMLElement) => {
+  document.title = pageTitle(route.page, route.locale);
+  document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
+
+  let content: string;
+  let mount: (() => void) | undefined;
+
+  switch (route.page) {
+    case 'lesson': {
+      const { renderLesson, bindLesson } = await import('./views/lesson');
+      content = renderLesson(route.locale);
+      mount = () => bindLesson(root, route.locale);
+      break;
+    }
+    case 'playground': {
+      const { renderPlayground, mountPlayground } = await import('./views/playground');
+      content = renderPlayground();
+      mount = () => mountPlayground(root, route.locale);
+      break;
+    }
+    case 'notFound':
+      content = renderNotFound(route.locale);
+      break;
+    default:
+      content = renderHome(route.locale);
+  }
+
+  root.innerHTML = renderLayout(route.locale, route.page === 'notFound' ? 'home' : route.page, content);
+  bindLayout(root, route.locale);
+  mount?.();
+};
+
 const route = parseRoute();
 
 if (route && app) {
-  document.title = pageTitle(route.page, route.locale);
-  document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
-  app.innerHTML = renderLayout(route.locale, route.page === 'notFound' ? 'home' : route.page, renderPage(route.page, route.locale));
-  bindLayout(app, route.locale);
-
-  if (route.page === 'lesson') bindLesson(app, route.locale);
-  if (route.page === 'playground') mountPlayground(app, route.locale);
+  void boot(route, app);
 }

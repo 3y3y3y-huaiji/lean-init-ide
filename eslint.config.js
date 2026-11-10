@@ -3,7 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'public/wasm-lean4/**', 'scripts/assets/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'public/wasm-lean4/**', 'public/sw.js', 'scripts/assets/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -16,6 +16,10 @@ export default tseslint.config(
   },
   {
     files: ['public/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
+    files: ['src/sw.ts'],
     languageOptions: { globals: globals.serviceworker },
   },
 );

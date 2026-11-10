@@ -89,25 +89,39 @@ export const bindLesson = (root: HTMLElement, locale: Locale) => {
     });
   }
 
-  // 跟随阅读：滚动到某一节时，如果编辑器内容仍是上次自动载入的代码（用户没改过），
-  // 就把这一节的代码换进去，让左右两边始终对得上。
+  // 跟随阅读：以视口上方 35% 处为基准，判定当前读到哪一节；
+  // 编辑器仍是上次自动载入的内容（用户没改过）时，就换成这一节的代码。
   const sections = [...root.querySelectorAll<HTMLElement>('.lesson-section')];
-  const observer = new IntersectionObserver(
-    (entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (!visible) return;
-      const button = visible.target.querySelector<HTMLButtonElement>('[data-code-index]');
-      if (!button) return;
-      const index = Number(button.dataset.codeIndex);
-      const code = codes[index];
-      if (code === undefined || code === autoLoaded) return;
-      if (panel.getCode() !== autoLoaded) return;
-      load(index, { focus: false });
+
+  const followReader = () => {
+    const marker = window.innerHeight * 0.35;
+    let current: HTMLElement | undefined;
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= marker) current = section;
+    }
+    if (!current) return;
+    const button = current.querySelector<HTMLButtonElement>('[data-code-index]');
+    if (!button) return;
+    const index = Number(button.dataset.codeIndex);
+    const code = codes[index];
+    if (code === undefined || code === autoLoaded) return;
+    if (panel.getCode() !== autoLoaded) return;
+    load(index, { focus: false });
+  };
+
+  let ticking = false;
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        followReader();
+      });
     },
-    { rootMargin: '-20% 0px -55% 0px' },
+    { passive: true },
   );
 
-  for (const section of sections) observer.observe(section);
+  followReader();
 };

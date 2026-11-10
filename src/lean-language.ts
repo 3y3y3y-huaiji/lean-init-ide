@@ -1,0 +1,95 @@
+import type * as Monaco from 'monaco-editor';
+
+export const LEAN_LANGUAGE_ID = 'lean4';
+
+const KEYWORDS = [
+  'abbrev', 'axiom', 'by', 'class', 'def', 'deriving', 'do', 'else', 'end', 'example',
+  'export', 'extends', 'for', 'forall', 'fun', 'if', 'import', 'in', 'inductive', 'instance',
+  'let', 'lemma', 'macro', 'match', 'mutual', 'namespace', 'noncomputable', 'opaque', 'open',
+  'partial', 'private', 'protected', 'return', 'section', 'structure', 'syntax', 'then',
+  'theorem', 'universe', 'unsafe', 'variable', 'where', 'with', 'Type', 'Prop', 'Sort',
+];
+
+const TACTICS = [
+  'apply', 'assumption', 'by_cases', 'calc', 'cases', 'change', 'constructor', 'contradiction',
+  'decide', 'exact', 'exfalso', 'ext', 'field_simp', 'fin_cases', 'funext', 'have', 'induction',
+  'intro', 'left', 'linarith', 'norm_num', 'omega', 'rcases', 'refine', 'rfl', 'right', 'ring',
+  'ring_nf', 'rw', 'show', 'simp', 'simp_all', 'simpa', 'specialize', 'split', 'subst',
+  'suffices', 'trivial', 'unfold',
+];
+
+export function registerLean(monaco: typeof Monaco): void {
+  if (monaco.languages.getLanguages().some((language) => language.id === LEAN_LANGUAGE_ID)) return;
+
+  monaco.languages.register({
+    id: LEAN_LANGUAGE_ID,
+    extensions: ['.lean'],
+    aliases: ['Lean 4', 'lean'],
+  });
+
+  monaco.languages.setLanguageConfiguration(LEAN_LANGUAGE_ID, {
+    comments: { lineComment: '--', blockComment: ['/-', '-/'] },
+    brackets: [
+      ['(', ')'],
+      ['[', ']'],
+      ['{', '}'],
+      ['⟨', '⟩'],
+    ],
+    autoClosingPairs: [
+      { open: '(', close: ')' },
+      { open: '[', close: ']' },
+      { open: '{', close: '}' },
+      { open: '⟨', close: '⟩' },
+      { open: '"', close: '"', notIn: ['string'] },
+    ],
+    surroundingPairs: [
+      { open: '(', close: ')' },
+      { open: '[', close: ']' },
+      { open: '{', close: '}' },
+      { open: '⟨', close: '⟩' },
+      { open: '"', close: '"' },
+    ],
+  });
+
+  monaco.languages.setMonarchTokensProvider(LEAN_LANGUAGE_ID, {
+    defaultToken: '',
+    tokenPostfix: '.lean',
+    keywords: KEYWORDS,
+    tactics: TACTICS,
+    operators: ['=', ':=', '=>', '→', '←', '↔', '∧', '∨', '¬', '∀', '∃', 'λ', '≤', '≥', '≠', '+', '-', '*', '/', '^', '∘'],
+    tokenizer: {
+      root: [
+        [/\/-/, 'comment', '@comment'],
+        [/--.*$/, 'comment'],
+        [/r#"/, 'string', '@rawstring'],
+        [/"([^"\\]|\\.)*"/, 'string'],
+        [/'([^'\\]|\\.)'/, 'string.char'],
+        [/\b\d+(\.\d+)?\b/, 'number'],
+        [
+          /[A-Za-z_\u00C0-\uFFFF][\w'!?\u00C0-\uFFFF]*/,
+          {
+            cases: {
+              '@keywords': 'keyword',
+              '@tactics': 'keyword.control',
+              '@default': 'identifier',
+            },
+          },
+        ],
+        [/[{}()\[\]⟨⟩]/, '@brackets'],
+        [/[=<>+\-*/%^&|!~:]+/, 'operator'],
+        [/[;,.]/, 'delimiter'],
+        [/\s+/, 'white'],
+      ],
+      comment: [
+        [/\/-/, 'comment', '@push'],
+        [/-\//, 'comment', '@pop'],
+        [/[^/-]+/, 'comment'],
+        [/[\/-]/, 'comment'],
+      ],
+      rawstring: [
+        [/"#/, 'string', '@pop'],
+        [/./, 'string'],
+      ],
+    },
+  });
+}

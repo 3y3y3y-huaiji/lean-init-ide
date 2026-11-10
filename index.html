@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lean Init IDE</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Lean 4.34.1 · WebAssembly · Init only</p>
+        <h1>Lean Init IDE</h1>
+      </div>
+      <div class="topbar-actions">
+        <span id="status" class="pill">未启动</span>
+        <button id="start">启动 Lean</button>
+      </div>
+    </header>
+
+    <div class="progress" aria-hidden="true"><div id="bar"></div></div>
+
+    <main class="workspace">
+      <section class="editor-pane">
+        <div id="editor"></div>
+      </section>
+      <aside class="side">
+        <section class="panel goal-panel">
+          <h2>Goal</h2>
+          <pre id="goal" class="goal">移动光标到证明内部查看 Goal</pre>
+        </section>
+        <section class="panel">
+          <h2>诊断 <span id="diag-count" class="count">0</span></h2>
+          <ul id="diagnostics" class="diagnostics">
+            <li class="muted">启动 Lean 后显示诊断</li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h2>日志</h2>
+          <pre id="log" class="log"></pre>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

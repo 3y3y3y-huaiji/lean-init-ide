@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.vite/
+.wrangler/
+public/wasm-lean4/
+*.log

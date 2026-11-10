@@ -1,0 +1,4 @@
+{
+  "name": "lean-init-ide",
+  "pages_build_output_dir": "./dist"
+}

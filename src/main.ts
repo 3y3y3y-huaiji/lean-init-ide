@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor/editor/editor.main';
+import * as monaco from 'monaco-editor';
 import editorWorker from '../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
 import { clearRuntimeAssetCache } from '@wasm-idle/core';
 import { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
@@ -246,7 +246,7 @@ const completionKind = (kind?: number): monaco.languages.CompletionItemKind => {
 
 monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
   triggerCharacters: ['.', ' '],
-  provideCompletionItems: async (_model, position) => {
+  provideCompletionItems: async (model, position) => {
     const result = await lspRequest<
       | { items?: Array<Record<string, unknown>> }
       | Array<Record<string, unknown>>
@@ -255,6 +255,13 @@ monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
 
     const items = Array.isArray(result) ? result : result.items ?? [];
     log(`completion @${position.lineNumber}:${position.column} -> ${items.length} 项`);
+    const word = model.getWordUntilPosition(position);
+    const range = new monaco.Range(
+      position.lineNumber,
+      word.startColumn,
+      position.lineNumber,
+      word.endColumn,
+    );
     return {
       suggestions: items.map((item) => {
         const insertText = typeof item.insertText === 'string' ? item.insertText : String(item.label ?? '');
@@ -262,6 +269,7 @@ monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
           label: String(item.label ?? insertText),
           kind: completionKind(typeof item.kind === 'number' ? item.kind : undefined),
           insertText,
+          range,
           insertTextRules:
             item.insertTextFormat === 2
               ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet

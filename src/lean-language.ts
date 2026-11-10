@@ -75,7 +75,7 @@ export function registerLean(monaco: typeof Monaco): void {
             },
           },
         ],
-        [/[{}()\[\]⟨⟩]/, '@brackets'],
+        [/[{}()\]⟨⟩]/, '@brackets'],
         [/[=<>+\-*/%^&|!~:]+/, 'operator'],
         [/[;,.]/, 'delimiter'],
         [/\s+/, 'white'],
@@ -84,7 +84,7 @@ export function registerLean(monaco: typeof Monaco): void {
         [/\/-/, 'comment', '@push'],
         [/-\//, 'comment', '@pop'],
         [/[^/-]+/, 'comment'],
-        [/[\/-]/, 'comment'],
+        [/[/-]/, 'comment'],
       ],
       rawstring: [
         [/"#/, 'string', '@pop'],

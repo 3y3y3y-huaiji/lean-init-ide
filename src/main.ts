@@ -309,15 +309,18 @@ editor.onDidChangeCursorPosition(() => {
 
 const start = async () => {
   startEl.disabled = true;
-  setStatus('加载运行时…', 'loading');
+  // 首次下载约 143 MB；在用户手势中申请持久存储，避免浏览器清理已校验的缓存。
+  void navigator.storage?.persist?.().catch(() => {});
+  setStatus('加载运行时…（首次约 143MB）', 'loading');
   setProgress(0);
   const startedAt = performance.now();
 
   try {
     server = await getLean4LanguageServer({
       rootUrl: '/',
-      startupTimeoutMs: 600_000,
-      assetTimeoutMs: 600_000,
+      // 慢网络下 22MB 的 pack 可能超过 10 分钟，放宽超时避免下载中途被中止。
+      startupTimeoutMs: 60 * 60_000,
+      assetTimeoutMs: 60 * 60_000,
       lean4: { maxMemoryBytes: 1024 ** 3 },
       createWorker: () => new LeanWorker(),
       onStatus: (status) => {

@@ -35,7 +35,14 @@ if (source.includes(to)) {
 const workerPath = path.join(root, 'scripts', 'assets', 'runner-worker.js');
 const workerBytes = readFileSync(workerPath);
 const workerSha = createHash('sha256').update(workerBytes).digest('hex');
-const runtimePath = path.join(root, 'node_modules', '@wasm-idle', 'lsp', 'dist', 'bundledLean4Runtime.js');
+const runtimePath = path.join(
+  root,
+  'node_modules',
+  '@wasm-idle',
+  'lsp',
+  'dist',
+  'bundledLean4Runtime.js',
+);
 const runtimeSource = readFileSync(runtimePath, 'utf8');
 const receipt = /(workerReceipt:\s*\{\s*bytes:\s*)\d+(,\s*sha256:\s*')[a-f0-9]+(')/;
 if (!receipt.test(runtimeSource)) {
@@ -43,11 +50,14 @@ if (!receipt.test(runtimeSource)) {
 }
 const nextRuntime = runtimeSource.replace(
   receipt,
-  (_match, prefix, middle, suffix) => `${prefix}${workerBytes.length}${middle}${workerSha}${suffix}`,
+  (_match, prefix, middle, suffix) =>
+    `${prefix}${workerBytes.length}${middle}${workerSha}${suffix}`,
 );
 if (nextRuntime !== runtimeSource) {
   writeFileSync(runtimePath, nextRuntime);
-  console.log(`lsp patch: workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`);
+  console.log(
+    `lsp patch: workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`,
+  );
 } else {
   console.log('lsp patch: workerReceipt already synced');
 }

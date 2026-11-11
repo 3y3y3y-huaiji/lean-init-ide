@@ -76,6 +76,46 @@ describe('assetSources', () => {
     expect(sources).toHaveLength(1);
     expect(sources[0]?.url).toBe(`/cdn/runner-worker.js?r=${manifest.cacheKey}`);
   });
+
+  describe('魔搭镜像', () => {
+    const mirrored = {
+      ...manifest,
+      mirror: {
+        label: 'ModelScope (CN)',
+        baseUrl: 'https://modelscope.cn/datasets/example/lean4-assets/resolve/master/',
+      },
+    } as RuntimeManifest;
+
+    it('mirrorFirst 时排在最前，按 cacheKey 目录取文件且不带 ?r=', () => {
+      const sources = assetSources(mirrored, assetByName('lean.wasm.gz.bin'), undefined, {
+        mirrorFirst: true,
+      });
+      expect(sources.map((source) => source.label)).toEqual([
+        'ModelScope (CN)',
+        'Pages Functions (R2)',
+        'GitHub raw',
+      ]);
+      expect(sources[0]?.url).toBe(
+        `https://modelscope.cn/datasets/example/lean4-assets/resolve/master/${manifest.cacheKey}/lean.wasm.gz.bin`,
+      );
+    });
+
+    it('includeMirror 时插在 primary 之后', () => {
+      const sources = assetSources(mirrored, assetByName('lean.mjs'), undefined, {
+        includeMirror: true,
+      });
+      expect(sources.map((source) => source.label)).toEqual([
+        'Pages Functions (R2)',
+        'ModelScope (CN)',
+        'GitHub raw',
+      ]);
+    });
+
+    it('默认不启用镜像，Node 构建行为不变', () => {
+      const sources = assetSources(mirrored, assetByName('lean.mjs'));
+      expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)', 'GitHub raw']);
+    });
+  });
 });
 
 describe('runtime manifest', () => {

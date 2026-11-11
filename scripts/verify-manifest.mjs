@@ -52,6 +52,19 @@ if (manifest.fallback?.baseUrl && !isHttps(manifest.fallback.baseUrl)) {
   fail(`fallback.baseUrl 必须是 https 地址，实际为 ${manifest.fallback.baseUrl}`);
 }
 
+if (manifest.mirror !== undefined) {
+  if (!manifest.mirror || typeof manifest.mirror !== 'object') {
+    fail('mirror 必须是对象');
+  } else {
+    if (!isNonEmptyString(manifest.mirror.label)) fail('mirror.label 必须是非空字符串');
+    if (!isHttps(manifest.mirror.baseUrl)) {
+      fail(`mirror.baseUrl 必须是 https 地址，实际为 ${manifest.mirror.baseUrl}`);
+    } else if (!manifest.mirror.baseUrl.endsWith('/')) {
+      fail('mirror.baseUrl 必须以 / 结尾');
+    }
+  }
+}
+
 const assets = manifest.assets;
 if (!Array.isArray(assets) || assets.length === 0) {
   fail('assets 必须是非空数组');

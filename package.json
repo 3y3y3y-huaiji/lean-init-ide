@@ -24,6 +24,7 @@
     "test:watch": "vitest",
     "fetch:assets": "node scripts/fetch-assets.mjs",
     "upload:assets": "node scripts/upload-assets.mjs",
+    "upload:modelscope": "node scripts/upload-modelscope.mjs",
     "verify:manifest": "node scripts/verify-manifest.mjs",
     "verify:build": "node scripts/verify-build.mjs",
     "smoke": "node scripts/smoke.mjs"

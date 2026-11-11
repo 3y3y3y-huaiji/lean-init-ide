@@ -30,7 +30,10 @@ type RangeAsset = {
 const RANGE_ASSETS = new Map<string, RangeAsset>(
   rangedAssets(manifest).map((asset) => [
     asset.name,
-    { bytes: asset.bytes, sources: assetSources(manifest, asset) },
+    {
+      bytes: asset.bytes,
+      sources: assetSources(manifest, asset, undefined, { mirrorFirst: true }),
+    },
   ]),
 );
 

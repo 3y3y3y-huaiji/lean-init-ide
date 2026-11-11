@@ -35,20 +35,33 @@ const composeUrl = (baseUrl, path) => {
   return `${normalized.endsWith('/') ? normalized : `${normalized}/`}${path}`;
 };
 
-/** 同源 Pages Function 优先，GitHub raw 兜底；两个源相同则去重。 */
-export const assetSources = (manifest, asset, primaryBaseUrl) => {
+/**
+ * 同源 Pages Function 优先，GitHub raw 兜底；配置了 mirror 时按需插入魔搭镜像。
+ * 镜像文件按 <cacheKey>/<name> 存放，避免在 resolve 地址上再带 ?r= 查询参数。
+ */
+export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
   const sources = [];
   const seen = new Set();
 
-  const add = (label, baseUrl, path) => {
+  const add = (label, baseUrl, path, { cacheKey = true } = {}) => {
     if (!label || !baseUrl || !path) return;
-    const url = withCacheKey(composeUrl(baseUrl, path), manifest.cacheKey);
+    const composed = composeUrl(baseUrl, path);
+    const url = cacheKey ? withCacheKey(composed, manifest.cacheKey) : composed;
     if (seen.has(url)) return;
     seen.add(url);
     sources.push({ label, url });
   };
 
+  const addMirror = () => {
+    if (!manifest.mirror) return;
+    add(manifest.mirror.label, manifest.mirror.baseUrl, `${manifest.cacheKey}/${asset.name}`, {
+      cacheKey: false,
+    });
+  };
+
+  if (options.mirrorFirst) addMirror();
   add(manifest.primary.label, primaryBaseUrl || manifest.primary.baseUrl, asset.key);
+  if (options.includeMirror) addMirror();
   add(manifest.fallback.label, manifest.fallback.baseUrl, asset.source);
   return sources;
 };

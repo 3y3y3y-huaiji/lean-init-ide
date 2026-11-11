@@ -4,6 +4,8 @@ pages_build_output_dir = "dist"
 compatibility_date = "2026-11-10"
 
 # 同源资产网关：Functions 直接读 R2，不经公网自定义域、不需要 CORS。
+# 顶层用于本地开发；production / preview 必须各自显式声明，否则绑定不会落到部署。
+# 注意 ASSETS 是 Pages 静态资源服务的保留绑定名，不能用。
 [[r2_buckets]]
 binding = "LEAN_ASSETS"
 bucket_name = "lean4-ide-releases"
@@ -12,4 +14,6 @@ bucket_name = "lean4-ide-releases"
 binding = "LEAN_ASSETS"
 bucket_name = "lean4-ide-releases"
 
-[env.production]
+[[env.production.r2_buckets]]
+binding = "LEAN_ASSETS"
+bucket_name = "lean4-ide-releases"

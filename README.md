@@ -44,11 +44,19 @@ npm run lint
 
 ### 部署前一次性配置
 
-`wrangler.toml` 已声明绑定，Pages 部署时自动生效（顶层用于 local / production，
-`env.preview` 用于预览部署）：
+`wrangler.toml` 已声明绑定。顶层用于本地开发，**production 与 preview 必须各自显式声明**，
+否则 Git 集成部署不会把绑定写进项目配置：
 
 ```toml
 [[r2_buckets]]
+binding = "LEAN_ASSETS"
+bucket_name = "lean4-ide-releases"
+
+[[env.preview.r2_buckets]]
+binding = "LEAN_ASSETS"
+bucket_name = "lean4-ide-releases"
+
+[[env.production.r2_buckets]]
 binding = "LEAN_ASSETS"
 bucket_name = "lean4-ide-releases"
 ```

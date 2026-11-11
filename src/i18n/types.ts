@@ -1,8 +1,23 @@
-export type LessonSection = {
-  heading: string;
-  paragraphs: string[];
-  code?: string;
-  after?: string;
+/** 课程正文的块级元素：段落、可运行代码、提示框。 */
+export type LessonBlock =
+  | { kind: 'p'; text: string }
+  | { kind: 'code'; code: string }
+  | { kind: 'note'; text: string; tone?: 'info' | 'warn' };
+
+/** 一节课程。slug 同时是路由片段与目录锚点。 */
+export type LessonPage = {
+  slug: string;
+  /** 目录里显示的短标题，避免长标题撑破侧栏。 */
+  navTitle: string;
+  title: string;
+  lead: string;
+  blocks: LessonBlock[];
+  exercise?: {
+    title: string;
+    body: string;
+    cta: string;
+    starter: string;
+  };
 };
 
 export type Messages = {
@@ -43,15 +58,14 @@ export type Messages = {
   };
   lesson: {
     eyebrow: string;
-    title: string;
-    lead: string;
-    openInEditor: string;
+    /** 左侧目录的标题。 */
+    tocTitle: string;
+    prev: string;
+    next: string;
+    /** 代码块上的按钮：把这段送进右侧编辑器。 */
+    runInEditor: string;
     editorHint: string;
-    sections: LessonSection[];
-    exerciseTitle: string;
-    exerciseBody: string;
-    exerciseCta: string;
-    starter: string;
+    lessons: LessonPage[];
   };
   playground: {
     title: string;

@@ -55,54 +55,173 @@ export const zh: Messages = {
     courseCta: '开始学习',
   },
   lesson: {
-    eyebrow: '入门课 01',
-    title: '第一个 Lean 证明',
-    lead: '这一课从零开始：先看 Lean 怎么求值，再读懂一条命题，最后用归纳法把它证出来。每段代码都可以直接送进编辑器运行。',
-    openInEditor: '载入编辑器',
+    eyebrow: 'Lean 4 入门',
+    tocTitle: '课程目录',
+    prev: '上一篇',
+    next: '下一篇',
+    runInEditor: '在右栏运行',
     editorHint:
-      '右侧是真实编辑器：先点「启动 Lean」，再点任意代码段的「载入编辑器」，就能边读边跑。',
-    sections: [
+      '右侧是真实编辑器。打开本页会自动开始加载 Lean，完成后改动代码即可看到诊断与 Goal。',
+    lessons: [
       {
-        heading: '1. 先让 Lean 说句话',
-        paragraphs: [
-          'Lean 既是一门编程语言，也是一个交互式定理证明器。先用 #check 看一个名字的类型，用 #eval 直接求值。',
+        slug: 'first-proof',
+        navTitle: '01 · 先让 Lean 说句话',
+        title: '先让 Lean 说句话',
+        lead: '从零开始：看 Lean 怎么求值，读懂一条命题，再亲手证一条等式。',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Lean 既是一门编程语言，也是一个交互式定理证明器。先用 #check 看一个名字的类型，用 #eval 直接求值。',
+          },
+          { kind: 'code', code: '#check Nat.add\n#eval 2 + 3' },
+          {
+            kind: 'note',
+            text: '把光标停在 #check 那一行，右侧诊断面板会给出 Nat.add 的类型；#eval 的结果出现在信息里。',
+          },
+          {
+            kind: 'p',
+            text: '在 Lean 里，「2 + 2 = 4」是一个类型，而证明就是这个类型的一个元素。等式两边能靠计算化成同一个表达式时，rfl 就能直接给出证明。',
+          },
+          { kind: 'code', code: '#check (show 2 + 2 = 4 from rfl)' },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'rfl 表示「由定义直接成立」。它只能关闭计算型等式，遇到需要推理的命题就要换策略。',
+          },
         ],
-        code: '#check Nat.add\n#eval 2 + 3',
-        after:
-          '把光标停在 #check 那一行，诊断面板会给出 Nat.add 的类型；#eval 的结果会出现在信息里。',
+        exercise: {
+          title: '练习',
+          body: '把 #eval 2 + 3 改成你喜欢的算式，再自己写一个 #check 看看结果。',
+          cta: '在编辑器中动手',
+          starter: '#check Nat.mul\n#eval 6 * 7\n',
+        },
       },
       {
-        heading: '2. 命题也是类型',
-        paragraphs: [
-          '在 Lean 里，「2 + 2 = 4」是一个类型，而证明就是这个类型的一个元素。等式两边能靠计算化成同一个表达式时，rfl 就能直接给出证明。',
+        slug: 'implication',
+        navTitle: '02 · 蕴含与函数',
+        title: '命题即类型',
+        lead: '「如果 P 那么 Q」在 Lean 里就是一个函数类型。理解这一点，证明思路会立刻清楚。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '在类型论里，命题和类型是同一件事：类型 P 有元素，就意味着命题 P 成立；而这个元素，就是 P 的证明。',
+          },
+          {
+            kind: 'p',
+            text: '于是「P 蕴含 P」就是「从 P 出发得到 P 的函数」。证明它，等价于写一个恒等函数。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h',
+          },
+          {
+            kind: 'note',
+            text: 'intro h 把目标 P → P 变成「已有假设 h : P，要证 P」；exact h 直接用这个假设交差。',
+          },
+          {
+            kind: 'p',
+            text: '蕴含可以串起来。两个箭头接在一起，就是把第一个的输出喂给第二个。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  exact h2 (h1 hp)',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: '如果目标形如 P → Q，第一步几乎总是 intro。不 intro 直接想，很容易卡住。',
+          },
         ],
-        code: '#check (show 2 + 2 = 4 from rfl)',
-        after: 'rfl 表示「由定义直接成立」。它只能关闭计算型等式，遇到需要推理的命题就要换策略。',
+        exercise: {
+          title: '练习',
+          body: '证明 (P → Q) → (Q → R) → P → R，也就是把 trans_imp 的前提写成箭头形式。',
+          cta: '在编辑器中动手',
+          starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
+        },
       },
       {
-        heading: '3. 用 induction 证明交换律',
-        paragraphs: [
-          '目标：对任意自然数 a、b，证明 a + b = b + a。直接展开做不完，需要对 a 做归纳。',
-          'induction a with 把目标拆成两种情况：a = 0，以及 a = succ a 并附带归纳假设 ih。',
+        slug: 'connectives',
+        navTitle: '03 · 合取与析取',
+        title: '与、或怎么拆',
+        lead: '∧ 和 ∨ 各有两条规则：怎么构造它，怎么使用它。记住这四个动作就够了。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '要证明 P ∧ Q，需要同时给出 P 的证明和 Q 的证明。⟨hp, hq⟩ 是 And.intro 的简写。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem and_self (P Q : Prop) (hp : P) (hq : Q) : P ∧ Q := ⟨hp, hq⟩',
+          },
+          {
+            kind: 'p',
+            text: '反过来，手里有 h : P ∧ Q 时，h.1 给出 P，h.2 给出 Q。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem and_comm (P Q : Prop) : P ∧ Q → Q ∧ P := by\n  intro h\n  exact ⟨h.2, h.1⟩',
+          },
+          {
+            kind: 'p',
+            text: '析取麻烦一点：要证 P ∨ Q，只需给出其中一边，用 Or.inl 或 Or.inr。要使用 P ∨ Q，则必须分两种情况讨论，这就是 cases。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem or_comm (P Q : Prop) : P ∨ Q → Q ∨ P := by\n  intro h\n  cases h with\n  | inl hp => exact Or.inr hp\n  | inr hq => exact Or.inl hq',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: '构造用 inl / inr，使用用 cases。方向搞反是最常见的卡点：手里有「或」就想直接取，是不行的。',
+          },
         ],
-        code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp [Nat.succ_add, ih]',
-        after:
-          'zero 分支里 simp 把 0 + b 化简成 b；succ 分支里 Nat.succ_add 把 succ a + b 变成 succ (a + b)，再用归纳假设改写。',
+        exercise: {
+          title: '练习',
+          body: '证明 (P ∧ Q) → (Q ∧ P) 的析取版本：(P ∨ Q) → (Q ∨ P) 你已经见过了，试试 (P ∧ Q) ∨ R → P ∨ R。',
+          cta: '在编辑器中动手',
+          starter: 'theorem or_and (P Q R : Prop) : (P ∧ Q) ∨ R → P ∨ R := by\n  sorry\n',
+        },
       },
       {
-        heading: '4. 换你动手',
-        paragraphs: [
-          '照着上面的结构，证明 a + 0 = a。写完后把光标放到证明内部，看 Goal 面板每一步还剩什么。',
+        slug: 'induction',
+        navTitle: '04 · 归纳法',
+        title: '用 induction 证明交换律',
+        lead: '加法交换律不能靠展开算出来，需要对其中一个参数做归纳。这是 Lean 里最重要的证明模式。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '目标：对任意自然数 a、b，证明 a + b = b + a。直接展开做不完，需要对 a 做归纳。',
+          },
+          {
+            kind: 'p',
+            text: 'induction a with 把目标拆成两种情况：a = 0，以及 a = succ a 并附带归纳假设 ih。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp [Nat.succ_add, Nat.add_succ, ih]',
+          },
+          {
+            kind: 'note',
+            text: 'zero 分支里 simp 把 0 + b 化简成 b；succ 分支里 Nat.succ_add 把 succ a + b 变成 succ (a + b)，再用归纳假设 ih 改写。',
+          },
+          {
+            kind: 'p',
+            text: '写完后把光标放到 by 块内部逐行移动，右侧 Goal 面板第一行会一直显示这条定理要证什么，第二行才是当前这一步的状态。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_zero (a : Nat) : a + 0 = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp',
+          },
         ],
-        code: 'theorem add_zero (a : Nat) : a + 0 = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp [ih]',
+        exercise: {
+          title: '练习',
+          body: '把 add_zero 自己写一遍，再尝试证明 zero_add：0 + a = a。两个 sorry 都需要你补上。',
+          cta: '在编辑器中动手',
+          starter:
+            'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
+        },
       },
     ],
-    exerciseTitle: '练习',
-    exerciseBody:
-      '把 add_zero 自己写一遍，再尝试证明 zero_add：0 + a = a。两个 sorry 都需要你补上。',
-    exerciseCta: '在编辑器中动手',
-    starter:
-      'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
   },
   playground: {
     title: 'Lean 编辑器',

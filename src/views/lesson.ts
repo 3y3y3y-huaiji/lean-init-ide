@@ -1,140 +1,166 @@
 import { createLeanPanel } from '../components/lean-panel';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
+import type { LessonPage } from '../i18n/types';
 import { escapeHtml } from './html';
 
-export const renderLesson = (locale: Locale): string => {
-  const t = messagesFor(locale).lesson;
+const codeBlockOpen =
+  'overflow-hidden rounded-xl border border-line bg-panel-soft data-[loaded=true]:border-accent data-[loaded=true]:ring-1 data-[loaded=true]:ring-accent-soft';
+
+const codeBlockHead =
+  'flex items-center justify-between gap-3 border-b border-line py-1.5 pl-3.5 pr-2 text-xs uppercase tracking-[0.06em] text-muted';
+
+const tocLink = (active: boolean) =>
+  active
+    ? 'block rounded-lg bg-accent-soft px-2.5 py-1.5 text-[13px] leading-snug text-fg no-underline'
+    : 'block rounded-lg px-2.5 py-1.5 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
+
+const noteClass = (tone: 'info' | 'warn' | undefined) =>
+  tone === 'warn'
+    ? 'my-5 rounded-lg border border-warn/45 bg-warn/10 px-4 py-3 text-[13.5px] leading-relaxed text-fg'
+    : 'my-5 rounded-lg border border-line bg-panel-soft px-4 py-3 text-[13.5px] leading-relaxed text-muted';
+
+/** 定位当前课时；slug 无效时回退到第一节，避免出现空白页。 */
+const pickLesson = (lessons: LessonPage[], slug?: string): { page: LessonPage; index: number } => {
+  const found = lessons.findIndex((lesson) => lesson.slug === slug);
+  const index = found === -1 ? 0 : found;
+  return { page: lessons[index]!, index };
+};
+
+const renderBlocks = (page: LessonPage, runLabel: string): { html: string; codeCount: number } => {
   let codeIndex = 0;
 
-  const sections = t.sections
-    .map((section) => {
-      const paragraphs = section.paragraphs
-        .map((text) => `<p class="mt-0 mb-3">${text}</p>`)
-        .join('');
-      const code = section.code
-        ? `
-        <div
-          data-role="code-block"
-          class="my-4 overflow-hidden rounded-xl border border-line bg-panel-soft data-[loaded=true]:border-accent data-[loaded=true]:ring-1 data-[loaded=true]:ring-accent-soft"
-        >
-          <div class="flex items-center justify-between gap-3 border-b border-line py-1.5 pl-3.5 pr-2 text-xs uppercase tracking-[0.06em] text-muted">
-            <span>Lean 4</span>
-            <button class="${ghostButtonClass}" type="button" data-code-index="${codeIndex++}">${t.openInEditor}</button>
-          </div>
-          <pre class="m-0 overflow-auto px-4 py-3.5 font-mono text-[13.5px] leading-[1.65]"><code>${escapeHtml(section.code)}</code></pre>
-        </div>`
-        : '';
-      const after = section.after
-        ? `<p class="mt-0 mb-3 border-l-2 border-line-strong pl-3 text-sm text-muted">${section.after}</p>`
-        : '';
+  const html = page.blocks
+    .map((block) => {
+      if (block.kind === 'p') {
+        return `<p class="mt-0 mb-4 text-[15px] leading-[1.75] text-fg">${escapeHtml(block.text)}</p>`;
+      }
+
+      if (block.kind === 'note') {
+        return `<div class="${noteClass(block.tone)}">${escapeHtml(block.text)}</div>`;
+      }
+
+      const index = codeIndex;
+      codeIndex += 1;
       return `
-      <section data-role="lesson-section" class="mt-[38px]">
-        <h2 class="mt-0 mb-3 text-xl font-bold">${section.heading}</h2>
-        ${paragraphs}${code}${after}
-      </section>`;
+        <div data-role="code-block" data-code-index="${index}" class="my-5 ${codeBlockOpen}">
+          <div class="${codeBlockHead}">
+            <span>Lean 4</span>
+            <button class="${ghostButtonClass}" type="button" data-code-index="${index}">${escapeHtml(runLabel)}</button>
+          </div>
+          <pre class="m-0 overflow-auto px-4 py-3.5 font-mono text-[13.5px] leading-[1.65]"><code>${escapeHtml(block.code)}</code></pre>
+        </div>`;
     })
     .join('');
 
+  return { html, codeCount: codeIndex };
+};
+
+export const renderLesson = (locale: Locale, slug?: string): string => {
+  const t = messagesFor(locale).lesson;
+  const { page, index } = pickLesson(t.lessons, slug);
+  const prev = t.lessons[index - 1];
+  const next = t.lessons[index + 1];
+  const body = renderBlocks(page, t.runInEditor);
+
+  const toc = t.lessons
+    .map(
+      (lesson, i) => `
+      <li>
+        <a class="${tocLink(i === index)}" href="/${locale}/learn/${lesson.slug}"${
+          i === index ? ' aria-current="page"' : ''
+        }>${escapeHtml(lesson.navTitle)}</a>
+      </li>`,
+    )
+    .join('');
+
+  const pager = `
+    <nav class="mt-12 flex items-start justify-between gap-6 border-t border-line pt-6">
+      ${
+        prev
+          ? `<a class="group no-underline" href="/${locale}/learn/${prev.slug}">
+               <span class="block text-xs text-muted">← ${escapeHtml(t.prev)}</span>
+               <span class="mt-1 block text-sm text-fg group-hover:text-accent">${escapeHtml(prev.navTitle)}</span>
+             </a>`
+          : '<span></span>'
+      }
+      ${
+        next
+          ? `<a class="group block text-right no-underline" href="/${locale}/learn/${next.slug}">
+               <span class="block text-xs text-muted">${escapeHtml(t.next)} →</span>
+               <span class="mt-1 block text-sm text-fg group-hover:text-accent">${escapeHtml(next.navTitle)}</span>
+             </a>`
+          : '<span></span>'
+      }
+    </nav>`;
+
+  const exercise = page.exercise
+    ? `
+      <section class="mt-8 rounded-2xl border border-accent bg-accent-soft p-6">
+        <h2 class="mt-0 mb-2.5 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
+        <p class="mt-0 mb-4 text-muted">${escapeHtml(page.exercise.body)}</p>
+        <button class="${buttonClass}" type="button" data-code-index="${body.codeCount}">${escapeHtml(page.exercise.cta)}</button>
+      </section>`
+    : '';
+
   return `
-    <div class="grid grid-cols-[minmax(0,1fr)_minmax(360px,440px)] items-start gap-[clamp(20px,3vw,40px)] max-[960px]:grid-cols-1">
-      <article class="max-w-[780px]">
+    <div class="grid grid-cols-[190px_minmax(0,1fr)_400px] items-start gap-8 max-[1240px]:grid-cols-[minmax(0,1fr)_380px] max-[960px]:grid-cols-1">
+      <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1240px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
+        <p class="m-0 mb-2 px-2.5 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
+        <ol class="m-0 list-none space-y-0.5 p-0">${toc}</ol>
+      </nav>
+
+      <article class="min-w-0 max-w-[760px]">
         <header>
-          <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
-          <h1 class="mt-0 mb-3 text-[clamp(28px,4.4vw,42px)] tracking-[-0.015em]">${t.title}</h1>
-          <p class="m-0 text-base text-muted">${t.lead}</p>
+          <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${escapeHtml(t.eyebrow)}</p>
+          <h1 class="mt-0 mb-3 text-[clamp(28px,4.2vw,40px)] tracking-[-0.015em]">${escapeHtml(page.title)}</h1>
+          <p class="mt-0 mb-8 text-base leading-relaxed text-muted">${escapeHtml(page.lead)}</p>
         </header>
-        ${sections}
-        <section class="mt-11 rounded-2xl border border-accent bg-accent-soft p-6">
-          <h2 class="mt-0 mb-2.5 text-lg font-bold">${t.exerciseTitle}</h2>
-          <p class="mt-0 mb-4 text-muted">${t.exerciseBody}</p>
-          <button class="${buttonClass}" type="button" data-code-index="${codeIndex}">${t.exerciseCta}</button>
-        </section>
+        ${body.html}
+        ${exercise}
+        ${pager}
       </article>
-      <aside
-        class="sticky top-[84px] flex max-h-[calc(100vh-100px)] flex-col gap-2.5 overflow-auto max-[960px]:static"
-      >
-        <p class="m-0 text-xs leading-[1.55] text-muted">${t.editorHint}</p>
+
+      <aside class="sticky top-[84px] flex max-h-[calc(100vh-100px)] flex-col gap-2.5 overflow-auto max-[960px]:static">
+        <p class="m-0 text-xs leading-[1.55] text-muted">${escapeHtml(t.editorHint)}</p>
         <div data-role="lean-panel"></div>
       </aside>
     </div>
   `;
 };
 
-export const bindLesson = (root: HTMLElement, locale: Locale) => {
+export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
+  const { page } = pickLesson(t.lessons, slug);
+
   const codes = [
-    ...t.sections.flatMap((section) => (section.code ? [section.code] : [])),
-    t.starter,
+    ...page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : [])),
+    ...(page.exercise ? [page.exercise.starter] : []),
   ];
+
   const host = root.querySelector<HTMLElement>('[data-role="lean-panel"]');
-  if (!host) return;
+  const initial = codes[0];
+  if (!host || initial === undefined) return;
 
-  const initialCode = codes[0] ?? t.starter;
-  const panel = createLeanPanel(host, { variant: 'compact', code: initialCode, locale });
-  const narrow = window.matchMedia('(max-width: 960px)');
-
-  // 记录最近一次自动载入的代码：只有用户没改过内容时，滚动才继续跟随。
-  let autoLoaded = initialCode;
+  const panel = createLeanPanel(host, { variant: 'compact', code: initial, locale });
 
   const blocks = [...root.querySelectorAll<HTMLElement>('[data-role="code-block"]')];
   const highlight = (index: number) => {
     for (const block of blocks) {
-      const button = block.querySelector<HTMLButtonElement>('[data-code-index]');
-      block.dataset.loaded = String(button?.dataset.codeIndex === String(index));
+      block.dataset.loaded = String(block.dataset.codeIndex === String(index));
     }
   };
 
-  const load = (index: number, options?: { focus?: boolean }) => {
-    const code = codes[index];
-    if (code === undefined) return;
-    panel.setCode(code, { focus: options?.focus ?? true });
-    autoLoaded = code;
-    highlight(index);
-  };
-
-  highlight(0);
-
-  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-code-index]')) {
+  // 只绑按钮：code-block 容器上也有 data-code-index，用属性选择器会一次点击触发两次。
+  for (const button of root.querySelectorAll<HTMLButtonElement>('button[data-code-index]')) {
     button.addEventListener('click', () => {
-      load(Number(button.dataset.codeIndex));
-      if (narrow.matches) host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const index = Number(button.dataset.codeIndex);
+      const code = codes[index];
+      if (code === undefined) return;
+      panel.setCode(code, { focus: true });
+      highlight(index);
     });
   }
 
-  // 跟随阅读：以视口上方 35% 处为基准，判定当前读到哪一节；
-  // 编辑器仍是上次自动载入的内容（用户没改过）时，就换成这一节的代码。
-  const sections = [...root.querySelectorAll<HTMLElement>('[data-role="lesson-section"]')];
-
-  const followReader = () => {
-    const marker = window.innerHeight * 0.35;
-    let current: HTMLElement | undefined;
-    for (const section of sections) {
-      if (section.getBoundingClientRect().top <= marker) current = section;
-    }
-    if (!current) return;
-    const button = current.querySelector<HTMLButtonElement>('[data-code-index]');
-    if (!button) return;
-    const index = Number(button.dataset.codeIndex);
-    const code = codes[index];
-    if (code === undefined || code === autoLoaded) return;
-    if (panel.getCode() !== autoLoaded) return;
-    load(index, { focus: false });
-  };
-
-  let ticking = false;
-  window.addEventListener(
-    'scroll',
-    () => {
-      if (ticking) return;
-      ticking = true;
-      window.requestAnimationFrame(() => {
-        ticking = false;
-        followReader();
-      });
-    },
-    { passive: true },
-  );
-
-  followReader();
+  highlight(0);
 };

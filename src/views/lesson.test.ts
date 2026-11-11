@@ -9,39 +9,65 @@ import { bindLesson, renderLesson } from './lesson';
 
 const makePanel = () => ({ setCode: vi.fn(), getCode: vi.fn(() => '') });
 
-const codeSectionsOf = (locale: 'zh' | 'en') =>
-  messagesFor(locale).lesson.sections.filter((section) => Boolean(section.code));
+const lessonsOf = (locale: 'zh' | 'en') => messagesFor(locale).lesson.lessons;
 
 describe('课程页渲染', () => {
-  it('每种语言都渲染出全部小节', () => {
-    for (const locale of ['zh', 'en'] as const) {
-      const expected = messagesFor(locale).lesson.sections.length;
-      const html = renderLesson(locale);
-      expect(html.match(/data-role="lesson-section"/g)?.length, locale).toBe(expected);
+  it('目录列出全部课时，并标出当前一节', () => {
+    const lessons = lessonsOf('zh');
+    const html = renderLesson('zh', lessons[1]!.slug);
+
+    for (const lesson of lessons) {
+      expect(html).toContain(`href="/zh/learn/${lesson.slug}"`);
+    }
+    expect(html).toContain('aria-current="page"');
+  });
+
+  it('只渲染当前课时的代码块', () => {
+    for (const lesson of lessonsOf('zh')) {
+      const expected = lesson.blocks.filter((block) => block.kind === 'code').length;
+      const html = renderLesson('zh', lesson.slug);
+      expect((html.match(/data-role="code-block"/g) ?? []).length, lesson.slug).toBe(expected);
     }
   });
 
-  it('只有带代码的小节才生成代码块', () => {
-    for (const locale of ['zh', 'en'] as const) {
-      const expected = codeSectionsOf(locale).length;
-      expect(renderLesson(locale).match(/data-role="code-block"/g)?.length ?? 0, locale).toBe(
-        expected,
-      );
+  it('无效 slug 回退到第一节而不是空白页', () => {
+    const first = lessonsOf('zh')[0]!;
+    const html = renderLesson('zh', 'no-such-lesson');
+
+    expect(html).toContain(first.title);
+    expect(html).toContain(first.lead);
+  });
+
+  it('首节没有上一篇，末节没有下一篇', () => {
+    const lessonMsgs = messagesFor('zh').lesson;
+    const lessons = lessonMsgs.lessons;
+
+    const first = renderLesson('zh', lessons[0]!.slug);
+    expect(first).toContain(lessonMsgs.next);
+    expect(first).not.toContain(lessonMsgs.prev);
+
+    const last = renderLesson('zh', lessons.at(-1)!.slug);
+    expect(last).toContain(lessonMsgs.prev);
+    expect(last).not.toContain(lessonMsgs.next);
+  });
+
+  it('练习按钮的索引排在所有代码块之后', () => {
+    const lesson = lessonsOf('zh').find((item) => item.exercise);
+    expect(lesson).toBeDefined();
+
+    const codeCount = lesson!.blocks.filter((block) => block.kind === 'code').length;
+    const html = renderLesson('zh', lesson!.slug);
+    const indexes = [...html.matchAll(/data-code-index="(\d+)"/g)].map((match) => Number(match[1]));
+
+    expect(Math.max(...indexes)).toBe(codeCount);
+  });
+
+  it('每节课的正文都能渲染出非空内容', () => {
+    for (const lesson of lessonsOf('zh')) {
+      const html = renderLesson('zh', lesson.slug);
+      expect(html).toContain(lesson.title);
+      expect(html.length, lesson.slug).toBeGreaterThan(1000);
     }
-  });
-
-  it('代码块索引从 0 连续递增，练习按钮接在最后', () => {
-    const locale = 'zh';
-    const total = codeSectionsOf(locale).length;
-    const indexes = [...renderLesson(locale).matchAll(/data-code-index="(\d+)"/g)].map((match) =>
-      Number(match[1]),
-    );
-
-    expect(indexes).toEqual([...Array(total + 1).keys()]);
-  });
-
-  it('侧栏保留编辑器挂载点', () => {
-    expect(renderLesson('zh')).toContain('data-role="lean-panel"');
   });
 });
 
@@ -49,31 +75,48 @@ describe('课程页交互绑定', () => {
   beforeEach(() => {
     createLeanPanel.mockReset();
     createLeanPanel.mockReturnValue(makePanel());
-    document.body.innerHTML = renderLesson('zh');
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
   });
 
-  it('挂载时使用紧凑变体并载入第一段代码', () => {
-    bindLesson(document.body, 'zh');
+  it('挂载紧凑编辑器并预载第一段代码', () => {
+    bindLesson(document.body, 'zh', 'first-proof');
 
     expect(createLeanPanel).toHaveBeenCalledTimes(1);
-    const [host, options] = createLeanPanel.mock.calls[0] as [
+    const [, options] = createLeanPanel.mock.calls[0] as [
       HTMLElement,
       { variant: string; code: string; locale: string },
     ];
-    expect(host.dataset.role).toBe('lean-panel');
     expect(options.variant).toBe('compact');
     expect(options.locale).toBe('zh');
     expect(options.code.length).toBeGreaterThan(0);
   });
 
-  it('默认高亮第一个代码块', () => {
-    bindLesson(document.body, 'zh');
+  it('点代码块按钮把对应代码送进面板并高亮', () => {
+    bindLesson(document.body, 'zh', 'first-proof');
+    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
 
-    const loaded = [...document.body.querySelectorAll<HTMLElement>('[data-role="code-block"]')].map(
-      (block) => block.dataset.loaded,
+    const blocks = [...document.body.querySelectorAll<HTMLElement>('[data-role="code-block"]')];
+    expect(blocks.length).toBeGreaterThan(1);
+
+    blocks[1]!.querySelector<HTMLButtonElement>('button')!.click();
+
+    expect(panel.setCode).toHaveBeenCalledTimes(1);
+    expect(blocks[1]!.dataset.loaded).toBe('true');
+    expect(blocks[0]!.dataset.loaded).toBe('false');
+  });
+
+  it('练习按钮载入该课的 starter 代码', () => {
+    bindLesson(document.body, 'zh', 'first-proof');
+    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
+    const starter = lessonsOf('zh')[0]!.exercise!.starter;
+
+    const exerciseButton = document.body.querySelector<HTMLButtonElement>(
+      'section button[data-code-index]',
     );
-    expect(loaded[0]).toBe('true');
-    expect(loaded.slice(1).every((value) => value === 'false')).toBe(true);
+    expect(exerciseButton).not.toBeNull();
+    exerciseButton!.click();
+
+    expect(panel.setCode).toHaveBeenCalledWith(starter, { focus: true });
   });
 
   it('缺少挂载点时安全退出', () => {

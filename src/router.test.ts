@@ -9,10 +9,24 @@ describe('resolveRoute', () => {
     });
   });
 
-  it('resolves the first lesson', () => {
+  it('resolves a lesson slug', () => {
     expect(resolveRoute('/en/learn/first-proof', 'zh')).toEqual({
       kind: 'route',
-      route: { page: 'lesson', locale: 'en' },
+      route: { page: 'lesson', locale: 'en', slug: 'first-proof' },
+    });
+  });
+
+  it('passes unknown slugs through, the view decides how to fall back', () => {
+    expect(resolveRoute('/zh/learn/unknown', 'en')).toEqual({
+      kind: 'route',
+      route: { page: 'lesson', locale: 'zh', slug: 'unknown' },
+    });
+  });
+
+  it('redirects the bare learn index to the first lesson', () => {
+    expect(resolveRoute('/zh/learn', 'en')).toEqual({
+      kind: 'redirect',
+      path: '/zh/learn/first-proof',
     });
   });
 
@@ -23,8 +37,8 @@ describe('resolveRoute', () => {
     });
   });
 
-  it('treats unknown localized paths as not found', () => {
-    expect(resolveRoute('/zh/learn/unknown', 'en')).toEqual({
+  it('treats unrelated localized paths as not found', () => {
+    expect(resolveRoute('/zh/nope', 'en')).toEqual({
       kind: 'route',
       route: { page: 'notFound', locale: 'zh' },
     });

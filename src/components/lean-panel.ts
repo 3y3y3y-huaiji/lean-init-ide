@@ -76,7 +76,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
     <section
       class="${
         compact
-          ? 'relative h-[340px] min-h-0 overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[300px]'
+          ? 'relative h-[360px] min-h-0 overflow-hidden rounded-xl border border-line bg-editor-bg'
           : 'relative h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[60vh] max-[900px]:min-h-[420px]'
       }"
     ><div class="absolute inset-0" data-role="editor"></div></section>
@@ -101,21 +101,23 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
           }"
         >${t.goalPlaceholder}</pre>
       </section>
-      <section class="${panelClass(compact)} flex-1 basis-1/2">
+      <section class="${panelClass(compact)} flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
         <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2">
           <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
         </ul>
       </section>
-      <section class="${panelClass(compact)} flex-1 basis-1/2">
-        <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
-        <pre
-          data-role="log"
-          class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted ${
-            compact ? 'max-h-[110px]' : ''
-          }"
-        ></pre>
-      </section>
+      ${
+        compact
+          ? `<details class="${panelClass(true)} flex-none">
+               <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">展开</span></summary>
+               <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
+             </details>`
+          : `<section class="${panelClass(false)} flex-1 basis-1/2">
+               <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
+               <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted"></pre>
+             </section>`
+      }
     </aside>
   </div>
 `;
@@ -647,8 +649,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   startEl.addEventListener('click', start);
 
-  // 仅开发环境：方便在控制台或自动化测试里检查语言注册与补全 UI。
-  if (import.meta.env.DEV) {
+  // 开发环境与 ?debug 下暴露编辑器实例，方便控制台调试和自动化检查。
+  if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
     Object.assign(window as unknown as Record<string, unknown>, {
       __monaco: monaco,
       __editor: editor,

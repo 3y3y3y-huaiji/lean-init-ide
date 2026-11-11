@@ -44,16 +44,33 @@ describe('i18n 字典结构对齐', () => {
     expect(emptyPaths(en, 'en')).toEqual([]);
   });
 
-  it('课程分节都带标题和至少一段正文', () => {
+  it('每节课都有 slug、标题和内容块', () => {
     for (const [name, messages] of [
       ['zh', zh],
       ['en', en],
     ] as const) {
-      expect(messages.lesson.sections.length, name).toBeGreaterThan(0);
-      for (const section of messages.lesson.sections) {
-        expect(section.heading.trim(), name).not.toBe('');
-        expect(section.paragraphs.length, name).toBeGreaterThan(0);
+      expect(messages.lesson.lessons.length, name).toBeGreaterThan(0);
+      for (const lesson of messages.lesson.lessons) {
+        expect(lesson.slug.trim(), name).not.toBe('');
+        expect(lesson.title.trim(), name).not.toBe('');
+        expect(lesson.blocks.length, name).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('两种语言的课时 slug 顺序一致，切换语言不会掉到别的课', () => {
+    expect(zh.lesson.lessons.map((lesson) => lesson.slug)).toEqual(
+      en.lesson.lessons.map((lesson) => lesson.slug),
+    );
+  });
+
+  it('slug 全站唯一', () => {
+    for (const [name, messages] of [
+      ['zh', zh],
+      ['en', en],
+    ] as const) {
+      const slugs = messages.lesson.lessons.map((lesson) => lesson.slug);
+      expect(new Set(slugs).size, name).toBe(slugs.length);
     }
   });
 });

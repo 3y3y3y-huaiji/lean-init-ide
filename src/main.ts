@@ -1,7 +1,7 @@
 import './index.css';
 import { buttonClass } from './components/ui';
 import { detectLocale, messagesFor, type Locale } from './i18n';
-import { resolveRoute, type Page, type Route } from './router';
+import { resolveRoute, type Route } from './router';
 import { bindLayout, renderLayout } from './views/layout';
 import { renderHome } from './views/home';
 
@@ -18,11 +18,14 @@ const renderNotFound = (locale: Locale): string => {
   `;
 };
 
-const pageTitle = (page: Page, locale: Locale): string => {
-  const t = messagesFor(locale);
-  switch (page) {
-    case 'lesson':
-      return `${t.lesson.title} · Lean Init IDE`;
+const pageTitle = (route: Route): string => {
+  const t = messagesFor(route.locale);
+  switch (route.page) {
+    case 'lesson': {
+      const lesson =
+        t.lesson.lessons.find((item) => item.slug === route.slug) ?? t.lesson.lessons[0];
+      return `${lesson?.title ?? t.lesson.tocTitle} · Lean Init IDE`;
+    }
     case 'playground':
       return `${t.playground.title} · Lean Init IDE`;
     case 'notFound':
@@ -33,7 +36,7 @@ const pageTitle = (page: Page, locale: Locale): string => {
 };
 
 const boot = async (route: Route, root: HTMLElement) => {
-  document.title = pageTitle(route.page, route.locale);
+  document.title = pageTitle(route);
   document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
 
   let content: string;
@@ -42,8 +45,8 @@ const boot = async (route: Route, root: HTMLElement) => {
   switch (route.page) {
     case 'lesson': {
       const { renderLesson, bindLesson } = await import('./views/lesson');
-      content = renderLesson(route.locale);
-      mount = () => bindLesson(root, route.locale);
+      content = renderLesson(route.locale, route.slug);
+      mount = () => bindLesson(root, route.locale, route.slug);
       break;
     }
     case 'playground': {

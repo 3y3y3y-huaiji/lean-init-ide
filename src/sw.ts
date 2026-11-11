@@ -19,6 +19,7 @@ import {
   type RuntimeManifest,
 } from './asset-sources.mjs';
 import { downloadRanges } from './sw-download';
+import { loadRangedAsset } from './sw-assemble';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
 
@@ -69,88 +70,32 @@ sw.addEventListener('fetch', (event) => {
   const asset = RANGE_ASSETS.get(name);
   if (!asset) return;
 
-  event.respondWith(loadRangedAsset(request, name, asset));
+  event.respondWith(
+    loadRangedAsset({
+      request,
+      name,
+      bytes: asset.bytes,
+      sources: asset.sources,
+      origin: sw.location.origin,
+      download: (url, total, signal, onProgress) =>
+        downloadRanges({
+          url,
+          total,
+          chunkBytes: CHUNK_BYTES,
+          parallel: MAX_PARALLEL,
+          timeoutMs: CHUNK_TIMEOUT_MS,
+          retries: RETRIES,
+          minSplitBytes: MIN_SPLIT_BYTES,
+          maxSplitDepth: MAX_SPLIT_DEPTH,
+          signal,
+          onProgress: ({ loaded }) => onProgress(loaded, total),
+        }),
+      onProgress: (loaded, total, source) => void notify(name, loaded, total, source.label),
+      onFallback: notifyFallback,
+      fallbackFetch: (request) => fetch(request),
+    }),
+  );
 });
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
-async function loadRangedAsset(
-  request: Request,
-  name: string,
-  asset: RangeAsset,
-): Promise<Response> {
-  let lastError: unknown;
-
-  for (const source of asset.sources) {
-    try {
-      // 主源是同源相对路径；显式补上 origin，避免 SW 里相对 URL 的解析差异。
-      const remoteUrl = source.url.startsWith('/')
-        ? new URL(source.url, sw.location.origin).href
-        : source.url;
-      const parts = await fetchRanges(remoteUrl, asset.bytes, request.signal, name, source.label);
-      const body = new Blob(parts, { type: 'application/octet-stream' });
-      if (body.size !== asset.bytes) {
-        throw new Error(`assembled ${body.size} bytes, expected ${asset.bytes}`);
-      }
-      return await assembleResponse(request, body);
-    } catch (error) {
-      if (request.signal.aborted) throw error;
-      lastError = error;
-      notifyFallback(name, `${source.label} 不可用：${errorMessage(error)}`);
-    }
-  }
-
-  notifyFallback(name, `远端源均失败，回退同源：${errorMessage(lastError)}`);
-  return fetch(request);
-}
-
-/** @wasm-idle/lsp 会校验 response.url === request.url，合成响应需要固定回同源地址。 */
-async function assembleResponse(request: Request, body: Blob): Promise<Response> {
-  const response = new Response(body, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Content-Length': String(body.size),
-      'Accept-Ranges': 'bytes',
-      'Cross-Origin-Resource-Policy': 'same-origin',
-    },
-  });
-
-  try {
-    Object.defineProperty(response, 'url', { value: request.url });
-    Object.defineProperty(response, 'redirected', { value: false });
-    Object.defineProperty(response, 'type', { value: 'basic' });
-    return response;
-  } catch {
-    return fetch(request);
-  }
-}
-
-/**
- * 并行下载所有分片并按顺序返回。分片数量直接来自固定的字节数，因此不需要额外的
- * HEAD 往返；数据不匹配会由这里的总长度校验和运行时的 SHA-256 校验兜住。
- */
-async function fetchRanges(
-  url: string,
-  total: number,
-  signal: AbortSignal,
-  name: string,
-  sourceLabel: string,
-): Promise<ArrayBuffer[]> {
-  return downloadRanges({
-    url,
-    total,
-    chunkBytes: CHUNK_BYTES,
-    parallel: MAX_PARALLEL,
-    timeoutMs: CHUNK_TIMEOUT_MS,
-    retries: RETRIES,
-    minSplitBytes: MIN_SPLIT_BYTES,
-    maxSplitDepth: MAX_SPLIT_DEPTH,
-    signal,
-    onProgress: ({ loaded }) => void notify(name, loaded, total, sourceLabel),
-  });
-}
 
 async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });

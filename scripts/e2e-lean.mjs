@@ -53,6 +53,27 @@ const main = async () => {
   if (!env.crossOriginIsolated) throw new Error('page is not cross-origin isolated');
   if (env.worker !== 'activated') throw new Error(`service worker state: ${env.worker}`);
 
+  // 首次加载时 active 可能已 activated，但页面还没被 controller 接管；
+  // 这时 /wasm-lean4/* 会绕过 SW 直接落到静态资源/SPA 回退，导致假失败。
+  if (!env.controlled) {
+    const controlled = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          if (navigator.serviceWorker.controller) return resolve(true);
+          const timer = setTimeout(() => resolve(false), 5000);
+          navigator.serviceWorker.addEventListener(
+            'controllerchange',
+            () => {
+              clearTimeout(timer);
+              resolve(true);
+            },
+            { once: true },
+          );
+        }),
+    );
+    if (!controlled) throw new Error('page is not controlled by the service worker');
+  }
+
   await page.click('[data-role="start"]');
   console.log(`[${stamp()}] 启动 Lean（默认示例）`);
 

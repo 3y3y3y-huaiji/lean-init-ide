@@ -103,8 +103,8 @@
       "name": "runner-worker.js",
       "key": "runner-worker.js",
       "local": "scripts/assets/runner-worker.js",
-      "bytes": 16776,
-      "sha256": "c34031f276fc4aa05c2acbab781fad1192df0cfbfbbb41535aa217786f25f2c6",
+      "bytes": 16931,
+      "sha256": "b69aa509eab9717999cc3d65a09fc558375beb6ce84e439cf957f61b992ef6ab",
       "contentType": "text/javascript"
     }
   ]

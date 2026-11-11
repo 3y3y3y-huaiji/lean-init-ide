@@ -97,6 +97,10 @@ jobs:
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
       - name: 准备 Lean 资产
         run: npm run fetch:assets
+      # build:web 的 dist 不含 wasm-lean4；小资产（index.json/lean.mjs 等）不走 SW，
+      # 必须补回静态副本，否则会落到网关的 SPA 回退。
+      - name: 补齐静态兜底资产
+        run: mkdir -p dist/wasm-lean4 && cp -r public/wasm-lean4/. dist/wasm-lean4/
       - name: 启动本地等价网关
         run: |
           node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &

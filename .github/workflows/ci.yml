@@ -81,3 +81,43 @@ jobs:
       # 只审生产依赖：开发工具链的告警不阻塞发布，但会在日志里可见。
       - name: 生产依赖高危漏洞
         run: npm audit --omit=dev --audit-level=high
+
+  deploy:
+    name: 部署
+    needs: [static, test, build, audit]
+    # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
+    if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 必须用完整 build：build:web 会跳过 143 MB 兜底副本，丢掉 SW 的第三级回退。
+      - name: 缓存 Lean 资产
+        uses: actions/cache@v4
+        with:
+          path: public/wasm-lean4
+          key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
+      - run: npm run build
+      - run: npm run verify:build
+      - name: 推送到 Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=lean-init-ide --branch=main
+      # 部署是原子的，但自定义域传播需要几秒，失败重试而不是立刻判定发布失败。
+      - name: 线上冒烟
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if node scripts/smoke.mjs; then
+              exit 0
+            fi
+            echo "第 ${attempt} 次冒烟未通过，10 秒后重试"
+            sleep 10
+          done
+          echo "冒烟连续失败，请按 README 的回滚步骤处理"
+          exit 1

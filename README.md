@@ -160,19 +160,50 @@ npm run upload:assets -- --verify-only
 
 ## 部署与冒烟
 
-Pages 走 Git 集成，push 到 `main` 即部署，没有独立的 CD 流水线。发布后的验证靠冒烟脚本：
+部署由 GitHub Actions 负责，**CI 全绿才会上线**：
+
+```
+static / test / build / audit  →  deploy  →  smoke
+```
+
+`deploy` job 只在 `main` 分支、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
+它跑完整 `npm run build`（含 143 MB 同源兜底副本，`build:web` 会省掉这一层），
+用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
+仍失败则整条流水线标红。
+
+### 首次启用
+
+1. Cloudflare → My Profile → API Tokens → Create Token，权限选
+   `Account → Cloudflare Pages → Edit` 与 `Account → Account Settings → Read`
+2. GitHub 仓库 → Settings → Secrets and variables → Actions：
+   - Secret `CLOUDFLARE_API_TOKEN`：上一步生成的 token
+   - Secret `CLOUDFLARE_ACCOUNT_ID`：`6f20d0c99e90d1b8ccecc383ad3e27ad`
+   - Variable `CD_ENABLED`：`true`
+3. 确认一次 GitHub 部署成功之后，到 Pages → `lean-init-ide` → Settings → Build & deployments
+   **断开 Git 集成**，否则 Cloudflare 与 GitHub 会各部署一次，互相覆盖。
+
+### 回滚
 
 ```bash
-npm run smoke                                   # 默认打 https://criticalthinking.de5.net
+npx wrangler pages deployment list --project-name=lean-init-ide
+```
+
+在 Dashboard 的 Deployments 里选中上一个正常版本执行 Rollback。回滚只影响静态产物与 Functions，
+R2 里的资产不受影响——运行时取哪一版由清单里的 `cacheKey` 决定。
+
+### 冒烟
+
+```bash
+npm run smoke                                   # 默认打主域
 npm run smoke -- --origin=https://lean-init-ide.pages.dev
 ```
 
-冒烟检查五项：首页 `#app` 与标题、COOP/COEP、`sw.js` 可访问、`/cdn/<key>` 的 Range 206 与
-`Content-Range`/`ETag`、白名单外路径 404。脚本只用 Node 内置模块和系统 `curl`，不需要
-`node_modules`，所以能直接在任意环境（含需要代理的网络）跑。
+检查五项：首页 `#app` 与标题、COOP/COEP、`sw.js` 可访问、`/cdn/<key>` 的 Range 206 与
+`Content-Range`/`ETag`、白名单外路径 404。
 
-`.github/workflows/smoke.yml` 支持手动触发和每日 01:00 UTC 巡检，用于捕捉证书、路由、
-Functions 的静默回归。它**不挂在 push 之后**——Pages 构建完成时间不确定，过早探测会打到旧版本。
+`.github/workflows/smoke.yml` 另外提供手动触发与每日 01:00 UTC 巡检。它和部署流水线里的冒烟
+分工不同：部署后的那次回答「这次发布对不对」，每日巡检回答「站还在不在」，负责捕捉证书、
+路由、Functions 的静默回归。
 
 已知平台行为：Cloudflare Pages 会用自己的边缘 TTL 覆盖静态资源的 `Cache-Control`，
 `public/_headers` 里给 `/sw.js` 写的 `no-cache` 未必生效（实测 `max-age=14400`）。

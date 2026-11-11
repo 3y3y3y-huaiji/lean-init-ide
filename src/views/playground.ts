@@ -7,7 +7,7 @@ const DEFAULT_CODE = `def bad : Nat := true
 theorem add_comm (a b : Nat) : a + b = b + a := by
   induction a with
   | zero => simp
-  | succ a ih => simp [Nat.succ_add, Nat.add_succ, ih]
+  | succ a ih => simp only [Nat.succ_add, Nat.add_succ, ih]
 
 #check Nat.add
 `;

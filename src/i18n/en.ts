@@ -200,7 +200,7 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp [Nat.succ_add, Nat.add_succ, ih]',
+            code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp only [Nat.succ_add, Nat.add_succ, ih]',
           },
           {
             kind: 'note',

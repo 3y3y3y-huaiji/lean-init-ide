@@ -189,8 +189,10 @@ describe('边缘缓存', () => {
 
   it('Range 编进 cache key，不同分片不会互相覆盖', async () => {
     const cache = {
-      match: vi.fn(async (_request: Request) => undefined),
-      put: vi.fn(async (_request: Request, _response: Response) => undefined),
+      match: vi.fn<(request: Request) => Promise<Response | undefined>>(async () => undefined),
+      put: vi.fn<(request: Request, response: Response) => Promise<undefined>>(
+        async () => undefined,
+      ),
     };
     vi.stubGlobal('caches', { default: cache });
 

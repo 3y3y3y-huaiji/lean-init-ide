@@ -95,6 +95,25 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 认证失败时 wrangler 只回一句 9106，看不出是 token 值坏了还是权限不够。
+      - name: 诊断部署凭据
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "token 长度: ${#TOKEN}"
+          case "$TOKEN" in
+            *[[:space:]]*) echo "token 含空白字符，多半是复制时带了换行或空格"; exit 1 ;;
+            *) echo "token 无空白字符" ;;
+          esac
+          echo "account id 长度: ${#ACCOUNT}"
+          code=$(curl -s -o /tmp/probe.json -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/pages/projects")
+          echo "API 状态码: $code"
+          head -c 400 /tmp/probe.json
+          echo
+          [ "$code" = "200" ] || exit 1
       # 必须用完整 build：build:web 会跳过 143 MB 兜底副本，丢掉 SW 的第三级回退。
       - name: 缓存 Lean 资产
         uses: actions/cache@v4

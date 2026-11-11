@@ -213,8 +213,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     barEl.style.width = ratio === null ? '0%' : `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
   };
 
-  // Cloudflare Pages 不支持 Range；Service Worker 从 Cloudflare R2 分片下载 Lean 资产，
-  // R2 不可用时自动回退 GitHub raw，最后回退同源全量请求。
+  // Pages 静态资源不支持 Range；Service Worker 从站点同源 /cdn/ 网关（Function → R2）
+  // 分片下载 Lean 资产，网关不可用时回退 GitHub raw，最后回退同源全量请求。
   const registerServiceWorker = async () => {
     if (!('serviceWorker' in navigator)) return;
     try {

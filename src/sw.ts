@@ -1,13 +1,13 @@
 /**
  * Lean 运行时资产下载器（Service Worker）。
  *
- * Cloudflare Pages 不处理 Range 请求，所以 143MB 的 Lean 运行时优先从
- * Cloudflare R2 自定义域分片并行下载；R2 失败时回退到固定 revision 的
- * GitHub raw，最后才回退到同源全量请求。每个大文件切成 4MB 分片，按预期
- * 字节数校验后合成一个同源响应交还给 Lean 加载器。
+ * Cloudflare Pages 的静态资源不处理 Range，所以 143MB 的 Lean 运行时优先从
+ * 站点同源的 /cdn/ 网关（Pages Function → R2 binding）分片并行下载；网关失败时
+ * 回退到固定 revision 的 GitHub raw，最后才回退到同源全量请求。每个大文件切成
+ * 4MB 分片，按预期字节数校验后合成一个同源响应交还给 Lean 加载器。
  *
  * 资产清单与分发源来自 config/lean4-runtime.json + src/asset-sources.mjs，
- * 与构建脚本 scripts/fetch-assets.mjs 共用同一份定义。
+ * 与 Pages Functions、构建脚本 scripts/fetch-assets.mjs 共用同一份定义。
  *
  * 构建期由 `npm run build:sw` 编译为 public/sw.js，仓库里不保留手写 JS。
  */
@@ -67,7 +67,11 @@ async function loadRangedAsset(request: Request, name: string, asset: RangeAsset
 
   for (const source of asset.sources) {
     try {
-      const parts = await fetchRanges(source.url, asset.bytes, request.signal, name, source.label);
+      // 主源是同源相对路径；显式补上 origin，避免 SW 里相对 URL 的解析差异。
+      const remoteUrl = source.url.startsWith('/')
+        ? new URL(source.url, sw.location.origin).href
+        : source.url;
+      const parts = await fetchRanges(remoteUrl, asset.bytes, request.signal, name, source.label);
       const body = new Blob(parts, { type: 'application/octet-stream' });
       if (body.size !== asset.bytes) {
         throw new Error(`assembled ${body.size} bytes, expected ${asset.bytes}`);

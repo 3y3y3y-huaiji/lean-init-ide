@@ -4,8 +4,8 @@
   "runtime": "Lean 4.34.1 Init",
   "bucket": "lean4-ide-releases",
   "primary": {
-    "label": "Cloudflare R2",
-    "baseUrl": "https://r2.huaiji3y.ccwu.cc/"
+    "label": "Pages Functions (R2)",
+    "baseUrl": "/cdn/"
   },
   "fallback": {
     "label": "GitHub raw",

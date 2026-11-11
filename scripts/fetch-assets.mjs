@@ -7,17 +7,25 @@ import { assetSources } from '../src/asset-sources.mjs';
 /**
  * Downloads the pinned Lean 4.34.1 Init runtime used by @wasm-idle/lsp.
  *
- * The manifest in config/lean4-runtime.json is shared with the Service Worker:
- * Cloudflare R2 is the primary source, GitHub raw is the fallback. Upstream
- * artifacts use `.gz` names while the runtime expects `.gz.bin`. Every file is
- * verified against its pinned byte count and SHA-256 before it is written.
+ * The manifest in config/lean4-runtime.json is shared with the Service Worker and
+ * Pages Functions: the primary source is the same-origin /cdn/ gateway, GitHub raw
+ * is the fallback. Upstream artifacts use `.gz` names while the runtime expects
+ * `.gz.bin`. Every file is verified against its pinned byte count and SHA-256.
  *
- * Set LEAN_ASSET_BASE_URL to override the primary source (e.g. a staging bucket).
+ * Node cannot fetch a relative /cdn/ URL without an origin. Set LEAN_ASSET_ORIGIN
+ * (e.g. https://operator.ccwu.cc) to use the deployed gateway during builds;
+ * otherwise the build goes straight to the GitHub raw fallback.
+ * LEAN_ASSET_BASE_URL overrides the primary source entirely.
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'public', 'wasm-lean4');
 const manifest = JSON.parse(readFileSync(path.join(root, 'config', 'lean4-runtime.json'), 'utf8'));
-const primaryOverride = process.env.LEAN_ASSET_BASE_URL?.trim() || undefined;
+const assetOrigin = process.env.LEAN_ASSET_ORIGIN?.trim();
+const primaryOverride =
+  process.env.LEAN_ASSET_BASE_URL?.trim() ||
+  (assetOrigin && manifest.primary.baseUrl.startsWith('/')
+    ? new URL(manifest.primary.baseUrl, assetOrigin).href
+    : undefined);
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 const isValid = (file, asset) => {
@@ -38,7 +46,13 @@ const verify = (asset, data) => {
 
 const fetchFromSources = async (asset) => {
   let lastError;
-  for (const source of assetSources(manifest, asset, primaryOverride)) {
+  const candidates = assetSources(manifest, asset, primaryOverride).filter((source) =>
+    /^https?:\/\//i.test(source.url),
+  );
+  if (candidates.length === 0) {
+    throw new Error(`no fetchable absolute source for ${asset.name}; set LEAN_ASSET_ORIGIN`);
+  }
+  for (const source of candidates) {
     try {
       const response = await fetch(source.url, {
         headers: { 'Accept-Encoding': 'identity' },

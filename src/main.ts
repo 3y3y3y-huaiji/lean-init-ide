@@ -59,7 +59,11 @@ const boot = async (route: Route, root: HTMLElement) => {
       content = renderHome(route.locale);
   }
 
-  root.innerHTML = renderLayout(route.locale, route.page === 'notFound' ? 'home' : route.page, content);
+  root.innerHTML = renderLayout(
+    route.locale,
+    route.page === 'notFound' ? 'home' : route.page,
+    content,
+  );
   bindLayout(root, route.locale);
   mount?.();
 };

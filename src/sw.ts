@@ -12,7 +12,12 @@
  * 构建期由 `npm run build:sw` 编译为 public/sw.js，仓库里不保留手写 JS。
  */
 import manifestJson from '../config/lean4-runtime.json';
-import { assetSources, rangedAssets, type AssetSource, type RuntimeManifest } from './asset-sources.mjs';
+import {
+  assetSources,
+  rangedAssets,
+  type AssetSource,
+  type RuntimeManifest,
+} from './asset-sources.mjs';
 import { buildRanges } from './sw-ranges';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
@@ -62,7 +67,11 @@ sw.addEventListener('fetch', (event) => {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-async function loadRangedAsset(request: Request, name: string, asset: RangeAsset): Promise<Response> {
+async function loadRangedAsset(
+  request: Request,
+  name: string,
+  asset: RangeAsset,
+): Promise<Response> {
   let lastError: unknown;
 
   for (const source of asset.sources) {
@@ -141,13 +150,16 @@ async function fetchRanges(
     }
   };
 
-  await Promise.all(
-    Array.from({ length: Math.min(MAX_PARALLEL, ranges.length) }, () => worker()),
-  );
+  await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL, ranges.length) }, () => worker()));
   return parts;
 }
 
-async function fetchRange(url: string, start: number, end: number, signal: AbortSignal): Promise<ArrayBuffer> {
+async function fetchRange(
+  url: string,
+  start: number,
+  end: number,
+  signal: AbortSignal,
+): Promise<ArrayBuffer> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
     try {
@@ -178,7 +190,13 @@ async function fetchRange(url: string, start: number, end: number, signal: Abort
 async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {
-    (client as WindowClient).postMessage({ type: 'lean-asset-progress', name, loaded, total, source });
+    (client as WindowClient).postMessage({
+      type: 'lean-asset-progress',
+      name,
+      loaded,
+      total,
+      source,
+    });
   }
 }
 

@@ -81,6 +81,46 @@ npm run upload:assets -- --verify-only
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
+## 质量门禁
+
+本地和 CI 跑同一套命令，任一失败即阻断合并：
+
+| 命令 | 检查内容 |
+| --- | --- |
+| `npm run format:check` | Prettier 格式一致性 |
+| `npm run lint` | ESLint（应用、脚本、配置文件） |
+| `npm run typecheck` | 三份 tsconfig：应用、Service Worker、Pages Functions |
+| `npm test` | Vitest + 覆盖率阈值 |
+| `npm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
+| `npm run build:web` | 生产构建（跳过 143 MB 资产下载） |
+| `npm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单、COOP/COEP、JS 体积预算 |
+
+覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
+后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
+
+`.github/workflows/ci.yml` 拆成四个并行 job：静态检查、单元测试、构建产物、依赖审计（只审生产依赖）。
+建议在 GitHub 分支保护里要求这四个 check 全绿才允许合入 `main`。
+
+## 部署与冒烟
+
+Pages 走 Git 集成，push 到 `main` 即部署，没有独立的 CD 流水线。发布后的验证靠冒烟脚本：
+
+```bash
+npm run smoke                                   # 默认打 https://criticalthinking.de5.net
+npm run smoke -- --origin=https://lean-init-ide.pages.dev
+```
+
+冒烟检查五项：首页 `#app` 与标题、COOP/COEP、`sw.js` 可访问、`/cdn/<key>` 的 Range 206 与
+`Content-Range`/`ETag`、白名单外路径 404。脚本只用 Node 内置模块和系统 `curl`，不需要
+`node_modules`，所以能直接在任意环境（含需要代理的网络）跑。
+
+`.github/workflows/smoke.yml` 支持手动触发和每日 01:00 UTC 巡检，用于捕捉证书、路由、
+Functions 的静默回归。它**不挂在 push 之后**——Pages 构建完成时间不确定，过早探测会打到旧版本。
+
+已知平台行为：Cloudflare Pages 会用自己的边缘 TTL 覆盖静态资源的 `Cache-Control`，
+`public/_headers` 里给 `/sw.js` 写的 `no-cache` 未必生效（实测 `max-age=14400`）。
+浏览器对 Service Worker 脚本有独立缓存策略，影响有限，但更新延迟属于可预期范围。
+
 ## 目录结构
 
 ```
@@ -101,7 +141,7 @@ public/
   _routes.json       仅 /cdn/* 走 Functions
 config/
   lean4-runtime.json 资产清单、字节数/SHA-256、主源与回退源、缓存键
-scripts/             资产下载/上传、LSP 补丁
+scripts/             资产下载/上传、LSP 补丁、清单与产物校验、线上冒烟
 wrangler.toml        Pages 项目配置与 R2 binding
 ```
 

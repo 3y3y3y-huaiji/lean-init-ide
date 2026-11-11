@@ -54,7 +54,9 @@ const run = (command, argv, options = {}) => {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`${command} exited with ${result.status}: ${String(result.stderr ?? '').trim()}`);
+    throw new Error(
+      `${command} exited with ${result.status}: ${String(result.stderr ?? '').trim()}`,
+    );
   }
   return String(result.stdout ?? '');
 };
@@ -92,14 +94,27 @@ const probeRemote = async (asset, attempts = 1) => {
     } catch (error) {
       // Node fetch does not honor HTTP(S)_PROXY; curl does.
       const output = run('curl', [
-        '-sS', '-D', '-', '-o', '/dev/null',
-        '-H', 'Range: bytes=0-0',
+        '-sS',
+        '-D',
+        '-',
+        '-o',
+        '/dev/null',
+        '-H',
+        'Range: bytes=0-0',
         target,
       ]);
       const lines = output.split(/\r?\n/);
       const headers = {
-        etag: lines.find((line) => /^etag:/i.test(line))?.slice(5).trim() ?? '',
-        contentRange: lines.find((line) => /^content-range:/i.test(line))?.slice(14).trim() ?? '',
+        etag:
+          lines
+            .find((line) => /^etag:/i.test(line))
+            ?.slice(5)
+            .trim() ?? '',
+        contentRange:
+          lines
+            .find((line) => /^content-range:/i.test(line))
+            ?.slice(14)
+            .trim() ?? '',
       };
       if (!headers.contentRange) throw error;
       return headers;
@@ -137,9 +152,7 @@ let skipped = 0;
 let verified = 0;
 
 for (const asset of assets) {
-  const sourcePath = asset.local
-    ? path.join(root, asset.local)
-    : path.join(outDir, asset.name);
+  const sourcePath = asset.local ? path.join(root, asset.local) : path.join(outDir, asset.name);
   if (!existsSync(sourcePath)) {
     throw new Error(`missing ${sourcePath}; run "npm run fetch:assets" first`);
   }
@@ -175,7 +188,9 @@ for (const asset of assets) {
   }
 
   if (remote?.error) {
-    console.log(`skip   ${asset.key} (网关探测不可用：${remote.error}；可用 LEAN_ASSET_ORIGIN 指定站点域名)`);
+    console.log(
+      `skip   ${asset.key} (网关探测不可用：${remote.error}；可用 LEAN_ASSET_ORIGIN 指定站点域名)`,
+    );
     continue;
   }
 
@@ -186,10 +201,16 @@ for (const asset of assets) {
   }
 
   const putArgs = [
-    'r2', 'object', 'put', `${bucket}/${asset.key}`,
-    '--file', relativePath,
-    '--content-type', asset.contentType,
-    '--cache-control', 'public,max-age=31536000,immutable',
+    'r2',
+    'object',
+    'put',
+    `${bucket}/${asset.key}`,
+    '--file',
+    relativePath,
+    '--content-type',
+    asset.contentType,
+    '--cache-control',
+    'public,max-age=31536000,immutable',
     local ? '--local' : '--remote',
     '--force',
   ];

@@ -50,12 +50,20 @@ describe('assetSources', () => {
     const origin = 'https://criticalthinking.de5.net';
     const absolute = new URL(manifest.primary.baseUrl, origin).href;
     const sources = assetSources(manifest, assetByName('lean.mjs'), absolute);
-    expect(sources[0]?.url).toBe(`https://criticalthinking.de5.net/cdn/lean.mjs?r=${manifest.cacheKey}`);
+    expect(sources[0]?.url).toBe(
+      `https://criticalthinking.de5.net/cdn/lean.mjs?r=${manifest.cacheKey}`,
+    );
   });
 
   it('normalizes an override base URL that lacks a trailing slash', () => {
-    const sources = assetSources(manifest, assetByName('lean.mjs'), 'https://staging.example.com/assets');
-    expect(sources[0]?.url).toBe(`https://staging.example.com/assets/lean.mjs?r=${manifest.cacheKey}`);
+    const sources = assetSources(
+      manifest,
+      assetByName('lean.mjs'),
+      'https://staging.example.com/assets',
+    );
+    expect(sources[0]?.url).toBe(
+      `https://staging.example.com/assets/lean.mjs?r=${manifest.cacheKey}`,
+    );
   });
 
   it('deduplicates sources that resolve to the same URL', () => {

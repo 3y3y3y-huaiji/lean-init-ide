@@ -16,7 +16,9 @@ const source = readFileSync(target, 'utf8');
 if (source.includes(to)) {
   console.log('lsp patch: already applied');
 } else if (!source.includes(from)) {
-  throw new Error(`lsp patch: expected "${from}" in ${target}. The package version changed; update the patch.`);
+  throw new Error(
+    `lsp patch: expected "${from}" in ${target}. The package version changed; update the patch.`,
+  );
 } else {
   writeFileSync(target, source.replace(from, to));
   console.log('lsp patch: maxConcurrentDownloads 3 -> 6');

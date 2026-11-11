@@ -9,7 +9,9 @@ export const renderLesson = (locale: Locale): string => {
 
   const sections = t.sections
     .map((section) => {
-      const paragraphs = section.paragraphs.map((text) => `<p class="mt-0 mb-3">${text}</p>`).join('');
+      const paragraphs = section.paragraphs
+        .map((text) => `<p class="mt-0 mb-3">${text}</p>`)
+        .join('');
       const code = section.code
         ? `
         <div
@@ -61,7 +63,10 @@ export const renderLesson = (locale: Locale): string => {
 
 export const bindLesson = (root: HTMLElement, locale: Locale) => {
   const t = messagesFor(locale).lesson;
-  const codes = [...t.sections.flatMap((section) => (section.code ? [section.code] : [])), t.starter];
+  const codes = [
+    ...t.sections.flatMap((section) => (section.code ? [section.code] : [])),
+    t.starter,
+  ];
   const host = root.querySelector<HTMLElement>('[data-role="lean-panel"]');
   if (!host) return;
 

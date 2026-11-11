@@ -1,0 +1,30 @@
+name: Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 目标站点
+        required: false
+        default: https://criticalthinking.de5.net
+  schedule:
+    # 每天 01:00 UTC 巡检一次，捕捉证书、路由、Functions 的静默回归。
+    - cron: '0 1 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: 线上冒烟
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # 不依赖 node_modules：脚本只用 Node 内置模块和系统 curl。
+      - name: 探测主站
+        run: node scripts/smoke.mjs
+        env:
+          LEAN_SITE_ORIGIN: ${{ inputs.origin || 'https://criticalthinking.de5.net' }}

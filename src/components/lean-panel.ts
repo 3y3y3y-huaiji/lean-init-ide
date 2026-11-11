@@ -114,7 +114,11 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
   </div>
 `;
 
-const renderMarkup = (locale: Locale, variant: LeanPanelVariant, t: ReturnType<typeof messagesFor>['playground']) => {
+const renderMarkup = (
+  locale: Locale,
+  variant: LeanPanelVariant,
+  t: ReturnType<typeof messagesFor>['playground'],
+) => {
   const compact = variant === 'compact';
   const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
   const start = `<button type="button" data-role="start">${t.start}</button>`;
@@ -210,7 +214,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   const setProgress = (ratio: number | null) => {
-    barEl.style.width = ratio === null ? '0%' : `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
+    barEl.style.width =
+      ratio === null ? '0%' : `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
   };
 
   // Pages 静态资源不支持 Range；Service Worker 从站点同源 /cdn/ 网关（Function → R2）
@@ -243,7 +248,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
     if (data?.type !== 'lean-asset-progress' || !data.name || !data.loaded || !data.total) return;
     setStatus(
-      t.statusChunks(data.name, (data.loaded / 1048576).toFixed(1), (data.total / 1048576).toFixed(1)),
+      t.statusChunks(
+        data.name,
+        (data.loaded / 1048576).toFixed(1),
+        (data.total / 1048576).toFixed(1),
+      ),
       'loading',
     );
     setProgress(data.loaded / data.total);
@@ -327,7 +336,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
   };
 
-  const lspRequest = async <T,>(method: string, params: unknown): Promise<T | null> => {
+  const lspRequest = async <T>(method: string, params: unknown): Promise<T | null> => {
     if (!connection || !ready) return null;
     try {
       return await connection.sendRequest<T>(method, params);
@@ -345,13 +354,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   monaco.languages.registerHoverProvider(LEAN_LANGUAGE_ID, {
     provideHover: async (_model, position) => {
       const hover = await lspRequest<{
-        contents: string | { kind?: string; value: string } | Array<string | { kind?: string; value: string }>;
+        contents:
+          | string
+          | { kind?: string; value: string }
+          | Array<string | { kind?: string; value: string }>;
       }>('textDocument/hover', positionParams(position));
       log(`hover ${position.lineNumber}:${position.column} -> ${hover ? '有结果' : 'null'}`);
       if (!hover?.contents) return null;
 
-      const contents = (Array.isArray(hover.contents) ? hover.contents : [hover.contents]).map((entry) =>
-        typeof entry === 'string' ? { value: entry } : { value: entry.value },
+      const contents = (Array.isArray(hover.contents) ? hover.contents : [hover.contents]).map(
+        (entry) => (typeof entry === 'string' ? { value: entry } : { value: entry.value }),
       );
       return { contents };
     },
@@ -387,12 +399,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     triggerCharacters: ['.', ' '],
     provideCompletionItems: async (completionModel, position) => {
       const result = await lspRequest<
-        | { items?: Array<Record<string, unknown>> }
-        | Array<Record<string, unknown>>
+        { items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>
       >('textDocument/completion', positionParams(position));
       if (!result) return { suggestions: [] };
 
-      const items = Array.isArray(result) ? result : result.items ?? [];
+      const items = Array.isArray(result) ? result : (result.items ?? []);
       log(`completion @${position.lineNumber}:${position.column} -> ${items.length} 项`);
       const word = completionModel.getWordUntilPosition(position);
       const range = new monaco.Range(
@@ -403,7 +414,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       );
       return {
         suggestions: items.map((item) => {
-          const insertText = typeof item.insertText === 'string' ? item.insertText : String(item.label ?? '');
+          const insertText =
+            typeof item.insertText === 'string' ? item.insertText : String(item.label ?? '');
           return {
             label: String(item.label ?? insertText),
             kind: completionKind(typeof item.kind === 'number' ? item.kind : undefined),
@@ -417,7 +429,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
             documentation:
               typeof item.documentation === 'string'
                 ? item.documentation
-                : item.documentation && typeof item.documentation === 'object' && 'value' in item.documentation
+                : item.documentation &&
+                    typeof item.documentation === 'object' &&
+                    'value' in item.documentation
                   ? String((item.documentation as { value: unknown }).value)
                   : undefined,
             sortText: typeof item.sortText === 'string' ? item.sortText : undefined,
@@ -431,8 +445,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   monaco.languages.registerDefinitionProvider(LEAN_LANGUAGE_ID, {
     provideDefinition: async (_model, position) => {
       const result = await lspRequest<
-        | { uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }
-        | Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }>
+        | {
+            uri: string;
+            range: {
+              start: { line: number; character: number };
+              end: { line: number; character: number };
+            };
+          }
+        | Array<{
+            uri: string;
+            range: {
+              start: { line: number; character: number };
+              end: { line: number; character: number };
+            };
+          }>
       >('textDocument/definition', positionParams(position));
       if (!result) return null;
       const locations = Array.isArray(result) ? result : [result];
@@ -524,7 +550,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         createWorker: () => new LeanWorker(),
         onStatus: (status) => {
           if (status.state === 'loading') {
-            const ratio = status.loaded !== undefined && status.total ? status.loaded / status.total : null;
+            const ratio =
+              status.loaded !== undefined && status.total ? status.loaded / status.total : null;
             const mb =
               status.loaded !== undefined && status.total
                 ? ` ${(status.loaded / 1048576).toFixed(1)}/${(status.total / 1048576).toFixed(1)}MB`
@@ -598,7 +625,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   // 仅开发环境：方便在控制台或自动化测试里检查语言注册与补全 UI。
   if (import.meta.env.DEV) {
-    Object.assign(window as unknown as Record<string, unknown>, { __monaco: monaco, __editor: editor });
+    Object.assign(window as unknown as Record<string, unknown>, {
+      __monaco: monaco,
+      __editor: editor,
+    });
   }
 
   if (autoStart) {

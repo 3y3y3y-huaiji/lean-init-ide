@@ -24,7 +24,8 @@ export const resolveRoute = (pathname: string, fallbackLocale: Locale): RouteRes
 
   const rest = segments.slice(1);
   if (rest.length === 0) return { kind: 'route', route: { page: 'home', locale: first } };
-  if (rest[0] === 'playground') return { kind: 'route', route: { page: 'playground', locale: first } };
+  if (rest[0] === 'playground')
+    return { kind: 'route', route: { page: 'playground', locale: first } };
   if (rest[0] === 'learn' && rest[1] === 'first-proof') {
     return { kind: 'route', route: { page: 'lesson', locale: first } };
   }

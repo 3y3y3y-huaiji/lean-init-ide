@@ -59,7 +59,8 @@ export const zh: Messages = {
     title: '第一个 Lean 证明',
     lead: '这一课从零开始：先看 Lean 怎么求值，再读懂一条命题，最后用归纳法把它证出来。每段代码都可以直接送进编辑器运行。',
     openInEditor: '载入编辑器',
-    editorHint: '右侧是真实编辑器：先点「启动 Lean」，再点任意代码段的「载入编辑器」，就能边读边跑。',
+    editorHint:
+      '右侧是真实编辑器：先点「启动 Lean」，再点任意代码段的「载入编辑器」，就能边读边跑。',
     sections: [
       {
         heading: '1. 先让 Lean 说句话',
@@ -67,7 +68,8 @@ export const zh: Messages = {
           'Lean 既是一门编程语言，也是一个交互式定理证明器。先用 #check 看一个名字的类型，用 #eval 直接求值。',
         ],
         code: '#check Nat.add\n#eval 2 + 3',
-        after: '把光标停在 #check 那一行，诊断面板会给出 Nat.add 的类型；#eval 的结果会出现在信息里。',
+        after:
+          '把光标停在 #check 那一行，诊断面板会给出 Nat.add 的类型；#eval 的结果会出现在信息里。',
       },
       {
         heading: '2. 命题也是类型',
@@ -84,16 +86,20 @@ export const zh: Messages = {
           'induction a with 把目标拆成两种情况：a = 0，以及 a = succ a 并附带归纳假设 ih。',
         ],
         code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp [Nat.succ_add, ih]',
-        after: 'zero 分支里 simp 把 0 + b 化简成 b；succ 分支里 Nat.succ_add 把 succ a + b 变成 succ (a + b)，再用归纳假设改写。',
+        after:
+          'zero 分支里 simp 把 0 + b 化简成 b；succ 分支里 Nat.succ_add 把 succ a + b 变成 succ (a + b)，再用归纳假设改写。',
       },
       {
         heading: '4. 换你动手',
-        paragraphs: ['照着上面的结构，证明 a + 0 = a。写完后把光标放到证明内部，看 Goal 面板每一步还剩什么。'],
+        paragraphs: [
+          '照着上面的结构，证明 a + 0 = a。写完后把光标放到证明内部，看 Goal 面板每一步还剩什么。',
+        ],
         code: 'theorem add_zero (a : Nat) : a + 0 = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp [ih]',
       },
     ],
     exerciseTitle: '练习',
-    exerciseBody: '把 add_zero 自己写一遍，再尝试证明 zero_add：0 + a = a。两个 sorry 都需要你补上。',
+    exerciseBody:
+      '把 add_zero 自己写一遍，再尝试证明 zero_add：0 + a = a。两个 sorry 都需要你补上。',
     exerciseCta: '在编辑器中动手',
     starter:
       'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
@@ -109,7 +115,8 @@ export const zh: Messages = {
     diagnosticsTitle: '诊断',
     diagnosticsPlaceholder: '启动 Lean 后显示诊断',
     logTitle: '日志',
-    footer: '浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先',
+    footer:
+      '浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先',
     openFull: '打开完整编辑器',
     statusIdle: '未启动',
     statusLoading: '加载运行时…（首次约 143MB）',

@@ -27,7 +27,9 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
       : 'rounded-lg px-2.5 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg';
 
   const nav = navItems
-    .map((item) => `<a class="${navLink(item.page === active)}" href="${item.href}">${item.label}</a>`)
+    .map(
+      (item) => `<a class="${navLink(item.page === active)}" href="${item.href}">${item.label}</a>`,
+    )
     .join('');
 
   const isPlayground = active === 'playground';

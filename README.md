@@ -205,6 +205,11 @@ npm run smoke -- --origin=https://lean-init-ide.pages.dev
 分工不同：部署后的那次回答「这次发布对不对」，每日巡检回答「站还在不在」，负责捕捉证书、
 路由、Functions 的静默回归。
 
+两条 CI 里的冒烟都打 `https://lean-init-ide.pages.dev`，而不是自定义域。原因是 GitHub Actions
+的机房 IP 会被 zone 的机器人防护拦成 403——那是安全策略生效，不是站点故障，拿它当失败条件
+会导致每次发布都误报。自定义域的可用性由浏览器侧确认；本地跑 `npm run smoke` 默认打主域，
+家宽 IP 一般不会被拦。
+
 已知平台行为：Cloudflare Pages 会用自己的边缘 TTL 覆盖静态资源的 `Cache-Control`，
 `public/_headers` 里给 `/sw.js` 写的 `no-cache` 未必生效（实测 `max-age=14400`）。
 浏览器对 Service Worker 脚本有独立缓存策略，影响有限，但更新延迟属于可预期范围。

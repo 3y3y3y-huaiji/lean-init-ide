@@ -24,7 +24,9 @@ jobs:
         with:
           node-version: 22
       # 不依赖 node_modules：脚本只用 Node 内置模块和系统 curl。
+      # 探测 pages.dev 而不是自定义域：机房 IP 会被 zone 的机器人规则拦成 403，
+      # 那是安全策略生效，不是站点故障。自定义域由浏览器侧人工确认。
       - name: 探测主站
         run: node scripts/smoke.mjs
         env:
-          LEAN_SITE_ORIGIN: ${{ inputs.origin || 'https://criticalthinking.de5.net' }}
+          LEAN_SITE_ORIGIN: ${{ inputs.origin || 'https://lean-init-ide.pages.dev' }}

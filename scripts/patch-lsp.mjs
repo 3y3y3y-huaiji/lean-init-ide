@@ -4,45 +4,92 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * @wasm-idle/lsp 1.3.0 hard-codes Lean asset downloads to 3 concurrent requests.
- * The 143 MB Init payload is dominated by six ~22 MB packs; raising the limit to 6
- * gives the browser more parallel connections without unbounded memory pressure.
+ * 所有补丁都在安装时幂等应用；模式不匹配会直接抛错，避免依赖升级后静默失效。
+ * 这是仓库唯一允许改 node_modules 的地方（postinstall 自动执行）。
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const target = path.join(root, 'node_modules', '@wasm-idle', 'lsp', 'dist', 'lean4', 'assets.js');
-const from = 'maxConcurrentDownloads: 3';
-const to = 'maxConcurrentDownloads: 6';
+const lspDist = path.join(root, 'node_modules', '@wasm-idle', 'lsp', 'dist');
 
-const source = readFileSync(target, 'utf8');
-if (source.includes(to)) {
-  console.log('lsp patch: already applied');
-} else if (!source.includes(from)) {
-  throw new Error(
-    `lsp patch: expected "${from}" in ${target}. The package version changed; update the patch.`,
-  );
-} else {
+const applyPatch = (relativePath, from, to, label) => {
+  const target = path.join(lspDist, relativePath);
+  const source = readFileSync(target, 'utf8');
+  if (source.includes(to)) {
+    console.log(`lsp patch: ${label} already applied`);
+    return;
+  }
+  if (!source.includes(from)) {
+    throw new Error(
+      `lsp patch: expected ${JSON.stringify(from)} in ${target}. The package version changed; update the patch.`,
+    );
+  }
   writeFileSync(target, source.replace(from, to));
-  console.log('lsp patch: maxConcurrentDownloads 3 -> 6');
-}
+  console.log(`lsp patch: ${label}`);
+};
 
 /**
- * The package hard-codes the runner worker's byte count and SHA-256, and uses that
- * hash as the worker URL's ?v= cache key. We ship a memory-optimised worker, so
- * recompute the receipt from our source on every install. Keeping this in sync is
- * what makes the new worker URL differ from the old one without touching the
- * global cacheKey (which would force a 143 MB re-download for every visitor).
+ * 1. 资产并发从 3 提到 6：143MB Init 由 6 个 ~22MB pack 主导，6 路正好吃满长肥管道。
+ */
+applyPatch(
+  path.join('lean4', 'assets.js'),
+  'maxConcurrentDownloads: 3',
+  'maxConcurrentDownloads: 6',
+  'maxConcurrentDownloads 3 -> 6',
+);
+
+const leanWorker = path.join('lean4', 'worker.js');
+
+/**
+ * 2. 解压完一个资产就释放压缩态引用，启动峰值不再同时持有 143MB 压缩态 + 415MB 解压态。
+ *    preflight 结果是冻结对象，先浅拷贝成可变对象再 delete。
+ *
+ * 注意：不要缩小 pthread 池。实测 64 -> 16/8 会让文件检查静默不产生诊断，
+ * 而初始化仍然显示 ready；池大小是功能参数，不是单纯的内存参数。
+ */
+applyPatch(
+  leanWorker,
+  `    const payload = await preflightLean4RuntimeAssets(data.options.baseUrl, {
+        limits,
+        persistentCache: data.persistentAssets?.persistentCache,
+        reportProgress: (loaded, stage) => scope.postMessage({ type: 'progress', stage, loaded, total: 1 })
+    });`,
+  `    const payload = { ...(await preflightLean4RuntimeAssets(data.options.baseUrl, {
+        limits,
+        persistentCache: data.persistentAssets?.persistentCache,
+        reportProgress: (loaded, stage) => scope.postMessage({ type: 'progress', stage, loaded, total: 1 })
+    })) };`,
+  'mutable preflight payload',
+);
+applyPatch(
+  leanWorker,
+  `            library[logicalName] = shared;
+        }
+    }`,
+  `            library[logicalName] = shared;
+        }
+        delete payload[name];
+    }`,
+  'release compressed asset after inflate',
+);
+
+/**
+ * 4. MEMFS 直接接管解压后的视图，省掉每个进程一份 415MB 拷贝（canOwn）。
+ *    库目录只读；文档 #eval 写入的是 /workspace，不会改共享 pack。
+ */
+applyPatch(
+  path.join('lean4', 'runtime-worker.js'),
+  'lean.FS.writeFile(path, file.bytes);',
+  'lean.FS.writeFile(path, file.bytes, { canOwn: true });',
+  'MEMFS canOwn (skip 415MB copy)',
+);
+
+/**
+ * 5. 包内硬编码的 runner worker 字节数与 SHA-256 用我们的源文件动态重算，
+ *    并同步到 workerReceipt；?v= 随之变化，cacheKey 保持不变。
  */
 const workerPath = path.join(root, 'scripts', 'assets', 'runner-worker.js');
 const workerBytes = readFileSync(workerPath);
 const workerSha = createHash('sha256').update(workerBytes).digest('hex');
-const runtimePath = path.join(
-  root,
-  'node_modules',
-  '@wasm-idle',
-  'lsp',
-  'dist',
-  'bundledLean4Runtime.js',
-);
+const runtimePath = path.join(lspDist, 'bundledLean4Runtime.js');
 const runtimeSource = readFileSync(runtimePath, 'utf8');
 const receipt = /(workerReceipt:\s*\{\s*bytes:\s*)\d+(,\s*sha256:\s*')[a-f0-9]+(')/;
 if (!receipt.test(runtimeSource)) {

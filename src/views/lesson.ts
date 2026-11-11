@@ -104,13 +104,13 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
     : '';
 
   return `
-    <div class="grid grid-cols-[190px_minmax(0,1fr)_400px] items-start gap-8 max-[1240px]:grid-cols-[minmax(0,1fr)_380px] max-[960px]:grid-cols-1">
-      <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1240px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
+    <div class="grid grid-cols-[180px_minmax(0,1fr)_minmax(340px,410px)] items-start gap-6 max-[1280px]:grid-cols-[minmax(0,1fr)_minmax(320px,370px)] max-[1280px]:gap-5 max-[1040px]:grid-cols-1">
+      <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1280px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
         <p class="m-0 mb-2 px-2.5 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
         <ol class="m-0 list-none space-y-0.5 p-0">${toc}</ol>
       </nav>
 
-      <article class="min-w-0 max-w-[760px]">
+      <article class="min-w-0 max-w-[880px]">
         <header>
           <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${escapeHtml(t.eyebrow)}</p>
           <h1 class="mt-0 mb-3 text-[clamp(28px,4.2vw,40px)] tracking-[-0.015em]">${escapeHtml(page.title)}</h1>
@@ -121,9 +121,9 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${pager}
       </article>
 
-      <aside class="sticky top-[84px] flex max-h-[calc(100vh-100px)] flex-col gap-2.5 overflow-auto max-[960px]:static">
-        <p class="m-0 text-xs leading-[1.55] text-muted">${escapeHtml(t.editorHint)}</p>
-        <div data-role="lean-panel"></div>
+      <aside class="sticky top-[84px] flex h-[calc(100vh-100px)] flex-col gap-2.5 max-[1040px]:static max-[1040px]:h-auto">
+        <p class="m-0 shrink-0 text-xs leading-[1.55] text-muted">${escapeHtml(t.editorHint)}</p>
+        <div data-role="lean-panel" class="flex min-h-0 flex-1 flex-col max-[1040px]:h-[560px] max-[1040px]:flex-none"></div>
       </aside>
     </div>
   `;

@@ -71,6 +71,8 @@ export type Messages = {
     title: string;
     hint: string;
     start: string;
+    /** 运行时已就绪后，同一个按钮变成释放内存的动作。 */
+    stop: string;
     goalTitle: string;
     goalPlaceholder: string;
     goalEmpty: string;
@@ -83,7 +85,7 @@ export type Messages = {
     statusIdle: string;
     statusLoading: string;
     statusStarting: string;
-    statusChunks: (name: string, loaded: string, total: string) => string;
+    statusChunks: (loaded: string, total: string) => string;
     statusChunkFallback: (name: string, message: string) => string;
     statusError: (message: string) => string;
     statusFailure: (message: string) => string;
@@ -98,6 +100,7 @@ export type Messages = {
     logRuntimeError: (message: string) => string;
     logInitialize: (seconds: string) => string;
     logStartFailed: (message: string) => string;
+    logStopped: string;
   };
   footer: {
     license: string;

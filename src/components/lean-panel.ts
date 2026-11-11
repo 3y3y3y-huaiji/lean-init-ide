@@ -54,7 +54,7 @@ const panelHeadingClass =
   'm-0 flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px] text-xs font-[650] uppercase tracking-[0.07em] text-muted';
 
 const pillClass =
-  'inline-flex min-h-8 items-center whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
+  'inline-flex min-h-8 max-w-[160px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
 
 const mutedItemClass = 'mb-1.5 px-2 py-2.5 text-[13px] text-muted';
 
@@ -69,21 +69,21 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
   <div
     class="${
       compact
-        ? 'grid flex-none grid-cols-1 gap-2.5 p-2.5'
+        ? 'flex min-h-0 flex-1 flex-col gap-2.5 p-2.5'
         : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
     }"
   >
     <section
       class="${
         compact
-          ? 'relative h-[360px] min-h-0 overflow-hidden rounded-xl border border-line bg-editor-bg'
+          ? 'relative min-h-[180px] flex-[2] overflow-hidden rounded-xl border border-line bg-editor-bg'
           : 'relative h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[60vh] max-[900px]:min-h-[420px]'
       }"
     ><div class="absolute inset-0" data-role="editor"></div></section>
     <aside
       class="${
         compact
-          ? 'flex h-auto flex-col gap-2.5'
+          ? 'contents'
           : 'flex h-[calc(100vh-250px)] min-h-0 flex-col gap-4 max-[900px]:h-auto'
       }"
     >
@@ -101,7 +101,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
           }"
         >${t.goalPlaceholder}</pre>
       </section>
-      <section class="${panelClass(compact)} flex-1">
+      <section class="${panelClass(compact)} min-h-0 flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
         <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2">
           <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
@@ -151,17 +151,17 @@ const renderMarkup = (
   }
 
   return `
-    <section class="overflow-hidden rounded-[14px] border border-line bg-panel">
+    <section class="flex h-full flex-col overflow-hidden rounded-[14px] border border-line bg-panel">
       <div class="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
-        <div class="flex flex-col">
-          <span class="m-0 text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
-          <strong class="text-sm">${t.title}</strong>
+        <div class="flex min-w-0 flex-col">
+          <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
+          <strong class="truncate text-sm">${t.title}</strong>
         </div>
-        <div class="flex items-center gap-3">${status}${start}</div>
+        <div class="flex shrink-0 items-center gap-2">${status}${start}</div>
       </div>
-      <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
+      <div class="h-[3px] shrink-0 bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
       ${renderWorkspace(t, true)}
-      <div class="px-3.5 pb-3 pt-1.5 text-right text-xs">
+      <div class="shrink-0 px-3.5 pb-3 pt-1.5 text-right text-xs">
         <a class="text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
       </div>
     </section>
@@ -257,11 +257,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
     if (data?.type !== 'lean-asset-progress' || !data.name || !data.loaded || !data.total) return;
     setStatus(
-      t.statusChunks(
-        data.name,
-        (data.loaded / 1048576).toFixed(1),
-        (data.total / 1048576).toFixed(1),
-      ),
+      t.statusChunks((data.loaded / 1048576).toFixed(1), (data.total / 1048576).toFixed(1)),
       'loading',
     );
     setProgress(data.loaded / data.total);
@@ -541,6 +537,22 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     goalTimer = window.setTimeout(requestGoal, 250);
   });
 
+  /** 关闭引擎：终止 worker 并释放它占的内存，编辑器内容保留。 */
+  const stop = () => {
+    connection?.dispose();
+    server?.dispose();
+    connection = null;
+    server = null;
+    ready = false;
+    goalSupported = true;
+    setStatus(t.statusIdle, 'idle');
+    setProgress(0);
+    goalEl.textContent = t.goalPlaceholder;
+    statementEl.hidden = true;
+    startEl.textContent = t.start;
+    log(t.logStopped);
+  };
+
   const start = async () => {
     if (startEl.disabled) return;
     startEl.disabled = true;
@@ -576,14 +588,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         createWorker: () => new LeanWorker(),
         onStatus: (status) => {
           if (status.state === 'loading') {
-            const ratio =
-              status.loaded !== undefined && status.total ? status.loaded / status.total : null;
-            const mb =
-              status.loaded !== undefined && status.total
-                ? ` ${(status.loaded / 1048576).toFixed(1)}/${(status.total / 1048576).toFixed(1)}MB`
-                : '';
-            setProgress(ratio);
-            setStatus(`加载 ${status.stage ?? 'Lean'}${mb}`, 'loading');
+            const loaded = status.loaded ?? 0;
+            const total = status.total ?? 0;
+            const hasBytes = loaded > 0 && total > 0;
+            setProgress(hasBytes ? loaded / total : null);
+            setStatus(
+              hasBytes
+                ? `${(loaded / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`
+                : t.statusStarting,
+              'loading',
+            );
           } else if (status.state === 'ready') {
             setProgress(1);
             setStatus(t.statusLspReady, 'ready');
@@ -630,6 +644,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       connection.sendNotification('initialized', {});
 
       ready = true;
+      startEl.textContent = t.stop;
       lastEditAt = performance.now();
       connection.sendNotification('textDocument/didOpen', {
         textDocument: { uri, languageId: LEAN_LANGUAGE_ID, version, text: model.getValue() },
@@ -647,7 +662,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
   };
 
-  startEl.addEventListener('click', start);
+  startEl.addEventListener('click', () => {
+    if (ready) stop();
+    else void start();
+  });
 
   // 开发环境与 ?debug 下暴露编辑器实例，方便控制台调试和自动化检查。
   if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {

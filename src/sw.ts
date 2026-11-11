@@ -1,31 +1,33 @@
 /**
  * Lean 运行时资产下载器（Service Worker）。
  *
- * Cloudflare Pages 不处理 Range 请求，所以 143MB 的 Lean 运行时改从固定 revision
- * 的 GitHub raw 拉取。GitHub raw 支持 Range 与 CORS：每个大文件切成 4MB 分片并行
- * 下载，按预期字节数校验后再作为一个同源响应交还给 Lean 加载器。
+ * Cloudflare Pages 不处理 Range 请求，所以 143MB 的 Lean 运行时优先从
+ * Cloudflare R2 自定义域分片并行下载；R2 失败时回退到固定 revision 的
+ * GitHub raw，最后才回退到同源全量请求。每个大文件切成 4MB 分片，按预期
+ * 字节数校验后合成一个同源响应交还给 Lean 加载器。
+ *
+ * 资产清单与分发源来自 config/lean4-runtime.json + src/asset-sources.mjs，
+ * 与构建脚本 scripts/fetch-assets.mjs 共用同一份定义。
  *
  * 构建期由 `npm run build:sw` 编译为 public/sw.js，仓库里不保留手写 JS。
  */
+import manifestJson from '../config/lean4-runtime.json';
+import { assetSources, rangedAssets, type AssetSource, type RuntimeManifest } from './asset-sources.mjs';
 import { buildRanges } from './sw-ranges';
 
-const GITHUB_RAW =
-  'https://raw.githubusercontent.com/seo-rii/wasm-llvm/14ea5ecbc514b0c87338aebf8f2b567020be5750/artifacts/lean-browser/';
+const manifest = manifestJson as unknown as RuntimeManifest;
 
 type RangeAsset = {
-  source: string;
   bytes: number;
+  sources: AssetSource[];
 };
 
-const RANGE_ASSETS = new Map<string, RangeAsset>([
-  ['lean.wasm.gz.bin', { source: 'lean.wasm.gz', bytes: 20239874 }],
-  ['lean-init-00.pack.gz.bin', { source: 'lean-init-00.pack.gz', bytes: 22626621 }],
-  ['lean-init-01.pack.gz.bin', { source: 'lean-init-01.pack.gz', bytes: 22633878 }],
-  ['lean-init-02.pack.gz.bin', { source: 'lean-init-02.pack.gz', bytes: 23039094 }],
-  ['lean-init-03.pack.gz.bin', { source: 'lean-init-03.pack.gz', bytes: 22382973 }],
-  ['lean-init-04.pack.gz.bin', { source: 'lean-init-04.pack.gz', bytes: 21886461 }],
-  ['lean-init-05.pack.gz.bin', { source: 'lean-init-05.pack.gz', bytes: 9812693 }],
-]);
+const RANGE_ASSETS = new Map<string, RangeAsset>(
+  rangedAssets(manifest).map((asset) => [
+    asset.name,
+    { bytes: asset.bytes, sources: assetSources(manifest, asset) },
+  ]),
+);
 
 const CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_PARALLEL = 6;
@@ -57,40 +59,49 @@ sw.addEventListener('fetch', (event) => {
   event.respondWith(loadRangedAsset(request, name, asset));
 });
 
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 async function loadRangedAsset(request: Request, name: string, asset: RangeAsset): Promise<Response> {
-  try {
-    const remoteUrl = GITHUB_RAW + asset.source;
-    const total = asset.bytes;
-    const parts = await fetchRanges(remoteUrl, total, request.signal, name);
-    const body = new Blob(parts, { type: 'application/octet-stream' });
-    if (body.size !== total) {
-      throw new Error(`assembled ${body.size} bytes, expected ${total}`);
-    }
+  let lastError: unknown;
 
-    const response = new Response(body, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': String(total),
-        'Accept-Ranges': 'bytes',
-        'Cross-Origin-Resource-Policy': 'same-origin',
-      },
-    });
-
-    // @wasm-idle/lsp 会校验 response.url === request.url。合成响应的 url 默认为空，
-    // 这里固定回同源请求地址；若运行时不支持改写，则退回同源 Pages 全量请求。
+  for (const source of asset.sources) {
     try {
-      Object.defineProperty(response, 'url', { value: request.url });
-      Object.defineProperty(response, 'redirected', { value: false });
-      Object.defineProperty(response, 'type', { value: 'basic' });
-    } catch {
-      return fetch(request);
+      const parts = await fetchRanges(source.url, asset.bytes, request.signal, name, source.label);
+      const body = new Blob(parts, { type: 'application/octet-stream' });
+      if (body.size !== asset.bytes) {
+        throw new Error(`assembled ${body.size} bytes, expected ${asset.bytes}`);
+      }
+      return await assembleResponse(request, body);
+    } catch (error) {
+      if (request.signal.aborted) throw error;
+      lastError = error;
+      notifyFallback(name, `${source.label} 不可用：${errorMessage(error)}`);
     }
+  }
 
+  notifyFallback(name, `远端源均失败，回退同源：${errorMessage(lastError)}`);
+  return fetch(request);
+}
+
+/** @wasm-idle/lsp 会校验 response.url === request.url，合成响应需要固定回同源地址。 */
+async function assembleResponse(request: Request, body: Blob): Promise<Response> {
+  const response = new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(body.size),
+      'Accept-Ranges': 'bytes',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+    },
+  });
+
+  try {
+    Object.defineProperty(response, 'url', { value: request.url });
+    Object.defineProperty(response, 'redirected', { value: false });
+    Object.defineProperty(response, 'type', { value: 'basic' });
     return response;
-  } catch (error) {
-    if (request.signal.aborted) throw error;
-    notifyFallback(name, error);
+  } catch {
     return fetch(request);
   }
 }
@@ -104,6 +115,7 @@ async function fetchRanges(
   total: number,
   signal: AbortSignal,
   name: string,
+  sourceLabel: string,
 ): Promise<ArrayBuffer[]> {
   const ranges = buildRanges(total, CHUNK_BYTES);
 
@@ -121,7 +133,7 @@ async function fetchRanges(
       const part = await fetchRange(url, start, end, signal);
       parts[index] = part;
       loaded += part.byteLength;
-      notify(name, loaded, total);
+      notify(name, loaded, total, sourceLabel);
     }
   };
 
@@ -159,17 +171,18 @@ async function fetchRange(url: string, start: number, end: number, signal: Abort
   throw lastError;
 }
 
-async function notify(name: string, loaded: number, total: number): Promise<void> {
+async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {
-    (client as WindowClient).postMessage({ type: 'lean-asset-progress', name, loaded, total });
+    (client as WindowClient).postMessage({ type: 'lean-asset-progress', name, loaded, total, source });
   }
 }
 
-async function notifyFallback(name: string, error: unknown): Promise<void> {
-  const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const message = error instanceof Error ? error.message : String(error);
-  for (const client of clients) {
-    (client as WindowClient).postMessage({ type: 'lean-asset-fallback', name, message });
-  }
+function notifyFallback(name: string, message: string): void {
+  void (async () => {
+    const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      (client as WindowClient).postMessage({ type: 'lean-asset-fallback', name, message });
+    }
+  })();
 }

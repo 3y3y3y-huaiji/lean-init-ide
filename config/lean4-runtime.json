@@ -1,0 +1,111 @@
+{
+  "revision": "14ea5ecbc514b0c87338aebf8f2b567020be5750",
+  "cacheKey": "14ea5ec",
+  "runtime": "Lean 4.34.1 Init",
+  "bucket": "lean4-ide-releases",
+  "primary": {
+    "label": "Cloudflare R2",
+    "baseUrl": "https://r2.huaiji3y.ccwu.cc/"
+  },
+  "fallback": {
+    "label": "GitHub raw",
+    "baseUrl": "https://raw.githubusercontent.com/seo-rii/wasm-llvm/14ea5ecbc514b0c87338aebf8f2b567020be5750/artifacts/lean-browser/"
+  },
+  "assets": [
+    {
+      "name": "producer-receipt.json",
+      "key": "producer-receipt.json",
+      "source": "producer-receipt.json",
+      "bytes": 9768,
+      "sha256": "335bd6e1720371fc161859cb7c2858600ec12314c30da1f0e5e503e324a96d42",
+      "contentType": "application/json"
+    },
+    {
+      "name": "lean.mjs",
+      "key": "lean.mjs",
+      "source": "lean.mjs",
+      "bytes": 108528,
+      "sha256": "16d6d6cb07c844bedf745f856a364ec61e86c13c4fe13a2e57c0c698a5c5f727",
+      "contentType": "text/javascript"
+    },
+    {
+      "name": "lean.wasm.gz.bin",
+      "key": "lean.wasm.gz",
+      "source": "lean.wasm.gz",
+      "bytes": 20239874,
+      "sha256": "89dc3cb841d487f9e29c1dc3069e7aeb1a63e5ec0267b8250552e3fe90f855bf",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "lean-init.index.json",
+      "key": "lean-init.index.json",
+      "source": "lean-init.index.json",
+      "bytes": 321866,
+      "sha256": "030b375cee435f12f7163c58c16d128340f9e20fa27a77ab646198be61906555",
+      "contentType": "application/json"
+    },
+    {
+      "name": "lean-init-00.pack.gz.bin",
+      "key": "lean-init-00.pack.gz",
+      "source": "lean-init-00.pack.gz",
+      "bytes": 22626621,
+      "sha256": "c2cea0798b8b3e910188eb79d3d0101452c874f693294d2cf8c360fde125c08e",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "lean-init-01.pack.gz.bin",
+      "key": "lean-init-01.pack.gz",
+      "source": "lean-init-01.pack.gz",
+      "bytes": 22633878,
+      "sha256": "6e65383d8de425a0c0f5b48430aa5be7c9f2066138080bf213a0435b0fd1d874",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "lean-init-02.pack.gz.bin",
+      "key": "lean-init-02.pack.gz",
+      "source": "lean-init-02.pack.gz",
+      "bytes": 23039094,
+      "sha256": "57cc57d61067fc77d8b72008299e25956a121cd3fdf628941420966de1f762e5",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "lean-init-03.pack.gz.bin",
+      "key": "lean-init-03.pack.gz",
+      "source": "lean-init-03.pack.gz",
+      "bytes": 22382973,
+      "sha256": "e310ddf310d6d89dc7cc583f01213a1eab2684c1ada9e77368ca16637009d72a",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "lean-init-04.pack.gz.bin",
+      "key": "lean-init-04.pack.gz",
+      "source": "lean-init-04.pack.gz",
+      "bytes": 21886461,
+      "sha256": "f1345c223483bbb8e3c25e73042c5526efbd24301df95c74d30b4799493e6697",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "lean-init-05.pack.gz.bin",
+      "key": "lean-init-05.pack.gz",
+      "source": "lean-init-05.pack.gz",
+      "bytes": 9812693,
+      "sha256": "9f8deb32469cbe66669381c8f0fb5d379d506f7935beb29393b19d2c52ac8a52",
+      "contentType": "application/octet-stream",
+      "ranged": true
+    },
+    {
+      "name": "runner-worker.js",
+      "key": "runner-worker.js",
+      "local": "scripts/assets/runner-worker.js",
+      "bytes": 16049,
+      "sha256": "3611a263c4304246c9ee2967c07be2a1c70764a39d642db87ba0b86bfbe9d519",
+      "contentType": "text/javascript"
+    }
+  ]
+}

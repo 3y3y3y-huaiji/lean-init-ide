@@ -11,7 +11,7 @@
 - 中英文界面，`/zh/`、`/en/` 双前缀，可切换并记住偏好
 - 亮色 / 暗色 / 跟随系统三种主题，Monaco 主题同步
 - 入门课程：从 `#check` 到第一个归纳证明，代码可一键载入编辑器
-- 首次加载约 143MB 运行时，之后持久缓存；Service Worker 从 GitHub raw 分片并行下载，失败自动回退同源
+- 首次加载约 143MB 运行时，之后持久缓存；Service Worker 从 Cloudflare R2 分片并行下载，失败回退 GitHub raw，最后回退同源
 
 ## 限制
 
@@ -30,7 +30,32 @@ npm run typecheck
 npm run lint
 ```
 
-运行时资产由 `scripts/fetch-assets.mjs` 从固定 revision 拉取，并逐个校验字节数与 SHA-256。
+## 运行时分发（Cloudflare R2）
+
+约 143MB 的 Lean 4.34.1 Init 资产托管在 R2 桶 `lean4-ide-releases`，经自定义域
+`https://r2.huaiji3y.ccwu.cc/` 公开只读分发：
+
+- **主源**：R2 自定义域，支持 Range；Service Worker 按 4MB 分片并行下载后组装成同源响应。
+- **回退**：R2 不可用 → 固定 revision 的 GitHub raw → 同源 `dist/wasm-lean4/` 全量请求。
+- **版本键**：每个 URL 带 `?r=<cacheKey>`（`config/lean4-runtime.json`），换 revision 即换缓存键，也绕开旧的 CORS 缓存变体。
+- **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。
+
+首次部署或升级资产：
+
+```bash
+npx wrangler login
+npm run fetch:assets                # 从 R2 拉取并校验到 public/wasm-lean4/
+npm run r2:cors                     # 应用 config/r2-cors.json（允许 Range 的 CORS 规则）
+npm run upload:assets -- --dry-run  # 预览将上传的对象
+npm run upload:assets               # 上传缺失/变更的对象，逐个复核 ETag 与长度
+npm run upload:assets -- --verify-only
+```
+
+`--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶，`LEAN_ASSET_BASE_URL` 覆盖构建期主源。
+R2 桶必须绑定自定义域并配置允许 `Range` 请求头的 CORS，否则 COEP: `require-corp` 页面读不到跨源分片。
+
+资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
+`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
 ## 目录结构
 
@@ -45,7 +70,10 @@ src/
   lean-language.ts   Lean 语法高亮与语言配置
 public/
   wasm-lean4/        Lean 运行时资产（构建时下载，不入库）
-scripts/             资产下载、LSP 补丁
+config/
+  lean4-runtime.json 资产清单、字节数/SHA-256、R2 与回退源、缓存键
+  r2-cors.json       R2 桶 CORS 规则（允许 Range）
+scripts/             资产下载/上传、LSP 补丁
 ```
 
 仓库里只有 TypeScript 源码：`src/sw.ts` 由 `npm run build:sw` 编译成 `public/sw.js`，不手写 JS。

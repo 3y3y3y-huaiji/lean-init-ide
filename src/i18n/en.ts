@@ -40,7 +40,7 @@ export const en: Messages = {
       },
       {
         title: 'Download once, cached for good',
-        body: 'The 143 MB runtime arrives in parallel 4 MB ranges, is verified with SHA-256, then persisted by the browser.',
+        body: 'The 143 MB runtime arrives in parallel 4 MB ranges from Cloudflare R2, is verified with SHA-256, falls back to GitHub raw, then persists in the browser.',
       },
       {
         title: 'Dual open-source license',
@@ -124,7 +124,7 @@ export const en: Messages = {
     statusWaitingDiagnostics: 'Waiting for diagnostics…',
     statusReady: (count, ms) => `Ready · diagnostics #${count} ${ms} ms`,
     statusNoDiagnostics: (ms) => `No diagnostics · ${ms} ms`,
-    logSwReady: 'Service worker ready, Lean assets stream from GitHub in ranges',
+    logSwReady: 'Service worker ready, Lean assets stream from Cloudflare R2 in ranges',
     logSwFailed: (message) => `Service worker registration failed, falling back to Pages: ${message}`,
     logCacheCleared: 'Cleared the Lean asset cache (fresh=1)',
     logRuntimeReady: 'Runtime assets ready',

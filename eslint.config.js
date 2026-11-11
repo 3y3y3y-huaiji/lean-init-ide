@@ -11,6 +11,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
+    // 共享模块同时被 Node 构建脚本、Service Worker 与 Vitest 引用。
+    files: ['src/**/*.mjs'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
     files: ['scripts/**/*.mjs', 'eslint.config.js'],
     languageOptions: { globals: globals.node },
   },

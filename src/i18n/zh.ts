@@ -40,7 +40,7 @@ export const zh: Messages = {
       },
       {
         title: '一次下载，长期可用',
-        body: '约 143MB 运行时按 4MB 分片并行下载并做 SHA-256 校验，之后走持久缓存。',
+        body: '约 143MB 运行时由 Cloudflare R2 按 4MB 分片并行下发并做 SHA-256 校验，R2 故障时自动回退 GitHub raw，之后走持久缓存。',
       },
       {
         title: '开源双协议',
@@ -122,7 +122,7 @@ export const zh: Messages = {
     statusWaitingDiagnostics: '等待诊断…',
     statusReady: (count, ms) => `就绪 · 诊断 #${count} ${ms}ms`,
     statusNoDiagnostics: (ms) => `无诊断 · ${ms}ms`,
-    logSwReady: 'Service Worker 就绪，Lean 资产走 GitHub 分片下载',
+    logSwReady: 'Service Worker 就绪，Lean 资产由 Cloudflare R2 分片下发',
     logSwFailed: (message) => `Service Worker 注册失败，回退 Pages：${message}`,
     logCacheCleared: '已清空 Lean 资产缓存（fresh=1）',
     logRuntimeReady: '运行时资源就绪',

@@ -96,7 +96,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       class="${
         compact
           ? 'contents'
-          : 'flex h-[calc(100vh-250px)] min-h-0 flex-col gap-4 max-[900px]:h-auto'
+          : 'flex h-[calc(100vh-250px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
       }"
     >
       <section data-panel="goal" class="${panelClass(compact)} shrink-0">
@@ -125,7 +125,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
                <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">展开</span></summary>
                <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
              </details>`
-          : `<section data-panel="log" class="${panelClass(false)} flex-1 basis-1/2">
+          : `<section data-panel="log" class="${panelClass(false)} flex-1">
                <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
                <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted"></pre>
              </section>`

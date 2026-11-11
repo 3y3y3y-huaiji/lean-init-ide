@@ -22,6 +22,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['workers/**/*.js'],
+    languageOptions: { globals: { ...globals.browser, ...globals.serviceworker } },
+  },
+  {
     files: ['scripts/**/*.mjs', 'eslint.config.js'],
     languageOptions: { globals: globals.node },
   },

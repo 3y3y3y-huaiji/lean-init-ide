@@ -1,0 +1,8 @@
+name = "lean-www-proxy"
+main = "src/index.js"
+compatibility_date = "2026-11-11"
+
+# 只接管 www 自定义主机名的流量；根域是 Pages 自定义域，不走这里。
+[[routes]]
+pattern = "www.criticalthinking.de5.net/*"
+zone_name = "criticalthinking.de5.net"

@@ -4,6 +4,8 @@
 
 在线使用：<https://criticalthinking.de5.net>（备用：<https://lean-init-ide.pages.dev>）
 
+参与开发前先读 [AGENTS.md](AGENTS.md)：那里列了不可违反的硬约束、模块边界和已知陷阱。
+
 ## 功能
 
 - 真实 Lean 4.34.1 Init 运行时，在浏览器内完成解析、精化与诊断
@@ -25,10 +27,35 @@ npm install          # 安装依赖并给 @wasm-idle/lsp 打补丁
 npm run dev          # 开发服务器（首次会下载并校验运行时资产）
 npm run build        # 生产构建（含资产下载）
 npm run build:web    # 只构建前端，跳过 143MB 资产（CI 使用）
-npm run preview
-npm run typecheck
-npm run lint
+npm run preview      # 预览构建产物
+npm run smoke        # 线上冒烟，发版后跑
 ```
+
+改动后必须跑完整门禁，命令见「质量门禁」一节，不要只跑 `npm test`。
+
+顺带两个本地环境的坑：`npm audit` 要加 `--registry=https://registry.npmjs.org`（镜像站不支持 audit 的 POST）；
+`npm ci` 若被系统的批量删除保护拦下，改用 `npm install` 补齐缺失项。
+
+## 架构
+
+三层，各自只通过明确的接口通信：
+
+```
+应用层   src/main.ts → views/ → components/lean-panel.ts
+         路由、i18n、主题；渲染函数只产出字符串，事件在 bind* 里绑定
+          ↓
+语言层   Monaco 编辑器 + @wasm-idle/lsp（Web Worker 内的 Lean 4.34.1）
+         LSP over postMessage：诊断、悬停、补全、跳转定义、$/lean/plainGoal
+          ↓
+资产层   Service Worker → /cdn/<key> → Pages Functions → R2
+         4MB 分片并行下载 → SHA-256 校验 → 回退 GitHub raw → 回退同源静态副本
+```
+
+三条主要数据流：
+
+1. **编辑**：用户输入 → Monaco model → `didChange`（350ms 防抖）→ LSP → `publishDiagnostics` → 编辑器标记与面板
+2. **光标**：`onDidChangeCursorPosition` → `$/lean/plainGoal`（250ms 防抖）→ 目标面板
+3. **启动**：注册 Service Worker → 分片下载 11 个资产 → 逐个校验 → 初始化 LSP → `didOpen`
 
 ## 运行时分发（同源 R2 网关）
 
@@ -146,6 +173,20 @@ wrangler.toml        Pages 项目配置与 R2 binding
 ```
 
 仓库不保留生成的 JS 产物：`src/sw.ts` 由 `npm run build:sw` 编译成 `public/sw.js`（不入库）；`config/lean4-runtime.json` 是唯一资产清单。
+
+## 排查
+
+| 现象 | 先查什么 |
+| --- | --- |
+| 页面白屏、没有 `#app` 内容 | `npm run verify:build`；确认 `dist/index.html` 引用了入口脚本 |
+| 进度条卡在 0% | 控制台看 `sw.js` 是否注册成功；`/cdn/<key>` 是否返回 206 |
+| 日志里一直回退到 GitHub raw | `/cdn/` 网关异常：binding 是否叫 `LEAN_ASSETS`，production / preview 是否都声明了 |
+| 诊断一直不出现 | `crossOriginIsolated` 是否为 true；COOP/COEP 是否被中间层剥掉 |
+| 补全、悬停没反应 | 面板日志里 LSP 是否 ready，`initialize` 是否成功 |
+| 本地资产校验失败 | 是否用会转换换行符的工具改过 `scripts/assets/**` |
+| 线上 `/cdn/xxx` 返回 200 的 HTML | `_routes.json` 丢了，Functions 没触发，请求落到了 SPA fallback |
+
+开发模式下 `window.__monaco` 与 `window.__editor` 可用；URL 加 `?fresh` 会清空资产缓存重新下载。
 
 ## 许可证
 

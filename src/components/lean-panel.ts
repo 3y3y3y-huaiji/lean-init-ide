@@ -7,6 +7,7 @@ import type { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
 import { createMessageConnection, type MessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
+import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
 
@@ -88,10 +89,15 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
     >
       <section class="${panelClass(compact)} flex-none">
         <h2 class="${panelHeadingClass}">${t.goalTitle}</h2>
+        <div
+          data-role="goal-statement"
+          hidden
+          class="truncate border-b border-line px-3.5 py-1.5 font-mono text-[11.5px] leading-[1.5] text-muted"
+        ></div>
         <pre
           data-role="goal"
           class="m-0 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-[13px] leading-[1.6] text-fg ${
-            compact ? 'max-h-[88px]' : 'max-h-[170px]'
+            compact ? 'max-h-[64px]' : 'max-h-[170px]'
           }"
         >${t.goalPlaceholder}</pre>
       </section>
@@ -173,6 +179,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const diagnosticsEl = host.querySelector<HTMLUListElement>('[data-role="diagnostics"]')!;
   const diagCountEl = host.querySelector<HTMLElement>('[data-role="count"]')!;
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
+  const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
 
   const uri = 'file:///workspace/Main.lean';
   const model = monaco.editor.createModel(code, LEAN_LANGUAGE_ID, monaco.Uri.parse(uri));
@@ -476,7 +483,23 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     },
   });
 
+  // 面板第一行：光标所在声明的签名。与光标列位置无关，只在跨声明或改代码时变化。
+  const updateStatement = () => {
+    const position = editor.getPosition();
+    if (!position) return;
+    const declaration = findDeclaration(model.getValue().split('\n'), position.lineNumber - 1);
+    const text = declaration?.signature ?? '';
+    if (statementEl.textContent !== text) {
+      statementEl.textContent = text;
+      statementEl.title = text;
+    }
+    statementEl.hidden = text === '';
+  };
+
+  updateStatement();
+
   model.onDidChangeContent(() => {
+    updateStatement();
     window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(() => {
       if (!connection || !ready) return;
@@ -511,6 +534,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   editor.onDidChangeCursorPosition(() => {
+    updateStatement();
     window.clearTimeout(goalTimer);
     goalTimer = window.setTimeout(requestGoal, 250);
   });

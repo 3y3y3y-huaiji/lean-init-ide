@@ -22,8 +22,8 @@ describe('@wasm-idle/lsp 补丁', () => {
     expect(workerSource).toContain('delete payload[name];');
   });
 
-  it('pthread 池保持 64：缩小会让文件检查静默不产生诊断', () => {
-    expect(workerSource).toContain("startProcess(['-j4', '--worker', document.uri], 64,");
+  it('pthread 池保持 16/8：再小会让文件检查静默不产生诊断', () => {
+    expect(workerSource).toContain("startProcess(['-j4', '--worker', document.uri], 16,");
     expect(workerSource).toContain("startProcess(['-j2', '--server'], 8,");
   });
 });

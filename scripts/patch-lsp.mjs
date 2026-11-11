@@ -39,11 +39,20 @@ applyPatch(
 const leanWorker = path.join('lean4', 'worker.js');
 
 /**
- * 2. 解压完一个资产就释放压缩态引用，启动峰值不再同时持有 143MB 压缩态 + 415MB 解压态。
+ * 2. 文件进程 pthread 池 64 -> 16。Emscripten 启动时会预创建整个池，每个 Worker
+ *    都是独立 JS 上下文。实测 8 会让文件检查静默不产生诊断（界面仍 ready），
+ *    16 是能稳定出诊断的下限；bootstrap 的 8 不要动，降到 4 同样会丢诊断。
+ */
+applyPatch(
+  leanWorker,
+  "startProcess(['-j4', '--worker', document.uri], 64,",
+  "startProcess(['-j4', '--worker', document.uri], 16,",
+  'lean file pthread pool 64 -> 16',
+);
+
+/**
+ * 3. 解压完一个资产就释放压缩态引用，启动峰值不再同时持有 143MB 压缩态 + 415MB 解压态。
  *    preflight 结果是冻结对象，先浅拷贝成可变对象再 delete。
- *
- * 注意：不要缩小 pthread 池。实测 64 -> 16/8 会让文件检查静默不产生诊断，
- * 而初始化仍然显示 ready；池大小是功能参数，不是单纯的内存参数。
  */
 applyPatch(
   leanWorker,

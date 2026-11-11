@@ -62,8 +62,12 @@ export type Messages = {
     tocTitle: string;
     prev: string;
     next: string;
-    /** 代码块上的按钮：把这段送进右侧编辑器。 */
+    /** 代码块上的按钮：就地运行并显示输出。 */
     runInEditor: string;
+    /** 运行中的占位文案。 */
+    running: string;
+    /** 运行后没有任何输出时的提示。 */
+    noOutput: string;
     editorHint: string;
     lessons: LessonPage[];
   };

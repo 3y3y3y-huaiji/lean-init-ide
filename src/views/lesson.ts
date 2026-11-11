@@ -1,11 +1,10 @@
-import { createLeanPanel } from '../components/lean-panel';
+import { createLeanPanel, type LspDiagnostic } from '../components/lean-panel';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
 import type { LessonPage } from '../i18n/types';
 import { escapeHtml } from './html';
 
-const codeBlockOpen =
-  'overflow-hidden rounded-xl border border-line bg-panel-soft data-[loaded=true]:border-accent data-[loaded=true]:ring-1 data-[loaded=true]:ring-accent-soft';
+const codeBlockOpen = 'overflow-hidden rounded-xl border border-line bg-panel-soft';
 
 const codeBlockHead =
   'flex items-center justify-between gap-3 border-b border-line py-1.5 pl-3.5 pr-2 text-xs uppercase tracking-[0.06em] text-muted';
@@ -43,12 +42,17 @@ const renderBlocks = (page: LessonPage, runLabel: string): { html: string; codeC
       const index = codeIndex;
       codeIndex += 1;
       return `
-        <div data-role="code-block" data-code-index="${index}" class="my-5 ${codeBlockOpen}">
+        <div data-role="code-block" class="my-5 ${codeBlockOpen}">
           <div class="${codeBlockHead}">
             <span>Lean 4</span>
-            <button class="${ghostButtonClass}" type="button" data-code-index="${index}">${escapeHtml(runLabel)}</button>
+            <button class="${ghostButtonClass}" type="button" data-run-index="${index}">${escapeHtml(runLabel)}</button>
           </div>
           <pre class="m-0 overflow-auto px-4 py-3.5 font-mono text-[13.5px] leading-[1.65]"><code>${escapeHtml(block.code)}</code></pre>
+          <div
+            data-output="${index}"
+            hidden
+            class="border-t border-line bg-panel px-4 py-2.5 font-mono text-[12.5px] leading-[1.6] empty:hidden"
+          ></div>
         </div>`;
     })
     .join('');
@@ -99,18 +103,18 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       <section class="mt-8 rounded-2xl border border-accent bg-accent-soft p-6">
         <h2 class="mt-0 mb-2.5 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
         <p class="mt-0 mb-4 text-muted">${escapeHtml(page.exercise.body)}</p>
-        <button class="${buttonClass}" type="button" data-code-index="${body.codeCount}">${escapeHtml(page.exercise.cta)}</button>
+        <a class="${buttonClass}" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(page.exercise.cta)}</a>
       </section>`
     : '';
 
   return `
-    <div class="grid grid-cols-[180px_minmax(0,1fr)_minmax(340px,410px)] items-start gap-6 max-[1280px]:grid-cols-[minmax(0,1fr)_minmax(320px,370px)] max-[1280px]:gap-5 max-[1040px]:grid-cols-1">
-      <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1280px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
+    <div class="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-6 max-[1040px]:grid-cols-1">
+      <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1040px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
         <p class="m-0 mb-2 px-2.5 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
         <ol class="m-0 list-none space-y-0.5 p-0">${toc}</ol>
       </nav>
 
-      <article class="min-w-0 max-w-[880px]">
+      <article class="min-w-0 max-w-[820px]">
         <header>
           <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${escapeHtml(t.eyebrow)}</p>
           <h1 class="mt-0 mb-3 text-[clamp(28px,4.2vw,40px)] tracking-[-0.015em]">${escapeHtml(page.title)}</h1>
@@ -120,47 +124,60 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${exercise}
         ${pager}
       </article>
-
-      <aside class="sticky top-[84px] flex h-[calc(100vh-88px)] min-h-[520px] flex-col gap-2.5 max-[1040px]:static max-[1040px]:h-auto max-[1040px]:min-h-0">
-        <p class="m-0 shrink-0 text-xs leading-[1.55] text-muted">${escapeHtml(t.editorHint)}</p>
-        <div data-role="lean-panel" class="flex min-h-0 flex-1 flex-col max-[1040px]:h-[560px] max-[1040px]:flex-none"></div>
-      </aside>
     </div>
+    <div data-role="runner" class="sr-only" aria-hidden="true"></div>
   `;
+};
+
+const sevClass = (severity?: number) =>
+  severity === 1 ? 'text-err' : severity === 2 ? 'text-warn' : 'text-muted';
+
+const renderOutput = (output: HTMLElement, list: LspDiagnostic[], emptyLabel: string) => {
+  if (list.length === 0) {
+    output.innerHTML = `<p class="m-0 text-muted">${escapeHtml(emptyLabel)}</p>`;
+    return;
+  }
+
+  output.innerHTML = list
+    .map((item) => {
+      const at = `${item.range.start.line + 1}:${item.range.start.character + 1}`;
+      return `<p class="m-0 mb-1 last:mb-0 ${sevClass(item.severity)}"><span class="mr-2 opacity-55">${at}</span>${escapeHtml(item.message)}</p>`;
+    })
+    .join('');
 };
 
 export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
 
-  const codes = [
-    ...page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : [])),
-    ...(page.exercise ? [page.exercise.starter] : []),
-  ];
+  const codes = page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));
+  const runnerHost = root.querySelector<HTMLElement>('[data-role="runner"]');
+  const first = codes[0];
+  if (!runnerHost || first === undefined) return;
 
-  const host = root.querySelector<HTMLElement>('[data-role="lean-panel"]');
-  const initial = codes[0];
-  if (!host || initial === undefined) return;
+  const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
+  const panel = createLeanPanel(runnerHost, {
+    variant: 'compact',
+    code: first,
+    locale,
+    autoStart: !saveData,
+  });
 
-  const panel = createLeanPanel(host, { variant: 'compact', code: initial, locale });
-
-  const blocks = [...root.querySelectorAll<HTMLElement>('[data-role="code-block"]')];
-  const highlight = (index: number) => {
-    for (const block of blocks) {
-      block.dataset.loaded = String(block.dataset.codeIndex === String(index));
-    }
-  };
-
-  // 只绑按钮：code-block 容器上也有 data-code-index，用属性选择器会一次点击触发两次。
-  for (const button of root.querySelectorAll<HTMLButtonElement>('button[data-code-index]')) {
+  for (const button of root.querySelectorAll<HTMLButtonElement>('button[data-run-index]')) {
     button.addEventListener('click', () => {
-      const index = Number(button.dataset.codeIndex);
+      const index = Number(button.dataset.runIndex);
       const code = codes[index];
-      if (code === undefined) return;
-      panel.setCode(code, { focus: true });
-      highlight(index);
+      const output = root.querySelector<HTMLElement>(`[data-output="${index}"]`);
+      if (code === undefined || !output) return;
+
+      output.hidden = false;
+      output.textContent = t.running;
+      button.disabled = true;
+
+      void panel.run(code).then((list) => {
+        button.disabled = false;
+        renderOutput(output, list, t.noOutput);
+      });
     });
   }
-
-  highlight(0);
 };

@@ -3,15 +3,13 @@ import * as monaco from 'monaco-editor/editor/editor.api';
 // 补全、悬停、查找等交互能力需要单独引入，见 monaco-contrib.ts。
 import '../monaco-contrib';
 import editorWorker from '../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
-import type { getLean4LanguageServer } from '@wasm-idle/lsp/lean4';
-import { createMessageConnection, type MessageConnection } from 'vscode-jsonrpc/browser';
+import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
+import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
-
-type Lean4Server = Awaited<ReturnType<typeof getLean4LanguageServer>>;
 
 (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
   getWorker: () => new editorWorker(),
@@ -33,17 +31,11 @@ export type LeanPanel = {
   setCode: (code: string, options?: { focus?: boolean }) => void;
   getCode: () => string;
   focus: () => void;
+  /** 把代码送进语言服务器并等一次诊断结果，供课程页做内联输出。 */
+  run: (code: string) => Promise<LspDiagnostic[]>;
 };
 
-type LspDiagnostic = {
-  range: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
-  severity?: number;
-  message: string;
-  source?: string;
-};
+export type { LspDiagnostic };
 
 const panelClass = (compact: boolean) =>
   `flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-panel ${
@@ -333,10 +325,6 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     logEl.scrollTop = logEl.scrollHeight;
   };
 
-  let connection: MessageConnection | null = null;
-  let server: Lean4Server | null = null;
-  let ready = false;
-  let version = 1;
   let lastEditAt = 0;
   let diagnosticSeq = 0;
   let debounceTimer: number | undefined;
@@ -465,10 +453,50 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
   };
 
+  const session = new LeanSession({
+    createServer: async () => {
+      // 运行时约 700KB，按需加载，首屏只留编辑器。
+      const { getLean4LanguageServer } = await import('@wasm-idle/lsp/lean4');
+      return getLean4LanguageServer({
+        rootUrl: '/',
+        // 慢网络下 22MB 的 pack 可能超过 10 分钟，放宽超时避免下载中途被中止。
+        startupTimeoutMs: 60 * 60_000,
+        assetTimeoutMs: 60 * 60_000,
+        // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
+        lean4: { maxMemoryBytes: 1024 ** 3 },
+        createWorker: () => new LeanWorker(),
+        onStatus: (status) => {
+          if (status.state === 'loading') {
+            const loaded = status.loaded ?? 0;
+            const total = status.total ?? 0;
+            const hasBytes = loaded > 0 && total > 0;
+            setProgress(hasBytes ? loaded / total : null);
+            setStatus(
+              hasBytes
+                ? `${(loaded / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`
+                : t.statusStarting,
+              'loading',
+            );
+          } else if (status.state === 'ready') {
+            setProgress(1);
+            setStatus(t.statusLspReady, 'ready');
+            log(t.logRuntimeReady);
+          } else if (status.state === 'error') {
+            setStatus(t.statusError(status.message), 'error');
+            log(t.logRuntimeError(status.message));
+          }
+        },
+      });
+    },
+    createConnection: (server) =>
+      createMessageConnection(server.transport.reader, server.transport.writer),
+    onDiagnostics: renderDiagnostics,
+    onLog: log,
+  });
+
   const lspRequest = async <T>(method: string, params: unknown): Promise<T | null> => {
-    if (!connection || !ready) return null;
     try {
-      return await connection.sendRequest<T>(method, params);
+      return await session.request<T>(method, params);
     } catch (error) {
       log(`${method} 失败：${error instanceof Error ? error.message : String(error)}`);
       return null;
@@ -622,27 +650,33 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   model.onDidChangeContent(() => {
     updateStatement();
+    if (suppressSync) return;
     window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(() => {
-      if (!connection || !ready) return;
+      if (!session.isReady) return;
       lastEditAt = performance.now();
-      version += 1;
-      connection.sendNotification('textDocument/didChange', {
-        textDocument: { uri, version },
-        contentChanges: [{ text: model.getValue() }],
-      });
+      session.change(model.getValue());
     }, 350);
   });
 
   let goalSupported = true;
   let goalTimer: number | undefined;
+  let suppressSync = false;
+
+  /** 会话层等待启动、串行重开文档并收集诊断；这里只同步 Monaco 的内容。 */
+  const run = (code: string) =>
+    session.run(code, () => {
+      suppressSync = true;
+      model.setValue(code);
+      suppressSync = false;
+    });
 
   const requestGoal = async () => {
-    if (!ready || !connection || !goalSupported) return;
+    if (!session.isReady || !goalSupported) return;
     const position = editor.getPosition();
     if (!position) return;
     try {
-      const result = await connection.sendRequest<{ rendered?: string; goals?: string[] }>(
+      const result = await session.request<{ rendered?: string; goals?: string[] }>(
         '$/lean/plainGoal',
         positionParams(position),
       );
@@ -663,11 +697,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   /** 关闭引擎：终止 worker 并释放它占的内存，编辑器内容保留。 */
   const stop = () => {
-    connection?.dispose();
-    server?.dispose();
-    connection = null;
-    server = null;
-    ready = false;
+    session.stop();
     goalSupported = true;
     setStatus(t.statusIdle, 'idle');
     setProgress(0);
@@ -700,79 +730,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
 
     try {
-      // 运行时约 700KB，按需加载，首屏只留编辑器。
-      const { getLean4LanguageServer } = await import('@wasm-idle/lsp/lean4');
-      server = await getLean4LanguageServer({
-        rootUrl: '/',
-        // 慢网络下 22MB 的 pack 可能超过 10 分钟，放宽超时避免下载中途被中止。
-        startupTimeoutMs: 60 * 60_000,
-        assetTimeoutMs: 60 * 60_000,
-        // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
-        lean4: { maxMemoryBytes: 1024 ** 3 },
-        createWorker: () => new LeanWorker(),
-        onStatus: (status) => {
-          if (status.state === 'loading') {
-            const loaded = status.loaded ?? 0;
-            const total = status.total ?? 0;
-            const hasBytes = loaded > 0 && total > 0;
-            setProgress(hasBytes ? loaded / total : null);
-            setStatus(
-              hasBytes
-                ? `${(loaded / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`
-                : t.statusStarting,
-              'loading',
-            );
-          } else if (status.state === 'ready') {
-            setProgress(1);
-            setStatus(t.statusLspReady, 'ready');
-            log(t.logRuntimeReady);
-          } else if (status.state === 'error') {
-            setStatus(t.statusError(status.message), 'error');
-            log(t.logRuntimeError(status.message));
-          }
-        },
-      });
-
-      connection = createMessageConnection(server.transport.reader, server.transport.writer);
-      connection.onNotification('textDocument/publishDiagnostics', renderDiagnostics);
-      connection.onNotification('window/logMessage', (params: { message: string }) =>
-        log(`server: ${params.message}`),
-      );
-      connection.onRequest('window/workDoneProgress/create', () => null);
-      connection.onRequest('client/registerCapability', () => null);
-      connection.onRequest('workspace/configuration', (params: { items: unknown[] }) =>
-        (params.items ?? []).map(() => null),
-      );
-      connection.onRequest('workspace/workspaceFolders', () => [
-        { uri: 'file:///workspace', name: 'workspace' },
-      ]);
-      connection.listen();
-
-      await connection.sendRequest('initialize', {
-        processId: null,
-        clientInfo: { name: 'lean-init-ide', version: '0.1.0' },
-        rootUri: 'file:///workspace',
-        rootPath: '/workspace',
-        workspaceFolders: [{ uri: 'file:///workspace', name: 'workspace' }],
-        capabilities: {
-          workspace: { workspaceFolders: true },
-          textDocument: {
-            synchronization: { dynamicRegistration: false, didSave: false },
-            hover: { contentFormat: ['markdown', 'plaintext'] },
-            completion: { completionItem: { snippetSupport: true } },
-            definition: {},
-            publishDiagnostics: { relatedInformation: true },
-          },
-        },
-      });
-      connection.sendNotification('initialized', {});
-
-      ready = true;
+      await session.start(model.getValue());
       startEl.textContent = t.stop;
       lastEditAt = performance.now();
-      connection.sendNotification('textDocument/didOpen', {
-        textDocument: { uri, languageId: LEAN_LANGUAGE_ID, version, text: model.getValue() },
-      });
       setStatus(t.statusWaitingDiagnostics, 'ready');
       log(t.logInitialize(((performance.now() - startedAt) / 1000).toFixed(2)));
       window.setTimeout(requestGoal, 800);
@@ -787,7 +747,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   startEl.addEventListener('click', () => {
-    if (ready) stop();
+    if (session.isReady) stop();
     else void start();
   });
 
@@ -807,8 +767,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   }
 
   window.addEventListener('pagehide', () => {
-    connection?.dispose();
-    server?.dispose();
+    session.stop();
     stopThemeSync();
     model.dispose();
     editor.dispose();
@@ -823,5 +782,6 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     },
     getCode: () => model.getValue(),
     focus: () => editor.focus(),
+    run,
   };
 };

@@ -61,7 +61,9 @@ export const en: Messages = {
     tocTitle: 'Contents',
     prev: 'Previous',
     next: 'Next',
-    runInEditor: 'Run on the right',
+    runInEditor: 'Run',
+    running: 'Running…',
+    noOutput: 'No errors, no output',
     editorHint:
       'The right panel is the real editor. Opening this page starts loading Lean automatically; once it is ready, edits show diagnostics and goals.',
     lessons: [

@@ -4,10 +4,16 @@ const { createLeanPanel } = vi.hoisted(() => ({ createLeanPanel: vi.fn() }));
 
 vi.mock('../components/lean-panel', () => ({ createLeanPanel }));
 
+import type { LspDiagnostic } from '../components/lean-panel';
 import { messagesFor } from '../i18n';
 import { bindLesson, renderLesson } from './lesson';
 
-const makePanel = () => ({ setCode: vi.fn(), getCode: vi.fn(() => '') });
+const makePanel = () => ({
+  setCode: vi.fn(),
+  getCode: vi.fn(() => ''),
+  focus: vi.fn(),
+  run: vi.fn(async (): Promise<LspDiagnostic[]> => []),
+});
 
 const lessonsOf = (locale: 'zh' | 'en') => messagesFor(locale).lesson.lessons;
 
@@ -22,11 +28,13 @@ describe('课程页渲染', () => {
     expect(html).toContain('aria-current="page"');
   });
 
-  it('只渲染当前课时的代码块', () => {
+  it('只渲染当前课时的代码块，每块都带输出容器', () => {
     for (const lesson of lessonsOf('zh')) {
       const expected = lesson.blocks.filter((block) => block.kind === 'code').length;
       const html = renderLesson('zh', lesson.slug);
+
       expect((html.match(/data-role="code-block"/g) ?? []).length, lesson.slug).toBe(expected);
+      expect((html.match(/data-output="/g) ?? []).length, lesson.slug).toBe(expected);
     }
   });
 
@@ -51,23 +59,19 @@ describe('课程页渲染', () => {
     expect(last).not.toContain(lessonMsgs.next);
   });
 
-  it('练习按钮的索引排在所有代码块之后', () => {
+  it('练习区改成跳转到 playground 的链接，带上课时 slug', () => {
     const lesson = lessonsOf('zh').find((item) => item.exercise);
     expect(lesson).toBeDefined();
 
-    const codeCount = lesson!.blocks.filter((block) => block.kind === 'code').length;
     const html = renderLesson('zh', lesson!.slug);
-    const indexes = [...html.matchAll(/data-code-index="(\d+)"/g)].map((match) => Number(match[1]));
-
-    expect(Math.max(...indexes)).toBe(codeCount);
+    expect(html).toContain(`href="/zh/playground?lesson=${lesson!.slug}"`);
   });
 
-  it('每节课的正文都能渲染出非空内容', () => {
-    for (const lesson of lessonsOf('zh')) {
-      const html = renderLesson('zh', lesson.slug);
-      expect(html).toContain(lesson.title);
-      expect(html.length, lesson.slug).toBeGreaterThan(1000);
-    }
+  it('不再渲染右侧编辑器栏', () => {
+    const html = renderLesson('zh', 'first-proof');
+
+    expect(html).not.toContain('data-role="lean-panel"');
+    expect(html).toContain('data-role="runner"');
   });
 });
 
@@ -78,7 +82,7 @@ describe('课程页交互绑定', () => {
     document.body.innerHTML = renderLesson('zh', 'first-proof');
   });
 
-  it('挂载紧凑编辑器并预载第一段代码', () => {
+  it('挂载隐藏的 runner，用紧凑变体并带上第一段代码', () => {
     bindLesson(document.body, 'zh', 'first-proof');
 
     expect(createLeanPanel).toHaveBeenCalledTimes(1);
@@ -91,32 +95,42 @@ describe('课程页交互绑定', () => {
     expect(options.code.length).toBeGreaterThan(0);
   });
 
-  it('点代码块按钮把对应代码送进面板并高亮', () => {
+  it('点运行把对应代码交给引擎，并把诊断渲染到输出区', async () => {
+    const panel = makePanel();
+    panel.run.mockResolvedValue([
+      {
+        range: { start: { line: 0, character: 2 }, end: { line: 0, character: 6 } },
+        severity: 1,
+        message: '类型不匹配',
+      },
+    ]);
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
     bindLesson(document.body, 'zh', 'first-proof');
-    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
 
-    const blocks = [...document.body.querySelectorAll<HTMLElement>('[data-role="code-block"]')];
-    expect(blocks.length).toBeGreaterThan(1);
+    const button = document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]');
+    expect(button).not.toBeNull();
+    button!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    blocks[1]!.querySelector<HTMLButtonElement>('button')!.click();
-
-    expect(panel.setCode).toHaveBeenCalledTimes(1);
-    expect(blocks[1]!.dataset.loaded).toBe('true');
-    expect(blocks[0]!.dataset.loaded).toBe('false');
+    expect(panel.run).toHaveBeenCalledTimes(1);
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
+    expect(output?.hidden).toBe(false);
+    expect(output?.innerHTML).toContain('类型不匹配');
   });
 
-  it('练习按钮载入该课的 starter 代码', () => {
+  it('引擎没跑出内容时显示提示而不是空白', async () => {
+    const panel = makePanel();
+    panel.run.mockResolvedValue([]);
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
     bindLesson(document.body, 'zh', 'first-proof');
-    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
-    const starter = lessonsOf('zh')[0]!.exercise!.starter;
 
-    const exerciseButton = document.body.querySelector<HTMLButtonElement>(
-      'section button[data-code-index]',
-    );
-    expect(exerciseButton).not.toBeNull();
-    exerciseButton!.click();
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(panel.setCode).toHaveBeenCalledWith(starter, { focus: true });
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.noOutput);
   });
 
   it('缺少挂载点时安全退出', () => {

@@ -59,7 +59,9 @@ export const zh: Messages = {
     tocTitle: '课程目录',
     prev: '上一篇',
     next: '下一篇',
-    runInEditor: '在右栏运行',
+    runInEditor: '运行',
+    running: '运行中…',
+    noOutput: '没有错误，也没有输出',
     editorHint:
       '右侧是真实编辑器。打开本页会自动开始加载 Lean，完成后改动代码即可看到诊断与 Goal。',
     lessons: [

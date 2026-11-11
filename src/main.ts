@@ -1,39 +1,11 @@
 import './index.css';
 import { buttonClass } from './components/ui';
-import { detectLocale, isLocale, messagesFor, type Locale } from './i18n';
+import { detectLocale, messagesFor, type Locale } from './i18n';
+import { resolveRoute, type Page, type Route } from './router';
 import { bindLayout, renderLayout } from './views/layout';
 import { renderHome } from './views/home';
 
-type Page = 'home' | 'lesson' | 'playground' | 'notFound';
-
-type Route = {
-  page: Page;
-  locale: Locale;
-};
-
 const app = document.querySelector<HTMLElement>('#app');
-
-/**
- * 路由约定：/{locale}/、/{locale}/learn/first-proof、/{locale}/playground。
- * 没有语言前缀时按浏览器语言重定向，保证每条链接都可分享。
- */
-const parseRoute = (): Route | null => {
-  const segments = location.pathname.split('/').filter(Boolean);
-  const first = segments[0];
-
-  if (!isLocale(first)) {
-    const locale = detectLocale();
-    const rest = segments.length ? `/${segments.join('/')}` : '/';
-    location.replace(`/${locale}${rest}`);
-    return null;
-  }
-
-  const rest = segments.slice(1);
-  if (rest.length === 0) return { page: 'home', locale: first };
-  if (rest[0] === 'playground') return { page: 'playground', locale: first };
-  if (rest[0] === 'learn' && rest[1] === 'first-proof') return { page: 'lesson', locale: first };
-  return { page: 'notFound', locale: first };
-};
 
 const renderNotFound = (locale: Locale): string => {
   const t = messagesFor(locale).notFound;
@@ -92,8 +64,10 @@ const boot = async (route: Route, root: HTMLElement) => {
   mount?.();
 };
 
-const route = parseRoute();
+const resolution = resolveRoute(location.pathname, detectLocale());
 
-if (route && app) {
-  void boot(route, app);
+if (resolution.kind === 'redirect') {
+  location.replace(resolution.path);
+} else if (app) {
+  void boot(resolution.route, app);
 }

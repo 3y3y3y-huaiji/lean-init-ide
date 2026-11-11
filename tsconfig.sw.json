@@ -7,8 +7,7 @@
     "strict": true,
     "skipLibCheck": true,
     "types": [],
-    "rootDir": "src",
-    "outDir": "public"
+    "noEmit": true
   },
   "include": ["src/sw.ts"]
 }

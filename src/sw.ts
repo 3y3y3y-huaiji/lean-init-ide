@@ -7,6 +7,8 @@
  *
  * 构建期由 `npm run build:sw` 编译为 public/sw.js，仓库里不保留手写 JS。
  */
+import { buildRanges } from './sw-ranges';
+
 const GITHUB_RAW =
   'https://raw.githubusercontent.com/seo-rii/wasm-llvm/14ea5ecbc514b0c87338aebf8f2b567020be5750/artifacts/lean-browser/';
 
@@ -103,10 +105,7 @@ async function fetchRanges(
   signal: AbortSignal,
   name: string,
 ): Promise<ArrayBuffer[]> {
-  const ranges: Array<[number, number]> = [];
-  for (let start = 0; start < total; start += CHUNK_BYTES) {
-    ranges.push([start, Math.min(start + CHUNK_BYTES - 1, total - 1)]);
-  }
+  const ranges = buildRanges(total, CHUNK_BYTES);
 
   const parts: ArrayBuffer[] = new Array(ranges.length);
   let next = 0;

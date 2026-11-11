@@ -21,5 +21,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm test
       # build:web skips the 143 MB Lean asset download; the runtime verifies those at load time.
       - run: npm run build:web

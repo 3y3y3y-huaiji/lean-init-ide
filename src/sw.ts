@@ -18,7 +18,7 @@ import {
   type AssetSource,
   type RuntimeManifest,
 } from './asset-sources.mjs';
-import { buildRanges } from './sw-ranges';
+import { downloadRanges } from './sw-download';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
 
@@ -35,12 +35,14 @@ const RANGE_ASSETS = new Map<string, RangeAsset>(
 );
 
 // 运行时预取同时下载 6 个资产，每个资产再并发分片，所以这里的并发是全局并发的乘数。
-// 1MiB × 3 = 6 个资产最多 18 条流；单流只需 12KB/s 就能在 90s 内传完一片，
-// 远低于实测链路（长距离 CDN 单流 80–300KB/s）。
-const CHUNK_BYTES = 1 * 1024 * 1024;
-const MAX_PARALLEL = 3;
+// 4MiB × 6 = 最多 36 条流，是实测吞吐最好的档位；单分片 120s 预算（4MiB 只需 35KB/s），
+// 预算耗尽后自动二分重试，慢片不会让整个资产重下。
+const CHUNK_BYTES = 4 * 1024 * 1024;
+const MAX_PARALLEL = 6;
 const RETRIES = 3;
-const CHUNK_TIMEOUT_MS = 90_000;
+const CHUNK_TIMEOUT_MS = 120_000;
+const MIN_SPLIT_BYTES = 1 * 1024 * 1024;
+const MAX_SPLIT_DEPTH = 2;
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -133,61 +135,18 @@ async function fetchRanges(
   name: string,
   sourceLabel: string,
 ): Promise<ArrayBuffer[]> {
-  const ranges = buildRanges(total, CHUNK_BYTES);
-
-  const parts: ArrayBuffer[] = new Array(ranges.length);
-  let next = 0;
-  let loaded = 0;
-
-  const worker = async () => {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= ranges.length) return;
-
-      const [start, end] = ranges[index]!;
-      const part = await fetchRange(url, start, end, signal);
-      parts[index] = part;
-      loaded += part.byteLength;
-      notify(name, loaded, total, sourceLabel);
-    }
-  };
-
-  await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL, ranges.length) }, () => worker()));
-  return parts;
-}
-
-async function fetchRange(
-  url: string,
-  start: number,
-  end: number,
-  signal: AbortSignal,
-): Promise<ArrayBuffer> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
-    try {
-      // 单个分片超过 45s 没响应就重试，避免整次下载被一个挂起的请求卡死。
-      const response = await fetch(url, {
-        headers: { Range: `bytes=${start}-${end}` },
-        signal: AbortSignal.any([signal, AbortSignal.timeout(CHUNK_TIMEOUT_MS)]),
-        cache: 'no-store',
-      });
-      if (response.status !== 206) {
-        throw new Error(`unexpected HTTP ${response.status}`);
-      }
-      const bytes = await response.arrayBuffer();
-      const expected = end - start + 1;
-      if (bytes.byteLength !== expected) {
-        throw new Error(`range ${start}-${end} returned ${bytes.byteLength} bytes`);
-      }
-      return bytes;
-    } catch (error) {
-      lastError = error;
-      if (signal.aborted) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-    }
-  }
-  throw lastError;
+  return downloadRanges({
+    url,
+    total,
+    chunkBytes: CHUNK_BYTES,
+    parallel: MAX_PARALLEL,
+    timeoutMs: CHUNK_TIMEOUT_MS,
+    retries: RETRIES,
+    minSplitBytes: MIN_SPLIT_BYTES,
+    maxSplitDepth: MAX_SPLIT_DEPTH,
+    signal,
+    onProgress: ({ loaded }) => void notify(name, loaded, total, sourceLabel),
+  });
 }
 
 async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {

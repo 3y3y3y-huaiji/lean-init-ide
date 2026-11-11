@@ -34,10 +34,13 @@ const RANGE_ASSETS = new Map<string, RangeAsset>(
   ]),
 );
 
-const CHUNK_BYTES = 4 * 1024 * 1024;
-const MAX_PARALLEL = 6;
+// 运行时预取同时下载 6 个资产，每个资产再并发分片，所以这里的并发是全局并发的乘数。
+// 1MiB × 3 = 6 个资产最多 18 条流；单流只需 12KB/s 就能在 90s 内传完一片，
+// 远低于实测链路（长距离 CDN 单流 80–300KB/s）。
+const CHUNK_BYTES = 1 * 1024 * 1024;
+const MAX_PARALLEL = 3;
 const RETRIES = 3;
-const CHUNK_TIMEOUT_MS = 45_000;
+const CHUNK_TIMEOUT_MS = 90_000;
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 

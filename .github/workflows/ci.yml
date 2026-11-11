@@ -123,11 +123,10 @@ jobs:
       - run: npm run build
       - run: npm run verify:build
       - name: 推送到 Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=lean-init-ide --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 pages deploy dist --project-name=lean-init-ide --branch=main
       # 部署是原子的，但自定义域传播需要几秒，失败重试而不是立刻判定发布失败。
       - name: 线上冒烟
         run: |

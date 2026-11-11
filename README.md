@@ -40,7 +40,7 @@ npm run lint
 - **回退**：网关不可用 → 固定 revision 的 GitHub raw → 同源 `dist/wasm-lean4/` 全量请求。
 - **版本键**：每个 URL 带 `?r=<cacheKey>`（`config/lean4-runtime.json`）。
 - **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。
-- **优选 IP**：配在站点自定义域 `criticalthinking.de5.net` 上，页面与资产共用同一条连接；`*.pages.dev` 默认域不能改 DNS。
+- **单一入口**：`criticalthinking.de5.net` 是 Pages 自定义域，页面与 `/cdn/` 资产共用同一条连接；`*.pages.dev` 仅作回退。
 
 ### 部署前一次性配置
 
@@ -81,22 +81,6 @@ npm run upload:assets -- --verify-only
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
-## www 优选域名代理
-
-`www.criticalthinking.de5.net` 在阿里云做分线路优选，作为 Cloudflare for SaaS 自定义主机名进入。
-回退源若指向另一个橙云代理域名会触发 `Error 1000: DNS points to prohibited IP`（Cloudflare → Cloudflare 回源保护）。
-因此由 `workers/www-proxy/` 接管 `www.criticalthinking.de5.net/*` 路由，内部反代 Pages 默认域；
-根域是 Pages 自定义域，不匹配该路由，完全不受影响。
-
-```bash
-npx wrangler deploy --config workers/www-proxy/wrangler.toml
-```
-
-部署时 wrangler.toml 里的 `[[routes]]` 会自动创建 Workers Route。实测仅靠这条路由接管即可消除 1000；
-按 Cloudflare 官方「Workers as fallback origin」建议，可另外把该自定义主机名的回退源改成 zone 内一条
-originless 橙云记录（例如 `origin.criticalthinking.de5.net` AAAA `100::`），彻底不走回源路径。
-该 Worker 不启用 `workers.dev`，只通过 www 路由提供服务。
-
 ## 目录结构
 
 ```
@@ -118,7 +102,6 @@ public/
 config/
   lean4-runtime.json 资产清单、字节数/SHA-256、主源与回退源、缓存键
 scripts/             资产下载/上传、LSP 补丁
-workers/www-proxy/   www 优选域名的穿透回退源 Worker
 wrangler.toml        Pages 项目配置与 R2 binding
 ```
 

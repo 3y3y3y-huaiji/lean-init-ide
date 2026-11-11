@@ -56,10 +56,10 @@ const panelHeadingClass =
 const pillClass =
   'inline-flex min-h-8 max-w-[160px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
 
-const mutedItemClass = 'mb-1.5 px-2 py-2.5 text-[13px] text-muted';
+const mutedItemClass = 'mb-1 px-2 py-2 text-[13px] text-muted';
 
 const diagnosticClass =
-  'grid w-full [font:inherit] cursor-pointer grid-cols-[auto_1fr] gap-2.5 rounded-lg border border-line bg-transparent px-2.5 py-[9px] text-left text-fg hover:border-line-strong hover:bg-panel-soft';
+  'grid w-full [font:inherit] cursor-pointer grid-cols-[auto_1fr] gap-2 rounded-lg border border-line bg-transparent px-2 py-[7px] text-left text-fg hover:border-line-strong hover:bg-panel-soft';
 
 const diagnosticLocationClass = 'whitespace-nowrap font-mono text-xs leading-normal text-err';
 
@@ -69,17 +69,29 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
   <div
     class="${
       compact
-        ? 'flex min-h-0 flex-1 flex-col gap-2.5 p-2.5'
+        ? 'flex min-h-0 flex-1 flex-col gap-2 p-2.5'
         : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
     }"
   >
     <section
+      ${compact ? 'data-role="editor-wrap" style="flex:0 0 45%"' : ''}
       class="${
         compact
-          ? 'relative min-h-[180px] flex-[2] overflow-hidden rounded-xl border border-line bg-editor-bg'
+          ? 'relative min-h-[130px] overflow-hidden rounded-xl border border-line bg-editor-bg'
           : 'relative h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[60vh] max-[900px]:min-h-[420px]'
       }"
     ><div class="absolute inset-0" data-role="editor"></div></section>
+    ${
+      compact
+        ? `<div
+             data-role="resize"
+             role="separator"
+             aria-orientation="horizontal"
+             title="拖动调整编辑器高度"
+             class="group flex h-3 shrink-0 cursor-row-resize touch-none items-center justify-center"
+           ><span class="h-[3px] w-12 rounded-full bg-line transition-colors group-hover:bg-accent"></span></div>`
+        : ''
+    }
     <aside
       class="${
         compact
@@ -87,7 +99,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
           : 'flex h-[calc(100vh-250px)] min-h-0 flex-col gap-4 max-[900px]:h-auto'
       }"
     >
-      <section class="${panelClass(compact)} flex-none">
+      <section data-panel="goal" class="${panelClass(compact)} shrink-0">
         <h2 class="${panelHeadingClass}">${t.goalTitle}</h2>
         <div
           data-role="goal-statement"
@@ -101,7 +113,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
           }"
         >${t.goalPlaceholder}</pre>
       </section>
-      <section class="${panelClass(compact)} min-h-0 flex-1">
+      <section data-panel="diagnostics" class="${panelClass(compact)} min-h-0 flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
         <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2">
           <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
@@ -109,11 +121,11 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       </section>
       ${
         compact
-          ? `<details class="${panelClass(true)} flex-none">
+          ? `<details data-panel="log" class="${panelClass(true)} shrink-0">
                <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">展开</span></summary>
                <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
              </details>`
-          : `<section class="${panelClass(false)} flex-1 basis-1/2">
+          : `<section data-panel="log" class="${panelClass(false)} flex-1 basis-1/2">
                <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
                <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted"></pre>
              </section>`
@@ -130,6 +142,26 @@ const renderMarkup = (
   const compact = variant === 'compact';
   const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
   const start = `<button type="button" data-role="start">${t.start}</button>`;
+
+  const panelToggle = (key: string, label: string) => `
+    <label class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
+      <input type="checkbox" data-panel-toggle="${key}" checked class="accent-[var(--accent)]" />
+      <span>${label}</span>
+    </label>`;
+
+  const panelsMenu = compact
+    ? `<details class="relative shrink-0" data-role="panels">
+         <summary class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg" title="面板显示">
+           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5h10M2 7h10M2 10.5h10"/></svg>
+         </summary>
+         <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
+           <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">显示面板</p>
+           ${panelToggle('goal', t.goalTitle)}
+           ${panelToggle('diagnostics', t.diagnosticsTitle)}
+           ${panelToggle('log', t.logTitle)}
+         </div>
+       </details>`
+    : '';
 
   if (!compact) {
     return `
@@ -157,7 +189,7 @@ const renderMarkup = (
           <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
           <strong class="truncate text-sm">${t.title}</strong>
         </div>
-        <div class="flex shrink-0 items-center gap-2">${status}${start}</div>
+        <div class="flex shrink-0 items-center gap-2">${status}${panelsMenu}${start}</div>
       </div>
       <div class="h-[3px] shrink-0 bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
       ${renderWorkspace(t, true)}
@@ -203,6 +235,98 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const stopThemeSync = onResolvedThemeChange((theme) => {
     monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
   });
+
+  // 编辑器与诊断的空间分配由用户拖动决定；面板显隐也持久化，避免每次进来重调。
+  const LAYOUT_KEY = 'lean-panel:layout';
+  const PANELS_KEY = 'lean-panel:panels';
+  const DEFAULT_RATIO = 0.45;
+
+  const readLayout = (): { editorRatio: number; panels: Record<string, boolean> } => {
+    const fallback = {
+      editorRatio: DEFAULT_RATIO,
+      panels: { goal: true, diagnostics: true, log: false },
+    };
+    try {
+      const stored = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') as {
+        editorRatio?: unknown;
+      };
+      const panels = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '{}') as Record<
+        string,
+        boolean
+      >;
+      return {
+        editorRatio:
+          typeof stored.editorRatio === 'number' &&
+          stored.editorRatio >= 0.2 &&
+          stored.editorRatio <= 0.7
+            ? stored.editorRatio
+            : DEFAULT_RATIO,
+        panels: { ...fallback.panels, ...panels },
+      };
+    } catch {
+      return fallback;
+    }
+  };
+
+  const layout = readLayout();
+  const editorWrap = host.querySelector<HTMLElement>('[data-role="editor-wrap"]');
+  const resizeHandle = host.querySelector<HTMLElement>('[data-role="resize"]');
+
+  const applyEditorRatio = (ratio: number) => {
+    if (editorWrap) editorWrap.style.flex = `0 0 ${(ratio * 100).toFixed(2)}%`;
+  };
+
+  if (editorWrap && resizeHandle) {
+    applyEditorRatio(layout.editorRatio);
+
+    resizeHandle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      const container = editorWrap.parentElement;
+      if (!container) return;
+
+      const total = container.clientHeight || 1;
+      const startY = event.clientY;
+      const startRatio = layout.editorRatio;
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const next = startRatio + (moveEvent.clientY - startY) / total;
+        layout.editorRatio = Math.min(0.7, Math.max(0.2, next));
+        applyEditorRatio(layout.editorRatio);
+      };
+
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        try {
+          localStorage.setItem(LAYOUT_KEY, JSON.stringify({ editorRatio: layout.editorRatio }));
+        } catch {
+          // 隐私模式下写不了，忽略即可。
+        }
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  }
+
+  for (const toggle of host.querySelectorAll<HTMLInputElement>('[data-panel-toggle]')) {
+    const key = toggle.dataset.panelToggle ?? '';
+    const target = host.querySelector<HTMLElement>(`[data-panel="${key}"]`);
+    const visible = layout.panels[key] ?? true;
+
+    toggle.checked = visible;
+    if (target) target.hidden = !visible;
+
+    toggle.addEventListener('change', () => {
+      if (target) target.hidden = !toggle.checked;
+      layout.panels[key] = toggle.checked;
+      try {
+        localStorage.setItem(PANELS_KEY, JSON.stringify(layout.panels));
+      } catch {
+        // 同上。
+      }
+    });
+  }
 
   const log = (message: string) => {
     logEl.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;

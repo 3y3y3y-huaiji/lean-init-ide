@@ -121,7 +121,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${pager}
       </article>
 
-      <aside class="sticky top-[84px] flex h-[calc(100vh-100px)] flex-col gap-2.5 max-[1040px]:static max-[1040px]:h-auto">
+      <aside class="sticky top-[84px] flex h-[calc(100vh-88px)] min-h-[520px] flex-col gap-2.5 max-[1040px]:static max-[1040px]:h-auto max-[1040px]:min-h-0">
         <p class="m-0 shrink-0 text-xs leading-[1.55] text-muted">${escapeHtml(t.editorHint)}</p>
         <div data-role="lean-panel" class="flex min-h-0 flex-1 flex-col max-[1040px]:h-[560px] max-[1040px]:flex-none"></div>
       </aside>

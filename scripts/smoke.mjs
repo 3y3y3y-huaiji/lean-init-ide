@@ -11,6 +11,7 @@
  *   LEAN_SITE_ORIGIN=https://example.com node scripts/smoke.mjs
  */
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -27,6 +28,8 @@ const origin =
 
 const manifest = JSON.parse(await readFile(resolve(root, 'config/lean4-runtime.json'), 'utf8'));
 const probe = manifest.assets[0];
+const tailAsset = manifest.assets.find((asset) => asset.name === 'lean-init-05.pack.gz.bin');
+const workerAsset = manifest.assets.find((asset) => asset.name === 'runner-worker.js');
 
 const request = async (url, { method = 'GET', headers = {} } = {}) => {
   const dir = await mkdtemp(join(tmpdir(), 'lean-smoke-'));
@@ -137,6 +140,31 @@ await check('/cdn 拒绝白名单外路径', async () => {
   const response = await request(`${origin}/cdn/__smoke_missing__.bin`);
   assert(response.status === 404, `期望 404，实际 ${response.status}`);
   return '404';
+});
+
+await check(`/cdn 尾部分片（${tailAsset.key}）`, async () => {
+  const start = tailAsset.bytes - 1024;
+  const response = await request(`${origin}/cdn/${tailAsset.key}`, {
+    headers: { Range: `bytes=${start}-${tailAsset.bytes - 1}` },
+  });
+  assert(response.status === 206, `期望 206，实际 ${response.status}`);
+  const expected = `bytes ${start}-${tailAsset.bytes - 1}/${tailAsset.bytes}`;
+  const actual = response.headers.get('content-range');
+  assert(actual === expected, `Content-Range=${actual ?? '(缺失)'}，期望 ${expected}`);
+  assert(response.body.length === 1024, `实际收到 ${response.body.length} 字节`);
+  return '206，尾部分片正确';
+});
+
+await check('worker 资产与清单一致', async () => {
+  const response = await request(`${origin}/cdn/${workerAsset.key}?r=${manifest.cacheKey}`);
+  assert(response.status === 200, `期望 200，实际 ${response.status}`);
+  assert(
+    response.body.length === workerAsset.bytes,
+    `字节数 ${response.body.length}，期望 ${workerAsset.bytes}`,
+  );
+  const sha256 = createHash('sha256').update(response.body).digest('hex');
+  assert(sha256 === workerAsset.sha256, `sha256=${sha256}，期望 ${workerAsset.sha256}`);
+  return `200，${response.body.length} B，sha256 一致`;
 });
 
 const failed = results.filter((result) => !result.ok);

@@ -68,6 +68,41 @@ jobs:
       - name: 产物契约
         run: npm run verify:build
 
+  e2e:
+    name: 浏览器端到端
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 和 deploy 共用同一份资产缓存；命中时 fetch:assets 只做哈希校验。
+      - name: 缓存 Lean 资产
+        uses: actions/cache@v4
+        with:
+          path: public/wasm-lean4
+          key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
+      - name: 准备 Lean 资产
+        run: npm run fetch:assets
+      - run: npm run build:web
+      - name: 启动本地等价网关
+        run: |
+          node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &
+          for _ in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:4174/__health >/dev/null; then
+              exit 0
+            fi
+            sleep 0.2
+          done
+          cat /tmp/gateway.log
+          exit 1
+      - name: 浏览器启动 Lean 并检查诊断
+        env:
+          LEAN_E2E_CHANNEL: chrome
+        run: node scripts/e2e-lean.mjs
+
   audit:
     name: 依赖审计
     runs-on: ubuntu-latest
@@ -84,7 +119,7 @@ jobs:
 
   deploy:
     name: 部署
-    needs: [static, test, build, audit]
+    needs: [static, test, build, e2e, audit]
     # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
     if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
     runs-on: ubuntu-latest

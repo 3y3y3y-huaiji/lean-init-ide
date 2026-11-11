@@ -79,6 +79,8 @@ npm run smoke        # 线上冒烟，发版后跑
 - **白名单**：只有 `config/lean4-runtime.json` 里登记的 key 能被读取，未知路径直接 404，不触碰 R2。
 - **边缘缓存**：用 Cache API 按「URL + Range」缓存响应。同一数据中心的后续请求命中后不再执行读桶逻辑，
   命中情况写在 `X-Cdn-Cache` 响应头里（`HIT` / `MISS`），排查时不用靠猜。
+  实测 CF 自身也会缓存 `.gz` 这类扩展名的 Range 响应（`cf-cache-status: HIT`，且任意 Range 都能正确切片）；
+  Cache API 补的是 CF 不缓存的类型——例如 `producer-receipt.json` 一直是 `DYNAMIC`。
 - **只读**：网关只调用 `get`，没有任何写入或删除路径。
 - **失败隔离**：写缓存失败不影响响应；R2 读取失败返回 404 而不是 500。
 

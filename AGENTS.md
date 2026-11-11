@@ -29,7 +29,7 @@
 
 违反任意一条都会造成线上故障，且本地 `npm run dev` 看不出来。
 
-1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改动这些文件必须同步更新清单里的 `bytes` 与 `sha256`，并重新上传到 R2。
+1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改动这些文件必须同步更新清单里的 `bytes` 与 `sha256`、**更换 `cacheKey`**，并重新上传到 R2。边缘缓存按 URL 缓存一年（`immutable`），不换版本键会让用户继续拿到旧对象。
 2. **`_routes.json` 的 include 只能是 `["/cdn/*"]`。** 扩大范围会让静态资源请求也进 Functions，首屏变慢。
 3. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`。
 4. **只用一个域名。** 不要引入第二个可访问的 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名会让用户换域名就从零开始下载 143 MB。

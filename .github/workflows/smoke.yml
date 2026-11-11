@@ -6,7 +6,8 @@ on:
       origin:
         description: 目标站点
         required: false
-        default: https://criticalthinking.de5.net
+        # 手动触发默认也打 pages.dev：机房 IP 访问自定义域会被机器人规则拦成 403。
+        default: https://lean-init-ide.pages.dev
   schedule:
     # 每天 01:00 UTC 巡检一次，捕捉证书、路由、Functions 的静默回归。
     - cron: '0 1 * * *'

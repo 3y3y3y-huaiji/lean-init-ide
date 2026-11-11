@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,4 +23,31 @@ if (source.includes(to)) {
 } else {
   writeFileSync(target, source.replace(from, to));
   console.log('lsp patch: maxConcurrentDownloads 3 -> 6');
+}
+
+/**
+ * The package hard-codes the runner worker's byte count and SHA-256, and uses that
+ * hash as the worker URL's ?v= cache key. We ship a memory-optimised worker, so
+ * recompute the receipt from our source on every install. Keeping this in sync is
+ * what makes the new worker URL differ from the old one without touching the
+ * global cacheKey (which would force a 143 MB re-download for every visitor).
+ */
+const workerPath = path.join(root, 'scripts', 'assets', 'runner-worker.js');
+const workerBytes = readFileSync(workerPath);
+const workerSha = createHash('sha256').update(workerBytes).digest('hex');
+const runtimePath = path.join(root, 'node_modules', '@wasm-idle', 'lsp', 'dist', 'bundledLean4Runtime.js');
+const runtimeSource = readFileSync(runtimePath, 'utf8');
+const receipt = /(workerReceipt:\s*\{\s*bytes:\s*)\d+(,\s*sha256:\s*')[a-f0-9]+(')/;
+if (!receipt.test(runtimeSource)) {
+  throw new Error('lsp patch: workerReceipt shape changed; update the patch.');
+}
+const nextRuntime = runtimeSource.replace(
+  receipt,
+  (_match, prefix, middle, suffix) => `${prefix}${workerBytes.length}${middle}${workerSha}${suffix}`,
+);
+if (nextRuntime !== runtimeSource) {
+  writeFileSync(runtimePath, nextRuntime);
+  console.log(`lsp patch: workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`);
+} else {
+  console.log('lsp patch: workerReceipt already synced');
 }

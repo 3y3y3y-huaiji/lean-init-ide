@@ -67,9 +67,16 @@ jobs:
       - run: npm run build:web
       - name: 产物契约
         run: npm run verify:build
+      # E2E 直接复用这份 dist，避免再跑一次 vite build，也保证测的是同一份产物。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
 
   e2e:
     name: 浏览器端到端
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -78,6 +85,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
       # 和 deploy 共用同一份资产缓存；命中时 fetch:assets 只做哈希校验。
       - name: 缓存 Lean 资产
         uses: actions/cache@v4
@@ -86,7 +97,6 @@ jobs:
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
       - name: 准备 Lean 资产
         run: npm run fetch:assets
-      - run: npm run build:web
       - name: 启动本地等价网关
         run: |
           node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &

@@ -18,8 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "fetch:assets": "node scripts/fetch-assets.mjs",
-    "upload:assets": "node scripts/upload-assets.mjs",
-    "r2:cors": "npx -y wrangler r2 bucket cors set lean4-ide-releases --file config/r2-cors.json --force"
+    "upload:assets": "node scripts/upload-assets.mjs"
   },
   "dependencies": {
     "@wasm-idle/core": "^1.3.0",

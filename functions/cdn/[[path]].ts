@@ -2,7 +2,12 @@ import manifest from '../../config/lean4-runtime.json';
 import { parseRangeHeader } from '../../src/cdn-range';
 
 type RuntimeAsset = { key: string; bytes: number; contentType: string };
-type R2ObjectBody = { size: number; body: ReadableStream };
+type R2ObjectBody = {
+  size: number;
+  body: ReadableStream;
+  etag?: string;
+  httpEtag?: string;
+};
 type R2Bucket = {
   get(
     key: string,
@@ -64,6 +69,9 @@ export const onRequest = async ({ request, env, params }: Context): Promise<Resp
   if (range) {
     headers.set('Content-Range', `bytes ${range.start}-${range.end}/${asset.bytes}`);
   }
+  // 暴露对象 ETag：上传脚本据此与本地 MD5 比对，确认远端对象未损坏。
+  const etag = object.httpEtag ?? (object.etag ? `"${object.etag}"` : undefined);
+  if (etag) headers.set('ETag', etag);
 
   return new Response(request.method === 'HEAD' ? null : object.body, {
     status: range ? 206 : 200,

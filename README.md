@@ -2,7 +2,7 @@
 
 浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 中的 Lean 语言服务器。打开网页即可写代码、看诊断、看 Goal，不需要安装 Lean 工具链，也没有后端。
 
-在线使用：<https://lean-init-ide.pages.dev>
+在线使用：<https://criticalthinking.de5.net>（备用：<https://lean-init-ide.pages.dev>）
 
 ## 功能
 
@@ -40,7 +40,7 @@ npm run lint
 - **回退**：网关不可用 → 固定 revision 的 GitHub raw → 同源 `dist/wasm-lean4/` 全量请求。
 - **版本键**：每个 URL 带 `?r=<cacheKey>`（`config/lean4-runtime.json`）。
 - **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。
-- **优选 IP**：配在站点自定义域（如 `operator.ccwu.cc`）上，页面与资产共用同一条连接；`*.pages.dev` 默认域不能改 DNS。
+- **优选 IP**：配在站点自定义域 `criticalthinking.de5.net` 上，页面与资产共用同一条连接；`*.pages.dev` 默认域不能改 DNS。
 
 ### 部署前一次性配置
 
@@ -75,9 +75,8 @@ npm run upload:assets               # 上传缺失/变更的对象，经同源�
 npm run upload:assets -- --verify-only
 ```
 
-- `LEAN_ASSET_ORIGIN`（默认 `https://lean-init-ide.pages.dev`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
+- `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
 - `--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶。
-- `npm run r2:cors` 与 `config/r2-cors.json` **仅在仍使用公网 R2 自定义域时才需要**；同源方案下 R2 binding 不走 HTTP，可忽略或删除。
 
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
@@ -102,12 +101,11 @@ public/
   _routes.json       仅 /cdn/* 走 Functions
 config/
   lean4-runtime.json 资产清单、字节数/SHA-256、主源与回退源、缓存键
-  r2-cors.json       仅公网自定义域方案需要的 CORS 规则
 scripts/             资产下载/上传、LSP 补丁
 wrangler.toml        Pages 项目配置与 R2 binding
 ```
 
-仓库里只有 TypeScript 源码：`src/sw.ts` 由 `npm run build:sw` 编译成 `public/sw.js`，不手写 JS。
+仓库不保留生成的 JS 产物：`src/sw.ts` 由 `npm run build:sw` 编译成 `public/sw.js`（不入库）；`config/lean4-runtime.json` 是唯一资产清单。
 
 ## 许可证
 

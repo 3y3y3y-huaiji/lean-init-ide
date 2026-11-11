@@ -40,7 +40,7 @@ const verifyOnly = has('--verify-only');
 const forceUpload = has('--force-upload');
 const bucket = option('--bucket') ?? manifest.bucket;
 // 主源是站点同源 /cdn/ 网关；探测时补一个可达的站点域名。
-const probeOrigin = process.env.LEAN_ASSET_ORIGIN?.trim() || 'https://lean-init-ide.pages.dev';
+const probeOrigin = process.env.LEAN_ASSET_ORIGIN?.trim() || 'https://criticalthinking.de5.net';
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const md5 = (data) => createHash('md5').update(data).digest('hex');

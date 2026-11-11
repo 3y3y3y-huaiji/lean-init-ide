@@ -13,7 +13,7 @@ import { assetSources } from '../src/asset-sources.mjs';
  * `.gz.bin`. Every file is verified against its pinned byte count and SHA-256.
  *
  * Node cannot fetch a relative /cdn/ URL without an origin. Set LEAN_ASSET_ORIGIN
- * (e.g. https://operator.ccwu.cc) to use the deployed gateway during builds;
+ * (e.g. https://criticalthinking.de5.net) to use the deployed gateway during builds;
  * otherwise the build goes straight to the GitHub raw fallback.
  * LEAN_ASSET_BASE_URL overrides the primary source entirely.
  */

@@ -47,10 +47,10 @@ describe('assetSources', () => {
   });
 
   it('resolves the relative primary to an absolute URL for Node builds', () => {
-    const origin = 'https://operator.ccwu.cc';
+    const origin = 'https://criticalthinking.de5.net';
     const absolute = new URL(manifest.primary.baseUrl, origin).href;
     const sources = assetSources(manifest, assetByName('lean.mjs'), absolute);
-    expect(sources[0]?.url).toBe(`https://operator.ccwu.cc/cdn/lean.mjs?r=${manifest.cacheKey}`);
+    expect(sources[0]?.url).toBe(`https://criticalthinking.de5.net/cdn/lean.mjs?r=${manifest.cacheKey}`);
   });
 
   it('normalizes an override base URL that lacks a trailing slash', () => {

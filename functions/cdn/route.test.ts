@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import manifest from '../../config/lean4-runtime.json';
 import { onRequest } from './[[path]]';
 
@@ -152,5 +152,99 @@ describe('同源 /cdn 网关', () => {
     const response = await call(createEnv(() => hit(sample.bytes)));
 
     expect(response.headers.get('ETag')).toBeNull();
+  });
+});
+
+describe('边缘缓存', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('未命中时回源、标 MISS 并写入缓存', async () => {
+    const cache = { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+    vi.stubGlobal('caches', { default: cache });
+    const get = vi.fn(() => hit(sample.bytes));
+
+    const response = await call(createEnv(get));
+
+    expect(response.headers.get('X-Cdn-Cache')).toBe('MISS');
+    expect(cache.match).toHaveBeenCalledTimes(1);
+    expect(cache.put).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('命中时直接返回，不再触碰 R2', async () => {
+    const cached = new Response(null, { status: 206 });
+    const cache = { match: vi.fn(async () => cached), put: vi.fn(async () => undefined) };
+    vi.stubGlobal('caches', { default: cache });
+    const get = vi.fn(() => hit(sample.bytes));
+
+    const response = await call(createEnv(get), { range: 'bytes=0-99' });
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get('X-Cdn-Cache')).toBe('HIT');
+    expect(get).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('Range 编进 cache key，不同分片不会互相覆盖', async () => {
+    const cache = {
+      match: vi.fn(async (_request: Request) => undefined),
+      put: vi.fn(async (_request: Request, _response: Response) => undefined),
+    };
+    vi.stubGlobal('caches', { default: cache });
+
+    await call(
+      createEnv(() => hit(100)),
+      { range: 'bytes=0-99' },
+    );
+    await call(
+      createEnv(() => hit(100)),
+      { range: 'bytes=100-199' },
+    );
+
+    const keys = cache.match.mock.calls.map(([request]) => request.url);
+    expect(keys[0]).toContain('range=0-99');
+    expect(keys[1]).toContain('range=100-199');
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('HEAD 请求既不查缓存也不写缓存', async () => {
+    const cache = { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+    vi.stubGlobal('caches', { default: cache });
+
+    const response = await call(
+      createEnv(() => hit(sample.bytes)),
+      { method: 'HEAD' },
+    );
+
+    expect(response.status).toBe(200);
+    expect(cache.match).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('没有 Cache API 时退化为直读，不影响响应', async () => {
+    vi.stubGlobal('caches', undefined);
+    const get = vi.fn(() => hit(sample.bytes));
+
+    const response = await call(createEnv(get));
+
+    expect(response.status).toBe(200);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('写缓存失败不改变响应结果', async () => {
+    const cache = {
+      match: vi.fn(async () => undefined),
+      put: vi.fn(async () => {
+        throw new Error('cache quota exceeded');
+      }),
+    };
+    vi.stubGlobal('caches', { default: cache });
+
+    const response = await call(createEnv(() => hit(sample.bytes)));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Length')).toBe(String(sample.bytes));
   });
 });

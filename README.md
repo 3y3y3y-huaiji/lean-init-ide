@@ -103,15 +103,17 @@ pnpm exec vitest run src/lsp-patches.test.ts
 
 一次完整加载约产生 36 个分片请求（143 MiB ÷ 4 MiB）。没有缓存时全部回源，命中缓存后重复访问的成本接近零。
 
-**建议在 Cloudflare 面板补一条限流规则**（API token 只有 `zone:read`，脚本改不了）：
+**Cloudflare 侧限流**（API token 只有 `zone:read`，脚本改不了；免费计划的规则额度有限，
+优先扩展现有规则而不是新增）把一条率的匹配表达式写成两个路径的并集：
 
 | 项 | 值 |
 | --- | --- |
-| 匹配表达式 | `starts_with(http.request.uri.path, "/cdn/")` |
+| 匹配表达式 | `starts_with(http.request.uri.path, "/cdn/") or eq(http.request.uri.path, "/api/telemetry")` |
 | 速率 | 每 IP 每分钟 300 次 |
 | 动作 | 限流，返回 429 |
 
 单次加载 36 个分片，300 次/分钟留了约 8 倍余量，正常用户不会触发，但能挡住脚本刷取。
+`/api/telemetry` 另外在 Function 内有单 IP 30 次/分钟的兜底，所以即使没有可用的 WAF 规则也不会被单个来源打满。
 
 **R2 凭据保持最小权限**：运行时只依赖 binding，不需要任何 S3 兼容密钥；上传脚本用的 token
 只给这个桶的读写，不要使用账号级 Global API Key。
@@ -164,6 +166,8 @@ pnpm run upload:assets -- --verify-only
 - 字段：单事件最多 12 个，key 限 `[a-z][a-z0-9_]{0,23}`，字符串截断 120 字符
 - 上报：`navigator.sendBeacon('/api/telemetry')`，不可用时回退 `fetch(..., { keepalive: true })`
 - 接收端：`functions/api/telemetry.ts`，校验后返回 204；`public/_routes.json` 只放行 `/api/telemetry` 与 `/cdn/*` 两个精确路径
+- 限流：接收端自带固定窗口兜底（单 IP 每分钟 30 次、单 isolate 每分钟 600 次，超限返回 429），
+  不依赖 Cloudflare 的 WAF 规则额度；状态只在 isolate 内存里，跨节点不共享，属于尽力而为
 
 没有声明 Analytics Engine binding，指标以一行 JSON 落 Workers Logs，用
 `pnpm dlx wrangler pages deployment tail --project-name=lean-init-ide` 查看。

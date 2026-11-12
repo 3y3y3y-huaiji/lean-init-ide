@@ -28,6 +28,20 @@ describe('POST /api/telemetry', () => {
     expect(response.headers.get('Allow')).toBe('POST');
   });
 
+  it('同一 IP 超过每分钟额度时返回 429', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const headers = { 'CF-Connecting-IP': '203.0.113.9' };
+
+    for (let index = 0; index < 30; index += 1) {
+      const response = await call(post(withEvents([{ name: 'boot' }]), headers));
+      expect(response.status).toBe(204);
+    }
+
+    const blocked = await call(post(withEvents([{ name: 'boot' }]), headers));
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('Retry-After')).toBe('60');
+  });
+
   it('拒绝非 JSON 的 Content-Type', async () => {
     const response = await call(post('{"events":[]}', { 'Content-Type': 'text/plain' }));
     expect(response.status).toBe(415);

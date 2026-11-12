@@ -8,11 +8,21 @@
  * 校验刻意与服务端前端各写一份：跨端共享会让前端包多一套解析逻辑，
  * 而这里只有几十行，重复成本远低于共享模块的耦合。
  */
+import { createRateLimiter } from './rate-limit';
 
 const MAX_BODY_BYTES = 8192;
 const MAX_EVENTS = 16;
 const MAX_FIELDS = 12;
 const MAX_STRING = 120;
+
+// Cloudflare 免费计划的 WAF 自定义/限流规则额度有限，端点自己兜一层：
+// 单 IP 每分钟 30 次、单 isolate 每分钟 600 次。跨 isolate 不共享，属于尽力而为。
+const limiter = createRateLimiter({
+  perKeyLimit: 30,
+  globalLimit: 600,
+  windowMs: 60_000,
+  maxKeys: 2048,
+});
 
 const EVENT_NAMES = new Set([
   'boot',
@@ -101,6 +111,13 @@ const badRequest = (message: string): Response => new Response(message, { status
 export const onRequest = async ({ request, env }: Context): Promise<Response> => {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
+  }
+
+  if (!limiter.allow(request.headers.get('CF-Connecting-IP'))) {
+    return new Response('Too many requests', {
+      status: 429,
+      headers: { 'Retry-After': '60', 'Cache-Control': 'no-store' },
+    });
   }
 
   const contentType = request.headers.get('Content-Type') ?? '';

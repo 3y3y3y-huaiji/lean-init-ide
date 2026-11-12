@@ -35,6 +35,13 @@ describe('页面骨架渲染', () => {
     expect(renderLayout('en', 'playground', '')).toContain('href="/zh/playground"');
   });
 
+  it('语言切换保留练习页的 lesson 查询串', () => {
+    setPath('/zh/playground?lesson=induction');
+    expect(renderLayout('zh', 'playground', '')).toContain(
+      'href="/en/playground?lesson=induction"',
+    );
+  });
+
   it('根路径下语言切换回到对应首页', () => {
     setPath('/zh');
     expect(renderLayout('zh', 'home', '')).toContain('href="/en/"');

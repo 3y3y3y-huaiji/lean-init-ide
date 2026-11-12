@@ -13,6 +13,7 @@ import {
   matchAbbreviation,
 } from '../lean-abbreviations';
 import { clearDraft, readDraft, saveDraft } from '../draft';
+import { isExerciseSolved, isExerciseStarter } from '../exercise';
 import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
@@ -124,7 +125,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
              data-role="resize"
              role="separator"
              aria-orientation="horizontal"
-             title="拖动调整编辑器高度"
+             title="${t.resizeHint}"
              class="group flex h-3 shrink-0 cursor-row-resize touch-none items-center justify-center"
            ><span class="h-[3px] w-12 rounded-full bg-line transition-colors group-hover:bg-accent"></span></div>`
         : ''
@@ -159,7 +160,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       ${
         compact
           ? `<details data-panel="log" class="${panelClass(true)} shrink-0">
-               <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">展开</span></summary>
+               <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">${t.expand}</span></summary>
                <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
              </details>`
           : `<section data-panel="log" class="${panelClass(false)} flex-1">
@@ -189,11 +190,11 @@ const renderMarkup = (
 
   const panelsMenu = compact
     ? `<details class="relative shrink-0" data-role="panels">
-         <summary class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg" title="面板显示">
+         <summary class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg" title="${t.panelsTitle}">
            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5h10M2 7h10M2 10.5h10"/></svg>
          </summary>
          <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
-           <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">显示面板</p>
+           <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
            ${panelToggle('goal', t.goalTitle)}
            ${panelToggle('diagnostics', t.diagnosticsTitle)}
            ${panelToggle('log', t.logTitle)}
@@ -368,6 +369,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   // 练习工具条：重置回 starter，或把当前代码导出成 .lean 文件。
   resetEl?.addEventListener('click', () => {
+    if (model.getValue() !== code && !window.confirm(t.resetConfirm)) return;
     if (draftKey) clearDraft(draftKey);
     if (passedEl) passedEl.hidden = true;
     model.setValue(code);
@@ -386,12 +388,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   });
 
-  // 只有带 sorry 的练习模板才有「过关」概念；无错误且不再有 sorry 才亮徽章。
-  const exerciseStarter = /\bsorry\b/.test(code);
+  // 只有带 sorry 的具名练习才有「过关」概念；还必须保留 starter 里的定理名。
+  const exerciseStarter = isExerciseStarter(code);
   const updatePassedBadge = (list: LspDiagnostic[]) => {
     if (!passedEl || !exerciseStarter) return;
-    const hasError = list.some((item) => (item.severity ?? 1) === 1);
-    passedEl.hidden = hasError || /\bsorry\b/.test(model.getValue());
+    passedEl.hidden = !isExerciseSolved(code, model.getValue(), list);
   };
 
   // 编辑器与诊断的空间分配由用户拖动决定；面板显隐也持久化，避免每次进来重调。
@@ -506,6 +507,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   let lastEditAt = 0;
+  let lastDiagnostics: LspDiagnostic[] = [];
   let changePending = false;
   let diagnosticSeq = 0;
   let debounceTimer: number | undefined;
@@ -658,6 +660,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     );
 
     updatePassedBadge(params.diagnostics);
+    lastDiagnostics = params.diagnostics;
 
     diagnosticsEl.replaceChildren();
     diagCountEl.textContent = String(params.diagnostics.length);
@@ -760,7 +763,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     try {
       return await session.request<T>(method, params);
     } catch (error) {
-      log(`${method} 失败：${error instanceof Error ? error.message : String(error)}`);
+      log(t.logRequestFailed(method, error instanceof Error ? error.message : String(error)));
       return null;
     }
   };
@@ -792,7 +795,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           | { kind?: string; value: string }
           | Array<string | { kind?: string; value: string }>;
       }>('textDocument/hover', positionParams(position));
-      log(`hover ${position.lineNumber}:${position.column} -> ${hover ? '有结果' : 'null'}`);
+      log(t.logHover(position.lineNumber, position.column, Boolean(hover)));
       if (!hover?.contents) return null;
 
       const contents = (Array.isArray(hover.contents) ? hover.contents : [hover.contents]).map(
@@ -820,7 +823,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         word.endColumn,
       );
       const { suggestions, incomplete } = toMonacoCompletions(result, fallback);
-      log(`completion @${position.lineNumber}:${position.column} -> ${suggestions.length} 项`);
+      log(t.logCompletion(position.lineNumber, position.column, suggestions.length));
       return { suggestions, incomplete };
     },
   });
@@ -879,8 +882,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   model.onDidChangeContent(() => {
     updateStatement();
     scheduleDraftSave();
-    // 改回 sorry 时立即收起徽章，不用等下一轮诊断。
-    if (passedEl && /\bsorry\b/.test(model.getValue())) passedEl.hidden = true;
+    // 改回 sorry 或删掉目标定理时立即收起徽章，不用等下一轮诊断。
+    if (passedEl && exerciseStarter && !isExerciseSolved(code, model.getValue(), lastDiagnostics)) {
+      passedEl.hidden = true;
+    }
     if (suppressSync) return;
     changePending = true;
     window.clearTimeout(debounceTimer);
@@ -928,7 +933,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     } catch (error) {
       goalSupported = false;
       goalEl.textContent = t.goalUnsupported;
-      log(`$/lean/plainGoal 失败：${error instanceof Error ? error.message : String(error)}`);
+      log(t.logGoalFailed(error instanceof Error ? error.message : String(error)));
     }
   };
 

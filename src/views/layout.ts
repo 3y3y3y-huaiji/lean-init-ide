@@ -24,6 +24,8 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
   const t = messagesFor(locale);
   const other = otherLocale(locale);
   const rest = location.pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '') || '/';
+  // 切换语言时保留查询串：练习页的 ?lesson= 不能丢，否则会退回空白编辑器。
+  const suffix = `${location.search}${location.hash}`;
   const pref = getThemePreference();
   const themeLabel = `${t.theme.label} · ${t.theme[pref]}`;
 
@@ -59,7 +61,7 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
           <a
             id="lang-switch"
             class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
-            href="/${other}${rest}"
+            href="/${other}${rest}${suffix}"
             title="${t.language.label}"
             aria-label="${t.language.label}"
           >

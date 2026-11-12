@@ -97,8 +97,18 @@ export type Messages = {
     abbreviationDetail: string;
     backToLesson: string;
     resetCode: string;
+    /** 重置前确认，避免手滑覆盖代码。 */
+    resetConfirm: string;
     exportCode: string;
     lessonPassed: string;
+    expand: string;
+    panelsTitle: string;
+    showPanels: string;
+    resizeHint: string;
+    logCompletion: (line: number, column: number, count: number) => string;
+    logHover: (line: number, column: number, found: boolean) => string;
+    logRequestFailed: (method: string, message: string) => string;
+    logGoalFailed: (message: string) => string;
     logTitle: string;
     footer: string;
     openFull: string;

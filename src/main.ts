@@ -2,6 +2,8 @@ import './index.css';
 import { applySourcePreference } from './asset-source';
 import { buttonClass } from './components/ui';
 import { detectLocale, messagesFor, type Locale } from './i18n';
+import { applyPageMeta } from './meta';
+import { readProgress } from './progress';
 import { resolveRoute, type Route } from './router';
 import { initTelemetry, track } from './telemetry';
 import { bindLayout, renderLayout } from './views/layout';
@@ -45,6 +47,11 @@ const pageTitle = (route: Route): string => {
 
 const boot = async (route: Route, root: HTMLElement) => {
   document.title = pageTitle(route);
+  applyPageMeta(document, {
+    locale: route.locale,
+    pathname: location.pathname,
+    title: document.title,
+  });
   document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
   track('boot', { page: route.page, locale: route.locale });
 
@@ -71,7 +78,7 @@ const boot = async (route: Route, root: HTMLElement) => {
       content = renderNotFound(route.locale);
       break;
     default:
-      content = renderHome(route.locale);
+      content = renderHome(route.locale, readProgress());
   }
 
   root.innerHTML = renderLayout(

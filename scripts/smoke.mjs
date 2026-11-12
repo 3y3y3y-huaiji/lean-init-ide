@@ -112,6 +112,27 @@ await check('跨源隔离头', async () => {
   return 'COOP/COEP 正确';
 });
 
+await check('安全响应头', async () => {
+  const response = await request(`${origin}/`);
+  const csp = response.headers.get('content-security-policy') ?? '';
+  assert(csp.includes("'wasm-unsafe-eval'"), `CSP 缺少 wasm-unsafe-eval：${csp || '(缺失)'}`);
+  assert(csp.includes('blob:'), 'CSP 缺少 blob:（Worker 动态模块需要）');
+  assert(
+    csp.includes('https://static.cloudflareinsights.com'),
+    'CSP 未放行 Cloudflare Web Analytics',
+  );
+  assert(csp.includes("frame-ancestors 'none'"), 'CSP 缺少 frame-ancestors');
+  assert(
+    response.headers.get('referrer-policy') === 'strict-origin-when-cross-origin',
+    `Referrer-Policy=${response.headers.get('referrer-policy') ?? '(缺失)'}`,
+  );
+  assert(
+    (response.headers.get('permissions-policy') ?? '').includes('camera=()'),
+    `Permissions-Policy=${response.headers.get('permissions-policy') ?? '(缺失)'}`,
+  );
+  return 'CSP / Referrer-Policy / Permissions-Policy 就位';
+});
+
 await check('Service Worker 可更新', async () => {
   const response = await request(`${origin}/sw.js`);
   assert(response.status === 200, `期望 200，实际 ${response.status}`);
@@ -167,9 +188,35 @@ await check('worker 资产与清单一致', async () => {
   return `200，${response.body.length} B，sha256 一致`;
 });
 
-const failed = results.filter((result) => !result.ok);
+// 魔搭是第三方镜像，波动不应阻断发布：记录结果但不计入失败。
+if (manifest.mirror) {
+  const started = Date.now();
+  try {
+    const response = await request(`${manifest.mirror.baseUrl}${manifest.cacheKey}/${probe.name}`, {
+      headers: { Range: 'bytes=0-15' },
+    });
+    const ok = response.status === 206 || response.status === 200;
+    results.push({
+      name: '魔搭镜像可读（可选）',
+      ok,
+      optional: true,
+      detail: ok ? `${response.status}，${response.body.length} 字节` : `HTTP ${response.status}`,
+      ms: Date.now() - started,
+    });
+  } catch (error) {
+    results.push({
+      name: '魔搭镜像可读（可选）',
+      ok: false,
+      optional: true,
+      detail: error.message,
+      ms: Date.now() - started,
+    });
+  }
+}
+
+const failed = results.filter((result) => !result.ok && !result.optional);
 for (const result of results) {
-  const mark = result.ok ? 'PASS' : 'FAIL';
+  const mark = result.ok ? 'PASS' : result.optional ? 'WARN' : 'FAIL';
   console.log(`  [${mark}] ${result.name} — ${result.detail} (${result.ms}ms)`);
 }
 
@@ -178,4 +225,8 @@ if (failed.length > 0) {
   process.exit(1);
 }
 
-console.log(`\n冒烟通过：${results.length}/${results.length} 项`);
+const optional = results.filter((result) => result.optional).length;
+console.log(
+  `\n冒烟通过：${results.length - optional}/${results.length - optional} 项` +
+    (optional > 0 ? `（另有 ${optional} 项可选检查）` : ''),
+);

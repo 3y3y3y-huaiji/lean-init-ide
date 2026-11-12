@@ -28,6 +28,7 @@ export const en: Messages = {
     title: 'Learn Lean 4 in your browser',
     lead: 'A real Lean language server runs inside a Web Worker. Write code, read diagnostics and inspect goals with no toolchain install and no backend.',
     ctaPrimary: 'Start the first lesson',
+    continueCta: 'Continue learning',
     ctaSecondary: 'Open the playground',
     featuresTitle: 'Why this is different',
     features: [
@@ -51,9 +52,9 @@ export const en: Messages = {
     limitsTitle: 'Current limits',
     limitsBody:
       'Only Init ships with it—no Std / Lean / Lake / Mathlib—so lessons stay within basic types, List and propositional logic. Cross-origin isolation is required; Chromium-based browsers work best.',
-    courseTitle: 'Lesson one: your first Lean proof',
+    courseTitle: 'Lesson one: meet Lean',
     courseBody:
-      'No prior Lean needed. Start with #check and #eval, then prove commutativity of addition by induction.',
+      'Start with what Lean is and why this course only uses Init, then move from #check and #eval to your first inductive proof.',
     courseCta: 'Start learning',
   },
   lesson: {
@@ -69,8 +70,40 @@ export const en: Messages = {
       'The right panel is the real editor. Opening this page starts loading Lean automatically; once it is ready, edits show diagnostics and goals.',
     lessons: [
       {
+        slug: 'what-is-lean',
+        navTitle: '01 · Meet Lean',
+        title: 'What is Lean?',
+        lead: 'Before writing the first proof, get clear on what Lean is and why this course only uses Init.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Lean is both a programming language and an interactive theorem prover. In one file you can compute 2 + 3 and prove that a + b = b + a for all natural numbers.',
+          },
+          { kind: 'code', code: '#eval 2 + 3' },
+          {
+            kind: 'p',
+            text: 'The most counter-intuitive idea in Lean: propositions are types, and a proof is an element of that type. Keep that in mind; lesson 2 unpacks it.',
+          },
+          { kind: 'code', code: '#check Nat.add' },
+          {
+            kind: 'note',
+            text: 'This course only ships Init, the core library bundled with Lean. No Std, Lean, Lake or Mathlib, so you will not see import Mathlib later.',
+          },
+          {
+            kind: 'p',
+            text: 'The editor runs entirely in your browser: the first visit downloads about 143 MB, later visits use a persistent cache, and your code is never uploaded.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Change the #eval expression to something you like, then #check a name you are curious about.',
+          cta: 'Try it in the editor',
+          starter: '#eval 6 * 7\n#check Nat.mul\n',
+        },
+      },
+      {
         slug: 'first-proof',
-        navTitle: '01 · Ask Lean a question',
+        navTitle: '02 · Ask Lean a question',
         title: 'Ask Lean a question',
         lead: 'Start from zero: evaluate an expression, read a proposition as a type, then prove an equality yourself.',
         blocks: [
@@ -106,7 +139,7 @@ export const en: Messages = {
       },
       {
         slug: 'implication',
-        navTitle: '02 · Implication',
+        navTitle: '03 · Implication',
         title: 'Propositions are types',
         lead: '“If P then Q” is a function type in Lean. Once that clicks, the shape of most proofs becomes obvious.',
         blocks: [
@@ -149,7 +182,7 @@ export const en: Messages = {
       },
       {
         slug: 'connectives',
-        navTitle: '03 · And, or',
+        navTitle: '04 · And, or',
         title: 'Building and using ∧ and ∨',
         lead: 'Each connective has two rules: how to construct it, and how to use it. Four moves cover almost everything.',
         blocks: [
@@ -192,7 +225,7 @@ export const en: Messages = {
       },
       {
         slug: 'induction',
-        navTitle: '04 · Induction',
+        navTitle: '05 · Induction',
         title: 'Prove commutativity by induction',
         lead: 'Addition is not commutative by computation alone. It needs induction on one argument — the most important proof pattern in Lean.',
         blocks: [
@@ -231,7 +264,7 @@ export const en: Messages = {
       },
       {
         slug: 'rewrite',
-        navTitle: '05 · Rewriting with rw',
+        navTitle: '06 · Rewriting with rw',
         title: 'Rewrite the goal with rw',
         lead: 'rfl only closes goals that are equal by definition. When a subexpression must be replaced, feed an equation into rw.',
         blocks: [
@@ -270,7 +303,7 @@ export const en: Messages = {
       },
       {
         slug: 'simp',
-        navTitle: '06 · simp and simplification',
+        navTitle: '07 · simp and simplification',
         title: 'Let simp finish the goal',
         lead: 'simp is a curated set of rewrite rules. Used well it closes computation goals in one line; used blindly it can wander.',
         blocks: [
@@ -309,7 +342,7 @@ export const en: Messages = {
       },
       {
         slug: 'quantifiers',
-        navTitle: '07 · Forall and exists',
+        navTitle: '08 · Forall and exists',
         title: 'Using ∀ and ∃',
         lead: '∀ is a function type; ∃ is a dependent pair. One takes an argument, the other unpacks a witness.',
         blocks: [
@@ -352,7 +385,7 @@ export const en: Messages = {
       },
       {
         slug: 'list-structure',
-        navTitle: '08 · Lists and structures',
+        navTitle: '09 · Lists and structures',
         title: 'Inductive types and structures',
         lead: 'List inducts just like Nat, except the constructors are nil and cons; structure packs several values into one new type.',
         blocks: [

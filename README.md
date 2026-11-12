@@ -34,16 +34,17 @@
 - 诊断、Goal（`$/lean/plainGoal`）、悬停、补全、跳转定义
 - 中英文界面，`/zh/`、`/en/` 双前缀，可切换并记住偏好
 - 亮色 / 暗色 / 跟随系统三种主题，Monaco 主题同步
-- 8 节入门课程，代码块可一键运行，练习可带着 starter 跳到编辑器
+- 9 节入门课程，代码块可一键运行，练习可带着 starter 跳到编辑器
 - 运行时按 4MB 分片并行下载、逐块校验，失败自动回退到其它源
 - 低内存设备自动关闭自动下载，并把持久缓存上限从 512MB 降到 128MB
 
 ## 课程
 
-每节 3 个可运行代码块加一个练习，全部落在 Init 范围内。
+每节 2–3 个可运行代码块加一个练习，全部落在 Init 范围内。
 
 | 课时 | 主题 | 关键动作 |
 | --- | --- | --- |
+| `what-is-lean` | Lean 是什么 | `#eval`、`#check`、Init 的边界 |
 | `first-proof` | 先让 Lean 说句话 | `#check`、`#eval`、`rfl` |
 | `implication` | 命题即类型 | `intro`、`exact`、函数组合 |
 | `connectives` | 与、或怎么拆 | `⟨hp, hq⟩`、`h.1` / `h.2`、`cases` |
@@ -100,7 +101,7 @@ pnpm run smoke       # 线上冒烟，发版后跑
 Lean Init IDE is a browser-native Lean 4 learning environment. The Lean 4.34.1 Init runtime and
 the real language server run in Web Workers, so you can write proofs and read diagnostics and
 goals without installing a toolchain. It is a static site on Cloudflare Pages; the 143 MB runtime
-streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Eight intro-level
+streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Nine intro-level
 lessons, no backend, and no code upload.
 
 ## 许可证

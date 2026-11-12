@@ -88,6 +88,22 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 **R2 凭据保持最小权限**：运行时只依赖 binding，不需要任何 S3 兼容密钥；上传脚本用的 token
 只给这个桶的读写，不要使用账号级 Global API Key。
 
+## 安全响应头
+
+`public/_headers` 在 `/*` 上统一设置：
+
+- `Content-Security-Policy`：默认只允许同源；脚本额外放行 Cloudflare Web Analytics 的
+  `static.cloudflareinsights.com`，并保留 `'wasm-unsafe-eval'`（WebAssembly 编译需要）。
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy`：关闭摄像头、麦克风、定位、支付与 USB。
+
+改 CSP 时注意三点：去掉 `'wasm-unsafe-eval'` 会让 Lean 直接起不来；去掉 `blob:` 会让 Worker
+里的动态模块导入失败；去掉 `static.cloudflareinsights.com` 会让 Web Analytics 静默失效。
+本地 e2e 由 `scripts/local-gateway.mjs` 读取同一份 `_headers`，所以 CSP 写错会在 CI 的浏览器测试里暴露，
+不需要等到部署后才发现。
+
+`public/robots.txt` 与 `public/sitemap.xml` 是静态文件；新增课程或路由时要同步 sitemap。
+
 ## 部署前一次性配置
 
 `wrangler.toml` 已声明绑定。顶层用于本地开发，**production 与 preview 必须各自显式声明**，

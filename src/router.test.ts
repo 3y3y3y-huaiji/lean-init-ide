@@ -26,7 +26,7 @@ describe('resolveRoute', () => {
   it('redirects the bare learn index to the first lesson', () => {
     expect(resolveRoute('/zh/learn', 'en')).toEqual({
       kind: 'redirect',
-      path: '/zh/learn/first-proof',
+      path: '/zh/learn/what-is-lean',
     });
   });
 

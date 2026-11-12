@@ -1,8 +1,14 @@
 import { buttonClass, ghostButtonLgClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
+import { firstUnvisitedLesson } from '../progress';
+import { FIRST_LESSON_SLUG } from '../router';
 
-export const renderHome = (locale: Locale): string => {
+export const renderHome = (locale: Locale, visited: ReadonlySet<string> = new Set()): string => {
   const t = messagesFor(locale).home;
+  const lessonSlugs = messagesFor(locale).lesson.lessons.map((lesson) => lesson.slug);
+  const target = firstUnvisitedLesson(lessonSlugs, visited) ?? FIRST_LESSON_SLUG;
+  const cta = visited.size > 0 ? t.continueCta : t.ctaPrimary;
+  const courseCta = visited.size > 0 ? t.continueCta : t.courseCta;
 
   const features = t.features
     .map(
@@ -20,7 +26,7 @@ export const renderHome = (locale: Locale): string => {
       <h1 class="mt-0 mb-4 text-[clamp(32px,5.4vw,52px)] tracking-[-0.02em]">${t.title}</h1>
       <p class="mt-0 mb-6.5 max-w-[640px] text-[clamp(15px,1.6vw,18px)] text-muted">${t.lead}</p>
       <div class="flex flex-wrap gap-3">
-        <a class="${buttonClass}" href="/${locale}/learn/first-proof">${t.ctaPrimary}</a>
+        <a class="${buttonClass}" href="/${locale}/learn/${target}">${cta}</a>
         <a class="${ghostButtonLgClass}" href="/${locale}/playground">${t.ctaSecondary}</a>
       </div>
     </section>
@@ -38,7 +44,7 @@ export const renderHome = (locale: Locale): string => {
       <article class="rounded-2xl border border-accent bg-panel bg-[linear-gradient(150deg,var(--accent-soft),transparent_70%)] p-6">
         <h2 class="mt-0 mb-2.5 text-[17px] font-bold">${t.courseTitle}</h2>
         <p class="mt-0 mb-4 text-sm text-muted last:mb-0">${t.courseBody}</p>
-        <a class="${buttonClass}" href="/${locale}/learn/first-proof">${t.courseCta}</a>
+        <a class="${buttonClass}" href="/${locale}/learn/${target}">${courseCta}</a>
       </article>
     </section>
   `;

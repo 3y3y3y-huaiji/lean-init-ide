@@ -118,6 +118,7 @@ chore(ci): 依赖审计只审生产依赖
 - **Analytics Engine binding 尚未声明**：指标现在只写 Workers Logs；要改数据点需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`，接收端会自动切换。
 - **Cloudflare Web Analytics 会注入第三方 beacon**：上 CSP 时要放行 `static.cloudflareinsights.com`（脚本）与 `cloudflareinsights.com`（上报）；它带 `Cross-Origin-Resource-Policy: cross-origin`，不影响 COEP。页面可能同时有 Pages 与 zone 两个 beacon，重复统计要在面板关掉一个。
 - **课程页会过滤「already declared」假阳性**：`@wasm-idle/lsp` 的 FileWorker 偶发把同一文档精化两次，只声明一次的名字也会被判重复。`src/views/lesson.ts` 的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删掉这段逻辑，也不要把它搬到 playground（那里需要看到真实的重复声明）。
+- **CSP 里有三条不能删**：`'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入模块）与 `static.cloudflareinsights.com`（Web Analytics）；去掉任意一条，Lean 或统计会静默失效。本地 e2e 会读 `public/_headers`，改错会在浏览器测试里暴露。
 - **rollup 解析不了 `lean-panel.ts` 的类型语法**：v8 覆盖率在补算未覆盖文件时会报 `PARSE_ERROR`，故显式排除。
 
 ## 文档维护

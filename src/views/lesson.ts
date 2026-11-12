@@ -7,6 +7,7 @@ import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
 import type { LessonPage } from '../i18n/types';
+import { markLessonVisited, readProgress } from '../progress';
 import { escapeHtml } from './html';
 
 const codeBlockOpen = 'overflow-hidden rounded-xl border border-line bg-panel-soft';
@@ -76,7 +77,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
     .map(
       (lesson, i) => `
       <li>
-        <a class="${tocLink(i === index)}" href="/${locale}/learn/${lesson.slug}"${
+        <a class="${tocLink(i === index)}" data-lesson-slug="${lesson.slug}" href="/${locale}/learn/${lesson.slug}"${
           i === index ? ' aria-current="page"' : ''
         }>${escapeHtml(lesson.navTitle)}</a>
       </li>`,
@@ -224,6 +225,18 @@ export const dropSpuriousRedeclarations = (list: LspDiagnostic[], code: string):
 export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
+
+  // 进度只存在浏览器里：进入课程即记为已读，目录里给已读课时打勾。
+  const visited = readProgress();
+  markLessonVisited(page.slug);
+  for (const link of root.querySelectorAll<HTMLAnchorElement>('[data-lesson-slug]')) {
+    if (!visited.has(link.dataset.lessonSlug ?? '')) continue;
+    const mark = document.createElement('span');
+    mark.className = 'ml-auto pl-2 text-accent';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = '✓';
+    link.append(mark);
+  }
 
   const codes = page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));
   const runnerHost = root.querySelector<HTMLElement>('[data-role="runner"]');

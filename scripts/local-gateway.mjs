@@ -49,6 +49,31 @@ const mime = {
   '.woff2': 'font/woff2',
 };
 
+/**
+ * 读取 public/_headers 的 /* 段，让本地 e2e 也在生产同款 CSP / Referrer-Policy 下运行。
+ * 只解析根段；其它路径的缓存头由网关自己决定。
+ */
+const readPageHeaders = () => {
+  const file = path.join(root, 'public', '_headers');
+  if (!existsSync(file)) return {};
+  const headers = {};
+  let inRoot = false;
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    if (!line.startsWith(' ')) {
+      inRoot = line.trim() === '/*';
+      continue;
+    }
+    if (!inRoot) continue;
+    const separator = line.indexOf(':');
+    if (separator > 0) {
+      headers[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+    }
+  }
+  return headers;
+};
+const pageHeaders = readPageHeaders();
+
 const parseRange = (header, size) => {
   if (header === null) return null;
   const match = /^bytes=(\d+)-(\d*)$/.exec(header.trim());
@@ -130,6 +155,7 @@ const serveStatic = (request, response) => {
     file = existsSync(candidate) ? candidate : path.join(dist, 'index.html');
   }
   const headers = {
+    ...pageHeaders,
     ...baseHeaders,
     'Content-Type': mime[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
     'Cache-Control': file.endsWith('sw.js') ? 'no-cache' : 'no-cache',

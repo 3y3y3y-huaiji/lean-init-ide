@@ -1,5 +1,6 @@
 import { ghostButtonClass } from '../components/ui';
 import { localeLabel, messagesFor, otherLocale, rememberLocale, type Locale } from '../i18n';
+import { FIRST_LESSON_SLUG } from '../router';
 import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
 import type { ThemePreference } from '../theme';
@@ -28,7 +29,7 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
 
   const navItems: Array<{ page: ActivePage; href: string; label: string }> = [
     { page: 'home', href: `/${locale}/`, label: t.nav.home },
-    { page: 'lesson', href: `/${locale}/learn/first-proof`, label: t.nav.lesson },
+    { page: 'lesson', href: `/${locale}/learn/${FIRST_LESSON_SLUG}`, label: t.nav.lesson },
     { page: 'playground', href: `/${locale}/playground`, label: t.nav.playground },
   ];
 

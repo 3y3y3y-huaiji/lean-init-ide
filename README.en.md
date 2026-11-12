@@ -40,16 +40,17 @@ Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sig
 - Diagnostics, goal state (`$/lean/plainGoal`), hover, completion and go-to-definition
 - Bilingual UI (`/zh/` and `/en/`), remembers your choice
 - Light / dark / system themes, with Monaco following along
-- 8 intro lessons; code blocks run in place, exercises open the playground with a starter
+- 9 intro lessons; code blocks run in place, exercises open the playground with a starter
 - The runtime streams in 4 MB ranges with per-chunk verification and automatic source fallback
 - Low-memory devices skip auto-download and cap the persistent cache at 128 MB
 
 ## Lessons
 
-Each lesson has three runnable code blocks and one exercise, all within Init.
+Each lesson has two or three runnable code blocks and one exercise, all within Init.
 
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
+| `what-is-lean` | What is Lean? | `#eval`, `#check`, the Init boundary |
 | `first-proof` | Ask Lean a question | `#check`, `#eval`, `rfl` |
 | `implication` | Propositions are types | `intro`, `exact`, function composition |
 | `connectives` | Building and using ∧ / ∨ | `⟨hp, hq⟩`, `h.1` / `h.2`, `cases` |

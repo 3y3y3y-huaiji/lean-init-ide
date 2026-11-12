@@ -16,6 +16,7 @@ const channel =
 const executablePath = process.env.LEAN_E2E_EXECUTABLE || undefined;
 
 const SLUGS = [
+  'what-is-lean',
   'first-proof',
   'implication',
   'connectives',

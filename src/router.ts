@@ -12,10 +12,10 @@ export type Route = {
 export type RouteResolution = { kind: 'route'; route: Route } | { kind: 'redirect'; path: string };
 
 /** 课程入口默认跳到的第一节课。新增课时时同步这里。 */
-const FIRST_LESSON_SLUG = 'first-proof';
+export const FIRST_LESSON_SLUG = 'what-is-lean';
 
 /**
- * 路由约定：/{locale}/、/{locale}/learn/first-proof、/{locale}/playground。
+ * 路由约定：/{locale}/、/{locale}/learn/what-is-lean、/{locale}/playground。
  * 没有语言前缀时返回重定向目标，由调用方写入 location。
  */
 export const resolveRoute = (pathname: string, fallbackLocale: Locale): RouteResolution => {

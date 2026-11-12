@@ -4,13 +4,19 @@ import { renderHome } from './home';
 
 describe('首页渲染', () => {
   it('主行动按钮指向当前语言的课程页', () => {
-    expect(renderHome('zh')).toContain('href="/zh/learn/first-proof"');
-    expect(renderHome('en')).toContain('href="/en/learn/first-proof"');
+    expect(renderHome('zh')).toContain('href="/zh/learn/what-is-lean"');
+    expect(renderHome('en')).toContain('href="/en/learn/what-is-lean"');
   });
 
   it('次要行动按钮指向 playground', () => {
     expect(renderHome('zh')).toContain('href="/zh/playground"');
     expect(renderHome('en')).toContain('href="/en/playground"');
+  });
+
+  it('有进度时继续学习指向第一节未读课', () => {
+    const html = renderHome('zh', new Set(['what-is-lean']));
+    expect(html).toContain('href="/zh/learn/first-proof"');
+    expect(html).toContain(messagesFor('zh').home.continueCta);
   });
 
   it('每条特性都渲染成独立卡片', () => {

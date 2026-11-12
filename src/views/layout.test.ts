@@ -24,7 +24,7 @@ describe('页面骨架渲染', () => {
     expect(html).toContain(t.nav.home);
     expect(html).toContain(t.nav.lesson);
     expect(html).toContain(t.nav.playground);
-    expect(html).toContain(`href="/zh/learn/first-proof"`);
+    expect(html).toContain(`href="/zh/learn/what-is-lean"`);
     expect(html).toContain('bg-accent-soft');
   });
 

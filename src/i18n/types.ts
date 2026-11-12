@@ -47,6 +47,8 @@ export type Messages = {
     title: string;
     lead: string;
     ctaPrimary: string;
+    /** 已有进度时的主按钮文案。 */
+    continueCta: string;
     ctaSecondary: string;
     featuresTitle: string;
     features: Array<{ title: string; body: string }>;

@@ -27,6 +27,7 @@ export const zh: Messages = {
     title: '在浏览器里学 Lean 4',
     lead: '真正的 Lean 语言服务器跑在 Web Worker 里。写代码、看诊断、读 Goal，不需要安装工具链，也没有后端。',
     ctaPrimary: '从第一课开始',
+    continueCta: '继续学习',
     ctaSecondary: '直接打开编辑器',
     featuresTitle: '和在线沙盒有什么不同',
     features: [
@@ -50,8 +51,9 @@ export const zh: Messages = {
     limitsTitle: '当前边界',
     limitsBody:
       '只内置 Init，不含 Std / Lean / Lake / Mathlib，所以课程内容限定在基础类型、List 与命题逻辑。需要 cross-origin isolation，Chromium 系浏览器体验最佳。',
-    courseTitle: '第一课：第一个 Lean 证明',
-    courseBody: '不假设任何 Lean 基础，从 #check 和 #eval 开始，最后用归纳法证明加法交换律。',
+    courseTitle: '第一课：认识 Lean',
+    courseBody:
+      '先弄明白 Lean 是什么、这门课为什么只用 Init，再从 #check 和 #eval 一路走到第一个归纳证明。',
     courseCta: '开始学习',
   },
   lesson: {
@@ -67,8 +69,40 @@ export const zh: Messages = {
       '右侧是真实编辑器。打开本页会自动开始加载 Lean，完成后改动代码即可看到诊断与 Goal。',
     lessons: [
       {
+        slug: 'what-is-lean',
+        navTitle: '01 · 认识 Lean',
+        title: 'Lean 是什么',
+        lead: '在写第一行证明之前，先搞清楚 Lean 能做什么，以及这门课为什么只用 Init。',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Lean 既是一门编程语言，也是一个交互式定理证明器。你可以在同一个文件里计算 2 + 3，也可以证明「对所有自然数 a、b，a + b = b + a」。',
+          },
+          { kind: 'code', code: '#eval 2 + 3' },
+          {
+            kind: 'p',
+            text: 'Lean 里最反直觉的一句话是：命题也是类型，证明就是这个类型的一个元素。现在先记住它，第 2 节会正式展开。',
+          },
+          { kind: 'code', code: '#check Nat.add' },
+          {
+            kind: 'note',
+            text: '这门课只带 Init——Lean 自带的基础库。没有 Std、Lean、Lake 或 Mathlib，所以后面的代码里不会出现 import Mathlib。',
+          },
+          {
+            kind: 'p',
+            text: '编辑器完整地跑在你的浏览器里：首次需要下载约 143MB 运行时，之后会缓存；代码不会上传到任何服务器。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '把 #eval 的算式换成你喜欢的，再 #check 一个你好奇的名字。',
+          cta: '在编辑器中动手',
+          starter: '#eval 6 * 7\n#check Nat.mul\n',
+        },
+      },
+      {
         slug: 'first-proof',
-        navTitle: '01 · 先让 Lean 说句话',
+        navTitle: '02 · 先让 Lean 说句话',
         title: '先让 Lean 说句话',
         lead: '从零开始：看 Lean 怎么求值，读懂一条命题，再亲手证一条等式。',
         blocks: [
@@ -104,7 +138,7 @@ export const zh: Messages = {
       },
       {
         slug: 'implication',
-        navTitle: '02 · 蕴含与函数',
+        navTitle: '03 · 蕴含与函数',
         title: '命题即类型',
         lead: '「如果 P 那么 Q」在 Lean 里就是一个函数类型。理解这一点，证明思路会立刻清楚。',
         blocks: [
@@ -147,7 +181,7 @@ export const zh: Messages = {
       },
       {
         slug: 'connectives',
-        navTitle: '03 · 合取与析取',
+        navTitle: '04 · 合取与析取',
         title: '与、或怎么拆',
         lead: '∧ 和 ∨ 各有两条规则：怎么构造它，怎么使用它。记住这四个动作就够了。',
         blocks: [
@@ -190,7 +224,7 @@ export const zh: Messages = {
       },
       {
         slug: 'induction',
-        navTitle: '04 · 归纳法',
+        navTitle: '05 · 归纳法',
         title: '用 induction 证明交换律',
         lead: '加法交换律不能靠展开算出来，需要对其中一个参数做归纳。这是 Lean 里最重要的证明模式。',
         blocks: [
@@ -229,7 +263,7 @@ export const zh: Messages = {
       },
       {
         slug: 'rewrite',
-        navTitle: '05 · 改写与 rw',
+        navTitle: '06 · 改写与 rw',
         title: '用 rw 改写目标',
         lead: 'rfl 只能收掉定义上相等的目标；遇到需要替换的目标，就要用 rw 把等式喂进去。',
         blocks: [
@@ -268,7 +302,7 @@ export const zh: Messages = {
       },
       {
         slug: 'simp',
-        navTitle: '06 · simp 与化简',
+        navTitle: '07 · simp 与化简',
         title: '让 simp 收尾',
         lead: 'simp 是一组带索引的改写规则；用得好可以一行收掉计算型目标，用不好会把目标越化越远。',
         blocks: [
@@ -307,7 +341,7 @@ export const zh: Messages = {
       },
       {
         slug: 'quantifiers',
-        navTitle: '07 · 全称与存在',
+        navTitle: '08 · 全称与存在',
         title: '∀ 与 ∃ 怎么用',
         lead: '∀ 是函数类型，∃ 是依赖对。前者给参数，后者拆见证。',
         blocks: [
@@ -350,7 +384,7 @@ export const zh: Messages = {
       },
       {
         slug: 'list-structure',
-        navTitle: '08 · List 与 structure',
+        navTitle: '09 · List 与 structure',
         title: '归纳类型与结构',
         lead: 'List 的归纳和 Nat 一样，只是构造子从 zero/succ 换成了 nil/cons；structure 则把几个值打包成一个新类型。',
         blocks: [

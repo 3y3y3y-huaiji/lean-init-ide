@@ -6,7 +6,12 @@ vi.mock('../components/lean-panel', () => ({ createLeanPanel }));
 
 import type { LspDiagnostic } from '../components/lean-panel';
 import { messagesFor } from '../i18n';
+import { markLessonVisited, readProgress } from '../progress';
 import { bindLesson, dropSpuriousRedeclarations, renderLesson } from './lesson';
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 const makePanel = () => ({
   setCode: vi.fn(),
@@ -124,6 +129,16 @@ describe('课程页交互绑定', () => {
     createLeanPanel.mockReset();
     createLeanPanel.mockReturnValue(makePanel());
     document.body.innerHTML = renderLesson('zh', 'first-proof');
+  });
+
+  it('进入课程记为已读，并在目录里给已读课时打勾', () => {
+    markLessonVisited('first-proof');
+    document.body.innerHTML = renderLesson('zh', 'implication');
+    bindLesson(document.body, 'zh', 'implication');
+
+    const done = document.body.querySelector<HTMLAnchorElement>('[data-lesson-slug="first-proof"]');
+    expect(done?.textContent).toContain('✓');
+    expect(readProgress().has('implication')).toBe(true);
   });
 
   it('挂载隐藏的 runner，用紧凑变体且不预置代码', () => {

@@ -157,5 +157,5 @@ export const initTelemetry = (options: { sampleRate?: number } = {}): void => {
   window.addEventListener('unhandledrejection', (event) => {
     reportError('promise', event.reason);
   });
-  window.addEventListener('pagehide', () => flushTelemetry(true));
+  window.addEventListener('pagehide', () => flushTelemetry());
 };

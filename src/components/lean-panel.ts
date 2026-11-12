@@ -7,9 +7,11 @@ import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { cacheBudgetBytes, currentMemoryTier } from '../device';
+import { matchAbbreviation } from '../lean-abbreviations';
 import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
+import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
 import { buttonClass } from './ui';
@@ -246,6 +248,52 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
   });
 
+  // Lean 的 \to / \forall 缩写：Tab 或空格后替换成 Unicode 符号。
+  // 空格已经插入，所以替换范围要排除最后那个空格；Tab 则需要自己移动光标。
+  const expandAbbreviation = (offset: number): boolean => {
+    const position = editor.getPosition();
+    if (!position) return false;
+    const line = model.getLineContent(position.lineNumber);
+    const targetColumn = position.column - offset;
+    const match = matchAbbreviation(line, targetColumn);
+    if (!match) return false;
+    editor.executeEdits('lean-abbreviations', [
+      {
+        range: new monaco.Range(
+          position.lineNumber,
+          match.startColumn,
+          position.lineNumber,
+          targetColumn,
+        ),
+        text: match.symbol,
+        forceMoveMarkers: true,
+      },
+    ]);
+    if (offset === 0) {
+      editor.setPosition({
+        lineNumber: position.lineNumber,
+        column: match.startColumn + match.symbol.length,
+      });
+    }
+    return true;
+  };
+
+  editor.onKeyDown((event) => {
+    if (event.keyCode === monaco.KeyCode.Tab && expandAbbreviation(0)) {
+      event.preventDefault();
+    }
+  });
+
+  // Monaco 没有公开的单字符输入事件，这里从内容变更里识别「插入了一个空格」。
+  model.onDidChangeContent((event) => {
+    if (event.changes.length !== 1) return;
+    const change = event.changes[0];
+    if (change?.text === ' ' && change.rangeLength === 0) {
+      // 在变更事件里直接改文档会重入，推迟到当前事件处理完。
+      window.setTimeout(() => expandAbbreviation(1), 0);
+    }
+  });
+
   // 编辑器与诊断的空间分配由用户拖动决定；面板显隐也持久化，避免每次进来重调。
   const LAYOUT_KEY = 'lean-panel:layout';
   const PANELS_KEY = 'lean-panel:panels';
@@ -344,6 +392,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   let lastEditAt = 0;
+  let changePending = false;
   let diagnosticSeq = 0;
   let debounceTimer: number | undefined;
 
@@ -595,8 +644,22 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     position: { line: position.lineNumber - 1, character: position.column - 1 },
   });
 
+  /**
+   * 补全、悬停、跳转都基于 LSP 当前文档。编辑有 350ms 防抖，请求前必须先把
+   * 未发送的改动刷过去，否则服务端会按旧文档计算（表现为刚输入 `.` 补全为空）。
+   */
+  const flushChange = () => {
+    if (!session.isReady || !changePending) return;
+    window.clearTimeout(debounceTimer);
+    changePending = false;
+    lastEditAt = performance.now();
+    session.change(model.getValue());
+  };
+
   monaco.languages.registerHoverProvider(LEAN_LANGUAGE_ID, {
     provideHover: async (_model, position) => {
+      if (!(await session.whenReady())) return null;
+      flushChange();
       const hover = await lspRequest<{
         contents:
           | string
@@ -613,81 +676,33 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     },
   });
 
-  const completionKind = (kind?: number): monaco.languages.CompletionItemKind => {
-    const map: Record<number, monaco.languages.CompletionItemKind> = {
-      1: monaco.languages.CompletionItemKind.Text,
-      2: monaco.languages.CompletionItemKind.Method,
-      3: monaco.languages.CompletionItemKind.Function,
-      4: monaco.languages.CompletionItemKind.Constructor,
-      5: monaco.languages.CompletionItemKind.Field,
-      6: monaco.languages.CompletionItemKind.Variable,
-      7: monaco.languages.CompletionItemKind.Class,
-      8: monaco.languages.CompletionItemKind.Interface,
-      9: monaco.languages.CompletionItemKind.Module,
-      10: monaco.languages.CompletionItemKind.Property,
-      11: monaco.languages.CompletionItemKind.Unit,
-      12: monaco.languages.CompletionItemKind.Value,
-      13: monaco.languages.CompletionItemKind.Enum,
-      14: monaco.languages.CompletionItemKind.Keyword,
-      15: monaco.languages.CompletionItemKind.Snippet,
-      20: monaco.languages.CompletionItemKind.EnumMember,
-      21: monaco.languages.CompletionItemKind.Constant,
-      22: monaco.languages.CompletionItemKind.Struct,
-      24: monaco.languages.CompletionItemKind.Operator,
-      25: monaco.languages.CompletionItemKind.TypeParameter,
-    };
-    return map[kind ?? 1] ?? monaco.languages.CompletionItemKind.Text;
-  };
-
   monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
-    triggerCharacters: ['.', ' '],
+    triggerCharacters: ['.'],
     provideCompletionItems: async (completionModel, position) => {
-      const result = await lspRequest<
-        { items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>
-      >('textDocument/completion', positionParams(position));
-      if (!result) return { suggestions: [] };
-
-      const items = Array.isArray(result) ? result : (result.items ?? []);
-      log(`completion @${position.lineNumber}:${position.column} -> ${items.length} 项`);
+      // 运行时就绪早于 LSP 初始化，启动窗口内的请求先等握手完成，避免空补全。
+      if (!(await session.whenReady())) return { suggestions: [], incomplete: false };
+      flushChange();
+      const result = await lspRequest<LspCompletionResult>(
+        'textDocument/completion',
+        positionParams(position),
+      );
       const word = completionModel.getWordUntilPosition(position);
-      const range = new monaco.Range(
+      const fallback = new monaco.Range(
         position.lineNumber,
         word.startColumn,
         position.lineNumber,
         word.endColumn,
       );
-      return {
-        suggestions: items.map((item) => {
-          const insertText =
-            typeof item.insertText === 'string' ? item.insertText : String(item.label ?? '');
-          return {
-            label: String(item.label ?? insertText),
-            kind: completionKind(typeof item.kind === 'number' ? item.kind : undefined),
-            insertText,
-            range,
-            insertTextRules:
-              item.insertTextFormat === 2
-                ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-                : undefined,
-            detail: typeof item.detail === 'string' ? item.detail : undefined,
-            documentation:
-              typeof item.documentation === 'string'
-                ? item.documentation
-                : item.documentation &&
-                    typeof item.documentation === 'object' &&
-                    'value' in item.documentation
-                  ? String((item.documentation as { value: unknown }).value)
-                  : undefined,
-            sortText: typeof item.sortText === 'string' ? item.sortText : undefined,
-            filterText: typeof item.filterText === 'string' ? item.filterText : undefined,
-          };
-        }),
-      };
+      const { suggestions, incomplete } = toMonacoCompletions(result, fallback);
+      log(`completion @${position.lineNumber}:${position.column} -> ${suggestions.length} 项`);
+      return { suggestions, incomplete };
     },
   });
 
   monaco.languages.registerDefinitionProvider(LEAN_LANGUAGE_ID, {
     provideDefinition: async (_model, position) => {
+      if (!(await session.whenReady())) return null;
+      flushChange();
       const result = await lspRequest<
         | {
             uri: string;
@@ -738,9 +753,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   model.onDidChangeContent(() => {
     updateStatement();
     if (suppressSync) return;
+    changePending = true;
     window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(() => {
       if (!session.isReady) return;
+      changePending = false;
       lastEditAt = performance.now();
       session.change(model.getValue());
     }, 350);
@@ -761,6 +778,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   const requestGoal = async () => {
     if (!session.isReady || !goalSupported) return;
+    flushChange();
     const position = editor.getPosition();
     if (!position) return;
     try {

@@ -112,6 +112,16 @@ export class LeanSession {
     return this.connection.sendRequest<T>(method, params);
   }
 
+  /**
+   * 等待会话可用：启动中则等到握手结束，未启动或已失败立即返回 false。
+   * 补全/悬停可能在运行时就绪后、LSP 初始化完成前被触发，需要这个窗口。
+   */
+  whenReady(): Promise<boolean> {
+    if (this.isReady) return Promise.resolve(true);
+    if (this.stateValue !== 'starting') return Promise.resolve(false);
+    return this.waitForReady();
+  }
+
   change(code: string): void {
     if (!this.isReady || !this.connection) return;
     this.version += 1;
@@ -190,7 +200,7 @@ export class LeanSession {
         throw new Error('Lean session stopped');
       }
       connection.sendNotification('initialized', {});
-      this.setState('ready');
+      // didOpen 先于 ready 发出：isReady 为真时文档一定已经打开，补全不会打到空文档。
       connection.sendNotification('textDocument/didOpen', {
         textDocument: {
           uri: this.uri,
@@ -199,6 +209,7 @@ export class LeanSession {
           text: code,
         },
       });
+      this.setState('ready');
     } catch (error) {
       if (generation === this.generation) {
         this.releaseResources();

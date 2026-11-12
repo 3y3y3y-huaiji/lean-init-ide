@@ -38,6 +38,7 @@ Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sig
 
 - A real Lean 4.34.1 Init runtime: parsing, elaboration and diagnostics in the page
 - Diagnostics, goal state (`$/lean/plainGoal`), hover, completion and go-to-definition
+- Lean Unicode abbreviations: type `\to` or `\forall` and press space or Tab to get `→` or `∀`
 - Bilingual UI (`/zh/` and `/en/`), remembers your choice
 - Light / dark / system themes, with Monaco following along
 - 9 intro lessons; code blocks run in place, exercises open the playground with a starter

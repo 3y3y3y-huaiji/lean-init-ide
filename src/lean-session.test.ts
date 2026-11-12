@@ -187,6 +187,32 @@ describe('LeanSession', () => {
     ]);
   });
 
+  it('whenReady 未启动立即返回 false，启动中等到握手完成', async () => {
+    const h = makeHarness();
+    await expect(h.session.whenReady()).resolves.toBe(false);
+
+    let finishServer!: () => void;
+    h.createServer.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishServer = () => resolve(h.server);
+        }),
+    );
+
+    const starting = h.session.start('one');
+    const waiting = h.session.whenReady();
+    let settled = false;
+    void waiting.then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
+    finishServer();
+    await starting;
+    await expect(waiting).resolves.toBe(true);
+  });
+
   it('run 在启动期间等待就绪，重开文档后返回匹配 URI 的诊断', async () => {
     const h = makeHarness();
     const sync = vi.fn();

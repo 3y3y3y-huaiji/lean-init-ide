@@ -6,6 +6,9 @@
  * 依赖 scripts/local-gateway.mjs 已在 LEAN_GATEWAY_PORT（默认 4174）上服务 dist，
  * 与 e2e-lean.mjs 共用同一个网关和浏览器通道；CI 里两个脚本跑在同一个 job。
  * 新增或删除课程时同步下面的 SLUGS（与 src/i18n/zh.ts 保持一致）。
+ *
+ * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间；CI 用
+ * LEAN_E2E_WORKERS=3。同一 context 共享 Service Worker 与运行时缓存。
  */
 import { chromium } from 'playwright-core';
 
@@ -14,6 +17,7 @@ const origin = `http://127.0.0.1:${port}`;
 const channel =
   process.env.LEAN_E2E_CHANNEL ?? (process.platform === 'win32' ? 'msedge' : 'chrome');
 const executablePath = process.env.LEAN_E2E_EXECUTABLE || undefined;
+const workers = Math.max(1, Math.min(4, Number(process.env.LEAN_E2E_WORKERS ?? 2) || 2));
 
 const SLUGS = [
   'what-is-lean',
@@ -63,17 +67,19 @@ const main = async () => {
     locale: 'en-US',
     extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
   });
-  const page = await context.newPage();
+  const pages = await Promise.all(Array.from({ length: workers }, () => context.newPage()));
   const failures = [];
 
-  for (const slug of SLUGS) {
+  const runLesson = async (page, slug, worker) => {
+    const startedAt = Date.now();
+    const prefix = `[w${worker}]`;
     await page.goto(`${origin}/zh/learn/${slug}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-role="status"][data-state="ready"]', { timeout: 240_000 });
 
     const count = await page.locator('button[data-run-index]').count();
     if (count === 0) {
       failures.push(`${slug}: 没有可运行的代码块`);
-      continue;
+      return;
     }
 
     for (let index = 0; index < count; index += 1) {
@@ -91,8 +97,8 @@ const main = async () => {
         null,
         { timeout: 120_000 },
       );
-      // 给迟到的诊断留一点时间，避免把「完成」当成「没有错误」。
-      await sleep(500);
+      // 运行屏障已经结算；留一点时间接住迟到的诊断，但不必等满 500ms。
+      await sleep(200);
 
       const errors = await page.locator(`[data-output="${index}"] .text-err`).allTextContents();
       if (errors.length > 0) {
@@ -108,20 +114,38 @@ const main = async () => {
       }
     }
 
-    console.log(`ok   ${slug}（${count} 块）`);
-  }
+    console.log(
+      `ok   ${prefix} ${slug}（${count} 块，${((Date.now() - startedAt) / 1000).toFixed(1)}s）`,
+    );
+  };
 
-  await browser.close();
+  try {
+    await Promise.all(
+      pages.map(async (page, workerIndex) => {
+        for (let index = workerIndex; index < SLUGS.length; index += workers) {
+          const slug = SLUGS[index];
+          try {
+            await runLesson(page, slug, workerIndex + 1);
+          } catch (error) {
+            failures.push(`${slug}: ${error.message ?? error}`);
+            console.error(`fail [w${workerIndex + 1}] ${slug}: ${error.message ?? error}`);
+          }
+        }
+      }),
+    );
+  } finally {
+    await browser.close();
+  }
 
   if (failures.length > 0) {
     console.error(`\n课程代码块失败：${failures.length}`);
     for (const failure of failures) console.error(`  - ${failure}`);
     process.exit(1);
   }
-  console.log(`课程代码块全部通过：${SLUGS.length} 节`);
+  console.log(`课程代码块全部通过：${SLUGS.length} 节，${workers} 路并行`);
 };
 
 main().catch((error) => {
   console.error('E2E lessons error:', error);
-  process.exit(2);
+  process.exit(1);
 });

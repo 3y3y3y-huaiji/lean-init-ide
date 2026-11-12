@@ -131,6 +131,7 @@ jobs:
       - name: 逐课运行全部代码块
         env:
           LEAN_E2E_CHANNEL: chrome
+          LEAN_E2E_WORKERS: 3
         run: node scripts/e2e-lessons.mjs
 
   audit:

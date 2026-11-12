@@ -14,21 +14,21 @@ permissions:
 jobs:
   upload:
     name: 上传运行时资产
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # 和 CI 其它 job 共用资产缓存；命中时 fetch:assets 只做哈希校验。
       - name: 缓存 Lean 资产
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: public/wasm-lean4
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}

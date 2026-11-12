@@ -16,13 +16,13 @@ permissions:
 jobs:
   static:
     name: 静态检查
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -38,20 +38,20 @@ jobs:
 
   test:
     name: 单元测试
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # 覆盖率阈值写在 vitest.config.ts，低于阈值即失败。
       - run: pnpm test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
@@ -61,13 +61,13 @@ jobs:
 
   build:
     name: 构建产物
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -77,7 +77,7 @@ jobs:
       - name: 产物契约
         run: pnpm run verify:build
       # E2E 直接复用这份 dist，避免再跑一次 vite build，也保证测的是同一份产物。
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -86,24 +86,24 @@ jobs:
   e2e:
     name: 浏览器端到端
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
       # 和 deploy 共用同一份资产缓存；命中时 fetch:assets 只做哈希校验。
       - name: 缓存 Lean 资产
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: public/wasm-lean4
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
@@ -135,13 +135,13 @@ jobs:
 
   audit:
     name: 依赖审计
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -155,13 +155,13 @@ jobs:
     needs: [static, test, build, e2e, audit]
     # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
     if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -187,7 +187,7 @@ jobs:
           [ "$code" = "200" ] || exit 1
       # 必须用完整 build：build:web 会跳过 143 MB 兜底副本，丢掉 SW 的第三级回退。
       - name: 缓存 Lean 资产
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: public/wasm-lean4
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}

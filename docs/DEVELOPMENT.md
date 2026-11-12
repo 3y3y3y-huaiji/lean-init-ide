@@ -48,6 +48,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 | `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
 | `pnpm run build:web` | 生产构建（跳过 143 MB 资产下载） |
 | `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单（`/cdn/*` + `/api/telemetry`）、COOP/COEP、JS 体积预算 |
+| `pnpm run e2e:lessons` | 逐课运行全部代码块，出现 error 级诊断即失败（CI 的 e2e job 内执行） |
 
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。

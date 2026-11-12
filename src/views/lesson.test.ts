@@ -6,7 +6,7 @@ vi.mock('../components/lean-panel', () => ({ createLeanPanel }));
 
 import type { LspDiagnostic } from '../components/lean-panel';
 import { messagesFor } from '../i18n';
-import { bindLesson, renderLesson } from './lesson';
+import { bindLesson, dropSpuriousRedeclarations, renderLesson } from './lesson';
 
 const makePanel = () => ({
   setCode: vi.fn(),
@@ -17,6 +17,38 @@ const makePanel = () => ({
 });
 
 const lessonsOf = (locale: 'zh' | 'en') => messagesFor(locale).lesson.lessons;
+
+const diagnostic = (message: string): LspDiagnostic => ({
+  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+  severity: 1,
+  message,
+});
+
+describe('dropSpuriousRedeclarations', () => {
+  it('过滤只声明一次却被报重复的假阳性', () => {
+    const code =
+      'theorem and_self (P Q : Prop) : P → Q → P ∧ Q := by\n  intro hp hq\n  exact ⟨hp, hq⟩';
+    const kept = dropSpuriousRedeclarations(
+      [diagnostic('`and_self` has already been declared')],
+      code,
+    );
+    expect(kept).toHaveLength(0);
+  });
+
+  it('保留代码里真的声明了两次的重复', () => {
+    const code = 'def answer := 1\ndef answer := 2';
+    const kept = dropSpuriousRedeclarations(
+      [diagnostic('`answer` has already been declared')],
+      code,
+    );
+    expect(kept).toHaveLength(1);
+  });
+
+  it('不影响其它诊断', () => {
+    const list = [diagnostic('类型不匹配'), diagnostic('`x` has already been declared')];
+    expect(dropSpuriousRedeclarations(list, 'def x := 1')).toHaveLength(1);
+  });
+});
 
 describe('课程页渲染', () => {
   it('目录列出全部课时，并标出当前一节', () => {

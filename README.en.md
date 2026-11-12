@@ -65,9 +65,6 @@ Each lesson has three runnable code blocks and one exercise, all within Init.
   propositional logic.
 - Requires cross-origin isolation (COOP/COEP) and SharedArrayBuffer; Chromium-based browsers work
   best.
-- Known issue: running the 2nd or 3rd code block in the `connectives` lesson back-to-back can
-  report `already declared` (the server reuses one document URI). Content and results are
-  unaffected; a fix is scheduled for a patch release.
 
 ## Privacy
 

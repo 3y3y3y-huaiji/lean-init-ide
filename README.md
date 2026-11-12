@@ -57,7 +57,6 @@
 
 - 只带 **Init**，没有 Std / Lean / Lake / Mathlib，课程内容限定在基础类型、List 与命题逻辑
 - 需要 cross-origin isolation（COOP/COEP）与 SharedArrayBuffer，Chromium 系浏览器体验最佳
-- 已知问题：connectives 课程的第 2、3 个代码块连续运行时可能报 `already declared`（语言服务器复用了同一文档 URI），内容与结论不受影响，修复排在补丁版本
 
 ## 隐私
 

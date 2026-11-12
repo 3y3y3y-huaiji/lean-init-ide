@@ -128,6 +128,10 @@ jobs:
         env:
           LEAN_E2E_CHANNEL: chrome
         run: node scripts/e2e-lean.mjs
+      - name: 逐课运行全部代码块
+        env:
+          LEAN_E2E_CHANNEL: chrome
+        run: node scripts/e2e-lessons.mjs
 
   audit:
     name: 依赖审计

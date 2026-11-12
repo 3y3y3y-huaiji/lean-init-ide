@@ -206,6 +206,21 @@ const renderOutput = (output: HTMLElement, list: LspDiagnostic[], emptyLabel: st
 /** 证明类代码没有诊断就代表目标已关闭；换一句文案，避免新手以为「什么都没发生」。 */
 const looksLikeProof = (code: string) => /^\s*(theorem|lemma|example)\b/m.test(code);
 
+const ALREADY_DECLARED = /`([A-Za-z_][A-Za-z0-9_']*)` has already been declared/;
+
+/**
+ * @wasm-idle/lsp 的 FileWorker 偶发把同一份文档精化两次，只声明一次的名字会被报
+ * 「already declared」。这里只过滤「代码里确实只出现一次」的重复声明；真重复仍然展示。
+ */
+export const dropSpuriousRedeclarations = (list: LspDiagnostic[], code: string): LspDiagnostic[] =>
+  list.filter((item) => {
+    const name = ALREADY_DECLARED.exec(item.message)?.[1];
+    if (!name) return true;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const occurrences = code.match(new RegExp(`\\b${escaped}\\b`, 'g'))?.length ?? 0;
+    return occurrences > 1;
+  });
+
 export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
@@ -263,7 +278,11 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
       void panel
         .run(code)
         .then((list) => {
-          renderOutput(output, list, looksLikeProof(code) ? t.proofAccepted : t.noOutput);
+          renderOutput(
+            output,
+            dropSpuriousRedeclarations(list, code),
+            looksLikeProof(code) ? t.proofAccepted : t.noOutput,
+          );
         })
         .finally(() => {
           window.clearInterval(timer);

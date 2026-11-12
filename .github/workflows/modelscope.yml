@@ -58,6 +58,25 @@ jobs:
             *)
               echo "token looks like a GitHub token: no" ;;
           esac
+      - name: 测试 ModelScope git 认证
+        env:
+          MODELSCOPE_USERNAME: HQZMSu
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO: HQZMSu/lean4-assets
+        run: |
+          set +e
+          if GIT_TERMINAL_PROMPT=0 git ls-remote "https://www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD >/dev/null 2>&1; then
+            echo "public read: ok"
+          else
+            echo "public read: failed"
+          fi
+          for user in "$MODELSCOPE_USERNAME" "oauth2"; do
+            if GIT_TERMINAL_PROMPT=0 git ls-remote "https://${user}:${MODELSCOPE_TOKEN}@www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD >/dev/null 2>&1; then
+              echo "auth as ${user}: ok"
+            else
+              echo "auth as ${user}: failed"
+            fi
+          done
       - name: 上传到 ModelScope
         env:
           MODELSCOPE_USERNAME: HQZMSu

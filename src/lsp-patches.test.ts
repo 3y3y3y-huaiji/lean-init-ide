@@ -4,7 +4,7 @@ import runtimeWorkerSource from '../node_modules/@wasm-idle/lsp/dist/lean4/runti
 import workerSource from '../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?raw';
 
 /**
- * 这些补丁由 scripts/patch-lsp.mjs 在 postinstall/prebuild:web 时应用。
+ * 这些补丁由 pnpm-workspace.yaml 的 patchedDependencies 在安装时应用（patches/ 目录）。
  * 依赖升级如果改了源码形状，补丁会失效；这里直接把关键行为钉住，
  * 避免「安装成功但补丁没生效」悄悄上线。
  */

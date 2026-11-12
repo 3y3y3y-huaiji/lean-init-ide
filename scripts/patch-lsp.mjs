@@ -4,11 +4,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * 所有补丁都在安装时幂等应用；模式不匹配会直接抛错，避免依赖升级后静默失效。
- * 这是仓库唯一允许改 node_modules 的地方（postinstall 自动执行）。
+ * 把运行时补丁应用到 @wasm-idle/lsp 包目录，用于生成 pnpm patch。
+ *
+ * 安装时补丁由 pnpm-workspace.yaml 的 patchedDependencies 自动应用，不再改写
+ * node_modules；升级 @wasm-idle/lsp 后运行 `pnpm run patch:lsp` 重新生成。
+ * 模式不匹配会直接抛错，避免依赖升级后补丁静默失效。
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const lspDist = path.join(root, 'node_modules', '@wasm-idle', 'lsp', 'dist');
+const packageRoot = process.argv[2];
+if (!packageRoot) {
+  throw new Error('usage: node scripts/patch-lsp.mjs <package-root>');
+}
+const lspDist = path.join(path.resolve(packageRoot), 'dist');
 
 const applyPatch = (relativePath, from, to, label) => {
   const target = path.join(lspDist, relativePath);

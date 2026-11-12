@@ -19,32 +19,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: 代码格式
-        run: npm run format:check
+        run: pnpm run format:check
       - name: ESLint
-        run: npm run lint
+        run: pnpm run lint
       - name: 类型检查（应用 / Service Worker / Pages Functions）
-        run: npm run typecheck
+        run: pnpm run typecheck
       - name: 资产清单结构
-        run: npm run verify:manifest
+        run: pnpm run verify:manifest
 
   test:
     name: 单元测试
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # 覆盖率阈值写在 vitest.config.ts，低于阈值即失败。
-      - run: npm test
+      - run: pnpm test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -58,15 +64,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # build:web 跳过 143 MB 资产下载，运行时由 /cdn 网关按需拉取。
-      - run: npm run build:web
+      - run: pnpm run build:web
       - name: 产物契约
-        run: npm run verify:build
+        run: pnpm run verify:build
       # E2E 直接复用这份 dist，避免再跑一次 vite build，也保证测的是同一份产物。
       - uses: actions/upload-artifact@v4
         with:
@@ -80,11 +89,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -96,7 +108,7 @@ jobs:
           path: public/wasm-lean4
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
       - name: 准备 Lean 资产
-        run: npm run fetch:assets
+        run: pnpm run fetch:assets
       # build:web 的 dist 不含 wasm-lean4；小资产（index.json/lean.mjs 等）不走 SW，
       # 必须补回静态副本，否则会落到网关的 SPA 回退。
       - name: 补齐静态兜底资产
@@ -122,14 +134,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # 只审生产依赖：开发工具链的告警不阻塞发布，但会在日志里可见。
       - name: 生产依赖高危漏洞
-        run: npm audit --omit=dev --audit-level=high
+        run: pnpm audit --prod --audit-level high
 
   deploy:
     name: 部署
@@ -139,11 +154,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # 认证失败时 wrangler 只回一句 9106，看不出是 token 值坏了还是权限不够。
       - name: 诊断部署凭据
         env:
@@ -169,13 +187,13 @@ jobs:
         with:
           path: public/wasm-lean4
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
-      - run: npm run build
-      - run: npm run verify:build
+      - run: pnpm run build
+      - run: pnpm run verify:build
       - name: 推送到 Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4 pages deploy dist --project-name=lean-init-ide --branch=main
+        run: pnpm dlx wrangler@4 pages deploy dist --project-name=lean-init-ide --branch=main
       # 部署是原子的，但自定义域传播需要几秒，失败重试而不是立刻判定发布失败。
       # 打 pages.dev 而不是主域：CI 的机房 IP 会被 zone 的机器人规则拦成 403，
       # 那是安全策略生效，不代表产物有问题。

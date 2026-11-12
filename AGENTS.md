@@ -27,7 +27,7 @@
 
 ## 硬约束
 
-违反任意一条都会造成线上故障，且本地 `npm run dev` 看不出来。
+违反任意一条都会造成线上故障，且本地 `pnpm run dev` 看不出来。
 
 1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改动这些文件必须同步更新清单里的 `bytes` 与 `sha256`、**更换 `cacheKey`**，并重新上传到 R2。边缘缓存按 URL 缓存一年（`immutable`），不换版本键会让用户继续拿到旧对象。
 2. **`_routes.json` 的 include 只能是 `["/cdn/*"]`。** 扩大范围会让静态资源请求也进 Functions，首屏变慢。
@@ -54,21 +54,21 @@
 ## 改动流程
 
 1. **改前**：确认要动的是哪一层；如果涉及清单、路由、响应头，先读一遍上表的「为什么危险」。
-2. **改后**：跑完整门禁，不能只跑 `npm test`。
+2. **改后**：跑完整门禁，不能只跑 `pnpm test`。
 3. **提交**：一个提交只做一件事；提交信息写清楚「为什么」，不是「改了什么」。
 4. **推送**：`main` 受分支保护，四个 check 全绿才允许 PR 合并；直接 push 可行。上线由 CI 的 `deploy` job 负责（`CD_ENABLED=true` 时生效），不要绕过它去手动传文件。
 
 ## 质量门禁
 
 ```bash
-npm run format:check   # Prettier
-npm run lint           # ESLint
-npm run typecheck      # 三份 tsconfig：应用 / SW / Functions
-npm test               # Vitest + 覆盖率阈值
-npm run verify:manifest # 资产清单结构 + local 资产字节与哈希
-npm run build:web      # 生产构建（跳过 143MB 资产）
-npm run verify:build   # 产物契约
-npm run smoke          # 线上冒烟（发版后跑）
+pnpm run format:check   # Prettier
+pnpm run lint           # ESLint
+pnpm run typecheck      # 三份 tsconfig：应用 / SW / Functions
+pnpm test               # Vitest + 覆盖率阈值
+pnpm run verify:manifest # 资产清单结构 + local 资产字节与哈希
+pnpm run build:web      # 生产构建（跳过 143MB 资产）
+pnpm run verify:build   # 产物契约
+pnpm run smoke          # 线上冒烟（发版后跑）
 ```
 
 覆盖率阈值：全局 78% 语句 / 80% 行；`functions/**` 要求 95%。**降低阈值需要单独说明理由**，不能顺手改。
@@ -104,8 +104,9 @@ chore(ci): 依赖审计只审生产依赖
 
 这些坑都实际踩过，别重复排查：
 
-- **`npm audit` 在本机跑不了**：华为云镜像不支持 audit 的 POST，返回 405。要加 `--registry=https://registry.npmjs.org`。
-- **`npm ci` 可能被环境的批量删除保护拦下**：改用 `npm install` 补齐缺失项（曾删掉 `@esbuild/win32-x64` 导致 vitest 启动失败）。
+- **`pnpm audit` 在本机跑不了**：华为云镜像不支持 audit 的 POST，返回 405。要加 `--registry=https://registry.npmjs.org`。
+- **`pnpm install` 可能被环境的批量删除保护拦下**：重跑一次补齐缺失项（曾删掉 `@esbuild/win32-x64` 导致 vitest 启动失败）。
+- **不要手改 `node_modules` 里的 `@wasm-idle/lsp`**：pnpm 的文件硬链接到全局 store，原地写入会污染 store；补丁统一放 `patches/`，由 `pnpm-workspace.yaml` 的 `patchedDependencies` 在安装时应用。升级依赖后跑 `pnpm run patch:lsp` 重新生成，不要用 `pnpm patch-commit`（Windows 上会因临时目录清理失败）。
 - **Pages 覆盖静态资源的 `Cache-Control`**：`_headers` 里给 `/sw.js` 写的 `no-cache` 不生效（实测 `max-age=14400`）。
 - **走代理时 curl 会先写 `200 Connection Established`**：解析状态码必须取最后一个真实 HTTP 行，否则一切都被读成 200。
 - **`wrangler.toml` 顶层 binding 不落到 production/preview**：Git 集成部署读的是 `[[env.*.r2_buckets]]`，两处都要写。

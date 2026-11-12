@@ -1,6 +1,7 @@
 node_modules
 dist
 package-lock.json
+pnpm-lock.yaml
 public/wasm-lean4
 public/sw.js
 scripts/assets

@@ -23,18 +23,34 @@
 ## 本地开发
 
 ```bash
-npm install          # 安装依赖并给 @wasm-idle/lsp 打补丁
-npm run dev          # 开发服务器（首次会下载并校验运行时资产）
-npm run build        # 生产构建（含资产下载）
-npm run build:web    # 只构建前端，跳过 143MB 资产（CI 使用）
-npm run preview      # 预览构建产物
-npm run smoke        # 线上冒烟，发版后跑
+pnpm install         # 安装依赖并应用 patches/ 里的 @wasm-idle/lsp 补丁
+pnpm run dev         # 开发服务器（首次会下载并校验运行时资产）
+pnpm run build       # 生产构建（含资产下载）
+pnpm run build:web   # 只构建前端，跳过 143MB 资产（CI 使用）
+pnpm run preview     # 预览构建产物
+pnpm run smoke       # 线上冒烟，发版后跑
 ```
 
-改动后必须跑完整门禁，命令见「质量门禁」一节，不要只跑 `npm test`。
+依赖由 pnpm 12 管理：`pnpm-lock.yaml` 固定版本，`pnpm-workspace.yaml` 里放 overrides、
+`allowBuilds` 和 `patchedDependencies`。不要再用 npm 生成 `package-lock.json`。
 
-顺带两个本地环境的坑：`npm audit` 要加 `--registry=https://registry.npmjs.org`（镜像站不支持 audit 的 POST）；
-`npm ci` 若被系统的批量删除保护拦下，改用 `npm install` 补齐缺失项。
+改动后必须跑完整门禁，命令见「质量门禁」一节，不要只跑 `pnpm test`。
+
+本地环境的坑：`pnpm audit` 要加 `--registry=https://registry.npmjs.org`（镜像站不支持 audit 的 POST）；
+pnpm 首次安装需要下载原生二进制，Windows 杀软可能误报，必要时把 pnpm 安装目录和项目 `node_modules` 加进排除项。
+
+### 升级 @wasm-idle/lsp
+
+运行时补丁在 `patches/`，安装时由 `patchedDependencies` 自动应用。升级后重新生成：
+
+```bash
+pnpm run patch:lsp          # 读取 package.json 里的版本
+pnpm install --no-frozen-lockfile
+pnpm exec vitest run src/lsp-patches.test.ts
+```
+
+`patch:lsp` 会从 npm registry 下载对应版本、校验 tarball 完整性、应用补丁并更新
+`pnpm-workspace.yaml`，不依赖 `pnpm patch-commit`，避开它在 Windows 上的临时目录清理问题。
 
 ## 架构
 
@@ -125,11 +141,11 @@ bucket_name = "lean4-ide-releases"
 ### 资产维护
 
 ```bash
-npx wrangler login
-npm run fetch:assets                # 下载并校验到 public/wasm-lean4/
-npm run upload:assets -- --dry-run  # 预览将上传的对象
-npm run upload:assets               # 上传缺失/变更的对象，经同源网关复核 ETag 与长度
-npm run upload:assets -- --verify-only
+pnpm dlx wrangler login
+pnpm run fetch:assets                # 下载并校验到 public/wasm-lean4/
+pnpm run upload:assets -- --dry-run  # 预览将上传的对象
+pnpm run upload:assets               # 上传缺失/变更的对象，经同源网关复核 ETag 与长度
+pnpm run upload:assets -- --verify-only
 ```
 
 - `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
@@ -144,13 +160,13 @@ npm run upload:assets -- --verify-only
 
 | 命令 | 检查内容 |
 | --- | --- |
-| `npm run format:check` | Prettier 格式一致性 |
-| `npm run lint` | ESLint（应用、脚本、配置文件） |
-| `npm run typecheck` | 三份 tsconfig：应用、Service Worker、Pages Functions |
-| `npm test` | Vitest + 覆盖率阈值 |
-| `npm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
-| `npm run build:web` | 生产构建（跳过 143 MB 资产下载） |
-| `npm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单、COOP/COEP、JS 体积预算 |
+| `pnpm run format:check` | Prettier 格式一致性 |
+| `pnpm run lint` | ESLint（应用、脚本、配置文件） |
+| `pnpm run typecheck` | 三份 tsconfig：应用、Service Worker、Pages Functions |
+| `pnpm test` | Vitest + 覆盖率阈值 |
+| `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
+| `pnpm run build:web` | 生产构建（跳过 143 MB 资产下载） |
+| `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单、COOP/COEP、JS 体积预算 |
 
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
@@ -167,7 +183,7 @@ static / test / build / audit  →  deploy  →  smoke
 ```
 
 `deploy` job 只在 `main` 分支、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
-它跑完整 `npm run build`（含 143 MB 同源兜底副本，`build:web` 会省掉这一层），
+它跑完整 `pnpm run build`（含 143 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
 仍失败则整条流水线标红。
 
@@ -185,7 +201,7 @@ static / test / build / audit  →  deploy  →  smoke
 ### 回滚
 
 ```bash
-npx wrangler pages deployment list --project-name=lean-init-ide
+pnpm dlx wrangler pages deployment list --project-name=lean-init-ide
 ```
 
 在 Dashboard 的 Deployments 里选中上一个正常版本执行 Rollback。回滚只影响静态产物与 Functions，
@@ -194,8 +210,8 @@ R2 里的资产不受影响——运行时取哪一版由清单里的 `cacheKey`
 ### 冒烟
 
 ```bash
-npm run smoke                                   # 默认打主域
-npm run smoke -- --origin=https://lean-init-ide.pages.dev
+pnpm run smoke                                   # 默认打主域
+pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 ```
 
 检查五项：首页 `#app` 与标题、COOP/COEP、`sw.js` 可访问、`/cdn/<key>` 的 Range 206 与
@@ -207,7 +223,7 @@ npm run smoke -- --origin=https://lean-init-ide.pages.dev
 
 两条 CI 里的冒烟都打 `https://lean-init-ide.pages.dev`，而不是自定义域。原因是 GitHub Actions
 的机房 IP 会被 zone 的机器人防护拦成 403——那是安全策略生效，不是站点故障，拿它当失败条件
-会导致每次发布都误报。自定义域的可用性由浏览器侧确认；本地跑 `npm run smoke` 默认打主域，
+会导致每次发布都误报。自定义域的可用性由浏览器侧确认；本地跑 `pnpm run smoke` 默认打主域，
 家宽 IP 一般不会被拦。
 
 已知平台行为：Cloudflare Pages 会用自己的边缘 TTL 覆盖静态资源的 `Cache-Control`，
@@ -238,13 +254,13 @@ scripts/             资产下载/上传、LSP 补丁、清单与产物校验、
 wrangler.toml        Pages 项目配置与 R2 binding
 ```
 
-仓库不保留生成的 JS 产物：`src/sw.ts` 由 `npm run build:sw` 编译成 `public/sw.js`（不入库）；`config/lean4-runtime.json` 是唯一资产清单。
+仓库不保留生成的 JS 产物：`src/sw.ts` 由 `pnpm run build:sw` 编译成 `public/sw.js`（不入库）；`config/lean4-runtime.json` 是唯一资产清单。
 
 ## 排查
 
 | 现象 | 先查什么 |
 | --- | --- |
-| 页面白屏、没有 `#app` 内容 | `npm run verify:build`；确认 `dist/index.html` 引用了入口脚本 |
+| 页面白屏、没有 `#app` 内容 | `pnpm run verify:build`；确认 `dist/index.html` 引用了入口脚本 |
 | 进度条卡在 0% | 控制台看 `sw.js` 是否注册成功；`/cdn/<key>` 是否返回 206 |
 | 日志里一直回退到 GitHub raw | `/cdn/` 网关异常：binding 是否叫 `LEAN_ASSETS`，production / preview 是否都声明了 |
 | 诊断一直不出现 | `crossOriginIsolated` 是否为 true；COOP/COEP 是否被中间层剥掉 |

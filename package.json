@@ -4,14 +4,13 @@
   "type": "module",
   "license": "(Apache-2.0 OR MulanPSL-2.0)",
   "description": "Browser-native Lean 4 Init IDE: Monaco + the upstream Lean language server running in WebAssembly workers.",
+  "packageManager": "pnpm@12.18.0",
   "scripts": {
-    "postinstall": "node scripts/patch-lsp.mjs",
     "dev": "vite",
-    "predev": "node scripts/patch-lsp.mjs && node scripts/fetch-assets.mjs && npm run build:sw",
+    "predev": "node scripts/fetch-assets.mjs && pnpm run build:sw",
     "build": "vite build",
-    "prebuild": "node scripts/patch-lsp.mjs && node scripts/fetch-assets.mjs && npm run build:sw",
-    "prebuild:web": "node scripts/patch-lsp.mjs",
-    "build:web": "npm run build:sw && vite build",
+    "prebuild": "node scripts/fetch-assets.mjs && pnpm run build:sw",
+    "build:web": "pnpm run build:sw && vite build",
     "build:sw": "esbuild src/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js",
     "preview": "vite preview",
     "gateway": "node scripts/local-gateway.mjs",
@@ -23,6 +22,7 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "fetch:assets": "node scripts/fetch-assets.mjs",
+    "patch:lsp": "node scripts/generate-lsp-patch.mjs",
     "upload:assets": "node scripts/upload-assets.mjs",
     "upload:modelscope": "node scripts/upload-modelscope.mjs",
     "verify:manifest": "node scripts/verify-manifest.mjs",
@@ -50,8 +50,5 @@
     "typescript-eslint": "^8.72.2",
     "vite": "^7.0.0",
     "vitest": "^5.1.0"
-  },
-  "overrides": {
-    "dompurify": "3.4.17"
   }
 }

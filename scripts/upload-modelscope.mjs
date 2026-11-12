@@ -85,25 +85,37 @@ const verifyLocal = () => {
 const verifyRemote = async () => {
   for (const asset of manifest.assets) {
     const url = remoteUrl(asset.name);
+    const ranged = asset.ranged === true;
     const response = await fetch(url, {
       headers: {
-        Range: 'bytes=0-15',
+        ...(ranged ? { Range: 'bytes=0-15' } : {}),
         Origin: 'https://criticalthinking.de5.net',
       },
       redirect: 'follow',
       signal: AbortSignal.timeout(30000),
     });
-    if (response.status !== 206) fail(`${asset.name} 远端期望 206，实际 ${response.status}`);
-    const range = response.headers.get('content-range');
-    const expected = `bytes 0-15/${asset.bytes}`;
-    if (range !== expected)
-      fail(`${asset.name} Content-Range=${range ?? '(缺失)'}，期望 ${expected}`);
+
+    // 大文件走 LFS CDN 并支持 Range；小文件是普通对象，直接 200 全量返回。
+    if (ranged) {
+      if (response.status !== 206) fail(`${asset.name} 远端期望 206，实际 ${response.status}`);
+      const range = response.headers.get('content-range');
+      const expected = `bytes 0-15/${asset.bytes}`;
+      if (range !== expected)
+        fail(`${asset.name} Content-Range=${range ?? '(缺失)'}，期望 ${expected}`);
+      const body = await response.arrayBuffer();
+      if (body.byteLength !== 16) fail(`${asset.name} 分片长度 ${body.byteLength}，期望 16`);
+    } else {
+      if (response.status !== 200) fail(`${asset.name} 远端期望 200，实际 ${response.status}`);
+      const body = await response.arrayBuffer();
+      if (body.byteLength !== asset.bytes) {
+        fail(`${asset.name} 远端 ${body.byteLength} 字节，清单要求 ${asset.bytes}`);
+      }
+    }
+
     if (!response.headers.get('access-control-allow-origin')) {
       fail(`${asset.name} 缺少 Access-Control-Allow-Origin`);
     }
-    const body = await response.arrayBuffer();
-    if (body.byteLength !== 16) fail(`${asset.name} 分片长度 ${body.byteLength}，期望 16`);
-    console.log(`modelscope: ${asset.name} 远端 206 / CORS 正常`);
+    console.log(`modelscope: ${asset.name} 远端 ${ranged ? '206' : '200'} / CORS 正常`);
   }
 };
 

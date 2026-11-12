@@ -68,3 +68,12 @@ export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
 
 /** 只有大文件走 Range 分片；小文件由构建脚本直接下载/复制。 */
 export const rangedAssets = (manifest) => manifest.assets.filter((asset) => asset.ranged === true);
+
+/**
+ * 按 Accept-Language 的首选语言判断是否优先走国内镜像。
+ * 只调整源顺序，不做硬路由：两个方向都保留完整回退。
+ */
+export const prefersDomesticMirror = (acceptLanguage) => {
+  const preferred = (acceptLanguage ?? '').split(',')[0]?.split(';')[0]?.trim().toLowerCase() ?? '';
+  return preferred === 'zh' || preferred.startsWith('zh-');
+};

@@ -1,10 +1,11 @@
 /**
  * Lean 运行时资产下载器（Service Worker）。
  *
- * Cloudflare Pages 的静态资源不处理 Range，所以 143MB 的 Lean 运行时优先从
- * 站点同源的 /cdn/ 网关（Pages Function → R2 binding）分片并行下载；网关失败时
- * 回退到固定 revision 的 GitHub raw，最后才回退到同源全量请求。每个大文件切成
- * 4MB 分片，按预期字节数校验后合成一个同源响应交还给 Lean 加载器。
+ * Cloudflare Pages 的静态资源不处理 Range，所以 143MB 的 Lean 运行时按
+ * Accept-Language 选择首选源：中文环境先走魔搭（ModelScope）镜像，其他环境
+ * 先走站点同源的 /cdn/ 网关（Pages Function → R2 binding）；任一源失败都按
+ * 顺序回退到另一个源，最后回退到固定 revision 的 GitHub raw 与同源全量请求。
+ * 每个大文件切成 4MB 分片，按预期字节数校验后合成一个同源响应交还给 Lean 加载器。
  *
  * 资产清单与分发源来自 config/lean4-runtime.json + src/asset-sources.mjs，
  * 与 Pages Functions、构建脚本 scripts/fetch-assets.mjs 共用同一份定义。
@@ -14,6 +15,7 @@
 import manifestJson from '../config/lean4-runtime.json';
 import {
   assetSources,
+  prefersDomesticMirror,
   rangedAssets,
   type AssetSource,
   type RuntimeManifest,
@@ -26,7 +28,10 @@ const manifest = manifestJson as unknown as RuntimeManifest;
 
 type RangeAsset = {
   bytes: number;
-  sources: AssetSource[];
+  /** 中文环境：魔搭优先，R2 → GitHub 回退。 */
+  domestic: AssetSource[];
+  /** 其他环境：R2 优先，魔搭 → GitHub 回退。 */
+  overseas: AssetSource[];
 };
 
 const RANGE_ASSETS = new Map<string, RangeAsset>(
@@ -34,7 +39,8 @@ const RANGE_ASSETS = new Map<string, RangeAsset>(
     asset.name,
     {
       bytes: asset.bytes,
-      sources: assetSources(manifest, asset, undefined, { mirrorFirst: true }),
+      domestic: assetSources(manifest, asset, undefined, { mirrorFirst: true }),
+      overseas: assetSources(manifest, asset, undefined, { includeMirror: true }),
     },
   ]),
 );
@@ -76,12 +82,17 @@ sw.addEventListener('fetch', (event) => {
   const asset = RANGE_ASSETS.get(name);
   if (!asset) return;
 
+  // 每个请求单独判断：同一 SW 可能同时服务不同语言的页面。
+  const sources = prefersDomesticMirror(request.headers.get('accept-language'))
+    ? asset.domestic
+    : asset.overseas;
+
   event.respondWith(
     loadRangedAsset({
       request,
       name,
       bytes: asset.bytes,
-      sources: asset.sources,
+      sources,
       origin: sw.location.origin,
       download: (url, total, signal, onProgress) =>
         downloadRanges({

@@ -11,6 +11,10 @@
     "label": "GitHub raw",
     "baseUrl": "https://raw.githubusercontent.com/seo-rii/wasm-llvm/14ea5ecbc514b0c87338aebf8f2b567020be5750/artifacts/lean-browser/"
   },
+  "mirror": {
+    "label": "ModelScope",
+    "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master"
+  },
   "assets": [
     {
       "name": "producer-receipt.json",

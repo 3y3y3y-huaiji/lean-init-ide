@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import manifestJson from '../config/lean4-runtime.json';
-import { assetSources, rangedAssets, withCacheKey } from './asset-sources.mjs';
+import {
+  assetSources,
+  prefersDomesticMirror,
+  rangedAssets,
+  withCacheKey,
+} from './asset-sources.mjs';
 import type { RuntimeManifest } from './asset-sources.mjs';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
@@ -118,6 +123,22 @@ describe('assetSources', () => {
   });
 });
 
+describe('prefersDomesticMirror', () => {
+  it('treats a Chinese first choice as domestic', () => {
+    expect(prefersDomesticMirror('zh-CN,zh;q=0.9,en;q=0.8')).toBe(true);
+    expect(prefersDomesticMirror('zh-Hant-TW,zh;q=0.9')).toBe(true);
+    expect(prefersDomesticMirror('zh')).toBe(true);
+  });
+
+  it('keeps other languages and missing headers on the overseas order', () => {
+    expect(prefersDomesticMirror('en-US,en;q=0.9')).toBe(false);
+    expect(prefersDomesticMirror('ja-JP,ja;q=0.9,en;q=0.5')).toBe(false);
+    expect(prefersDomesticMirror('*')).toBe(false);
+    expect(prefersDomesticMirror('')).toBe(false);
+    expect(prefersDomesticMirror(null)).toBe(false);
+  });
+});
+
 describe('runtime manifest', () => {
   it('ships seven ranged assets with pinned sizes and hashes', () => {
     const ranged = rangedAssets(manifest);
@@ -138,6 +159,7 @@ describe('runtime manifest', () => {
     expect(manifest.primary.baseUrl.startsWith('/')).toBe(true);
     expect(manifest.primary.baseUrl.endsWith('/')).toBe(true);
     expect(manifest.fallback.baseUrl.startsWith('https://')).toBe(true);
+    expect(manifest.mirror?.baseUrl.startsWith('https://')).toBe(true);
 
     for (const asset of manifest.assets) {
       expect(asset.sha256).toMatch(/^[0-9a-f]{64}$/);

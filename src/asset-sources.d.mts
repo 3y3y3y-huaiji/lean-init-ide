@@ -41,3 +41,5 @@ export declare function assetSources(
   options?: AssetSourceOptions,
 ): AssetSource[];
 export declare function rangedAssets(manifest: RuntimeManifest): RuntimeAsset[];
+/** 按 Accept-Language 首选语言判断是否优先走国内镜像（只影响源顺序）。 */
+export declare function prefersDomesticMirror(acceptLanguage: string | null | undefined): boolean;

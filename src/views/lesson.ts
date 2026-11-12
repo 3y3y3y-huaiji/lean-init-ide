@@ -4,6 +4,7 @@ import {
   type LspDiagnostic,
 } from '../components/lean-panel';
 import { buttonClass, ghostButtonClass } from '../components/ui';
+import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
 import type { LessonPage } from '../i18n/types';
 import { escapeHtml } from './html';
@@ -217,7 +218,8 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
     variant: 'compact',
     code: first,
     locale,
-    autoStart: !saveData,
+    // 低内存设备与省流模式都不自动下载 143MB，让用户先确认。
+    autoStart: shouldAutoStart(currentMemoryTier(), saveData === true),
     onProgress: (progress) => reportProgress?.(progress),
   });
 

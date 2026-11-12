@@ -59,10 +59,16 @@ export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
     });
   };
 
+  const addFallback = () => {
+    add(manifest.fallback.label, manifest.fallback.baseUrl, asset.source);
+  };
+
   if (options.mirrorFirst) addMirror();
+  // 诊断用的强制源：GitHub 排最前，其它源仍然保留，失败时照常回退。
+  if (options.githubFirst) addFallback();
   add(manifest.primary.label, primaryBaseUrl || manifest.primary.baseUrl, asset.key);
   if (options.includeMirror) addMirror();
-  add(manifest.fallback.label, manifest.fallback.baseUrl, asset.source);
+  if (!options.githubFirst) addFallback();
   return sources;
 };
 
@@ -77,3 +83,18 @@ export const prefersDomesticMirror = (acceptLanguage) => {
   const preferred = (acceptLanguage ?? '').split(',')[0]?.split(';')[0]?.trim().toLowerCase() ?? '';
   return preferred === 'zh' || preferred.startsWith('zh-');
 };
+
+/* ---------------------------------------------------------------------------
+ * 诊断用的强制源开关：页面带 ?source=mirror|cdn|github 时，把对应的源排到最前。
+ * 页面写 CacheStorage、Service Worker 读同一份配置——SW 看不到页面 URL，
+ * 而 CacheStorage 在同一 origin 两侧都可用，也能跨 SW 重启保留。
+ * ------------------------------------------------------------------------- */
+
+/** 可强制的资产源；与 assetSources 的选项一一对应。 */
+export const SOURCE_MODES = ['mirror', 'cdn', 'github'];
+
+export const isSourceMode = (value) => value === 'mirror' || value === 'cdn' || value === 'github';
+
+export const SOURCE_PREFERENCE_CACHE = 'lean-source';
+
+export const SOURCE_PREFERENCE_KEY = '/__lean/source-preference';

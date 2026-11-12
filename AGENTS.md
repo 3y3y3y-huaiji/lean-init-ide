@@ -30,7 +30,7 @@
 违反任意一条都会造成线上故障，且本地 `pnpm run dev` 看不出来。
 
 1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改动这些文件必须同步更新清单里的 `bytes` 与 `sha256`、**更换 `cacheKey`**，并重新上传到 R2。边缘缓存按 URL 缓存一年（`immutable`），不换版本键会让用户继续拿到旧对象。
-2. **`_routes.json` 的 include 只能是 `["/cdn/*"]`。** 扩大范围会让静态资源请求也进 Functions，首屏变慢。
+2. **`_routes.json` 的 include 只能是 `["/cdn/*", "/api/telemetry"]` 这两个精确路径。** 不要改成通配符或目录：扩大范围会让静态资源请求也进 Functions，首屏变慢。
 3. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`。
 4. **只用一个域名。** 不要引入第二个可访问的 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名会让用户换域名就从零开始下载 143 MB。
 5. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
@@ -46,7 +46,11 @@
 | `src/components/lean-panel.ts` | Monaco 与 LSP 的装配层 | 不要把可测的纯逻辑写进来，它被排除在覆盖率之外 |
 | `src/sw.ts` | 资产分片下载与缓存 | 不要在这里写业务逻辑，它只服务资产分发 |
 | `src/asset-sources.mjs` | 资产源解析（Node / SW / Functions 共用） | 不要在任何一侧复制这套逻辑 |
+| `src/asset-source.ts` | 页面侧 `?source=` 强制源开关 | 不要把它做成持久化的用户设置 |
+| `src/telemetry.ts` | 启动链路指标与错误上报 | 不要记录用户代码、cookie、设备指纹；任何失败必须静默 |
+| `src/device.ts` | 设备分档：缓存预算与自动启动 | 不要用它改 wasm 内存上限，1GiB 是导入峰值所需 |
 | `functions/cdn/` | 同源 R2 网关 | 不要放宽白名单，不要移除 Range 处理 |
+| `functions/api/` | 运行指标接收端 | 不要放宽字段校验，不要回显原始请求体 |
 | `scripts/` | 资产运维与门禁脚本 | 不要在脚本里硬编码域名，用 `LEAN_ASSET_ORIGIN` |
 
 **单一事实来源**：资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`。改动时先改这三处，其余模块被动跟随。
@@ -110,6 +114,8 @@ chore(ci): 依赖审计只审生产依赖
 - **Pages 覆盖静态资源的 `Cache-Control`**：`_headers` 里给 `/sw.js` 写的 `no-cache` 不生效（实测 `max-age=14400`）。
 - **走代理时 curl 会先写 `200 Connection Established`**：解析状态码必须取最后一个真实 HTTP 行，否则一切都被读成 200。
 - **`wrangler.toml` 顶层 binding 不落到 production/preview**：Git 集成部署读的是 `[[env.*.r2_buckets]]`，两处都要写。
+- **指标端点依赖 `_routes.json` 的精确 include**：删掉 `/api/telemetry` 后请求会落到 SPA fallback 并返回 HTML，接收端看起来「没生效」。
+- **Analytics Engine binding 尚未声明**：指标现在只写 Workers Logs；要改数据点需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`，接收端会自动切换。
 - **rollup 解析不了 `lean-panel.ts` 的类型语法**：v8 覆盖率在补算未覆盖文件时会报 `PARSE_ERROR`，故显式排除。
 
 ## 文档维护
@@ -117,6 +123,8 @@ chore(ci): 依赖审计只审生产依赖
 改了以下任一项，必须同步更新文档，否则下一个 Agent 会按旧信息行动：
 
 - 资产分发链路或清单字段 → `README.md` 的「运行时分发」
+- 指标事件、字段或路由 → `README.md` 的「运行指标与错误上报」
+- 源诊断开关或探活脚本 → `README.md` 的「国内访问与源诊断」
 - 门禁命令或阈值 → `README.md` 的「质量门禁」与本文件的命令表
 - 部署方式或域名 → `README.md` 顶部与「部署与冒烟」
 - 新增硬约束 → 本文件的「硬约束」

@@ -14,6 +14,7 @@
 - 亮色 / 暗色 / 跟随系统三种主题，Monaco 主题同步
 - 入门课程：从 `#check` 到第一个归纳证明，代码可一键载入编辑器
 - 首次加载约 143MB 运行时，之后持久缓存；Service Worker 经站点同源 `/cdn/` 网关（Pages Functions → R2）按 4MB 分片并行下载，失败回退 GitHub raw，最后回退同源静态副本
+- 低内存设备（`navigator.deviceMemory ≤ 4`）不自动下载，持久缓存上限从 512MB 降到 128MB，启动前由用户确认
 
 ## 限制
 
@@ -154,6 +155,50 @@ pnpm run upload:assets -- --verify-only
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
+## 运行指标与错误上报
+
+前端只记录启动链路的阶段耗时与未捕获错误，不含 cookie、用户代码或设备指纹；
+`navigator.doNotTrack === '1'` 时整页关闭，普通指标按 50% 采样，错误事件必发且每页最多 3 条。
+
+- 事件名：`boot` / `sw` / `assets` / `lsp_ready` / `first_diagnostics` / `runtime_error`
+- 字段：单事件最多 12 个，key 限 `[a-z][a-z0-9_]{0,23}`，字符串截断 120 字符
+- 上报：`navigator.sendBeacon('/api/telemetry')`，不可用时回退 `fetch(..., { keepalive: true })`
+- 接收端：`functions/api/telemetry.ts`，校验后返回 204；`public/_routes.json` 只放行 `/api/telemetry` 与 `/cdn/*` 两个精确路径
+
+没有声明 Analytics Engine binding，指标以一行 JSON 落 Workers Logs，用
+`pnpm dlx wrangler pages deployment tail --project-name=lean-init-ide` 查看。
+以后要接 Analytics Engine，在 `wrangler.toml` 的 production / preview 同时加
+`[[env.*.analytics_engine_datasets]] binding = "TELEMETRY"`，接收端会自动改写成数据点，无需改代码。
+
+## 国内访问与源诊断
+
+已知现象：AliDNS / DNSPod 的 DoH 解析一致，但分到的部分 Anycast IPv4（如 `104.21.91.203`、
+`172.67.179.86`）在 TLS 握手阶段被 reset；其余 Cloudflare IP 与 `pages.dev` 正常。
+这不是 DNS 解析错误，改解析服务商无效。
+
+**方案 A（推荐，需域名管理员操作）**：把自定义域改成 DNS-only CNAME 到优选 IP 面板，关闭代理（灰云），
+用第三方优选 IP 工具定期更新 A 记录。代价是失去 Cloudflare 的 WAF / 缓存，需要自己补限流与证书。
+
+**方案 B**：国内反代或对象存储镜像。必须保持与主站同源，否则 Service Worker 缓存与 localStorage
+按 origin 隔离，换域名等于让用户重下 143MB。
+
+代码侧提供两个诊断工具，不改 DNS 也能判断问题在哪一段：
+
+```bash
+pnpm run probe:sources        # 对魔搭 / 同源网关 / GitHub raw 各取 64KiB，输出 TTFB 与速率
+LEAN_ASSET_ORIGIN=https://lean-init-ide.pages.dev pnpm run probe:sources
+```
+
+浏览器里可用 `?source=mirror|cdn|github` 强制首选源（写在 CacheStorage 里，Service Worker 读取后生效），
+面板日志会显示实际命中的源标签：
+
+- `?source=mirror`：魔搭优先，适合验证国内镜像
+- `?source=cdn`：同源 `/cdn/` 网关优先
+- `?source=github`：GitHub raw 优先
+
+参数非法或没有参数时恢复默认策略（按 `Accept-Language` 在魔搭与同源网关之间选首选源）。
+选择会写进 CacheStorage 并在后续访问继续生效；用另一个值覆盖，或访问 `?source=reset` 之类的非法值即可清除。
+
 ## 质量门禁
 
 本地和 CI 跑同一套命令，任一失败即阻断合并：
@@ -166,7 +211,7 @@ pnpm run upload:assets -- --verify-only
 | `pnpm test` | Vitest + 覆盖率阈值 |
 | `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
 | `pnpm run build:web` | 生产构建（跳过 143 MB 资产下载） |
-| `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单、COOP/COEP、JS 体积预算 |
+| `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单（`/cdn/*` + `/api/telemetry`）、COOP/COEP、JS 体积预算 |
 
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
@@ -238,6 +283,9 @@ src/
   sw.ts              Range 分片下载 Service Worker（编译为 public/sw.js）
   cdn-range.ts       Range 头解析（与 Pages Functions 共用）
   asset-sources.mjs  资产源解析（Node / SW / Functions 共用）
+  asset-source.ts    页面侧 ?source= 强制源开关
+  telemetry.ts       启动链路指标与错误上报（sendBeacon）
+  device.ts          设备分档：缓存预算与自动启动策略
   i18n/              中英文字典与文案读取
   theme.ts           亮/暗/跟随系统
   views/             落地页、课程页、编辑器页
@@ -245,9 +293,10 @@ src/
   lean-language.ts   Lean 语法高亮与语言配置
 functions/
   cdn/[[path]].ts    同源 R2 网关（Range / 206 / 白名单）
+  api/telemetry.ts   运行指标接收端（校验后写日志 / Analytics Engine）
 public/
   wasm-lean4/        同源静态兜底副本（构建时下载，不入库）
-  _routes.json       仅 /cdn/* 走 Functions
+  _routes.json       仅 /cdn/* 与 /api/telemetry 走 Functions
 config/
   lean4-runtime.json 资产清单、字节数/SHA-256、主源与回退源、缓存键
 scripts/             资产下载/上传、LSP 补丁、清单与产物校验、线上冒烟
@@ -267,6 +316,7 @@ wrangler.toml        Pages 项目配置与 R2 binding
 | 补全、悬停没反应 | 面板日志里 LSP 是否 ready，`initialize` 是否成功 |
 | 本地资产校验失败 | 是否用会转换换行符的工具改过 `scripts/assets/**` |
 | 线上 `/cdn/xxx` 返回 200 的 HTML | `_routes.json` 丢了，Functions 没触发，请求落到了 SPA fallback |
+| 国内部分网络打不开、换 IP 就好 | 跑 `pnpm run probe:sources`，再用 `?source=` 逐源验证；确认是 Anycast IP 被 reset 后按「国内访问与源诊断」处理 |
 
 开发模式下 `window.__monaco` 与 `window.__editor` 可用；URL 加 `?fresh` 会清空资产缓存重新下载。
 

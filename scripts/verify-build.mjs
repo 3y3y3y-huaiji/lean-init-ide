@@ -66,15 +66,17 @@ if (!(await exists(swPath))) {
   if (!sw.includes('addEventListener')) fail('sw.js 里没有事件监听，疑似被清空');
 }
 
-// 3. Functions 路由范围：只有 /cdn/* 允许走 Functions
+// 3. Functions 路由范围：只允许精确路径，静态资源不能进 Functions
 const routesPath = resolve(dist, '_routes.json');
 if (!(await exists(routesPath))) {
   fail('缺少 dist/_routes.json，Pages Functions 会被全站拦截');
 } else {
   const routes = JSON.parse(await readFile(routesPath, 'utf8'));
   const include = JSON.stringify(routes.include ?? []);
-  if (include !== JSON.stringify(['/cdn/*'])) {
-    fail(`_routes.json 的 include 必须恰好是 ["/cdn/*"]，实际为 ${include}`);
+  // /api/telemetry 是运行指标接收端；扩成通配符会让静态资源也进 Functions，首屏变慢。
+  const expected = JSON.stringify(['/cdn/*', '/api/telemetry']);
+  if (include !== expected) {
+    fail(`_routes.json 的 include 必须恰好是 ${expected}，实际为 ${include}`);
   }
   if ((routes.exclude ?? []).length > 0) {
     fail('_routes.json 的 exclude 应为空，避免与 include 语义冲突');

@@ -15,10 +15,14 @@
 import manifestJson from '../config/lean4-runtime.json';
 import {
   assetSources,
+  isSourceMode,
   prefersDomesticMirror,
   rangedAssets,
+  SOURCE_PREFERENCE_CACHE,
+  SOURCE_PREFERENCE_KEY,
   type AssetSource,
   type RuntimeManifest,
+  type SourceMode,
 } from './asset-sources.mjs';
 import { downloadRanges } from './sw-download';
 import { loadRangedAsset } from './sw-assemble';
@@ -32,6 +36,8 @@ type RangeAsset = {
   domestic: AssetSource[];
   /** 其他环境：R2 优先，魔搭 → GitHub 回退。 */
   overseas: AssetSource[];
+  /** 诊断（?source=github）：GitHub 优先，其余源仍保留做回退。 */
+  github: AssetSource[];
 };
 
 const RANGE_ASSETS = new Map<string, RangeAsset>(
@@ -41,6 +47,7 @@ const RANGE_ASSETS = new Map<string, RangeAsset>(
       bytes: asset.bytes,
       domestic: assetSources(manifest, asset, undefined, { mirrorFirst: true }),
       overseas: assetSources(manifest, asset, undefined, { includeMirror: true }),
+      github: assetSources(manifest, asset, undefined, { githubFirst: true }),
     },
   ]),
 );
@@ -71,6 +78,32 @@ sw.addEventListener('activate', (event) => {
   event.waitUntil(sw.clients.claim());
 });
 
+/**
+ * 页面通过 ?source= 写的强制源。SW 读不到页面 URL，所以页面把选择放进 CacheStorage，
+ * 这里启动后读一次并缓存在内存；SW 被回收重启后仍能恢复。
+ */
+let forcedMode: SourceMode | null | undefined;
+
+const readForcedMode = async (): Promise<SourceMode | null> => {
+  if (forcedMode !== undefined) return forcedMode;
+  try {
+    const cache = await caches.open(SOURCE_PREFERENCE_CACHE);
+    const hit = await cache.match(SOURCE_PREFERENCE_KEY);
+    const value = hit ? (await hit.text()).trim() : '';
+    forcedMode = isSourceMode(value) ? value : null;
+  } catch {
+    forcedMode = null;
+  }
+  return forcedMode;
+};
+
+sw.addEventListener('message', (event) => {
+  const data = event.data as { type?: string; mode?: unknown };
+  if (data?.type !== 'lean-source-mode') return;
+  const next = typeof data.mode === 'string' ? data.mode : null;
+  forcedMode = isSourceMode(next) ? next : null;
+});
+
 sw.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -84,34 +117,47 @@ sw.addEventListener('fetch', (event) => {
   if (!asset) return;
 
   // 每个请求单独判断：同一 SW 可能同时服务不同语言的页面。
-  const sources = prefersDomesticMirror(request.headers.get('accept-language'))
+  const defaultSources = prefersDomesticMirror(request.headers.get('accept-language'))
     ? asset.domestic
     : asset.overseas;
 
+  // respondWith 必须在事件同步阶段调用；强制源要读 CacheStorage，放到 promise 里再解析。
   event.respondWith(
-    loadRangedAsset({
-      request,
-      name,
-      bytes: asset.bytes,
-      sources,
-      origin: sw.location.origin,
-      download: (url, total, signal, onProgress) =>
-        downloadRanges({
-          url,
-          total,
-          chunkBytes: CHUNK_BYTES,
-          parallel: MAX_PARALLEL,
-          timeoutMs: CHUNK_TIMEOUT_MS,
-          retries: RETRIES,
-          minSplitBytes: MIN_SPLIT_BYTES,
-          maxSplitDepth: MAX_SPLIT_DEPTH,
-          signal,
-          onProgress: ({ loaded }) => onProgress(loaded, total),
-        }),
-      onProgress: (loaded, total, source) => void notify(name, loaded, total, source.label),
-      onFallback: notifyFallback,
-      fallbackFetch: (request) => fetch(request),
-    }),
+    (async () => {
+      const mode = await readForcedMode();
+      const sources =
+        mode === 'mirror'
+          ? asset.domestic
+          : mode === 'cdn'
+            ? asset.overseas
+            : mode === 'github'
+              ? asset.github
+              : defaultSources;
+
+      return loadRangedAsset({
+        request,
+        name,
+        bytes: asset.bytes,
+        sources,
+        origin: sw.location.origin,
+        download: (url, total, signal, onProgress) =>
+          downloadRanges({
+            url,
+            total,
+            chunkBytes: CHUNK_BYTES,
+            parallel: MAX_PARALLEL,
+            timeoutMs: CHUNK_TIMEOUT_MS,
+            retries: RETRIES,
+            minSplitBytes: MIN_SPLIT_BYTES,
+            maxSplitDepth: MAX_SPLIT_DEPTH,
+            signal,
+            onProgress: ({ loaded }) => onProgress(loaded, total),
+          }),
+        onProgress: (loaded, total, source) => void notify(name, loaded, total, source.label),
+        onFallback: notifyFallback,
+        fallbackFetch: (request) => fetch(request),
+      });
+    })(),
   );
 });
 

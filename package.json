@@ -27,6 +27,7 @@
     "upload:modelscope": "node scripts/upload-modelscope.mjs",
     "verify:manifest": "node scripts/verify-manifest.mjs",
     "verify:build": "node scripts/verify-build.mjs",
+    "probe:sources": "node scripts/probe-sources.mjs",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

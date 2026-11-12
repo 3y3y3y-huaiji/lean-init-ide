@@ -6,9 +6,11 @@ import editorWorker from '../../node_modules/monaco-editor/esm/vs/editor/editor.
 import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
+import { cacheBudgetBytes, currentMemoryTier } from '../device';
 import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
+import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
 import { buttonClass } from './ui';
 
@@ -210,6 +212,7 @@ const renderMarkup = (
 export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): LeanPanel => {
   const { variant, code, locale, autoStart = false, onProgress } = options;
   const t = messagesFor(locale).playground;
+  const memoryTier = currentMemoryTier();
 
   host.innerHTML = renderMarkup(locale, variant, t);
 
@@ -349,6 +352,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let progressRatio: number | null = null;
   let hasAssetProgress = false;
 
+  // 观测用：一次启动只报一条 LSP 就绪、一条首帧诊断；资产进度只报首字节与完成。
+  let runStartedAt = 0;
+  let firstDiagnosticsReported = false;
+  const assetTelemetry = { started: false, completed: false, startedAt: 0 };
+
   const emitProgress = () =>
     onProgress?.({ label: progressLabel, kind: progressKind, ratio: progressRatio });
 
@@ -368,16 +376,27 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     emitProgress();
   };
 
+  // 低内存设备不自动下载：状态里写清楚，并把原因挂在启动按钮上。
+  if (memoryTier === 'low') {
+    setStatus(t.statusLowMemory, 'idle');
+    startEl.title = t.lowMemoryHint;
+    log(t.logLowMemory);
+  }
+
   // Pages 静态资源不支持 Range；Service Worker 从站点同源 /cdn/ 网关（Function → R2）
   // 分片下载 Lean 资产，网关不可用时回退 GitHub raw，最后回退同源全量请求。
   const registerServiceWorker = async () => {
     if (!('serviceWorker' in navigator)) return;
+    const startedAt = performance.now();
     try {
       await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
       await navigator.serviceWorker.ready;
       log(t.logSwReady);
+      track('sw', { ok: true, ms: performance.now() - startedAt });
     } catch (error) {
-      log(t.logSwFailed(error instanceof Error ? error.message : String(error)));
+      const message = error instanceof Error ? error.message : String(error);
+      log(t.logSwFailed(message));
+      track('sw', { ok: false, ms: performance.now() - startedAt, message });
     }
   };
 
@@ -407,6 +426,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     hasAssetProgress = true;
     // 全部字节下载完后 Lean 还要解压和初始化，此时文案切回启动阶段。
     const downloaded = loaded >= total;
+
+    if (!assetTelemetry.started) {
+      assetTelemetry.started = true;
+      assetTelemetry.startedAt = performance.now();
+      track('assets', { phase: 'first_bytes', source: data.source ?? 'unknown' });
+    }
+    if (downloaded && !assetTelemetry.completed) {
+      assetTelemetry.completed = true;
+      track('assets', {
+        phase: 'complete',
+        bytes: total,
+        ms: performance.now() - assetTelemetry.startedAt,
+      });
+    }
     setStatus(
       downloaded
         ? t.statusStarting
@@ -437,6 +470,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (params.uri.toLowerCase() !== uri.toLowerCase()) return;
 
     const latency = lastEditAt ? performance.now() - lastEditAt : 0;
+    if (!firstDiagnosticsReported) {
+      firstDiagnosticsReported = true;
+      track('first_diagnostics', {
+        ms: runStartedAt ? performance.now() - runStartedAt : 0,
+        count: params.diagnostics.length,
+      });
+    }
     diagnosticSeq += 1;
     setStatus(t.statusReady(diagnosticSeq, Math.round(latency)), 'ready');
 
@@ -505,6 +545,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         // 慢网络下 22MB 的 pack 可能超过 10 分钟，放宽超时避免下载中途被中止。
         startupTimeoutMs: 60 * 60_000,
         assetTimeoutMs: 60 * 60_000,
+        // 低内存设备只下调持久缓存；wasm 上限保持 1GiB，Init 导入峰值需要它。
+        persistentCache: {
+          maxBytes: cacheBudgetBytes(memoryTier),
+          maxEntryBytes: cacheBudgetBytes(memoryTier),
+        },
         // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
         lean4: { maxMemoryBytes: 1024 ** 3 },
         createWorker: () => new LeanWorker(),
@@ -519,9 +564,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
             setProgress(1);
             setStatus(t.statusLspReady, 'ready');
             log(t.logRuntimeReady);
+            track('lsp_ready', { ms: runStartedAt ? performance.now() - runStartedAt : 0 });
           } else if (status.state === 'error') {
             setStatus(t.statusError(status.message), 'error');
             log(t.logRuntimeError(status.message));
+            reportError('runtime', status.message);
           }
         },
       });
@@ -704,6 +751,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   /** 会话层等待启动、串行重开文档并收集诊断；这里只同步 Monaco 的内容。 */
   const run = (code: string) =>
     session.run(code, () => {
+      if (runStartedAt === 0) runStartedAt = performance.now();
       suppressSync = true;
       model.setValue(code);
       suppressSync = false;
@@ -737,7 +785,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const stop = () => {
     session.stop();
     goalSupported = true;
-    setStatus(t.statusIdle, 'idle');
+    runStartedAt = 0;
+    firstDiagnosticsReported = false;
+    setStatus(memoryTier === 'low' ? t.statusLowMemory : t.statusIdle, 'idle');
     setProgress(0);
     goalEl.textContent = t.goalPlaceholder;
     statementEl.hidden = true;
@@ -753,6 +803,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     setStatus(t.statusLoading, 'loading');
     setProgress(0);
     const startedAt = performance.now();
+    runStartedAt = startedAt;
+    firstDiagnosticsReported = false;
+    assetTelemetry.started = false;
+    assetTelemetry.completed = false;
 
     if ('serviceWorker' in navigator) {
       await Promise.race([
@@ -779,6 +833,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       setStatus(t.statusFailure(message), 'error');
       log(t.logStartFailed(message));
       console.error(error);
+      reportError('start', error);
     } finally {
       startEl.disabled = false;
     }
@@ -797,7 +852,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     });
   }
 
-  if (autoStart) {
+  if (autoStart && memoryTier !== 'low') {
     // 直接排一个短定时器：比 IntersectionObserver 更确定，也让下载尽早开始。
     window.setTimeout(() => {
       void start();

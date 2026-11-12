@@ -31,6 +31,8 @@ export interface AssetSourceOptions {
   mirrorFirst?: boolean;
   /** 在 primary 之后插入镜像（Node 构建一般不需要）。 */
   includeMirror?: boolean;
+  /** 诊断用：GitHub raw 排在最前，其它源仍保留做回退。 */
+  githubFirst?: boolean;
 }
 
 export declare function withCacheKey(rawUrl: string, cacheKey: string): string;
@@ -43,3 +45,11 @@ export declare function assetSources(
 export declare function rangedAssets(manifest: RuntimeManifest): RuntimeAsset[];
 /** 按 Accept-Language 首选语言判断是否优先走国内镜像（只影响源顺序）。 */
 export declare function prefersDomesticMirror(acceptLanguage: string | null | undefined): boolean;
+
+/* 诊断用的强制源开关：?source=mirror|cdn|github */
+export type SourceMode = 'mirror' | 'cdn' | 'github';
+export declare const SOURCE_MODES: readonly SourceMode[];
+export declare function isSourceMode(value: string | null | undefined): value is SourceMode;
+/** 页面与 Service Worker 共享强制源配置的 CacheStorage 名与键。 */
+export declare const SOURCE_PREFERENCE_CACHE: string;
+export declare const SOURCE_PREFERENCE_KEY: string;

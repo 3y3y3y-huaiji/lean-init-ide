@@ -243,6 +243,9 @@ export const en: Messages = {
       'A real Lean LSP in the browser · Init only, no Std / Lean / Lake / Mathlib · Chromium first',
     openFull: 'Open the full playground',
     statusIdle: 'Not started',
+    statusLowMemory: 'Low-memory device · start manually',
+    lowMemoryHint:
+      'This device reports limited memory. Lean needs about 400 MB free, so the download no longer starts automatically — start it yourself when the device has room.',
     statusLoading: 'Loading runtime… (about 143 MB on first run)',
     statusStarting: 'Starting the LSP…',
     statusChunks: (loaded, total) => `${loaded} / ${total} MB`,
@@ -262,6 +265,8 @@ export const en: Messages = {
     logInitialize: (seconds) => `initialize finished in ${seconds}s`,
     logStartFailed: (message) => `Startup failed: ${message}`,
     logStopped: 'Lean engine stopped, worker and memory released',
+    logLowMemory:
+      'Low-memory device: auto-start disabled and the persistent cache capped at 128 MB',
   },
   footer: {
     license: 'Apache-2.0 OR MulanPSL-2.0',

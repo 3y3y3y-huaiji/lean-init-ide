@@ -241,6 +241,9 @@ export const zh: Messages = {
       '浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先',
     openFull: '打开完整编辑器',
     statusIdle: '未启动',
+    statusLowMemory: '低内存设备 · 手动启动',
+    lowMemoryHint:
+      '检测到可用内存偏小：启动 Lean 需要约 400MB 空闲内存，已关闭自动下载。确认设备有余量后手动点「启动 Lean」。',
     statusLoading: '加载运行时…（首次约 143MB）',
     statusStarting: '启动 LSP…',
     statusChunks: (loaded, total) => `${loaded} / ${total} MB`,
@@ -259,6 +262,7 @@ export const zh: Messages = {
     logInitialize: (seconds) => `initialize 完成，总耗时 ${seconds}s`,
     logStartFailed: (message) => `启动失败：${message}`,
     logStopped: '已关闭 Lean 引擎，worker 与内存已释放',
+    logLowMemory: '低内存设备：已关闭自动启动，持久缓存上限下调到 128MB',
   },
   footer: {
     license: 'Apache-2.0 OR MulanPSL-2.0',

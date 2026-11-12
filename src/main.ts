@@ -1,11 +1,16 @@
 import './index.css';
+import { applySourcePreference } from './asset-source';
 import { buttonClass } from './components/ui';
 import { detectLocale, messagesFor, type Locale } from './i18n';
 import { resolveRoute, type Route } from './router';
+import { initTelemetry, track } from './telemetry';
 import { bindLayout, renderLayout } from './views/layout';
 import { renderHome } from './views/home';
 
 const app = document.querySelector<HTMLElement>('#app');
+
+initTelemetry();
+void applySourcePreference(location.search);
 
 const renderNotFound = (locale: Locale): string => {
   const t = messagesFor(locale).notFound;
@@ -38,6 +43,7 @@ const pageTitle = (route: Route): string => {
 const boot = async (route: Route, root: HTMLElement) => {
   document.title = pageTitle(route);
   document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
+  track('boot', { page: route.page, locale: route.locale });
 
   let content: string;
   let mount: (() => void) | undefined;

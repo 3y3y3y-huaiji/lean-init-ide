@@ -87,6 +87,10 @@ export type Messages = {
     footer: string;
     openFull: string;
     statusIdle: string;
+    /** 低内存设备不自动启动时替代 statusIdle 的说明。 */
+    statusLowMemory: string;
+    /** 低内存设备的额外提示，放在启动按钮的 title 上。 */
+    lowMemoryHint: string;
     statusLoading: string;
     statusStarting: string;
     statusChunks: (loaded: string, total: string) => string;
@@ -105,6 +109,7 @@ export type Messages = {
     logInitialize: (seconds: string) => string;
     logStartFailed: (message: string) => string;
     logStopped: string;
+    logLowMemory: string;
   };
   footer: {
     license: string;

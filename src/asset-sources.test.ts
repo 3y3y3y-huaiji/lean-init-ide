@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import manifestJson from '../config/lean4-runtime.json';
 import {
   assetSources,
+  isSourceMode,
   prefersDomesticMirror,
   rangedAssets,
   withCacheKey,
@@ -119,6 +120,32 @@ describe('assetSources', () => {
     it('默认不启用镜像，Node 构建行为不变', () => {
       const sources = assetSources(mirrored, assetByName('lean.mjs'));
       expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)', 'GitHub raw']);
+    });
+  });
+
+  describe('诊断用的强制源', () => {
+    it('githubFirst 把 GitHub 排到最前，其余源保留做回退', () => {
+      const sources = assetSources(manifest, assetByName('lean.wasm.gz.bin'), undefined, {
+        githubFirst: true,
+      });
+      expect(sources.map((source) => source.label)).toEqual(['GitHub raw', 'Pages Functions (R2)']);
+      expect(sources[0]?.url).toContain('raw.githubusercontent.com');
+    });
+
+    it('没有 GitHub 回退的资产不会凭空造源', () => {
+      const sources = assetSources(manifest, assetByName('runner-worker.js'), undefined, {
+        githubFirst: true,
+      });
+      expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)']);
+    });
+
+    it('只认 mirror / cdn / github 三个值', () => {
+      expect(isSourceMode('mirror')).toBe(true);
+      expect(isSourceMode('cdn')).toBe(true);
+      expect(isSourceMode('github')).toBe(true);
+      expect(isSourceMode('')).toBe(false);
+      expect(isSourceMode(null)).toBe(false);
+      expect(isSourceMode('MIRROR')).toBe(false);
     });
   });
 });

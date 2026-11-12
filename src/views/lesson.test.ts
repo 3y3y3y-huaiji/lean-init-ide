@@ -38,6 +38,17 @@ describe('课程页渲染', () => {
     }
   });
 
+  it('窄屏目录把全部课时收进可展开的 details', () => {
+    const lessons = lessonsOf('zh');
+    const html = renderLesson('zh', lessons[1]!.slug);
+
+    expect(html).toContain('<details');
+    expect(html).toContain('group-open:rotate-180');
+    for (const lesson of lessons) {
+      expect(html).toContain(`href="/zh/learn/${lesson.slug}"`);
+    }
+  });
+
   it('无效 slug 回退到第一节而不是空白页', () => {
     const first = lessonsOf('zh')[0]!;
     const html = renderLesson('zh', 'no-such-lesson');

@@ -10,6 +10,7 @@ import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
+import { buttonClass } from './ui';
 
 (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
   getWorker: () => new editorWorker(),
@@ -46,7 +47,7 @@ const panelHeadingClass =
   'm-0 flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px] text-xs font-[650] uppercase tracking-[0.07em] text-muted';
 
 const pillClass =
-  'inline-flex min-h-8 max-w-[160px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
+  'inline-flex min-h-9 max-w-[240px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
 
 const mutedItemClass = 'mb-1 px-2 py-2 text-[13px] text-muted';
 
@@ -62,7 +63,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
     class="${
       compact
         ? 'flex min-h-0 flex-1 flex-col gap-2 p-2.5'
-        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
+        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_clamp(320px,32vw,380px)] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
     }"
   >
     <section
@@ -70,7 +71,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       class="${
         compact
           ? 'relative min-h-[130px] overflow-hidden rounded-xl border border-line bg-editor-bg'
-          : 'relative h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[60vh] max-[900px]:min-h-[420px]'
+          : 'relative h-[calc(100dvh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52dvh] max-[900px]:min-h-[360px]'
       }"
     ><div class="absolute inset-0" data-role="editor"></div></section>
     ${
@@ -88,7 +89,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       class="${
         compact
           ? 'contents'
-          : 'flex h-[calc(100vh-250px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
+          : 'flex h-[calc(100dvh-250px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
       }"
     >
       <section data-panel="goal" class="${panelClass(compact)} shrink-0">
@@ -107,7 +108,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       </section>
       <section data-panel="diagnostics" class="${panelClass(compact)} min-h-0 flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
-        <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2">
+        <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2 max-[900px]:max-h-[280px]">
           <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
         </ul>
       </section>
@@ -119,7 +120,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
              </details>`
           : `<section data-panel="log" class="${panelClass(false)} flex-1">
                <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
-               <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted"></pre>
+               <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted max-[900px]:max-h-[220px]"></pre>
              </section>`
       }
     </aside>
@@ -133,7 +134,7 @@ const renderMarkup = (
 ) => {
   const compact = variant === 'compact';
   const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
-  const start = `<button type="button" data-role="start">${t.start}</button>`;
+  const start = `<button class="${buttonClass}" type="button" data-role="start">${t.start}</button>`;
 
   const panelToggle = (key: string, label: string) => `
     <label class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
@@ -157,16 +158,16 @@ const renderMarkup = (
 
   if (!compact) {
     return `
-      <section class="flex min-h-[calc(100vh-61px)] flex-col">
+      <section class="flex min-h-[calc(100dvh-61px)] flex-col max-[900px]:min-h-0">
         <div
-          class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start"
+          class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start max-[900px]:gap-3"
         >
-          <div>
+          <div class="min-w-0">
             <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">Lean 4.34.1 · WebAssembly · Init only</p>
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
-          <div class="flex items-center gap-3">${status}${start}</div>
+          <div class="flex flex-wrap items-center gap-2">${status}${start}</div>
         </div>
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         ${renderWorkspace(t, false)}
@@ -331,6 +332,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   const setStatus = (text: string, kind: 'idle' | 'loading' | 'ready' | 'error' = 'idle') => {
     statusEl.textContent = text;
+    statusEl.title = text;
     statusEl.dataset.state = kind;
   };
 

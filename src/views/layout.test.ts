@@ -61,6 +61,16 @@ describe('页面骨架渲染', () => {
     const html = renderLayout('zh', 'home', '');
     expect(html).toContain(`${t.theme.label} · ${t.theme.dark}`);
   });
+
+  it('窄屏头部保留图标、短语言标记和无障碍名称', () => {
+    const html = renderLayout('zh', 'home', '');
+
+    expect(html).toContain('data-theme-icon');
+    expect(html).toContain('data-theme-text');
+    expect(html).toContain('max-[900px]:size-10');
+    expect(html).toContain('aria-label="设置"');
+    expect(html).toContain('>EN<');
+  });
 });
 
 describe('骨架交互绑定', () => {

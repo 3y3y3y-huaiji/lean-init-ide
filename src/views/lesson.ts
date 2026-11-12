@@ -11,8 +11,8 @@ const codeBlockHead =
 
 const tocLink = (active: boolean) =>
   active
-    ? 'block rounded-lg bg-accent-soft px-2.5 py-1.5 text-[13px] leading-snug text-fg no-underline'
-    : 'block rounded-lg px-2.5 py-1.5 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
+    ? 'flex min-h-10 items-center rounded-lg bg-accent-soft px-2.5 py-2 text-[13px] leading-snug text-fg no-underline'
+    : 'flex min-h-10 items-center rounded-lg px-2.5 py-2 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
 
 const noteClass = (tone: 'info' | 'warn' | undefined) =>
   tone === 'warn'
@@ -78,23 +78,36 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
     )
     .join('');
 
+  const mobileToc = `
+    <details class="group mb-6 rounded-xl border border-line bg-panel px-3 py-2 min-[1041px]:hidden">
+      <summary class="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-1 text-sm text-fg [&::-webkit-details-marker]:hidden">
+        <span>${escapeHtml(t.tocTitle)}</span>
+        <span class="flex items-center gap-2 font-mono text-xs text-muted">${String(
+          index + 1,
+        ).padStart(2, '0')} / ${String(t.lessons.length).padStart(2, '0')}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="transition-transform group-open:rotate-180"><path d="m3.5 5.5 3.5 3 3.5-3"/></svg>
+        </span>
+      </summary>
+      <ol class="mb-1 mt-2 list-none space-y-0.5 p-0">${toc}</ol>
+    </details>`;
+
   const pager = `
-    <nav class="mt-12 flex items-start justify-between gap-6 border-t border-line pt-6">
+    <nav class="mt-12 flex items-start justify-between gap-4 border-t border-line pt-6">
       ${
         prev
-          ? `<a class="group no-underline" href="/${locale}/learn/${prev.slug}">
+          ? `<a class="group min-w-0 flex-1 rounded-lg py-1.5 no-underline" href="/${locale}/learn/${prev.slug}">
                <span class="block text-xs text-muted">← ${escapeHtml(t.prev)}</span>
                <span class="mt-1 block text-sm text-fg group-hover:text-accent">${escapeHtml(prev.navTitle)}</span>
              </a>`
-          : '<span></span>'
+          : '<span class="flex-1"></span>'
       }
       ${
         next
-          ? `<a class="group block text-right no-underline" href="/${locale}/learn/${next.slug}">
+          ? `<a class="group block min-w-0 flex-1 rounded-lg py-1.5 text-right no-underline" href="/${locale}/learn/${next.slug}">
                <span class="block text-xs text-muted">${escapeHtml(t.next)} →</span>
                <span class="mt-1 block text-sm text-fg group-hover:text-accent">${escapeHtml(next.navTitle)}</span>
              </a>`
-          : '<span></span>'
+          : '<span class="flex-1"></span>'
       }
     </nav>`;
 
@@ -103,7 +116,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       <section class="mt-8 rounded-2xl border border-accent bg-accent-soft p-6">
         <h2 class="mt-0 mb-2.5 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
         <p class="mt-0 mb-4 text-muted">${escapeHtml(page.exercise.body)}</p>
-        <a class="${buttonClass}" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(page.exercise.cta)}</a>
+        <a class="${buttonClass} max-[520px]:w-full" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(page.exercise.cta)}</a>
       </section>`
     : '';
 
@@ -115,6 +128,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       </nav>
 
       <article class="min-w-0 max-w-[820px]">
+        ${mobileToc}
         <header>
           <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${escapeHtml(t.eyebrow)}</p>
           <h1 class="mt-0 mb-3 text-[clamp(28px,4.2vw,40px)] tracking-[-0.015em]">${escapeHtml(page.title)}</h1>

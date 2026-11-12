@@ -8,6 +8,17 @@ export type ActivePage = 'home' | 'lesson' | 'playground';
 
 const REPO_URL = 'https://github.com/3y3y3y-huaiji/lean-init-ide';
 
+const iconAttrs =
+  'width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+
+const themeIcons: Record<ThemePreference, string> = {
+  system: `<svg ${iconAttrs}><rect x="2" y="2.5" width="12" height="8.5" rx="1.2"/><path d="M6 13.5h4"/></svg>`,
+  light: `<svg ${iconAttrs}><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1"/></svg>`,
+  dark: `<svg ${iconAttrs}><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6Z"/></svg>`,
+};
+
+const slidersIcon = `<svg ${iconAttrs}><path d="M2 4.5h3M9 4.5h5M2 11.5h5M11 11.5h3"/><circle cx="7" cy="4.5" r="1.6"/><circle cx="9" cy="11.5" r="1.6"/></svg>`;
+
 export const renderLayout = (locale: Locale, active: ActivePage, content: string): string => {
   const t = messagesFor(locale);
   const other = otherLocale(locale);
@@ -23,8 +34,8 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
 
   const navLink = (isActive: boolean) =>
     isActive
-      ? 'rounded-lg bg-accent-soft px-2.5 py-1.5 text-sm text-fg no-underline'
-      : 'rounded-lg px-2.5 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg';
+      ? 'inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-lg bg-accent-soft px-3 py-1.5 text-sm text-fg no-underline min-[901px]:min-h-0 min-[901px]:px-2.5'
+      : 'inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg min-[901px]:min-h-0 min-[901px]:px-2.5';
 
   const nav = navItems
     .map(
@@ -33,31 +44,48 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
     .join('');
 
   const isPlayground = active === 'playground';
+  const compactLocale = other === 'en' ? 'EN' : '中';
 
   return `
-    <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md">
-      <div class="mx-auto flex max-w-[1160px] items-center gap-5 gutter-x py-3.5 max-[900px]:flex-wrap max-[900px]:gap-2.5">
-        <a class="inline-flex items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline" href="/${locale}/">
-          <span class="grid size-7 place-items-center rounded-lg bg-accent text-[17px] font-bold text-accent-contrast">λ</span>
-          <span>Lean Init IDE</span>
+    <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[900px]:static">
+      <div class="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-4 gap-y-2 gutter-x py-2.5 min-[901px]:py-3.5">
+        <a class="inline-flex min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline" href="/${locale}/">
+          <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-[17px] font-bold text-accent-contrast">λ</span>
+          <span class="truncate">Lean Init IDE</span>
         </a>
-        <nav class="ml-2 flex flex-1 flex-wrap gap-1 max-[900px]:order-3 max-[900px]:ml-0 max-[900px]:w-full">${nav}</nav>
-        <div class="flex gap-2">
-          <a id="lang-switch" class="${ghostButtonClass}" href="/${other}${rest}" title="${t.language.label}">
-            ${localeLabel(other)}
+        <nav class="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:order-3 max-[640px]:w-full min-[641px]:ml-2 min-[641px]:flex-1 min-[641px]:pb-0">${nav}</nav>
+        <div class="order-2 ml-auto flex shrink-0 items-center gap-1.5 min-[641px]:order-none min-[641px]:ml-0 min-[901px]:gap-2">
+          <a
+            id="lang-switch"
+            class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
+            href="/${other}${rest}"
+            title="${t.language.label}"
+            aria-label="${t.language.label}"
+          >
+            <span class="max-[900px]:hidden">${localeLabel(other)}</span>
+            <span class="hidden text-xs font-semibold max-[900px]:inline">${compactLocale}</span>
           </a>
-          <button id="theme-toggle" class="${ghostButtonClass}" type="button" title="${themeLabel}">
-            ${themeLabel}
+          <button
+            id="theme-toggle"
+            class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
+            type="button"
+            title="${themeLabel}"
+            aria-label="${themeLabel}"
+          >
+            <span data-theme-text class="max-[900px]:hidden">${themeLabel}</span>
+            <span data-theme-icon class="hidden max-[900px]:block">${themeIcons[pref]}</span>
           </button>
           <div class="relative">
             <button
               id="settings-toggle"
-              class="${ghostButtonClass}"
+              class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
               type="button"
               aria-expanded="false"
               aria-controls="settings-panel"
+              aria-label="${t.settings.label}"
             >
-              ${t.settings.label}
+              <span class="max-[900px]:hidden">${t.settings.label}</span>
+              <span class="hidden max-[900px]:block">${slidersIcon}</span>
             </button>
             <div
               id="settings-panel"
@@ -101,8 +129,12 @@ export const bindLayout = (root: HTMLElement, locale: Locale) => {
     if (!themeButton) return;
     const pref: ThemePreference = getThemePreference();
     const label = `${t.theme.label} · ${t.theme[pref]}`;
-    themeButton.textContent = label;
     themeButton.title = label;
+    themeButton.setAttribute('aria-label', label);
+    const text = themeButton.querySelector<HTMLElement>('[data-theme-text]');
+    if (text) text.textContent = label;
+    const icon = themeButton.querySelector<HTMLElement>('[data-theme-icon]');
+    if (icon) icon.innerHTML = themeIcons[pref];
   };
 
   themeButton?.addEventListener('click', () => {

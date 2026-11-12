@@ -85,7 +85,10 @@ export const zh: Messages = {
             kind: 'p',
             text: '在 Lean 里，「2 + 2 = 4」是一个类型，而证明就是这个类型的一个元素。等式两边能靠计算化成同一个表达式时，rfl 就能直接给出证明。',
           },
-          { kind: 'code', code: '#check (show 2 + 2 = 4 from rfl)' },
+          {
+            kind: 'code',
+            code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl',
+          },
           {
             kind: 'note',
             tone: 'warn',

@@ -87,7 +87,10 @@ export const en: Messages = {
             kind: 'p',
             text: 'In Lean, “2 + 2 = 4” is a type, and a proof is an element of that type. When both sides reduce to the same expression by computation, rfl closes the goal immediately.',
           },
-          { kind: 'code', code: '#check (show 2 + 2 = 4 from rfl)' },
+          {
+            kind: 'code',
+            code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl',
+          },
           {
             kind: 'note',
             tone: 'warn',

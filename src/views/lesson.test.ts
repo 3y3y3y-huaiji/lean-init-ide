@@ -146,6 +146,21 @@ describe('课程页交互绑定', () => {
     expect(output?.textContent).toContain(messagesFor('zh').lesson.noOutput);
   });
 
+  it('证明类代码通过时给出「证明通过」而不是空输出', async () => {
+    const panel = makePanel();
+    panel.run.mockResolvedValue([]);
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'implication');
+    bindLesson(document.body, 'zh', 'implication');
+
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.proofAccepted);
+    expect(output?.textContent).not.toContain(messagesFor('zh').lesson.noOutput);
+  });
+
   it('运行期间在输出区显示加载进度和已用时间，完成后替换为结果', async () => {
     const panel = makePanel();
     let finish!: (list: LspDiagnostic[]) => void;

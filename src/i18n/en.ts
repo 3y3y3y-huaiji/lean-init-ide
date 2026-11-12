@@ -64,6 +64,7 @@ export const en: Messages = {
     runInEditor: 'Run',
     running: 'Running…',
     noOutput: 'No errors, no output',
+    proofAccepted: 'Proof accepted · Lean has no remaining goals',
     editorHint:
       'The right panel is the real editor. Opening this page starts loading Lean automatically; once it is ready, edits show diagnostics and goals.',
     lessons: [

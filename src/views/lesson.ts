@@ -203,6 +203,9 @@ const renderOutput = (output: HTMLElement, list: LspDiagnostic[], emptyLabel: st
     .join('');
 };
 
+/** 证明类代码没有诊断就代表目标已关闭；换一句文案，避免新手以为「什么都没发生」。 */
+const looksLikeProof = (code: string) => /^\s*(theorem|lemma|example)\b/m.test(code);
+
 export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
@@ -260,7 +263,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
       void panel
         .run(code)
         .then((list) => {
-          renderOutput(output, list, t.noOutput);
+          renderOutput(output, list, looksLikeProof(code) ? t.proofAccepted : t.noOutput);
         })
         .finally(() => {
           window.clearInterval(timer);

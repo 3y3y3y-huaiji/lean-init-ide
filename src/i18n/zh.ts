@@ -62,6 +62,7 @@ export const zh: Messages = {
     runInEditor: '运行',
     running: '运行中…',
     noOutput: '没有错误，也没有输出',
+    proofAccepted: '证明通过 · Lean 已接受，没有待证目标',
     editorHint:
       '右侧是真实编辑器。打开本页会自动开始加载 Lean，完成后改动代码即可看到诊断与 Goal。',
     lessons: [

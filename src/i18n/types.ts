@@ -68,6 +68,8 @@ export type Messages = {
     running: string;
     /** 运行后没有任何输出时的提示。 */
     noOutput: string;
+    /** 证明类代码没有诊断时的提示：说明目标已关闭，而不是“什么都没发生”。 */
+    proofAccepted: string;
     editorHint: string;
     lessons: LessonPage[];
   };

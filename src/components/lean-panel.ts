@@ -577,6 +577,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       createMessageConnection(server.transport.reader, server.transport.writer),
     onDiagnostics: renderDiagnostics,
     onLog: log,
+    // #check 的信息可能比 documentSymbol 晚几十毫秒，留一个静默窗口避免丢输出。
+    diagnosticSettleMs: 300,
   });
 
   const lspRequest = async <T>(method: string, params: unknown): Promise<T | null> => {

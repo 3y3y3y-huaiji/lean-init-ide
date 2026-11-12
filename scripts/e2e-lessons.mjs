@@ -83,6 +83,12 @@ const main = async () => {
           `${slug} 第 ${index + 1} 块：${errors.map((text) => text.trim()).join(' | ')}`,
         );
       }
+
+      // 课程里每块都应该有可见结果；#check / #eval 显示「没有输出」说明诊断丢了。
+      const output = (await page.locator(`[data-output="${index}"]`).innerText()).trim();
+      if (!output || output.includes('没有错误，也没有输出')) {
+        failures.push(`${slug} 第 ${index + 1} 块：没有可见输出`);
+      }
     }
 
     console.log(`ok   ${slug}（${count} 块）`);

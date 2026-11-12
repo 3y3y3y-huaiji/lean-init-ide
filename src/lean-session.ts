@@ -25,11 +25,20 @@ export type LeanSessionOptions = {
   readyTimeoutMs?: number;
   diagnosticTimeoutMs?: number;
   reopenDelayMs?: number;
+  /**
+   * documentSymbol 返回后再等多久没有新诊断才结算（毫秒）。默认 0 表示立刻结算。
+   * Lean 的 #check 信息可能比 documentSymbol 晚几十毫秒到达，留一个小窗口避免丢输出。
+   */
+  diagnosticSettleMs?: number;
 };
 
 type ActiveRun = {
   resolve: (diagnostics: LspDiagnostic[]) => void;
   timer: number | undefined;
+  /** 静默等待定时器，结算时清理。 */
+  quietTimer: number | undefined;
+  /** 最近一次收到该文档诊断的时间，用于判断静默。 */
+  lastPublishAt: number;
   opened: boolean;
   diagnostics: LspDiagnostic[];
 };
@@ -58,6 +67,7 @@ export class LeanSession {
   private readonly readyTimeoutMs: number;
   private readonly diagnosticTimeoutMs: number;
   private readonly reopenDelayMs: number;
+  private readonly diagnosticSettleMs: number;
 
   constructor(private readonly options: LeanSessionOptions) {
     this.uri = options.uri ?? 'file:///workspace/Main.lean';
@@ -65,6 +75,7 @@ export class LeanSession {
     this.readyTimeoutMs = options.readyTimeoutMs ?? 180_000;
     this.diagnosticTimeoutMs = options.diagnosticTimeoutMs ?? 25_000;
     this.reopenDelayMs = options.reopenDelayMs ?? 300;
+    this.diagnosticSettleMs = options.diagnosticSettleMs ?? 0;
   }
 
   get state(): LeanSessionState {
@@ -140,6 +151,7 @@ export class LeanSession {
         (params: { uri: string; diagnostics: LspDiagnostic[] }) => {
           if (params.uri.toLowerCase() === this.uri.toLowerCase() && this.activeRun?.opened) {
             this.activeRun.diagnostics = params.diagnostics;
+            this.activeRun.lastPublishAt = Date.now();
           }
           this.options.onDiagnostics?.(params);
         },
@@ -206,7 +218,14 @@ export class LeanSession {
 
     this.options.onLog?.(`[run] 开始，长度 ${code.length}`);
     return new Promise<LspDiagnostic[]>((resolve) => {
-      const active: ActiveRun = { resolve, timer: undefined, opened: false, diagnostics: [] };
+      const active: ActiveRun = {
+        resolve,
+        timer: undefined,
+        quietTimer: undefined,
+        lastPublishAt: Date.now(),
+        opened: false,
+        diagnostics: [],
+      };
       this.activeRun = active;
       active.timer = window.setTimeout(() => this.settleRun([], active), this.diagnosticTimeoutMs);
 
@@ -232,11 +251,12 @@ export class LeanSession {
           },
         });
         syncEditor();
-        // Lean 会渐进发布诊断；等待本版文档处理完成后再返回最后一次诊断。
+        // Lean 会渐进发布诊断；documentSymbol 作为处理屏障，随后再留一个静默窗口，
+        // 避免 #check 这类比屏障晚几十毫秒到达的信息被丢掉。
         void connection
           .sendRequest('textDocument/documentSymbol', { textDocument: { uri: this.uri } })
           .then(
-            () => this.settleRun(active.diagnostics, active),
+            () => this.settleAfterQuiet(active),
             (error: unknown) => {
               this.options.onLog?.(
                 `[run] documentSymbol 失败：${error instanceof Error ? error.message : String(error)}`,
@@ -246,6 +266,31 @@ export class LeanSession {
           );
       }, this.reopenDelayMs);
     });
+  }
+
+  /**
+   * documentSymbol 之后再等一小段静默时间：Lean 的 #check 信息可能晚于屏障到达。
+   * 期间只要有新诊断就重新计时，最长不超过 1 秒，避免慢机器上无限等待。
+   */
+  private settleAfterQuiet(active: ActiveRun): void {
+    const quietMs = this.diagnosticSettleMs;
+    if (quietMs <= 0) {
+      this.settleRun(active.diagnostics, active);
+      return;
+    }
+
+    active.lastPublishAt = Date.now();
+    const deadline = Date.now() + Math.max(quietMs * 4, 1000);
+    const tick = () => {
+      if (this.activeRun !== active) return;
+      const now = Date.now();
+      if (now - active.lastPublishAt >= quietMs || now >= deadline) {
+        this.settleRun(active.diagnostics, active);
+        return;
+      }
+      active.quietTimer = window.setTimeout(tick, 50);
+    };
+    tick();
   }
 
   private waitForReady(): Promise<boolean> {
@@ -269,6 +314,7 @@ export class LeanSession {
     if (!active || (expected && active !== expected)) return;
     this.activeRun = null;
     if (active.timer !== undefined) window.clearTimeout(active.timer);
+    if (active.quietTimer !== undefined) window.clearTimeout(active.quietTimer);
     active.resolve(diagnostics);
   }
 

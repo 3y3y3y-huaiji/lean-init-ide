@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageConnection } from 'vscode-jsonrpc/browser';
-import { LeanSession, type LeanSessionServer, type LspDiagnostic } from './lean-session';
+import {
+  LeanSession,
+  type LeanSessionOptions,
+  type LeanSessionServer,
+  type LspDiagnostic,
+} from './lean-session';
 
 type DiagnosticParams = { uri: string; diagnostics: LspDiagnostic[] };
 
@@ -12,7 +17,7 @@ const diagnostic = (message: string): LspDiagnostic => ({
   message,
 });
 
-const makeHarness = () => {
+const makeHarness = (overrides: Partial<LeanSessionOptions> = {}) => {
   let publishDiagnostics: ((params: DiagnosticParams) => void) | undefined;
   const notifications: Array<{ method: string; params: unknown }> = [];
   const documentSymbolResolvers: Array<() => void> = [];
@@ -60,6 +65,7 @@ const makeHarness = () => {
     readyTimeoutMs: 1000,
     diagnosticTimeoutMs: 1000,
     reopenDelayMs: 300,
+    ...overrides,
   });
 
   return {
@@ -204,6 +210,22 @@ describe('LeanSession', () => {
     h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: list });
     h.completeRun();
 
+    await expect(running).resolves.toEqual(list);
+  });
+
+  it('documentSymbol 之后等待静默窗口，接住迟到的 #check 诊断', async () => {
+    const h = makeHarness({ diagnosticSettleMs: 300 });
+    await h.session.start('initial');
+    const running = h.session.run('#check Nat.add', vi.fn());
+    await vi.advanceTimersByTimeAsync(300);
+
+    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [] });
+    h.completeRun();
+    await vi.advanceTimersByTimeAsync(100);
+    const list = [diagnostic('Nat.add : Nat → Nat → Nat')];
+    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: list });
+
+    await vi.advanceTimersByTimeAsync(400);
     await expect(running).resolves.toEqual(list);
   });
 

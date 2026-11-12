@@ -1,10 +1,10 @@
+简体中文 | [English](README.en.md)
+
 # Lean Init IDE
 
 浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 中的 Lean 语言服务器。打开网页即可写证明、看诊断、看 Goal，不需要安装 Lean 工具链，也没有后端。
 
 在线使用：<https://criticalthinking.de5.net>（备用：<https://lean-init-ide.pages.dev>）
-
-简体中文 | [English](README.en.md)
 
 ## 这是什么
 

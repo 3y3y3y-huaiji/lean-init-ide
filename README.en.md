@@ -1,3 +1,5 @@
+[简体中文](README.md) | English
+
 # Lean Init IDE
 
 A Lean 4 learning environment in the browser: a Monaco editor plus a real Lean language server
@@ -5,8 +7,6 @@ running in a Web Worker. Write proofs, read diagnostics and inspect goals withou
 toolchain — and without a backend.
 
 Live: <https://criticalthinking.de5.net> (fallback: <https://lean-init-ide.pages.dev>)
-
-[简体中文](README.md) | English
 
 ## What it is
 

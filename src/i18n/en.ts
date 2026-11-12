@@ -430,8 +430,17 @@ export const en: Messages = {
     goalPlaceholder: 'Move the cursor inside a proof to see the goal',
     goalEmpty: 'No goal at the cursor',
     goalUnsupported: 'This Lean LSP does not support goals',
+    goalHint: 'Move the cursor inside the by block to see the current goal',
     diagnosticsTitle: 'Diagnostics',
     diagnosticsPlaceholder: 'Diagnostics appear after Lean starts',
+    severityError: 'Error',
+    severityWarning: 'Warning',
+    severityInfo: 'Info',
+    abbreviationDetail: 'Unicode abbreviation',
+    backToLesson: 'Back to lesson',
+    resetCode: 'Reset exercise',
+    exportCode: 'Export .lean',
+    lessonPassed: 'Exercise passed',
     logTitle: 'Log',
     footer:
       'A real Lean LSP in the browser · Init only, no Std / Lean / Lake / Mathlib · Chromium first',
@@ -454,6 +463,7 @@ export const en: Messages = {
     logSwFailed: (message) =>
       `Service worker registration failed, falling back to Pages: ${message}`,
     logCacheCleared: 'Cleared the Lean asset cache (fresh=1)',
+    logDraftRestored: 'Restored the local draft from your last visit',
     logRuntimeReady: 'Runtime assets ready',
     logRuntimeError: (message) => `Runtime error: ${message}`,
     logInitialize: (seconds) => `initialize finished in ${seconds}s`,
@@ -503,7 +513,7 @@ export const en: Messages = {
       {
         heading: 'Local storage',
         paragraphs: [
-          'Theme, language and auto-start preferences live in localStorage.',
+          'Theme, language, auto-start preference, lesson progress and exercise drafts live in localStorage; drafts never leave your browser.',
           'The Lean runtime and the diagnostic source preference live in CacheStorage / IndexedDB, so the ~143 MB download is not repeated.',
           'You can clear all of it from your browser settings at any time; the site still works.',
         ],

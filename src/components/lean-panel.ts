@@ -7,14 +7,19 @@ import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { cacheBudgetBytes, currentMemoryTier } from '../device';
-import { matchAbbreviation } from '../lean-abbreviations';
+import {
+  abbreviationSuggestions,
+  findAbbreviationQuery,
+  matchAbbreviation,
+} from '../lean-abbreviations';
+import { clearDraft, readDraft, saveDraft } from '../draft';
 import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
-import { buttonClass } from './ui';
+import { buttonClass, ghostButtonClass } from './ui';
 
 (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
   getWorker: () => new editorWorker(),
@@ -40,6 +45,10 @@ export type LeanPanelOptions = {
   locale: Locale;
   /** 面板可见时自动启动，省掉一次点击后的等待。 */
   autoStart?: boolean;
+  /** 从课程练习进来时提供，用于显示「回到本课」并命名导出文件。 */
+  lessonSlug?: string;
+  /** 提供时按该 key 自动保存草稿，刷新后恢复。 */
+  draftKey?: string;
   /** 启动与下载进度，供课程页在不可见面板外显示。 */
   onProgress?: (progress: LeanPanelProgress) => void;
 };
@@ -70,9 +79,26 @@ const pillClass =
 const mutedItemClass = 'mb-1 px-2 py-2 text-[13px] text-muted';
 
 const diagnosticClass =
-  'grid w-full [font:inherit] cursor-pointer grid-cols-[auto_1fr] gap-2 rounded-lg border border-line bg-transparent px-2 py-[7px] text-left text-fg hover:border-line-strong hover:bg-panel-soft';
+  'grid w-full [font:inherit] cursor-pointer grid-cols-[auto_auto_1fr] items-center gap-2 rounded-lg border border-line bg-transparent px-2 py-[7px] text-left text-fg hover:border-line-strong hover:bg-panel-soft';
 
-const diagnosticLocationClass = 'whitespace-nowrap font-mono text-xs leading-normal text-err';
+/** LSP severity：1 错误、2 警告、3 信息、4 提示；#eval / #check 的输出属于 3。 */
+const diagnosticLocationClass = (severity?: number) =>
+  `whitespace-nowrap font-mono text-xs leading-normal ${
+    severity === 2
+      ? 'text-warn'
+      : severity === 1 || severity === undefined
+        ? 'text-err'
+        : 'text-accent'
+  }`;
+
+const diagnosticBadgeClass = (severity?: number) =>
+  `whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-[650] leading-none ${
+    severity === 2
+      ? 'border-warn/40 bg-warn/10 text-warn'
+      : severity === 1 || severity === undefined
+        ? 'border-err/40 bg-err/10 text-err'
+        : 'border-accent/40 bg-accent-soft text-accent'
+  }`;
 
 const diagnosticMessageClass = 'text-[13px] leading-normal';
 
@@ -89,7 +115,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       class="${
         compact
           ? 'relative min-h-[130px] overflow-hidden rounded-xl border border-line bg-editor-bg'
-          : 'relative h-[calc(100dvh-250px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52dvh] max-[900px]:min-h-[360px]'
+          : 'relative h-[calc(100dvh-292px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52dvh] max-[900px]:min-h-[360px]'
       }"
     ><div class="absolute inset-0" data-role="editor"></div></section>
     ${
@@ -107,7 +133,7 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       class="${
         compact
           ? 'contents'
-          : 'flex h-[calc(100dvh-250px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
+          : 'flex h-[calc(100dvh-292px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
       }"
     >
       <section data-panel="goal" class="${panelClass(compact)} shrink-0">
@@ -149,6 +175,7 @@ const renderMarkup = (
   locale: Locale,
   variant: LeanPanelVariant,
   t: ReturnType<typeof messagesFor>['playground'],
+  lessonSlug?: string,
 ) => {
   const compact = variant === 'compact';
   const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
@@ -188,6 +215,16 @@ const renderMarkup = (
           <div class="flex flex-wrap items-center gap-2">${status}${start}</div>
         </div>
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
+        <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">
+          ${
+            lessonSlug
+              ? `<a class="${ghostButtonClass}" href="/${locale}/learn/${encodeURIComponent(lessonSlug)}">← ${t.backToLesson}</a>`
+              : ''
+          }
+          <button class="${ghostButtonClass}" type="button" data-role="reset">${t.resetCode}</button>
+          <button class="${ghostButtonClass}" type="button" data-role="export">${t.exportCode}</button>
+          <span data-role="passed" hidden class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-ok/45 bg-ok/10 px-3 py-1 text-xs font-[650] text-ok">✓ ${t.lessonPassed}</span>
+        </div>
         ${renderWorkspace(t, false)}
       </section>
     `;
@@ -212,11 +249,12 @@ const renderMarkup = (
 };
 
 export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): LeanPanel => {
-  const { variant, code, locale, autoStart = false, onProgress } = options;
+  const { variant, code, locale, autoStart = false, lessonSlug, draftKey, onProgress } = options;
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
+  const draft = draftKey ? readDraft(draftKey) : null;
 
-  host.innerHTML = renderMarkup(locale, variant, t);
+  host.innerHTML = renderMarkup(locale, variant, t, lessonSlug);
 
   const statusEl = host.querySelector<HTMLElement>('[data-role="status"]')!;
   const startEl = host.querySelector<HTMLButtonElement>('[data-role="start"]')!;
@@ -226,9 +264,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const diagCountEl = host.querySelector<HTMLElement>('[data-role="count"]')!;
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
   const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
+  const resetEl = host.querySelector<HTMLButtonElement>('[data-role="reset"]');
+  const exportEl = host.querySelector<HTMLButtonElement>('[data-role="export"]');
+  const passedEl = host.querySelector<HTMLElement>('[data-role="passed"]');
 
   const uri = 'file:///workspace/Main.lean';
-  const model = monaco.editor.createModel(code, LEAN_LANGUAGE_ID, monaco.Uri.parse(uri));
+  const model = monaco.editor.createModel(
+    draft?.code ?? code,
+    LEAN_LANGUAGE_ID,
+    monaco.Uri.parse(uri),
+  );
   const editor = monaco.editor.create(host.querySelector<HTMLElement>('[data-role="editor"]')!, {
     model,
     theme: getResolvedTheme() === 'light' ? 'vs' : 'vs-dark',
@@ -293,6 +338,61 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       window.setTimeout(() => expandAbbreviation(1), 0);
     }
   });
+
+  // 输入 `\` 时给出缩写候选，忘了拼写也能选；选中后整段 `\name` 替换为符号。
+  monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
+    triggerCharacters: ['\\'],
+    provideCompletionItems: (completionModel, position) => {
+      const line = completionModel.getLineContent(position.lineNumber);
+      const query = findAbbreviationQuery(line, position.column);
+      if (!query) return { suggestions: [] };
+      const range = new monaco.Range(
+        position.lineNumber,
+        query.startColumn,
+        position.lineNumber,
+        position.column,
+      );
+      return {
+        suggestions: abbreviationSuggestions(query.query).map(({ name, symbol }, index) => ({
+          label: `\\${name}`,
+          kind: monaco.languages.CompletionItemKind.Text,
+          detail: `${symbol} · ${t.abbreviationDetail}`,
+          insertText: symbol,
+          range,
+          // 用表内顺序而不是字母序，先出现 \to / \forall 这类高频缩写。
+          sortText: String(index).padStart(3, '0'),
+        })),
+      };
+    },
+  });
+
+  // 练习工具条：重置回 starter，或把当前代码导出成 .lean 文件。
+  resetEl?.addEventListener('click', () => {
+    if (draftKey) clearDraft(draftKey);
+    if (passedEl) passedEl.hidden = true;
+    model.setValue(code);
+    editor.setPosition({ lineNumber: 1, column: 1 });
+    editor.revealLine(1);
+    editor.focus();
+  });
+
+  exportEl?.addEventListener('click', () => {
+    const blob = new Blob([model.getValue()], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${lessonSlug ?? 'playground'}.lean`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  });
+
+  // 只有带 sorry 的练习模板才有「过关」概念；无错误且不再有 sorry 才亮徽章。
+  const exerciseStarter = /\bsorry\b/.test(code);
+  const updatePassedBadge = (list: LspDiagnostic[]) => {
+    if (!passedEl || !exerciseStarter) return;
+    const hasError = list.some((item) => (item.severity ?? 1) === 1);
+    passedEl.hidden = hasError || /\bsorry\b/.test(model.getValue());
+  };
 
   // 编辑器与诊断的空间分配由用户拖动决定；面板显隐也持久化，避免每次进来重调。
   const LAYOUT_KEY = 'lean-panel:layout';
@@ -389,6 +489,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const log = (message: string) => {
     logEl.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
     logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  if (draft) log(t.logDraftRestored);
+
+  let draftTimer: number | undefined;
+  const scheduleDraftSave = () => {
+    if (!draftKey) return;
+    window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(() => saveDraft(draftKey, model.getValue()), 400);
+  };
+  const saveDraftNow = () => {
+    if (!draftKey) return;
+    window.clearTimeout(draftTimer);
+    saveDraft(draftKey, model.getValue());
   };
 
   let lastEditAt = 0;
@@ -543,6 +657,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       })),
     );
 
+    updatePassedBadge(params.diagnostics);
+
     diagnosticsEl.replaceChildren();
     diagCountEl.textContent = String(params.diagnostics.length);
 
@@ -561,15 +677,25 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       button.className = diagnosticClass;
       button.type = 'button';
 
+      const severity = diagnostic.severity;
+      const badge = document.createElement('span');
+      badge.className = diagnosticBadgeClass(severity);
+      badge.textContent =
+        severity === 2
+          ? t.severityWarning
+          : severity === 1 || severity === undefined
+            ? t.severityError
+            : t.severityInfo;
+
       const location = document.createElement('span');
-      location.className = diagnosticLocationClass;
+      location.className = diagnosticLocationClass(severity);
       location.textContent = `${diagnostic.range.start.line + 1}:${diagnostic.range.start.character + 1}`;
 
       const message = document.createElement('span');
       message.className = diagnosticMessageClass;
       message.textContent = diagnostic.message;
 
-      button.append(location, message);
+      button.append(badge, location, message);
       button.addEventListener('click', () => {
         const position = {
           lineNumber: diagnostic.range.start.line + 1,
@@ -752,6 +878,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   model.onDidChangeContent(() => {
     updateStatement();
+    scheduleDraftSave();
+    // 改回 sorry 时立即收起徽章，不用等下一轮诊断。
+    if (passedEl && /\bsorry\b/.test(model.getValue())) passedEl.hidden = true;
     if (suppressSync) return;
     changePending = true;
     window.clearTimeout(debounceTimer);
@@ -787,7 +916,15 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         positionParams(position),
       );
       const text = result?.rendered?.trim() || (result?.goals ?? []).join('\n\n').trim();
-      goalEl.textContent = text || t.goalEmpty;
+      if (text) {
+        goalEl.textContent = text;
+        return;
+      }
+      // 光标停在声明行时 Lean 还没有目标；如果证明体仍是 sorry，别显示成轻松的“没有 Goal”。
+      const declaration = findDeclaration(model.getValue().split('\n'), position.lineNumber - 1);
+      const atDeclarationHeader = declaration?.startLine === position.lineNumber - 1;
+      goalEl.textContent =
+        atDeclarationHeader && /\bsorry\b/.test(model.getValue()) ? t.goalHint : t.goalEmpty;
     } catch (error) {
       goalSupported = false;
       goalEl.textContent = t.goalUnsupported;
@@ -843,6 +980,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
     try {
       await session.start(model.getValue());
+      // 启动期间用户可能已经改过代码；didOpen 用的是启动那一刻的内容，这里补一次同步。
+      flushChange();
       startEl.textContent = t.stop;
       lastEditAt = performance.now();
       setStatus(t.statusWaitingDiagnostics, 'ready');
@@ -880,6 +1019,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   }
 
   window.addEventListener('pagehide', () => {
+    saveDraftNow();
     session.stop();
     stopThemeSync();
     model.dispose();

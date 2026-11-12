@@ -85,8 +85,20 @@ export type Messages = {
     goalPlaceholder: string;
     goalEmpty: string;
     goalUnsupported: string;
+    /** 光标停在声明行、证明体还有 sorry 时的引导。 */
+    goalHint: string;
     diagnosticsTitle: string;
     diagnosticsPlaceholder: string;
+    /** 诊断按 LSP severity 分组，避免把 #eval / #check 的输出当成报错。 */
+    severityError: string;
+    severityWarning: string;
+    severityInfo: string;
+    /** 反斜杠缩写候选的说明。 */
+    abbreviationDetail: string;
+    backToLesson: string;
+    resetCode: string;
+    exportCode: string;
+    lessonPassed: string;
     logTitle: string;
     footer: string;
     openFull: string;
@@ -108,6 +120,7 @@ export type Messages = {
     logSwReady: string;
     logSwFailed: (message: string) => string;
     logCacheCleared: string;
+    logDraftRestored: string;
     logRuntimeReady: string;
     logRuntimeError: (message: string) => string;
     logInitialize: (seconds: string) => string;

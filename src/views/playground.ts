@@ -1,5 +1,6 @@
 import { createLeanPanel } from '../components/lean-panel';
 import { currentMemoryTier } from '../device';
+import { draftKeyFor } from '../draft';
 import { messagesFor, type Locale } from '../i18n';
 import { getAutoStart } from '../settings';
 
@@ -29,6 +30,8 @@ export const mountPlayground = (root: HTMLElement, locale: Locale) => {
     variant: 'full',
     code,
     locale,
+    lessonSlug: lesson?.slug,
+    draftKey: draftKeyFor(lesson?.slug),
     autoStart: getAutoStart() && currentMemoryTier() !== 'low',
   });
 };

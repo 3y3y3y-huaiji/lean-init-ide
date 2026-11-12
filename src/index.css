@@ -5,6 +5,11 @@
 
 @source './**/*.ts';
 
+/* hidden 属性优先级高于 inline-flex 等 display 工具类，避免徽章/面板该藏时不藏。 */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --bg: #0d1016;

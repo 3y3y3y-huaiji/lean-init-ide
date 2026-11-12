@@ -80,7 +80,7 @@ export const en: Messages = {
           { kind: 'code', code: '#check Nat.add\n#eval 2 + 3' },
           {
             kind: 'note',
-            text: 'Put the cursor on the #check line: the diagnostics panel shows the type of Nat.add, and #eval prints its result as information.',
+            text: 'Click Run: the output first shows the type of Nat.add, then the value of #eval. The goal of this lesson is to tell the two apart.',
           },
           {
             kind: 'p',
@@ -210,7 +210,7 @@ export const en: Messages = {
           },
           {
             kind: 'p',
-            text: 'Afterwards, move the cursor line by line inside the by block. The first line of the goal panel keeps showing what the theorem claims; only the second line tracks where you are.',
+            text: 'The goal of this lesson is commutativity, a + b = b + a. To watch the proof state step by step, open the editor and put the cursor inside the by block: the first line of the Goal panel is always the theorem’s goal, and the lines below describe the current step.',
           },
           {
             kind: 'code',

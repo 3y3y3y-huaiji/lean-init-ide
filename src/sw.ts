@@ -20,6 +20,7 @@ import {
 } from './asset-sources.mjs';
 import { downloadRanges } from './sw-download';
 import { loadRangedAsset } from './sw-assemble';
+import { createProgressTracker } from './sw-progress';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
 
@@ -37,6 +38,11 @@ const RANGE_ASSETS = new Map<string, RangeAsset>(
     },
   ]),
 );
+
+const RANGE_TOTAL_BYTES = [...RANGE_ASSETS.values()].reduce((sum, asset) => sum + asset.bytes, 0);
+
+// 浏览器按资产发请求；这里累计已下载字节，给页面一个不会回跳的总进度。
+const progressTracker = createProgressTracker(RANGE_TOTAL_BYTES);
 
 // 运行时预取同时下载 6 个资产，每个资产再并发分片，所以这里的并发是全局并发的乘数。
 // 4MiB × 6 = 最多 36 条流，是实测吞吐最好的档位；单分片 120s 预算（4MiB 只需 35KB/s），
@@ -98,6 +104,8 @@ sw.addEventListener('fetch', (event) => {
 });
 
 async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
+  const overall = progressTracker.record(name, loaded);
+
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {
     (client as WindowClient).postMessage({
@@ -105,6 +113,8 @@ async function notify(name: string, loaded: number, total: number, source: strin
       name,
       loaded,
       total,
+      overallLoaded: overall.loaded,
+      overallTotal: overall.total,
       source,
     });
   }

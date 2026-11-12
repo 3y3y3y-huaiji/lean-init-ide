@@ -116,6 +116,26 @@
   }
 }
 
+/* 课程运行进度：下载比例还未知时用扫光动画表示仍在推进。 */
+@keyframes run-bar-sweep {
+  from {
+    background-position: -60% 0;
+  }
+  to {
+    background-position: 160% 0;
+  }
+}
+
+@layer components {
+  .run-bar-indeterminate {
+    width: 100%;
+    background-image: linear-gradient(90deg, transparent, var(--accent), transparent);
+    background-size: 45% 100%;
+    background-repeat: no-repeat;
+    animation: run-bar-sweep 1.2s linear infinite;
+  }
+}
+
 /* 页面的左右留白在各处重复出现，抽成工具类而不是散落的 clamp()。 */
 @utility gutter-x {
   padding-inline: clamp(16px, 4vw, 40px);

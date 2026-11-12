@@ -78,7 +78,7 @@ export const zh: Messages = {
           { kind: 'code', code: '#check Nat.add\n#eval 2 + 3' },
           {
             kind: 'note',
-            text: '把光标停在 #check 那一行，右侧诊断面板会给出 Nat.add 的类型；#eval 的结果出现在信息里。',
+            text: '点「运行」后，输出区会先给出 Nat.add 的类型，再给出 #eval 的求值结果。本节的目标，就是分清哪一行是类型、哪一行是值。',
           },
           {
             kind: 'p',
@@ -208,7 +208,7 @@ export const zh: Messages = {
           },
           {
             kind: 'p',
-            text: '写完后把光标放到 by 块内部逐行移动，右侧 Goal 面板第一行会一直显示这条定理要证什么，第二行才是当前这一步的状态。',
+            text: '本节的目标是交换律 a + b = b + a。写完后想逐步看证明状态，点「在编辑器中动手」，把光标移到 by 块内部：Goal 面板第一行始终是这条定理要证的目标，下面的行才是当前这一步的状态。',
           },
           {
             kind: 'code',

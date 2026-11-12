@@ -1,4 +1,8 @@
-import { createLeanPanel, type LspDiagnostic } from '../components/lean-panel';
+import {
+  createLeanPanel,
+  type LeanPanelProgress,
+  type LspDiagnostic,
+} from '../components/lean-panel';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
 import type { LessonPage } from '../i18n/types';
@@ -146,6 +150,44 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
 const sevClass = (severity?: number) =>
   severity === 1 ? 'text-err' : severity === 2 ? 'text-warn' : 'text-muted';
 
+const formatElapsed = (ms: number) =>
+  ms < 60_000
+    ? `${(ms / 1000).toFixed(1)}s`
+    : `${Math.floor(ms / 60_000)}m ${String(Math.floor((ms % 60_000) / 1000)).padStart(2, '0')}s`;
+
+const renderRunProgress = (label: string, ratio: number | null) => {
+  const pending = ratio === null || ratio <= 0;
+  const width = pending ? '' : `width:${Math.min(100, ratio * 100).toFixed(1)}%`;
+  return `
+    <div data-role="run-progress" class="flex flex-col gap-1.5 py-0.5">
+      <div class="flex items-baseline justify-between gap-3 text-xs text-muted">
+        <span data-role="run-label">${escapeHtml(label)}</span>
+        <span data-role="run-time" class="font-mono tabular-nums">0.0s</span>
+      </div>
+      <div class="h-1.5 overflow-hidden rounded-full bg-line/70">
+        <div
+          data-role="run-bar"
+          class="h-full rounded-full transition-[width] duration-200 ${
+            pending ? 'run-bar-indeterminate' : 'bg-accent'
+          }"
+          ${width ? `style="${width}"` : ''}
+        ></div>
+      </div>
+    </div>`;
+};
+
+const paintRunBar = (bar: HTMLElement, ratio: number | null) => {
+  if (ratio === null || ratio <= 0) {
+    bar.classList.add('run-bar-indeterminate');
+    bar.classList.remove('bg-accent');
+    bar.style.width = '';
+    return;
+  }
+  bar.classList.remove('run-bar-indeterminate');
+  bar.classList.add('bg-accent');
+  bar.style.width = `${Math.min(100, ratio * 100).toFixed(1)}%`;
+};
+
 const renderOutput = (output: HTMLElement, list: LspDiagnostic[], emptyLabel: string) => {
   if (list.length === 0) {
     output.innerHTML = `<p class="m-0 text-muted">${escapeHtml(emptyLabel)}</p>`;
@@ -170,28 +212,57 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   if (!runnerHost || first === undefined) return;
 
   const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
+  let reportProgress: ((progress: LeanPanelProgress) => void) | null = null;
   const panel = createLeanPanel(runnerHost, {
     variant: 'compact',
     code: first,
     locale,
     autoStart: !saveData,
+    onProgress: (progress) => reportProgress?.(progress),
   });
 
-  for (const button of root.querySelectorAll<HTMLButtonElement>('button[data-run-index]')) {
+  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('button[data-run-index]'));
+
+  for (const button of buttons) {
     button.addEventListener('click', () => {
       const index = Number(button.dataset.runIndex);
       const code = codes[index];
       const output = root.querySelector<HTMLElement>(`[data-output="${index}"]`);
       if (code === undefined || !output) return;
 
+      const initial = panel.getProgress();
       output.hidden = false;
-      output.textContent = t.running;
-      button.disabled = true;
+      output.innerHTML = renderRunProgress(initial.label, initial.ratio);
+      for (const other of buttons) other.disabled = true;
 
-      void panel.run(code).then((list) => {
-        button.disabled = false;
-        renderOutput(output, list, t.noOutput);
-      });
+      const labelEl = output.querySelector<HTMLElement>('[data-role="run-label"]')!;
+      const timeEl = output.querySelector<HTMLElement>('[data-role="run-time"]')!;
+      const barEl = output.querySelector<HTMLElement>('[data-role="run-bar"]')!;
+      const startedAt = performance.now();
+      const tick = () => {
+        timeEl.textContent = formatElapsed(performance.now() - startedAt);
+      };
+      tick();
+      const timer = window.setInterval(tick, 100);
+
+      let bestRatio = initial.ratio;
+      reportProgress = (progress) => {
+        labelEl.textContent = progress.kind === 'ready' ? t.running : progress.label;
+        // 资产切换会让单资产百分比回落，课程页只展示本次运行的最高进度。
+        if (progress.ratio !== null) bestRatio = Math.max(bestRatio ?? 0, progress.ratio);
+        paintRunBar(barEl, bestRatio);
+      };
+
+      void panel
+        .run(code)
+        .then((list) => {
+          renderOutput(output, list, t.noOutput);
+        })
+        .finally(() => {
+          window.clearInterval(timer);
+          reportProgress = null;
+          for (const other of buttons) other.disabled = false;
+        });
     });
   }
 };

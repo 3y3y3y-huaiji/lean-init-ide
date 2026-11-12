@@ -20,12 +20,24 @@ registerLean(monaco);
 
 export type LeanPanelVariant = 'full' | 'compact';
 
+export type LeanPanelProgressKind = 'idle' | 'loading' | 'ready' | 'error';
+
+export type LeanPanelProgress = {
+  /** 当前阶段文案，如“加载运行时…（首次约 143MB）”“启动 LSP…”。 */
+  label: string;
+  kind: LeanPanelProgressKind;
+  /** 资产下载进度；未知时为 null，用不确定进度条。 */
+  ratio: number | null;
+};
+
 export type LeanPanelOptions = {
   variant: LeanPanelVariant;
   code: string;
   locale: Locale;
   /** 面板可见时自动启动，省掉一次点击后的等待。 */
   autoStart?: boolean;
+  /** 启动与下载进度，供课程页在不可见面板外显示。 */
+  onProgress?: (progress: LeanPanelProgress) => void;
 };
 
 export type LeanPanel = {
@@ -34,6 +46,8 @@ export type LeanPanel = {
   focus: () => void;
   /** 把代码送进语言服务器并等一次诊断结果，供课程页做内联输出。 */
   run: (code: string) => Promise<LspDiagnostic[]>;
+  /** 读取当前进度快照，课程页点击运行时先回显已有状态。 */
+  getProgress: () => LeanPanelProgress;
 };
 
 export type { LspDiagnostic };
@@ -194,7 +208,7 @@ const renderMarkup = (
 };
 
 export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): LeanPanel => {
-  const { variant, code, locale, autoStart = false } = options;
+  const { variant, code, locale, autoStart = false, onProgress } = options;
   const t = messagesFor(locale).playground;
 
   host.innerHTML = renderMarkup(locale, variant, t);
@@ -330,15 +344,28 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let diagnosticSeq = 0;
   let debounceTimer: number | undefined;
 
-  const setStatus = (text: string, kind: 'idle' | 'loading' | 'ready' | 'error' = 'idle') => {
+  let progressLabel = t.statusIdle;
+  let progressKind: LeanPanelProgressKind = 'idle';
+  let progressRatio: number | null = null;
+  let hasAssetProgress = false;
+
+  const emitProgress = () =>
+    onProgress?.({ label: progressLabel, kind: progressKind, ratio: progressRatio });
+
+  const setStatus = (text: string, kind: LeanPanelProgressKind = 'idle') => {
     statusEl.textContent = text;
     statusEl.title = text;
     statusEl.dataset.state = kind;
+    progressLabel = text;
+    progressKind = kind;
+    emitProgress();
   };
 
   const setProgress = (ratio: number | null) => {
     barEl.style.width =
       ratio === null ? '0%' : `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
+    progressRatio = ratio;
+    emitProgress();
   };
 
   // Pages 静态资源不支持 Range；Service Worker 从站点同源 /cdn/ 网关（Function → R2）
@@ -362,6 +389,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       name?: string;
       loaded?: number;
       total?: number;
+      overallLoaded?: number;
+      overallTotal?: number;
       message?: string;
       source?: string;
     };
@@ -370,11 +399,23 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       return;
     }
     if (data?.type !== 'lean-asset-progress' || !data.name || !data.loaded || !data.total) return;
+
+    // 新 SW 会带上所有资产累计后的总进度；旧 SW 只有单资产数据时退回单资产。
+    const loaded = data.overallLoaded ?? data.loaded;
+    const total = data.overallTotal ?? data.total;
+    if (total <= 0) return;
+    hasAssetProgress = true;
+    // 全部字节下载完后 Lean 还要解压和初始化，此时文案切回启动阶段。
+    const downloaded = loaded >= total;
     setStatus(
-      t.statusChunks((data.loaded / 1048576).toFixed(1), (data.total / 1048576).toFixed(1)),
+      downloaded
+        ? t.statusStarting
+        : total < 0.1 * 1048576
+          ? t.statusLoading
+          : t.statusChunks((loaded / 1048576).toFixed(1), (total / 1048576).toFixed(1)),
       'loading',
     );
-    setProgress(data.loaded / data.total);
+    setProgress(loaded / total);
   };
 
   navigator.serviceWorker?.addEventListener('message', onServiceWorkerMessage);
@@ -469,16 +510,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         createWorker: () => new LeanWorker(),
         onStatus: (status) => {
           if (status.state === 'loading') {
-            const loaded = status.loaded ?? 0;
-            const total = status.total ?? 0;
-            const hasBytes = loaded > 0 && total > 0;
-            setProgress(hasBytes ? loaded / total : null);
-            setStatus(
-              hasBytes
-                ? `${(loaded / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`
-                : t.statusStarting,
-              'loading',
-            );
+            // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。
+            if (!hasAssetProgress) {
+              setProgress(null);
+              setStatus(t.statusStarting, 'loading');
+            }
           } else if (status.state === 'ready') {
             setProgress(1);
             setStatus(t.statusLspReady, 'ready');
@@ -785,5 +821,6 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     getCode: () => model.getValue(),
     focus: () => editor.focus(),
     run,
+    getProgress: () => ({ label: progressLabel, kind: progressKind, ratio: progressRatio }),
   };
 };

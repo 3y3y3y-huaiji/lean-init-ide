@@ -13,6 +13,7 @@ const makePanel = () => ({
   getCode: vi.fn(() => ''),
   focus: vi.fn(),
   run: vi.fn(async (): Promise<LspDiagnostic[]> => []),
+  getProgress: vi.fn(() => ({ label: '加载运行时…', kind: 'loading' as const, ratio: null })),
 });
 
 const lessonsOf = (locale: 'zh' | 'en') => messagesFor(locale).lesson.lessons;
@@ -142,6 +143,45 @@ describe('课程页交互绑定', () => {
 
     const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
     expect(output?.textContent).toContain(messagesFor('zh').lesson.noOutput);
+  });
+
+  it('运行期间在输出区显示加载进度和已用时间，完成后替换为结果', async () => {
+    const panel = makePanel();
+    let finish!: (list: LspDiagnostic[]) => void;
+    panel.run.mockReturnValue(
+      new Promise<LspDiagnostic[]>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    const button = document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!;
+    button.click();
+
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]')!;
+    expect(output.querySelector('[data-role="run-progress"]')).not.toBeNull();
+    expect(output.textContent).toContain('加载运行时…');
+    expect(output.textContent).toContain('0.0s');
+    expect(button.disabled).toBe(true);
+    expect(
+      document.body.querySelector<HTMLButtonElement>('button[data-run-index="1"]')!.disabled,
+    ).toBe(true);
+
+    const options = createLeanPanel.mock.calls[0]?.[1] as {
+      onProgress?: (progress: { label: string; kind: string; ratio: number | null }) => void;
+    };
+    options.onProgress?.({ label: '12.3 / 136.4 MB', kind: 'loading', ratio: 0.5 });
+    expect(output.textContent).toContain('12.3 / 136.4 MB');
+    expect(output.querySelector<HTMLElement>('[data-role="run-bar"]')!.style.width).toBe('50%');
+
+    finish([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(output.querySelector('[data-role="run-progress"]')).toBeNull();
+    expect(output.textContent).toContain(messagesFor('zh').lesson.noOutput);
+    expect(button.disabled).toBe(false);
   });
 
   it('缺少挂载点时安全退出', () => {

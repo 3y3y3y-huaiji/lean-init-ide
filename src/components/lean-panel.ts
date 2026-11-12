@@ -13,6 +13,7 @@ import {
   matchAbbreviation,
 } from '../lean-abbreviations';
 import { clearDraft, readDraft, saveDraft } from '../draft';
+import { clearRuntimeCache } from '../runtime-cache';
 import { isExerciseSolved, isExerciseStarter } from '../exercise';
 import { findDeclaration } from '../lean-declaration';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
@@ -996,8 +997,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
 
     if (new URLSearchParams(location.search).has('fresh')) {
-      const { clearRuntimeAssetCache } = await import('@wasm-idle/core');
-      await clearRuntimeAssetCache();
+      await clearRuntimeCache();
       log(t.logCacheCleared);
     }
 

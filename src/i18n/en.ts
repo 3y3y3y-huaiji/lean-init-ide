@@ -22,6 +22,12 @@ export const en: Messages = {
     autoStart: 'Download Lean automatically when the editor opens',
     autoStartHint:
       'When off you start Lean yourself. The first download is about 102 MB and stays cached in this browser.',
+    clearCache: 'Clear runtime cache',
+    clearCacheHint:
+      'Deletes the downloaded Lean runtime (about 102 MB). The next start downloads it again.',
+    clearCacheBusy: 'Clearing…',
+    clearCacheDone: 'Cleared. The runtime will be downloaded again on the next start.',
+    clearCacheFailed: 'Could not clear the cache. Try again.',
   },
   home: {
     eyebrow: 'Lean 4 · WebAssembly · LSP in the browser',

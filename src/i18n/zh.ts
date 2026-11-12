@@ -21,6 +21,11 @@ export const zh: Messages = {
     title: '偏好设置',
     autoStart: '打开编辑器页时自动下载 Lean',
     autoStartHint: '关闭后需要手动点「启动 Lean」。首次下载约 102MB，只在你的浏览器里缓存。',
+    clearCache: '清理运行时缓存',
+    clearCacheHint: '删除已下载的 Lean 运行时（约 102MB），下次启动会重新下载。',
+    clearCacheBusy: '清理中…',
+    clearCacheDone: '已清理，下次启动会重新下载运行时。',
+    clearCacheFailed: '清理失败，请稍后重试。',
   },
   home: {
     eyebrow: 'Lean 4 · WebAssembly · 浏览器内 LSP',

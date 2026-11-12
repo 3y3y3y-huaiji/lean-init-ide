@@ -1,6 +1,7 @@
 import { ghostButtonClass } from '../components/ui';
 import { localeLabel, messagesFor, otherLocale, rememberLocale, type Locale } from '../i18n';
 import { FIRST_LESSON_SLUG } from '../router';
+import { clearRuntimeCache } from '../runtime-cache';
 import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
 import type { ThemePreference } from '../theme';
@@ -103,6 +104,21 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
                   <small class="mt-1 block text-xs leading-normal text-muted">${t.settings.autoStartHint}</small>
                 </span>
               </label>
+              <div class="mt-4 border-t border-line pt-3">
+                <button
+                  id="clear-cache"
+                  class="${ghostButtonClass} w-full justify-center"
+                  type="button"
+                >${t.settings.clearCache}</button>
+                <small class="mt-2 block text-xs leading-normal text-muted">${t.settings.clearCacheHint}</small>
+                <small
+                  id="clear-cache-status"
+                  class="mt-2 block text-xs leading-normal"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></small>
+              </div>
             </div>
           </div>
         </div>
@@ -156,6 +172,36 @@ export const bindLayout = (root: HTMLElement, locale: Locale) => {
 
   if (autoStart) autoStart.checked = getAutoStart();
   autoStart?.addEventListener('change', () => setAutoStart(autoStart.checked));
+
+  const clearCache = root.querySelector<HTMLButtonElement>('#clear-cache');
+  const clearCacheStatus = root.querySelector<HTMLElement>('#clear-cache-status');
+  clearCache?.addEventListener('click', async () => {
+    if (!clearCache) return;
+    const label = clearCache.textContent;
+    clearCache.disabled = true;
+    clearCache.textContent = t.settings.clearCacheBusy;
+    if (clearCacheStatus) {
+      clearCacheStatus.hidden = true;
+      clearCacheStatus.textContent = '';
+    }
+    try {
+      await clearRuntimeCache();
+      if (clearCacheStatus) {
+        clearCacheStatus.textContent = t.settings.clearCacheDone;
+        clearCacheStatus.className = 'mt-2 block text-xs leading-normal text-ok';
+        clearCacheStatus.hidden = false;
+      }
+    } catch {
+      if (clearCacheStatus) {
+        clearCacheStatus.textContent = t.settings.clearCacheFailed;
+        clearCacheStatus.className = 'mt-2 block text-xs leading-normal text-err';
+        clearCacheStatus.hidden = false;
+      }
+    } finally {
+      clearCache.disabled = false;
+      clearCache.textContent = label;
+    }
+  });
 
   settingsToggle?.addEventListener('click', (event) => {
     if (!settingsPanel) return;

@@ -46,6 +46,11 @@ export type Messages = {
     title: string;
     autoStart: string;
     autoStartHint: string;
+    clearCache: string;
+    clearCacheHint: string;
+    clearCacheBusy: string;
+    clearCacheDone: string;
+    clearCacheFailed: string;
   };
   home: {
     eyebrow: string;

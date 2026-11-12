@@ -4,6 +4,11 @@ import { setAutoStart } from '../settings';
 import { getThemePreference, setThemePreference } from '../theme';
 import { bindLayout, renderLayout } from './layout';
 
+const { clearRuntimeCache } = vi.hoisted(() => ({
+  clearRuntimeCache: vi.fn(async () => undefined),
+}));
+vi.mock('../runtime-cache', () => ({ clearRuntimeCache }));
+
 const setPath = (path: string) => window.history.replaceState({}, '', path);
 
 const mount = (locale: 'zh' | 'en' = 'zh') => {
@@ -85,6 +90,7 @@ describe('骨架交互绑定', () => {
     localStorage.clear();
     setPath('/zh/');
     setThemePreference('system');
+    clearRuntimeCache.mockClear();
   });
 
   afterEach(() => {
@@ -138,6 +144,23 @@ describe('骨架交互绑定', () => {
     input.dispatchEvent(new Event('change'));
 
     expect(spy).toHaveBeenCalledWith('lean:auto-start', 'true');
+  });
+
+  it('设置面板可以清理运行时缓存并给出反馈', async () => {
+    mount('zh');
+    const button = document.body.querySelector<HTMLButtonElement>('#clear-cache')!;
+    const status = document.body.querySelector<HTMLElement>('#clear-cache-status')!;
+
+    expect(button.textContent).toContain(messagesFor('zh').settings.clearCache);
+    expect(status.hidden).toBe(true);
+
+    button.click();
+    await vi.waitFor(() => expect(clearRuntimeCache).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(status.hidden).toBe(false));
+
+    expect(status.textContent).toBe(messagesFor('zh').settings.clearCacheDone);
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toContain(messagesFor('zh').settings.clearCache);
   });
 
   it('点击语言切换记住目标语言但不触发导航', () => {

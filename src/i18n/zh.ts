@@ -406,7 +406,11 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih => simp [ih]',
+            code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih =>\n    simp only [List.map_cons, List.length_cons]\n    rw [ih]',
+          },
+          {
+            kind: 'p',
+            text: 'simp 默认会用 List.length_map 直接证掉目标，归纳假设反而用不上；这里用 simp only 只展开构造子，再 rw [ih] 显式使用它。',
           },
           {
             kind: 'p',

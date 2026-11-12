@@ -407,7 +407,11 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih => simp [ih]',
+            code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih =>\n    simp only [List.map_cons, List.length_cons]\n    rw [ih]',
+          },
+          {
+            kind: 'p',
+            text: 'By default simp would close the goal with List.length_map and never use the induction hypothesis; simp only unfolds the constructors, and rw [ih] uses ih explicitly.',
           },
           {
             kind: 'p',

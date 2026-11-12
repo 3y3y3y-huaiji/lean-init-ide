@@ -1,4 +1,4 @@
-简体中文 | [English](README.en.md)
+<h3>简体中文 | <a href="README.en.md">English</a></h3>
 
 # Lean Init IDE
 

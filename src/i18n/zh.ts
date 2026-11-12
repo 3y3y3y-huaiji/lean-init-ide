@@ -55,10 +55,22 @@ export const zh: Messages = {
     courseBody:
       '先弄明白 Lean 是什么、这门课为什么只用 Init，再从 #check 和 #eval 一路走到第一个归纳证明。',
     courseCta: '开始学习',
+    pathsTitle: '两条学习路径',
+    pathMeta: (count) => `${count} 节课`,
   },
   lesson: {
     eyebrow: 'Lean 4 入门',
     tocTitle: '课程目录',
+    tracks: {
+      intro: {
+        title: '入门路径',
+        lead: '从 #eval 到归纳法，先把 Lean 的写法和常用证明套路用熟。',
+      },
+      math: {
+        title: '数学与验证',
+        lead: '从整除、奇偶到集合与算法正确性，用 Lean 把数学定义写成可检查的代码。',
+      },
+    },
     prev: '上一篇',
     next: '下一篇',
     runInEditor: '运行',
@@ -417,6 +429,481 @@ export const zh: Messages = {
           starter:
             'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
         },
+      },
+      {
+        slug: 'math-divisibility',
+        track: 'math',
+        navTitle: 'M1 · 整除',
+        title: '整除：把一个词写成定义',
+        lead: '“6 能被 2 整除”不只是做除法，而是说：存在一个数 k，使 6 = 2 × k。Lean 把这句话直接写成定义。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '先看符号 ∣（读作“整除”）。2 ∣ 6 的意思是“存在整数 k，使 6 = 2 × k”。它和 2 / 6 完全不是一回事：前者是一个命题，后者是一个数。',
+          },
+          { kind: 'code', code: '#check (2 ∣ 6)\n\nexample : 2 ∣ 6 := ⟨3, rfl⟩' },
+          {
+            kind: 'p',
+            text: '⟨3, rfl⟩ 就是证据：3 是那个 k，rfl 表示 6 和 2 × 3 按定义相等。证明存在性命题，核心就是构造一个 witness。',
+          },
+          {
+            kind: 'p',
+            text: '整除可以传递：如果 a 整除 b，b 整除 c，那么 a 整除 c。证明方法就是把两个 witness 乘起来。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem dvd_trans (a b c : Nat) (hab : a ∣ b) (hbc : b ∣ c) : a ∣ c := by\n  rcases hab with ⟨x, rfl⟩\n  rcases hbc with ⟨y, rfl⟩\n  exact ⟨x * y, by rw [Nat.mul_assoc]⟩',
+          },
+          { kind: 'p', text: '两个数都被 a 整除，它们的和也被 a 整除。' },
+          {
+            kind: 'code',
+            code: 'theorem dvd_add (a b c : Nat) (hb : a ∣ b) (hc : a ∣ c) : a ∣ b + c := by\n  rcases hb with ⟨x, rfl⟩\n  rcases hc with ⟨y, rfl⟩\n  exact ⟨x + y, by rw [Nat.mul_add]⟩',
+          },
+          {
+            kind: 'note',
+            text: '这类证明的套路：rcases 把“存在 k”拆成具体的 witness；rw 把目标换成乘法等式；最后把新的 witness 交回去。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明任何数都整除 0，并且 1 整除任何数。',
+          cta: '在编辑器中动手',
+          starter:
+            'theorem dvd_zero (a : Nat) : a ∣ 0 := by\n  sorry\n\ntheorem one_dvd (a : Nat) : 1 ∣ a := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-parity',
+        track: 'math',
+        navTitle: 'M2 · 奇偶',
+        title: '奇偶：第一个不像“计算”的证明',
+        lead: '偶数就是 2 的倍数，奇数就是 2 的倍数加一。把这两句话写成定义，就能证明“偶数 + 偶数还是偶数”。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '定义不是越复杂越好，而是把“我知道它是什么”变成“机器也能检查它是什么”。偶数、奇数各用一行就能写完。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\nexample : Even 6 := ⟨3, rfl⟩\nexample : Odd 7 := ⟨3, rfl⟩',
+          },
+          {
+            kind: 'p',
+            text: 'Even a 是一个存在命题。rcases 拆开它，就得到一个具体的 k；两个偶数相加，把两个 k 加在一起就是新的 witness。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by omega⟩',
+          },
+          {
+            kind: 'p',
+            text: '奇数 + 奇数会多出一个 1，正好又凑成 2 的倍数。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem odd_add_odd (a b : Nat) (ha : Odd a) (hb : Odd b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y + 1, by omega⟩',
+          },
+          {
+            kind: 'p',
+            text: '同一个数不能既是偶数又是奇数。假设两者都成立，omega 会发现 2k = 2j + 1 不可能。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  omega',
+          },
+          {
+            kind: 'note',
+            text: 'omega 是 Lean 自带的线性算术求解器，能处理加减、乘常数和不等式；遇到变量之间的乘法，就要自己给引理。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明偶数乘以任何自然数仍然是偶数。',
+          cta: '在编辑器中动手',
+          starter:
+            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-gcd',
+        track: 'math',
+        navTitle: 'M3 · 最大公约数',
+        title: '最大公约数：先写规格，再谈算法',
+        lead: '“最大公约数”最重要的不是怎么算，而是它到底满足什么性质。把性质写成定义，算法正确性才有讨论对象。',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'd 是 a、b 的公约数，并且任何公约数都整除 d。这三句话就是最大公约数的规格。',
+          },
+          {
+            kind: 'code',
+            code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\n#check IsGcd',
+          },
+          {
+            kind: 'p',
+            text: 'Init 自带 Nat.gcd（底层是欧几里得算法）。我们不需要重写算法，只需要证明它满足上面这条规格。',
+          },
+          {
+            kind: 'code',
+            code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_is_gcd (a b : Nat) : IsGcd a b (Nat.gcd a b) := by\n  constructor\n  · exact Nat.gcd_dvd_left a b\n  constructor\n  · exact Nat.gcd_dvd_right a b\n  · intro e hea heb\n    exact Nat.dvd_gcd hea heb',
+          },
+          {
+            kind: 'p',
+            text: '规格还有一个好处：满足规格的值唯一。如果 d 和 e 都满足 IsGcd，那么 d = e。',
+          },
+          {
+            kind: 'code',
+            code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_unique (a b d e : Nat) (hd : IsGcd a b d) (he : IsGcd a b e) : d = e := by\n  rcases hd with ⟨hda, hdb, hdg⟩\n  rcases he with ⟨hea, heb, heg⟩\n  exact Nat.dvd_antisymm (heg d hda hdb) (hdg e hea heb)',
+          },
+          {
+            kind: 'note',
+            text: '这就是“规格与实现分离”：以后换一个更快的 gcd 算法，只要还能证明 IsGcd，所有依赖它的定理都不用改。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明：如果 2 整除 a 和 b，那么 2 整除它们的最大公约数。',
+          cta: '在编辑器中动手',
+          starter:
+            'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem two_dvd_gcd (a b : Nat) (ha : 2 ∣ a) (hb : 2 ∣ b) : 2 ∣ Nat.gcd a b := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-primes',
+        track: 'math',
+        navTitle: 'M4 · 素数与反例',
+        title: '素数：定义、反例与最小证明',
+        lead: '素数不是“看起来很特别”的数，而是满足两条性质的数：至少为 2，且因子只有 1 和它自己。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '把“只有 1 和它自己两个因子”写成一个全称命题，就得到素数的定义。',
+          },
+          {
+            kind: 'code',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\n#check Prime',
+          },
+          {
+            kind: 'p',
+            text: '反驳一个数是素数，只需要找到一个“多余的因子”。比如 4 有因子 2，而 2 既不是 1 也不是 4。',
+          },
+          {
+            kind: 'code',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_one : ¬ Prime 1 := by\n  intro h\n  rcases h with ⟨h2, _⟩\n  omega\n\ntheorem not_prime_four : ¬ Prime 4 := by\n  intro h\n  rcases h with ⟨_, hd⟩\n  have h2 : 2 ∣ 4 := ⟨2, rfl⟩\n  have h := hd 2 h2\n  omega',
+          },
+          {
+            kind: 'p',
+            text: '证明 2 是素数则要处理任意因子 d：它必须先满足 d ≤ 2，又必须是正数，所以只能是 1 或 2。',
+          },
+          {
+            kind: 'code',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · omega\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by omega) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by omega)\n    omega',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: '“素数有无穷多个”是欧几里得的经典结论。它的证明需要构造 n! + 1，而本运行时不带阶乘库，所以这里只保留思路：假设只有有限个素数，把它们乘起来加一，会得到一个不被任何已知素数整除的数。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明 6 不是素数。提示：找一个既不是 1 也不是 6 的因子。',
+          cta: '在编辑器中动手',
+          starter:
+            'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_six : ¬ Prime 6 := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-sets',
+        track: 'math',
+        navTitle: 'M5 · 集合',
+        title: '集合：把“属于”写成谓词',
+        lead: '集合不是列表，而是一条规则：给我一个元素，我回答它在不在。用 Lean 说，集合就是返回 Prop 的函数。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '在 Lean 里可以直接把集合定义成 A : α → Prop。x 属于 A，就是命题 A x 为真。',
+          },
+          {
+            kind: 'code',
+            code: 'def Set (α : Type) := α → Prop\n\ndef evens : Set Nat := fun n => ∃ k, n = 2 * k\n\n#check evens\n#check evens 4',
+          },
+          {
+            kind: 'p',
+            text: '子集：A 的每个元素都在 B 里。这是一条全称命题，证明就是 intro 一个元素再往下推。',
+          },
+          {
+            kind: 'code',
+            code: 'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ntheorem subset_trans {α : Type} (A B C : Set α) (h1 : Subset A B) (h2 : Subset B C) : Subset A C := by\n  intro x hx\n  exact h2 x (h1 x hx)',
+          },
+          {
+            kind: 'p',
+            text: '并集：A ∪ B 的元素满足 A x 或 B x，所以 A 一定是 A ∪ B 的子集。',
+          },
+          {
+            kind: 'code',
+            code: 'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetUnion {α : Type} (A B : Set α) : Set α := fun x => A x ∨ B x\n\ntheorem subset_union {α : Type} (A B : Set α) : Subset A (SetUnion A B) := by\n  intro x hx\n  exact Or.inl hx',
+          },
+          {
+            kind: 'note',
+            text: '符号 ∈ 只是 A x 的另一种写法；本课不用额外类型类，直接读作“A 接受 x”。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '定义交集，并证明交集是左边集合的子集。',
+          cta: '在编辑器中动手',
+          starter:
+            'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetInter {α : Type} (A B : Set α) : Set α := fun x => A x ∧ B x\n\ntheorem inter_subset_left {α : Type} (A B : Set α) : Subset (SetInter A B) A := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-functions',
+        track: 'math',
+        navTitle: 'M6 · 函数',
+        title: '单射、满射与双射',
+        lead: '函数就是映射。单射保证不撞车，满射保证目标都能到，双射则是完美的来回转换。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '单射：不同输入给出不同输出。满射：每个目标值都有原像。两者都有就是双射。',
+          },
+          {
+            kind: 'code',
+            code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\n#check Injective',
+          },
+          {
+            kind: 'p',
+            text: '两个单射复合还是单射：如果 g (f a) = g (f b)，先用 g 的单射得到 f a = f b，再用 f 的单射得到 a = b。',
+          },
+          {
+            kind: 'code',
+            code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ntheorem injective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Injective f) (hg : Injective g) : Injective (fun x => g (f x)) := by\n  intro a b h\n  apply hf\n  apply hg\n  exact h',
+          },
+          {
+            kind: 'p',
+            text: '恒等函数既单又满，所以是双射。',
+          },
+          {
+            kind: 'code',
+            code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem surjective_id {α : Type} : Surjective (fun x : α => x) := by\n  intro b\n  exact ⟨b, rfl⟩\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  constructor\n  · intro a b h\n    exact h\n  · exact surjective_id',
+          },
+          {
+            kind: 'note',
+            text: '双射意味着可以来回转换而不丢信息；有限集合之间若存在双射，元素个数一定相同。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明两个满射的复合仍然是满射。',
+          cta: '在编辑器中动手',
+          starter:
+            'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-relations',
+        track: 'math',
+        navTitle: 'M7 · 关系',
+        title: '等价关系与分类',
+        lead: '关系是接受两个元素的命题。等价关系满足自反、对称、传递，它把对象分成一堆一堆。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '把三条性质写成一个结构，就是等价关系的定义。',
+          },
+          {
+            kind: 'code',
+            code: 'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\n#check IsEquivalence',
+          },
+          {
+            kind: 'p',
+            text: '“长度相同”就是一个等价关系：长度等于自己、可以交换、可以传递。',
+          },
+          {
+            kind: 'code',
+            code: 'def SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_refl {α : Type} (xs : List α) : SameLength xs xs := rfl\n\ntheorem same_length_symm {α : Type} (xs ys : List α) (h : SameLength xs ys) :\n    SameLength ys xs := by\n  exact h.symm\n\ntheorem same_length_trans {α : Type} (xs ys zs : List α)\n    (h1 : SameLength xs ys) (h2 : SameLength ys zs) : SameLength xs zs := by\n  exact h1.trans h2',
+          },
+          {
+            kind: 'p',
+            text: '等价关系把对象分堆：同一堆里的东西“在某种意义下一样”。数学里的分类，通常就是找一个合适的等价关系。',
+          },
+          {
+            kind: 'note',
+            text: '模 n 同余、同构、同伦都是等价关系；它们让复杂对象变成可以比较的“类”。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '把三条性质组合成一个 IsEquivalence 证明。',
+          cta: '在编辑器中动手',
+          starter:
+            'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_equiv {α : Type} : IsEquivalence (SameLength (α := α)) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-strong-induction',
+        track: 'math',
+        navTitle: 'M8 · 强归纳',
+        title: '强归纳与斐波那契',
+        lead: '有些递推关系要用到前两项甚至所有更小的项；这时普通归纳不够，需要强归纳。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '斐波那契数列：F(0)=0，F(1)=1，之后每一项等于前两项之和。',
+          },
+          {
+            kind: 'code',
+            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\n#eval fib 10',
+          },
+          {
+            kind: 'p',
+            text: '普通归纳只给你前一项；强归纳给你所有更小的项。Lean 的 Nat.strongRecOn 把“对所有 m < n 成立”直接交给你。',
+          },
+          {
+            kind: 'code',
+            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by omega)\n      have h2 := ih (k + 1) (by omega)\n      simp [fib, Nat.pow_succ]\n      omega',
+          },
+          {
+            kind: 'note',
+            text: '强归纳不是新公理，它可以从普通归纳推出来；只是用起来更顺手。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明斐波那契数列单调不减：F(n) ≤ F(n+1)。',
+          cta: '在编辑器中动手',
+          starter:
+            'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'code-sorting',
+        track: 'math',
+        navTitle: 'M9 · 插入排序',
+        title: '插入排序为什么是对的',
+        lead: '排序的规格有两部分：结果有序，并且元素一个都没丢。把这两条写下来，正确性才有意义。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '先定义“有序”：空表和单元素表天然有序，多元素表要求头 ≤ 第二个元素，并且尾部有序。',
+          },
+          {
+            kind: 'code',
+            code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\n#eval sort [3, 1, 2]',
+          },
+          {
+            kind: 'p',
+            text: '成员保持：y 在 insertNat x xs 里，当且仅当 y = x 或者 y 本来就在 xs 里。',
+          },
+          {
+            kind: 'code',
+            code: 'def insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ntheorem mem_insertNat (x y : Nat) (xs : List Nat) :\n    y ∈ insertNat x xs ↔ y = x ∨ y ∈ xs := by\n  induction xs with\n  | nil =>\n    unfold insertNat\n    simp\n  | cons z zs ih =>\n    unfold insertNat\n    by_cases h : x ≤ z\n    · simp [h]\n    · simp [h, ih, or_left_comm]',
+          },
+          {
+            kind: 'note',
+            text: '有序性的证明留作练习；先证成员保持，再证有序，是这类证明的常见拆法。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '证明把 x 插入有序表后仍然有序。',
+          cta: '在编辑器中动手',
+          starter:
+            'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'code-sum',
+        track: 'math',
+        navTitle: 'M10 · 列表求和',
+        title: '递归函数与归纳证明',
+        lead: '列表求和是最小但完整的例子：写一个递归函数，再用结构归纳证明它的性质。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '求和的定义直接照抄数学：空表是 0，非空表是头加尾。',
+          },
+          {
+            kind: 'code',
+            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\n#eval sum [1, 2, 3]',
+          },
+          {
+            kind: 'p',
+            text: '拼接两个列表再求和，等于分别求和再相加。证明对第一个列表做结构归纳。',
+          },
+          {
+            kind: 'code',
+            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega',
+          },
+          {
+            kind: 'note',
+            text: '如果加上累加器参数，求和可以写成尾递归；证明会变成“累加器不变量”，那是下一层练习。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '利用 sum_append 证明两个列表交换顺序后总和不变。',
+          cta: '在编辑器中动手',
+          starter:
+            'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-axioms',
+        track: 'math',
+        navTitle: 'M11 · 公理与 sorry',
+        title: '公理、sorry 与可信代码',
+        lead: '公理是不证明就接受的命题；定理是从公理推出来的。Lean 能告诉你一条定理到底依赖哪些公理。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '#print axioms 会列出定理依赖的公理。核心算术定理通常不依赖任何公理。',
+          },
+          { kind: 'code', code: '#print axioms Nat.add_comm\n\n#check Classical.choice' },
+          {
+            kind: 'p',
+            text: 'sorry 会生成 sorryAx，让任何命题“成立”。它适合草稿，不适合交付。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem cheat : 1 = 2 := by\n  sorry\n\n#print axioms cheat',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: '看到 sorryAx 就说明证明还没完成；课程代码和 CI 都不应该留下 sorry。',
+          },
+        ],
+      },
+      {
+        slug: 'math-mathlib',
+        track: 'math',
+        navTitle: 'M12 · 从 Init 到 Mathlib',
+        title: '从 Init 到 Mathlib',
+        lead: 'Mathlib 是 Lean 的数学库：集合、函数、数论、代数、分析都在里面。本运行时只带 Init，所以课程自己搭了一个迷你数学库。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '课程里的 Even、Prime、IsGcd、Set、Injective、Sorted，在 Mathlib 里都有工业级版本。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\n#check Even\n#check Nat.gcd\n#check List.length',
+          },
+          {
+            kind: 'p',
+            text: '对照表：Even/Odd、Nat.Prime、Nat.gcd、Set、Function.Injective、List.Perm 分别是这些概念的 Mathlib 名字。',
+          },
+          {
+            kind: 'code',
+            code: '#check Nat.gcd_dvd_left\n#check Nat.dvd_gcd\n#check List.mem_append',
+          },
+          {
+            kind: 'note',
+            text: '本地继续学：先装 elan，再用 lake new 建项目，在 lakefile 里 require mathlib；首次编译会比较久，但之后就能用整套数学库。',
+          },
+        ],
       },
     ],
   },

@@ -35,14 +35,16 @@
 - Lean Unicode 缩写：输入 `\to`、`\forall` 后按空格或 Tab 展开为 `→`、`∀`
 - 中英文界面，`/zh/`、`/en/` 双前缀，可切换并记住偏好
 - 亮色 / 暗色 / 跟随系统三种主题，Monaco 主题同步
-- 9 节入门课程，代码块可一键运行，练习可带着 starter 跳到编辑器
+- 21 节课程：9 节入门 + 12 节数学与验证，代码块可一键运行，练习可带着 starter 跳到编辑器
 - 练习草稿自动存在本机，刷新不丢；可一键重置或导出 `.lean`
 - 运行时按 4MB 分片并行下载、逐块校验，失败自动回退到其它源
 - 低内存设备自动关闭自动下载，并把持久缓存上限从 512MB 降到 128MB
 
 ## 课程
 
-每节 2–3 个可运行代码块加一个练习，全部落在 Init 范围内。
+每节 2–4 个可运行代码块加一个练习，全部落在 Init 范围内。
+
+**入门路径**
 
 | 课时 | 主题 | 关键动作 |
 | --- | --- | --- |
@@ -55,6 +57,23 @@
 | `simp` | 让 simp 收尾 | `simp`、`simp only [Nat.succ_add]` |
 | `quantifiers` | ∀ 与 ∃ 怎么用 | 把 `∀` 当函数用、`⟨n, 证明⟩`、拆存在量词 |
 | `list-structure` | 归纳类型与结构 | List 的 `nil` / `cons`、`structure`、`#eval` |
+
+**数学与验证路径**
+
+| 课时 | 主题 | 关键动作 |
+| --- | --- | --- |
+| `math-divisibility` | 整除：把词写成定义 | `∣` 的存在性定义、传递性、`dvd_add` |
+| `math-parity` | 奇偶与第一个证明 | `Even` / `Odd`、拆存在量词、`omega` |
+| `math-gcd` | 最大公约数的规格 | `IsGcd`、`Nat.gcd` 的规格证明、唯一性 |
+| `math-primes` | 素数与反例 | `Prime` 定义、反证、处理任意因子 |
+| `math-sets` | 集合：属于与子集 | 谓词式集合、`Subset`、并集 |
+| `math-functions` | 单射、满射、双射 | 函数性质、复合保持单射 / 满射 |
+| `math-relations` | 等价关系与分类 | `IsEquivalence`、长度相同的等价关系 |
+| `math-strong-induction` | 强归纳与斐波那契 | `Nat.strongRecOn`、指数上界 |
+| `code-sorting` | 插入排序正确性 | `Sorted`、成员保持、有序性练习 |
+| `code-sum` | 递归函数与归纳证明 | `sum`、`sum_append`、结构归纳 |
+| `math-axioms` | 公理、sorry 与可信代码 | `#print axioms`、`sorryAx` |
+| `math-mathlib` | 从 Init 到 Mathlib | 迷你库与 Mathlib 对照、本地安装路径 |
 
 ## 限制
 

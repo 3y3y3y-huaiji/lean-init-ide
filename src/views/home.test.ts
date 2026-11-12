@@ -23,7 +23,15 @@ describe('首页渲染', () => {
     for (const locale of ['zh', 'en'] as const) {
       const html = renderHome(locale);
       const expected = messagesFor(locale).home.features.length;
-      expect(html.match(/<article/g)?.length, locale).toBe(expected + 2);
+      expect(html.match(/<article/g)?.length, locale).toBe(expected + 3);
+    }
+  });
+
+  it('数学与验证路径入口指向第一节数学课', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      const html = renderHome(locale);
+      expect(html).toContain(messagesFor(locale).lesson.tracks.math.title);
+      expect(html).toContain(`href="/${locale}/learn/math-divisibility"`);
     }
   });
 

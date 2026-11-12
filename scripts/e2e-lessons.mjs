@@ -25,6 +25,18 @@ const SLUGS = [
   'simp',
   'quantifiers',
   'list-structure',
+  'math-divisibility',
+  'math-parity',
+  'math-gcd',
+  'math-primes',
+  'math-sets',
+  'math-functions',
+  'math-relations',
+  'math-strong-induction',
+  'code-sorting',
+  'code-sum',
+  'math-axioms',
+  'math-mathlib',
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -95,6 +95,13 @@ describe('课程页渲染', () => {
     expect(html).toContain(first.lead);
   });
 
+  it('目录按路径分组并包含数学课', () => {
+    const html = renderLesson('zh', 'math-divisibility');
+    expect(html).toContain(messagesFor('zh').lesson.tracks.math.title);
+    expect(html).toContain('href="/zh/learn/math-sets"');
+    expect(html).toContain('href="/zh/learn/math-mathlib"');
+  });
+
   it('首节没有上一篇，末节没有下一篇', () => {
     const lessonMsgs = messagesFor('zh').lesson;
     const lessons = lessonMsgs.lessons;

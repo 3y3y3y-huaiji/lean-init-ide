@@ -4,9 +4,14 @@ export type LessonBlock =
   | { kind: 'code'; code: string }
   | { kind: 'note'; text: string; tone?: 'info' | 'warn' };
 
+/** 课程路径：入门课与数学/验证课分开组织，但共用同一个路由。 */
+export type LessonTrack = 'intro' | 'math';
+
 /** 一节课程。slug 同时是路由片段与目录锚点。 */
 export type LessonPage = {
   slug: string;
+  /** 缺省视为入门路径，历史课程不必逐条补字段。 */
+  track?: LessonTrack;
   /** 目录里显示的短标题，避免长标题撑破侧栏。 */
   navTitle: string;
   title: string;
@@ -57,11 +62,15 @@ export type Messages = {
     courseTitle: string;
     courseBody: string;
     courseCta: string;
+    /** 两条学习路径的标题。 */
+    pathsTitle: string;
+    pathMeta: (count: number) => string;
   };
   lesson: {
     eyebrow: string;
     /** 左侧目录的标题。 */
     tocTitle: string;
+    tracks: Record<LessonTrack, { title: string; lead: string }>;
     prev: string;
     next: string;
     /** 代码块上的按钮：就地运行并显示输出。 */

@@ -78,6 +78,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 
 ### 发布记录
 
+- `v0.3.0`：新增「数学与验证」路径 12 节（整除、奇偶、gcd、素数、集合、函数、关系、强归纳、插入排序、列表求和、公理与 Mathlib 导读）；首页与目录按路径分组；重置改为按钮二次确认并收紧窄屏顶栏。
 - `v0.2.1`：修复清空代码被误判「本关已通过」、语言切换丢失 `?lesson=`、重置题目缺少确认；补齐英文日志与面板文案；确认 390px 窄屏为单列堆叠。
 - `v0.2.0`：新增「认识 Lean」导论课（共 9 节）、课程进度记忆与首页继续学习入口、LSP 语义补全与 Lean Unicode 缩写（`\to`、`\forall`）；补齐 CSP / Referrer-Policy / Permissions-Policy、favicon、robots/sitemap 等合规与门面。
 - `v0.1.1`：第一课的 `rfl` 代码块改为可见输出；README 回归项目介绍，技术文档移入 `docs/`。

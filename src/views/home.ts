@@ -5,10 +5,27 @@ import { FIRST_LESSON_SLUG } from '../router';
 
 export const renderHome = (locale: Locale, visited: ReadonlySet<string> = new Set()): string => {
   const t = messagesFor(locale).home;
-  const lessonSlugs = messagesFor(locale).lesson.lessons.map((lesson) => lesson.slug);
+  const lessonMsgs = messagesFor(locale).lesson;
+  const lessonSlugs = lessonMsgs.lessons.map((lesson) => lesson.slug);
   const target = firstUnvisitedLesson(lessonSlugs, visited) ?? FIRST_LESSON_SLUG;
   const cta = visited.size > 0 ? t.continueCta : t.ctaPrimary;
-  const courseCta = visited.size > 0 ? t.continueCta : t.courseCta;
+
+  const introLessons = lessonMsgs.lessons.filter((lesson) => (lesson.track ?? 'intro') === 'intro');
+  const mathLessons = lessonMsgs.lessons.filter((lesson) => lesson.track === 'math');
+  const introTarget =
+    firstUnvisitedLesson(
+      introLessons.map((lesson) => lesson.slug),
+      visited,
+    ) ?? FIRST_LESSON_SLUG;
+  const mathTarget = mathLessons[0]?.slug;
+
+  const pathCard = (track: 'intro' | 'math', lessons: typeof introLessons, href: string) => `
+    <article class="rounded-2xl border border-line bg-panel p-6">
+      <h3 class="mt-0 mb-2 text-[17px] font-bold">${lessonMsgs.tracks[track].title}</h3>
+      <p class="mt-0 mb-3 text-sm text-muted">${lessonMsgs.tracks[track].lead}</p>
+      <p class="mt-0 mb-4 text-xs uppercase tracking-[0.08em] text-muted">${t.pathMeta(lessons.length)}</p>
+      <a class="${buttonClass}" href="/${locale}/learn/${href}">${t.courseCta}</a>
+    </article>`;
 
   const features = t.features
     .map(
@@ -36,15 +53,18 @@ export const renderHome = (locale: Locale, visited: ReadonlySet<string> = new Se
       <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3.5">${features}</div>
     </section>
 
-    <section class="mt-[clamp(40px,6vw,72px)] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5">
+    <section class="mt-[clamp(40px,6vw,72px)]">
+      <h2 class="mt-0 mb-4.5 text-sm uppercase tracking-[0.08em] text-muted">${t.pathsTitle}</h2>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5">
+        ${pathCard('intro', introLessons, introTarget)}
+        ${mathTarget ? pathCard('math', mathLessons, mathTarget) : ''}
+      </div>
+    </section>
+
+    <section class="mt-[clamp(40px,6vw,72px)]">
       <article class="rounded-2xl border border-line bg-panel p-6">
         <h2 class="mt-0 mb-2.5 text-[17px] font-bold">${t.limitsTitle}</h2>
         <p class="mt-0 mb-4 text-sm text-muted last:mb-0">${t.limitsBody}</p>
-      </article>
-      <article class="rounded-2xl border border-accent bg-panel bg-[linear-gradient(150deg,var(--accent-soft),transparent_70%)] p-6">
-        <h2 class="mt-0 mb-2.5 text-[17px] font-bold">${t.courseTitle}</h2>
-        <p class="mt-0 mb-4 text-sm text-muted last:mb-0">${t.courseBody}</p>
-        <a class="${buttonClass}" href="/${locale}/learn/${target}">${courseCta}</a>
       </article>
     </section>
   `;

@@ -41,14 +41,16 @@ Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sig
 - Lean Unicode abbreviations: type `\to` or `\forall` and press space or Tab to get `→` or `∀`
 - Bilingual UI (`/zh/` and `/en/`), remembers your choice
 - Light / dark / system themes, with Monaco following along
-- 9 intro lessons; code blocks run in place, exercises open the playground with a starter
+- 21 lessons: 9 intro + 12 math & verification; code blocks run in place, exercises open the playground with a starter
 - Exercise drafts stay in your browser across reloads, with one-click reset and `.lean` export
 - The runtime streams in 4 MB ranges with per-chunk verification and automatic source fallback
 - Low-memory devices skip auto-download and cap the persistent cache at 128 MB
 
 ## Lessons
 
-Each lesson has two or three runnable code blocks and one exercise, all within Init.
+Each lesson has two to four runnable code blocks and one exercise, all within Init.
+
+**Getting started**
 
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
@@ -61,6 +63,23 @@ Each lesson has two or three runnable code blocks and one exercise, all within I
 | `simp` | Let simp finish the goal | `simp`, `simp only [Nat.succ_add]` |
 | `quantifiers` | Using ∀ and ∃ | `∀` as a function, `⟨n, proof⟩`, unpacking ∃ |
 | `list-structure` | Inductive types and structures | List `nil` / `cons`, `structure`, `#eval` |
+
+**Math & verification**
+
+| Lesson | Topic | Key moves |
+| --- | --- | --- |
+| `math-divisibility` | Divisibility as a definition | Existential `∣`, transitivity, `dvd_add` |
+| `math-parity` | Parity and the first real proof | `Even` / `Odd`, unpacking ∃, `omega` |
+| `math-gcd` | Specifying the GCD | `IsGcd`, proving `Nat.gcd` meets it, uniqueness |
+| `math-primes` | Primes and counterexamples | `Prime`, refutation, arbitrary divisors |
+| `math-sets` | Sets: membership and subsets | Predicate sets, `Subset`, union |
+| `math-functions` | Injective, surjective, bijective | Function properties, composition |
+| `math-relations` | Equivalence relations | `IsEquivalence`, same-length relation |
+| `math-strong-induction` | Strong induction and Fibonacci | `Nat.strongRecOn`, exponential bound |
+| `code-sorting` | Insertion sort correctness | `Sorted`, membership preservation, sortedness exercise |
+| `code-sum` | Recursive functions and induction | `sum`, `sum_append`, structural induction |
+| `math-axioms` | Axioms, sorry and trust | `#print axioms`, `sorryAx` |
+| `math-mathlib` | From Init to Mathlib | Mini library vs Mathlib, local setup |
 
 ## Limitations
 

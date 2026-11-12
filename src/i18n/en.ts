@@ -56,10 +56,22 @@ export const en: Messages = {
     courseBody:
       'Start with what Lean is and why this course only uses Init, then move from #check and #eval to your first inductive proof.',
     courseCta: 'Start learning',
+    pathsTitle: 'Two learning paths',
+    pathMeta: (count) => `${count} lessons`,
   },
   lesson: {
     eyebrow: 'Lean 4 basics',
     tocTitle: 'Contents',
+    tracks: {
+      intro: {
+        title: 'Getting started',
+        lead: 'From #eval to induction: get comfortable with Lean syntax and the common proof patterns.',
+      },
+      math: {
+        title: 'Math & verification',
+        lead: 'From divisibility and parity to sets and algorithm correctness, written as machine-checked code.',
+      },
+    },
     prev: 'Previous',
     next: 'Next',
     runInEditor: 'Run',
@@ -418,6 +430,481 @@ export const en: Messages = {
           starter:
             'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
         },
+      },
+      {
+        slug: 'math-divisibility',
+        track: 'math',
+        navTitle: 'M1 · Divisibility',
+        title: 'Divisibility: turn a word into a definition',
+        lead: '"6 is divisible by 2" is not mainly about division: it says there is a k with 6 = 2 × k. Lean writes that sentence as a definition.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'The symbol ∣ means "divides". 2 ∣ 6 says there is an integer k with 6 = 2 × k. It is a proposition, not a number: do not confuse it with 2 / 6.',
+          },
+          { kind: 'code', code: '#check (2 ∣ 6)\n\nexample : 2 ∣ 6 := ⟨3, rfl⟩' },
+          {
+            kind: 'p',
+            text: '⟨3, rfl⟩ is the evidence: 3 is the witness, and rfl checks that 6 and 2 × 3 are equal by definition. Proving an existence statement means constructing a witness.',
+          },
+          {
+            kind: 'p',
+            text: 'Divisibility is transitive: if a divides b and b divides c, then a divides c. The proof multiplies the two witnesses.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem dvd_trans (a b c : Nat) (hab : a ∣ b) (hbc : b ∣ c) : a ∣ c := by\n  rcases hab with ⟨x, rfl⟩\n  rcases hbc with ⟨y, rfl⟩\n  exact ⟨x * y, by rw [Nat.mul_assoc]⟩',
+          },
+          { kind: 'p', text: 'If a divides b and c, it also divides b + c.' },
+          {
+            kind: 'code',
+            code: 'theorem dvd_add (a b c : Nat) (hb : a ∣ b) (hc : a ∣ c) : a ∣ b + c := by\n  rcases hb with ⟨x, rfl⟩\n  rcases hc with ⟨y, rfl⟩\n  exact ⟨x + y, by rw [Nat.mul_add]⟩',
+          },
+          {
+            kind: 'note',
+            text: 'The pattern: rcases turns “there exists k” into a concrete witness, rw rewrites the goal into a multiplication identity, and exact hands the new witness back.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that every number divides 0, and that 1 divides every number.',
+          cta: 'Try it in the editor',
+          starter:
+            'theorem dvd_zero (a : Nat) : a ∣ 0 := by\n  sorry\n\ntheorem one_dvd (a : Nat) : 1 ∣ a := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-parity',
+        track: 'math',
+        navTitle: 'M2 · Parity',
+        title: 'Parity: your first proof that is not a calculation',
+        lead: 'An even number is a multiple of 2; an odd number is one more than a multiple of 2. Write those sentences down and you can prove that even + even is even.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'A good definition is not complicated; it turns “I know what this means” into something a machine can check. Even and Odd each take one line.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\nexample : Even 6 := ⟨3, rfl⟩\nexample : Odd 7 := ⟨3, rfl⟩',
+          },
+          {
+            kind: 'p',
+            text: 'Even a is an existence statement. rcases unwraps a concrete k; adding two even numbers adds the two witnesses.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by omega⟩',
+          },
+          {
+            kind: 'p',
+            text: 'Adding two odd numbers leaves an extra 1, which again makes a multiple of 2.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem odd_add_odd (a b : Nat) (ha : Odd a) (hb : Odd b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y + 1, by omega⟩',
+          },
+          {
+            kind: 'p',
+            text: 'A number cannot be both even and odd. Assume both, and omega sees that 2k = 2j + 1 is impossible.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  omega',
+          },
+          {
+            kind: 'note',
+            text: 'omega is Lean’s built-in linear arithmetic solver. It handles addition, subtraction, multiplication by constants and inequalities; for products of variables you need your own lemmas.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that an even number times any natural number is still even.',
+          cta: 'Try it in the editor',
+          starter:
+            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-gcd',
+        track: 'math',
+        navTitle: 'M3 · GCD',
+        title: 'Greatest common divisor: specify first, implement later',
+        lead: 'What matters about a GCD is not how to compute it, but which properties it satisfies. Write those properties down and correctness becomes a question you can answer.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'd is a common divisor of a and b, and every common divisor divides d. Those three clauses are the specification.',
+          },
+          {
+            kind: 'code',
+            code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\n#check IsGcd',
+          },
+          {
+            kind: 'p',
+            text: 'Init already ships Nat.gcd (Euclid’s algorithm). We do not need to rewrite it; we only need to prove that it meets the specification.',
+          },
+          {
+            kind: 'code',
+            code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_is_gcd (a b : Nat) : IsGcd a b (Nat.gcd a b) := by\n  constructor\n  · exact Nat.gcd_dvd_left a b\n  constructor\n  · exact Nat.gcd_dvd_right a b\n  · intro e hea heb\n    exact Nat.dvd_gcd hea heb',
+          },
+          {
+            kind: 'p',
+            text: 'Another benefit: a value satisfying the specification is unique. If both d and e satisfy IsGcd, then d = e.',
+          },
+          {
+            kind: 'code',
+            code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_unique (a b d e : Nat) (hd : IsGcd a b d) (he : IsGcd a b e) : d = e := by\n  rcases hd with ⟨hda, hdb, hdg⟩\n  rcases he with ⟨hea, heb, heg⟩\n  exact Nat.dvd_antisymm (heg d hda hdb) (hdg e hea heb)',
+          },
+          {
+            kind: 'note',
+            text: 'This is separation of specification and implementation: swap in a faster GCD algorithm later, prove IsGcd again, and every theorem that depends on it still holds.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that if 2 divides a and b, then 2 divides their greatest common divisor.',
+          cta: 'Try it in the editor',
+          starter:
+            'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem two_dvd_gcd (a b : Nat) (ha : 2 ∣ a) (hb : 2 ∣ b) : 2 ∣ Nat.gcd a b := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-primes',
+        track: 'math',
+        navTitle: 'M4 · Primes',
+        title: 'Primes: definitions, counterexamples, small proofs',
+        lead: 'A prime is not a number that “looks special”. It is a number satisfying two properties: at least 2, and its only divisors are 1 and itself.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Write “only divisors are 1 and itself” as a universal statement and you have the definition.',
+          },
+          {
+            kind: 'code',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\n#check Prime',
+          },
+          {
+            kind: 'p',
+            text: 'To refute primality, it is enough to exhibit an extra divisor. For example 4 has divisor 2, which is neither 1 nor 4.',
+          },
+          {
+            kind: 'code',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_one : ¬ Prime 1 := by\n  intro h\n  rcases h with ⟨h2, _⟩\n  omega\n\ntheorem not_prime_four : ¬ Prime 4 := by\n  intro h\n  rcases h with ⟨_, hd⟩\n  have h2 : 2 ∣ 4 := ⟨2, rfl⟩\n  have h := hd 2 h2\n  omega',
+          },
+          {
+            kind: 'p',
+            text: 'Proving that 2 is prime means handling an arbitrary divisor d: it must satisfy d ≤ 2 and d > 0, so it can only be 1 or 2.',
+          },
+          {
+            kind: 'code',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · omega\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by omega) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by omega)\n    omega',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'Euclid proved that there are infinitely many primes by constructing n! + 1. This runtime does not include a factorial library, so we only keep the idea: assume finitely many primes, multiply them and add one, and get a number divisible by none of the known primes.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that 6 is not prime. Hint: find a divisor that is neither 1 nor 6.',
+          cta: 'Try it in the editor',
+          starter:
+            'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_six : ¬ Prime 6 := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-sets',
+        track: 'math',
+        navTitle: 'M5 · Sets',
+        title: 'Sets: membership as a predicate',
+        lead: 'A set is not a list. It is a rule: give me an element and I say whether it belongs. In Lean, a set is simply a function returning Prop.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Define a set as A : α → Prop. Saying x belongs to A means the proposition A x is true.',
+          },
+          {
+            kind: 'code',
+            code: 'def Set (α : Type) := α → Prop\n\ndef evens : Set Nat := fun n => ∃ k, n = 2 * k\n\n#check evens\n#check evens 4',
+          },
+          {
+            kind: 'p',
+            text: 'A is a subset of B when every element of A is also in B. It is a universal statement: introduce an element and push the proof forward.',
+          },
+          {
+            kind: 'code',
+            code: 'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ntheorem subset_trans {α : Type} (A B C : Set α) (h1 : Subset A B) (h2 : Subset B C) : Subset A C := by\n  intro x hx\n  exact h2 x (h1 x hx)',
+          },
+          {
+            kind: 'p',
+            text: 'The union A ∪ B contains x when A x or B x holds, so A is always a subset of A ∪ B.',
+          },
+          {
+            kind: 'code',
+            code: 'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetUnion {α : Type} (A B : Set α) : Set α := fun x => A x ∨ B x\n\ntheorem subset_union {α : Type} (A B : Set α) : Subset A (SetUnion A B) := by\n  intro x hx\n  exact Or.inl hx',
+          },
+          {
+            kind: 'note',
+            text: 'The notation x ∈ A is another way to write A x. This lesson avoids extra type classes and reads A x as “A accepts x”.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Define intersection and prove that it is a subset of its left argument.',
+          cta: 'Try it in the editor',
+          starter:
+            'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetInter {α : Type} (A B : Set α) : Set α := fun x => A x ∧ B x\n\ntheorem inter_subset_left {α : Type} (A B : Set α) : Subset (SetInter A B) A := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-functions',
+        track: 'math',
+        navTitle: 'M6 · Functions',
+        title: 'Injective, surjective, bijective',
+        lead: 'A function is a mapping. Injectivity prevents collisions, surjectivity reaches every target, and bijectivity is a perfect round trip.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Injective: different inputs give different outputs. Surjective: every target has a preimage. Both together mean bijective.',
+          },
+          {
+            kind: 'code',
+            code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\n#check Injective',
+          },
+          {
+            kind: 'p',
+            text: 'A composition of injections is injective: from g (f a) = g (f b), injectivity of g gives f a = f b, and injectivity of f gives a = b.',
+          },
+          {
+            kind: 'code',
+            code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ntheorem injective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Injective f) (hg : Injective g) : Injective (fun x => g (f x)) := by\n  intro a b h\n  apply hf\n  apply hg\n  exact h',
+          },
+          {
+            kind: 'p',
+            text: 'The identity function is both injective and surjective, hence bijective.',
+          },
+          {
+            kind: 'code',
+            code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem surjective_id {α : Type} : Surjective (fun x : α => x) := by\n  intro b\n  exact ⟨b, rfl⟩\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  constructor\n  · intro a b h\n    exact h\n  · exact surjective_id',
+          },
+          {
+            kind: 'note',
+            text: 'A bijection lets you translate back and forth without losing information; finite sets with a bijection between them have the same number of elements.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that a composition of surjections is surjective.',
+          cta: 'Try it in the editor',
+          starter:
+            'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-relations',
+        track: 'math',
+        navTitle: 'M7 · Relations',
+        title: 'Equivalence relations and classification',
+        lead: 'A relation is a proposition about two elements. An equivalence relation is reflexive, symmetric and transitive, and it sorts objects into classes.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Pack the three properties into a structure and you have the definition of an equivalence relation.',
+          },
+          {
+            kind: 'code',
+            code: 'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\n#check IsEquivalence',
+          },
+          {
+            kind: 'p',
+            text: '“Same length” is an equivalence relation: length equals itself, equality can be swapped, and equalities compose.',
+          },
+          {
+            kind: 'code',
+            code: 'def SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_refl {α : Type} (xs : List α) : SameLength xs xs := rfl\n\ntheorem same_length_symm {α : Type} (xs ys : List α) (h : SameLength xs ys) :\n    SameLength ys xs := by\n  exact h.symm\n\ntheorem same_length_trans {α : Type} (xs ys zs : List α)\n    (h1 : SameLength xs ys) (h2 : SameLength ys zs) : SameLength xs zs := by\n  exact h1.trans h2',
+          },
+          {
+            kind: 'p',
+            text: 'An equivalence relation puts objects into classes: objects in the same class are “the same in some sense”. Mathematical classification usually means choosing the right equivalence relation.',
+          },
+          {
+            kind: 'note',
+            text: 'Congruence modulo n, isomorphism and homotopy are all equivalence relations; they turn complicated objects into comparable classes.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Combine the three properties into one IsEquivalence proof.',
+          cta: 'Try it in the editor',
+          starter:
+            'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_equiv {α : Type} : IsEquivalence (SameLength (α := α)) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-strong-induction',
+        track: 'math',
+        navTitle: 'M8 · Strong induction',
+        title: 'Strong induction and Fibonacci',
+        lead: 'Some recursions need the previous two terms or all smaller ones. Ordinary induction is not enough; strong induction is.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Fibonacci: F(0)=0, F(1)=1, and every later term is the sum of the previous two.',
+          },
+          {
+            kind: 'code',
+            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\n#eval fib 10',
+          },
+          {
+            kind: 'p',
+            text: 'Ordinary induction gives you the previous term; strong induction gives you every smaller term. Lean’s Nat.strongRecOn hands you “true for all m < n” directly.',
+          },
+          {
+            kind: 'code',
+            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by omega)\n      have h2 := ih (k + 1) (by omega)\n      simp [fib, Nat.pow_succ]\n      omega',
+          },
+          {
+            kind: 'note',
+            text: 'Strong induction is not a new axiom; it follows from ordinary induction. It is just more convenient.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that Fibonacci is nondecreasing: F(n) ≤ F(n+1).',
+          cta: 'Try it in the editor',
+          starter:
+            'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'code-sorting',
+        track: 'math',
+        navTitle: 'M9 · Insertion sort',
+        title: 'Why insertion sort is correct',
+        lead: 'The specification of sorting has two parts: the result is sorted, and no element is lost. Write those down and correctness becomes meaningful.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'First define “sorted”: empty and singleton lists are sorted; a longer list needs head ≤ second and a sorted tail.',
+          },
+          {
+            kind: 'code',
+            code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\n#eval sort [3, 1, 2]',
+          },
+          {
+            kind: 'p',
+            text: 'Membership preservation: y is in insertNat x xs exactly when y = x or y was already in xs.',
+          },
+          {
+            kind: 'code',
+            code: 'def insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ntheorem mem_insertNat (x y : Nat) (xs : List Nat) :\n    y ∈ insertNat x xs ↔ y = x ∨ y ∈ xs := by\n  induction xs with\n  | nil =>\n    unfold insertNat\n    simp\n  | cons z zs ih =>\n    unfold insertNat\n    by_cases h : x ≤ z\n    · simp [h]\n    · simp [h, ih, or_left_comm]',
+          },
+          {
+            kind: 'note',
+            text: 'Proving sortedness is left as the exercise; proving membership first and sortedness second is the usual split.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove that inserting x into a sorted list keeps it sorted.',
+          cta: 'Try it in the editor',
+          starter:
+            'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'code-sum',
+        track: 'math',
+        navTitle: 'M10 · List sum',
+        title: 'Recursive functions and inductive proofs',
+        lead: 'List sum is the smallest complete example: write a recursive function, then prove its properties by structural induction.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'The definition copies the mathematics: empty is 0, a nonempty list is its head plus the sum of its tail.',
+          },
+          {
+            kind: 'code',
+            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\n#eval sum [1, 2, 3]',
+          },
+          {
+            kind: 'p',
+            text: 'Summing an appended list equals the sum of the two sums. Prove it by structural induction on the first list.',
+          },
+          {
+            kind: 'code',
+            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega',
+          },
+          {
+            kind: 'note',
+            text: 'With an accumulator argument, sum becomes tail recursive; the proof then needs an accumulator invariant, which is the next exercise.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Use sum_append to prove that swapping the two lists does not change the total.',
+          cta: 'Try it in the editor',
+          starter:
+            'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-axioms',
+        track: 'math',
+        navTitle: 'M11 · Axioms & sorry',
+        title: 'Axioms, sorry and trustworthy code',
+        lead: 'An axiom is accepted without proof; a theorem is derived from axioms. Lean can tell you exactly which axioms a theorem depends on.',
+        blocks: [
+          {
+            kind: 'p',
+            text: '#print axioms lists the axioms a theorem depends on. Core arithmetic theorems usually depend on none.',
+          },
+          { kind: 'code', code: '#print axioms Nat.add_comm\n\n#check Classical.choice' },
+          {
+            kind: 'p',
+            text: 'sorry generates sorryAx and makes any proposition “true”. It is fine for drafts, not for delivery.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem cheat : 1 = 2 := by\n  sorry\n\n#print axioms cheat',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'Seeing sorryAx means the proof is unfinished; course code and CI should never leave sorry behind.',
+          },
+        ],
+      },
+      {
+        slug: 'math-mathlib',
+        track: 'math',
+        navTitle: 'M12 · Init to Mathlib',
+        title: 'From Init to Mathlib',
+        lead: 'Mathlib is Lean’s mathematics library: sets, functions, number theory, algebra and analysis. This runtime only ships Init, so the course built a mini library of its own.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'The Even, Prime, IsGcd, Set, Injective and Sorted definitions in this course all have industrial-strength counterparts in Mathlib.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\n#check Even\n#check Nat.gcd\n#check List.length',
+          },
+          {
+            kind: 'p',
+            text: 'Mapping: Even/Odd, Nat.Prime, Nat.gcd, Set, Function.Injective and List.Perm are the Mathlib names for these concepts.',
+          },
+          {
+            kind: 'code',
+            code: '#check Nat.gcd_dvd_left\n#check Nat.dvd_gcd\n#check List.mem_append',
+          },
+          {
+            kind: 'note',
+            text: 'To continue locally: install elan, create a project with lake new, and require mathlib in the lakefile. The first build takes a while, but then the whole library is available.',
+          },
+        ],
       },
     ],
   },

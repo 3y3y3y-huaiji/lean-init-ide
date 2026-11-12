@@ -6,7 +6,7 @@ import {
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
-import type { LessonPage } from '../i18n/types';
+import type { LessonPage, LessonTrack } from '../i18n/types';
 import { markLessonVisited, readProgress } from '../progress';
 import { escapeHtml } from './html';
 
@@ -73,15 +73,28 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
   const next = t.lessons[index + 1];
   const body = renderBlocks(page, t.runInEditor);
 
-  const toc = t.lessons
-    .map(
-      (lesson, i) => `
+  const trackOf = (lesson: LessonPage): LessonTrack => lesson.track ?? 'intro';
+  const toc = (['intro', 'math'] as const)
+    .map((track) => {
+      const entries = t.lessons
+        .map((lesson, i) => ({ lesson, i }))
+        .filter(({ lesson }) => trackOf(lesson) === track);
+      if (entries.length === 0) return '';
+      const heading = `<li class="mt-2 px-2.5 pb-1 pt-2 text-[10px] font-[650] uppercase tracking-[0.08em] text-muted first:mt-0 first:pt-0">${escapeHtml(t.tracks[track].title)}</li>`;
+      return (
+        heading +
+        entries
+          .map(
+            ({ lesson, i }) => `
       <li>
         <a class="${tocLink(i === index)}" data-lesson-slug="${lesson.slug}" href="/${locale}/learn/${lesson.slug}"${
           i === index ? ' aria-current="page"' : ''
         }>${escapeHtml(lesson.navTitle)}</a>
       </li>`,
-    )
+          )
+          .join('')
+      );
+    })
     .join('');
 
   const mobileToc = `
@@ -136,7 +149,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       <article class="min-w-0 max-w-[820px]">
         ${mobileToc}
         <header>
-          <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${escapeHtml(t.eyebrow)}</p>
+          <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${escapeHtml(t.tracks[trackOf(page)].title)}</p>
           <h1 class="mt-0 mb-3 text-[clamp(28px,4.2vw,40px)] tracking-[-0.015em]">${escapeHtml(page.title)}</h1>
           <p class="mt-0 mb-8 text-base leading-relaxed text-muted">${escapeHtml(page.lead)}</p>
         </header>

@@ -16,7 +16,7 @@ permissions:
 jobs:
   static:
     name: 静态检查
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -38,7 +38,7 @@ jobs:
 
   test:
     name: 单元测试
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -61,7 +61,7 @@ jobs:
 
   build:
     name: 构建产物
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -86,7 +86,7 @@ jobs:
   e2e:
     name: 浏览器端到端
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -135,7 +135,7 @@ jobs:
 
   audit:
     name: 依赖审计
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -155,7 +155,7 @@ jobs:
     needs: [static, test, build, e2e, audit]
     # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
     if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

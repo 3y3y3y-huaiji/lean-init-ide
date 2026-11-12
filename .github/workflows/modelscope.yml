@@ -38,11 +38,31 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: 检查 ModelScope 配置
+        env:
+          MODELSCOPE_USERNAME: HQZMSu
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO: HQZMSu/lean4-assets
+        run: |
+          echo "username: $MODELSCOPE_USERNAME"
+          echo "repo: $MODELSCOPE_REPO"
+          echo "token length: ${#MODELSCOPE_TOKEN}"
+          if printf '%s' "$MODELSCOPE_TOKEN" | grep -q '[[:space:]]'; then
+            echo "token contains whitespace: yes"
+          else
+            echo "token contains whitespace: no"
+          fi
+          case "$MODELSCOPE_TOKEN" in
+            ghp_*|github_pat_*|gho_*|ghu_*|ghs_*)
+              echo "token looks like a GitHub token: yes" ;;
+            *)
+              echo "token looks like a GitHub token: no" ;;
+          esac
       - name: 上传到 ModelScope
         env:
-          MODELSCOPE_USERNAME: ${{ secrets.MODELSCOPE_USERNAME }}
+          MODELSCOPE_USERNAME: HQZMSu
           MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
-          MODELSCOPE_REPO: ${{ secrets.MODELSCOPE_REPO }}
+          MODELSCOPE_REPO: HQZMSu/lean4-assets
         run: |
           if [ "${{ inputs.verify_only }}" = "true" ]; then
             pnpm run upload:modelscope -- --verify-only

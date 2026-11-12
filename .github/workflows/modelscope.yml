@@ -92,13 +92,18 @@ jobs:
           echo test > auth-test.txt
           git add auth-test.txt
           git commit -qm test
-          for user in "$MODELSCOPE_USERNAME" "oauth2"; do
+          for user in "$MODELSCOPE_USERNAME" "hqzmsu" "oauth2" "git" "x-access-token"; do
             if GIT_TERMINAL_PROMPT=0 git push --dry-run "https://${user}:${MODELSCOPE_TOKEN}@www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD:master >/dev/null 2>&1; then
               echo "write auth as ${user}: ok"
             else
               echo "write auth as ${user}: failed"
             fi
           done
+          if GIT_TERMINAL_PROMPT=0 git push --dry-run "https://${MODELSCOPE_TOKEN}:${MODELSCOPE_TOKEN}@www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD:master >/dev/null 2>&1; then
+            echo "write auth token:token: ok"
+          else
+            echo "write auth token:token: failed"
+          fi
           if GIT_TERMINAL_PROMPT=0 git push --dry-run "https://${MODELSCOPE_TOKEN}@www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD:master >/dev/null 2>&1; then
             echo "write auth token-as-username: ok"
           else

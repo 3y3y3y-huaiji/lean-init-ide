@@ -4,6 +4,8 @@
 
 在线使用：<https://criticalthinking.de5.net>（备用：<https://lean-init-ide.pages.dev>）
 
+简体中文 | [English](README.en.md)
+
 ## 这是什么
 
 一个**不用安装任何工具链**的 Lean 4 学习环境。Lean 4.34.1 的 Init 运行时被编译成 WebAssembly，

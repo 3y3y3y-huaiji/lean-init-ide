@@ -124,6 +124,7 @@ chore(ci): 依赖审计只审生产依赖
 改了以下任一项，必须同步更新文档，否则下一个 Agent 会按旧信息行动：
 
 - 资产分发链路或清单字段 → `docs/ARCHITECTURE.md` 的「运行时分发」与 `docs/OPERATIONS.md` 的「资产维护」
+- README 的用户可见内容 → 同步 `README.en.md`，两份保持同一结构
 - 指标事件、字段或路由 → `docs/OPERATIONS.md` 的「运行指标与错误上报」
 - 源诊断开关或探活脚本 → `docs/OPERATIONS.md` 的「国内访问与源诊断」
 - 门禁命令或阈值 → `docs/DEVELOPMENT.md` 的「质量门禁」与本文件的命令表

@@ -77,6 +77,33 @@ jobs:
               echo "auth as ${user}: failed"
             fi
           done
+      - name: 测试写入认证
+        env:
+          MODELSCOPE_USERNAME: HQZMSu
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO: HQZMSu/lean4-assets
+        run: |
+          set +e
+          work=$(mktemp -d)
+          cd "$work"
+          git init -q
+          git config user.email ci@example.com
+          git config user.name ci
+          echo test > auth-test.txt
+          git add auth-test.txt
+          git commit -qm test
+          for user in "$MODELSCOPE_USERNAME" "oauth2"; do
+            if GIT_TERMINAL_PROMPT=0 git push --dry-run "https://${user}:${MODELSCOPE_TOKEN}@www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD:master >/dev/null 2>&1; then
+              echo "write auth as ${user}: ok"
+            else
+              echo "write auth as ${user}: failed"
+            fi
+          done
+          if GIT_TERMINAL_PROMPT=0 git push --dry-run "https://${MODELSCOPE_TOKEN}@www.modelscope.cn/datasets/${MODELSCOPE_REPO}.git" HEAD:master >/dev/null 2>&1; then
+            echo "write auth token-as-username: ok"
+          else
+            echo "write auth token-as-username: failed"
+          fi
       - name: 上传到 ModelScope
         env:
           MODELSCOPE_USERNAME: HQZMSu

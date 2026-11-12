@@ -1,6 +1,6 @@
 {
   "revision": "14ea5ecbc514b0c87338aebf8f2b567020be5750",
-  "cacheKey": "14ea5ec",
+  "cacheKey": "z9687c64",
   "runtime": "Lean 4.34.1 Init",
   "bucket": "lean4-ide-releases",
   "primary": {
@@ -13,7 +13,8 @@
   },
   "mirror": {
     "label": "ModelScope",
-    "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/"
+    "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/",
+    "prefix": "wasm-lean4"
   },
   "assets": [
     {
@@ -34,12 +35,18 @@
     },
     {
       "name": "lean.wasm.gz.bin",
-      "key": "lean.wasm.gz",
-      "source": "lean.wasm.gz",
-      "bytes": 20239874,
-      "sha256": "89dc3cb841d487f9e29c1dc3069e7aeb1a63e5ec0267b8250552e3fe90f855bf",
+      "key": "lean.wasm.gz.bin",
+      "source": "lean.wasm.gz.bin",
+      "bytes": 10417830,
+      "sha256": "bbffc87df4a9e6407ac65099a61a786f9f69e0af2399039a5b649ffb6654e3f1",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean.wasm.gz",
+      "upstreamBytes": 20239874,
+      "upstreamSha256": "89dc3cb841d487f9e29c1dc3069e7aeb1a63e5ec0267b8250552e3fe90f855bf",
+      "uncompressedBytes": 113033667,
+      "uncompressedSha256": "d81dbde2ba4aaf0546affca2756477b6d1365a5633080d7119f737e5906ed919"
     },
     {
       "name": "lean-init.index.json",
@@ -51,57 +58,93 @@
     },
     {
       "name": "lean-init-00.pack.gz.bin",
-      "key": "lean-init-00.pack.gz",
-      "source": "lean-init-00.pack.gz",
-      "bytes": 22626621,
-      "sha256": "c2cea0798b8b3e910188eb79d3d0101452c874f693294d2cf8c360fde125c08e",
+      "key": "lean-init-00.pack.gz.bin",
+      "source": "lean-init-00.pack.gz.bin",
+      "bytes": 18209695,
+      "sha256": "99ab095062d852e3cdb8d6692cb3f20218badb33a30e30548b5d2c41d0df3efc",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean-init-00.pack.gz",
+      "upstreamBytes": 22626621,
+      "upstreamSha256": "c2cea0798b8b3e910188eb79d3d0101452c874f693294d2cf8c360fde125c08e",
+      "uncompressedBytes": 50331648,
+      "uncompressedSha256": "19734bd892d96cbf4ec7b1d13e1bdccbbee022f3288908ee535e2facfc99d483"
     },
     {
       "name": "lean-init-01.pack.gz.bin",
-      "key": "lean-init-01.pack.gz",
-      "source": "lean-init-01.pack.gz",
-      "bytes": 22633878,
-      "sha256": "6e65383d8de425a0c0f5b48430aa5be7c9f2066138080bf213a0435b0fd1d874",
+      "key": "lean-init-01.pack.gz.bin",
+      "source": "lean-init-01.pack.gz.bin",
+      "bytes": 17940410,
+      "sha256": "eed3523b4d861a308a10311d5082901825073c48a5dd63c6e6e8045970250111",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean-init-01.pack.gz",
+      "upstreamBytes": 22633878,
+      "upstreamSha256": "6e65383d8de425a0c0f5b48430aa5be7c9f2066138080bf213a0435b0fd1d874",
+      "uncompressedBytes": 50331648,
+      "uncompressedSha256": "2ea9fcd0ede724bfc93bf032b7ee3d09724fbd83a17afaaaad534859e74b1200"
     },
     {
       "name": "lean-init-02.pack.gz.bin",
-      "key": "lean-init-02.pack.gz",
-      "source": "lean-init-02.pack.gz",
-      "bytes": 23039094,
-      "sha256": "57cc57d61067fc77d8b72008299e25956a121cd3fdf628941420966de1f762e5",
+      "key": "lean-init-02.pack.gz.bin",
+      "source": "lean-init-02.pack.gz.bin",
+      "bytes": 18333033,
+      "sha256": "f36524e50fcd5783366a1ef39fcf6b8feffe302ba4cc3d336663b2cab8e566e4",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean-init-02.pack.gz",
+      "upstreamBytes": 23039094,
+      "upstreamSha256": "57cc57d61067fc77d8b72008299e25956a121cd3fdf628941420966de1f762e5",
+      "uncompressedBytes": 50331648,
+      "uncompressedSha256": "75273ea353191316cb8fc31900ef36ffa7424a4bd62061cdbbba8477510ed3bc"
     },
     {
       "name": "lean-init-03.pack.gz.bin",
-      "key": "lean-init-03.pack.gz",
-      "source": "lean-init-03.pack.gz",
-      "bytes": 22382973,
-      "sha256": "e310ddf310d6d89dc7cc583f01213a1eab2684c1ada9e77368ca16637009d72a",
+      "key": "lean-init-03.pack.gz.bin",
+      "source": "lean-init-03.pack.gz.bin",
+      "bytes": 17543881,
+      "sha256": "23eb420fa6f08ce0453b9f8b9ad77e2fa518b2e883adbaca28158fc58cc4486c",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean-init-03.pack.gz",
+      "upstreamBytes": 22382973,
+      "upstreamSha256": "e310ddf310d6d89dc7cc583f01213a1eab2684c1ada9e77368ca16637009d72a",
+      "uncompressedBytes": 50331648,
+      "uncompressedSha256": "480c12f5b808c18f692e9f5f5666bee3c6a2b0473075a3dd1417039b2bf05553"
     },
     {
       "name": "lean-init-04.pack.gz.bin",
-      "key": "lean-init-04.pack.gz",
-      "source": "lean-init-04.pack.gz",
-      "bytes": 21886461,
-      "sha256": "f1345c223483bbb8e3c25e73042c5526efbd24301df95c74d30b4799493e6697",
+      "key": "lean-init-04.pack.gz.bin",
+      "source": "lean-init-04.pack.gz.bin",
+      "bytes": 17170987,
+      "sha256": "150d5ea10c560837d89627b99ed1ffe78aa2e9f81144ba4a0784ea20d1e056b0",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean-init-04.pack.gz",
+      "upstreamBytes": 21886461,
+      "upstreamSha256": "f1345c223483bbb8e3c25e73042c5526efbd24301df95c74d30b4799493e6697",
+      "uncompressedBytes": 50331648,
+      "uncompressedSha256": "5daed6ecf33bfb049e294c72ed161d6a0260440aa371b2be34f26b78377e1178"
     },
     {
       "name": "lean-init-05.pack.gz.bin",
-      "key": "lean-init-05.pack.gz",
-      "source": "lean-init-05.pack.gz",
-      "bytes": 9812693,
-      "sha256": "9f8deb32469cbe66669381c8f0fb5d379d506f7935beb29393b19d2c52ac8a52",
+      "key": "lean-init-05.pack.gz.bin",
+      "source": "lean-init-05.pack.gz.bin",
+      "bytes": 7379336,
+      "sha256": "d23d66e54a7285a1d634f57c630e246fc1b1d719b0707141e9d539ed5649a668",
       "contentType": "application/octet-stream",
-      "ranged": true
+      "ranged": true,
+      "encoding": "zstd",
+      "upstream": "lean-init-05.pack.gz",
+      "upstreamBytes": 9812693,
+      "upstreamSha256": "9f8deb32469cbe66669381c8f0fb5d379d506f7935beb29393b19d2c52ac8a52",
+      "uncompressedBytes": 24923128,
+      "uncompressedSha256": "73ca4bd7a0d07f15d3b88298b7dd273406a92e36da96cb555ebb986ee85b7b14"
     },
     {
       "name": "runner-worker.js",

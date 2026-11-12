@@ -23,7 +23,7 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # 和 CI 其它 job 共用资产缓存；命中时 fetch:assets 只做哈希校验。

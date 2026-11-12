@@ -8,7 +8,7 @@
  *
  *   --repo=<ns/name>      覆盖 MODELSCOPE_REPO
  *   --type=dataset|model  仓库类型，默认 dataset
- *   --root=<cacheKey>     仓库内目录，默认用清单 cacheKey
+ *   --root=<dir>          仓库内目录，默认用 manifest.mirror.prefix，否则用 cacheKey
  *   --dry-run             只校验本地文件并打印目标 URL
  *   --verify-only         跳过上传，只校验远端 Range/CORS
  *   --keep                保留下载的临时仓库目录
@@ -43,7 +43,7 @@ const args = new Map(
 
 const repo = args.get('repo') ?? process.env.MODELSCOPE_REPO ?? '';
 const repoType = args.get('type') ?? process.env.MODELSCOPE_REPO_TYPE ?? 'dataset';
-const rootDir = args.get('root') ?? manifest.cacheKey;
+const rootDir = args.get('root') ?? manifest.mirror?.prefix ?? manifest.cacheKey;
 const username = process.env.MODELSCOPE_USERNAME ?? '';
 const token = process.env.MODELSCOPE_TOKEN ?? '';
 const dryRun = args.has('dry-run');

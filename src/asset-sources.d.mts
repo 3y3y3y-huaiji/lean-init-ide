@@ -12,6 +12,14 @@ export interface RuntimeAsset {
   sha256: string;
   contentType: string;
   ranged?: boolean;
+  /** 交付字节的压缩格式；缺省为 identity。 */
+  encoding?: 'gzip' | 'zstd';
+  /** zstd 资产的构建来源（上游 gzip 文件名与校验值）。 */
+  upstream?: string;
+  upstreamBytes?: number;
+  upstreamSha256?: string;
+  uncompressedBytes?: number;
+  uncompressedSha256?: string;
 }
 
 export interface RuntimeManifest {
@@ -21,8 +29,8 @@ export interface RuntimeManifest {
   bucket: string;
   primary: { label: string; baseUrl: string };
   fallback: { label: string; baseUrl: string };
-  /** 国内镜像（魔搭）。文件按 <cacheKey>/<name> 存放，URL 不带 ?r= 版本键。 */
-  mirror?: { label: string; baseUrl: string };
+  /** 国内镜像（魔搭）。文件按 <prefix 或 cacheKey>/<name> 存放，URL 不带 ?r= 版本键。 */
+  mirror?: { label: string; baseUrl: string; prefix?: string };
   assets: RuntimeAsset[];
 }
 

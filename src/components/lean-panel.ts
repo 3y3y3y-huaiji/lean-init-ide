@@ -33,7 +33,7 @@ export type LeanPanelVariant = 'full' | 'compact';
 export type LeanPanelProgressKind = 'idle' | 'loading' | 'ready' | 'error';
 
 export type LeanPanelProgress = {
-  /** 当前阶段文案，如“加载运行时…（首次约 143MB）”“启动 LSP…”。 */
+  /** 当前阶段文案，如“加载运行时…（首次约 102MB）”“启动 LSP…”。 */
   label: string;
   kind: LeanPanelProgressKind;
   /** 资产下载进度；未知时为 null，用不确定进度条。 */
@@ -978,7 +978,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const start = async () => {
     if (startEl.disabled) return;
     startEl.disabled = true;
-    // 首次下载约 143 MB；在用户手势中申请持久存储，避免浏览器清理已校验的缓存。
+    // 首次下载约 102 MB；在用户手势中申请持久存储，避免浏览器清理已校验的缓存。
     void navigator.storage?.persist?.().catch(() => {});
     setStatus(t.statusLoading, 'loading');
     setProgress(0);

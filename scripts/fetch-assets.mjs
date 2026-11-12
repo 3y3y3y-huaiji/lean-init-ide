@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync, zstdCompressSync, constants as zlibConstants } from 'node:zlib';
 import { assetSources } from '../src/asset-sources.mjs';
 
 /**
@@ -42,6 +43,39 @@ const verify = (asset, data) => {
         `expected ${asset.bytes} / ${asset.sha256}`,
     );
   }
+};
+
+/**
+ * zstd 资产的原始字节仍在上游 GitHub raw（gzip）。下载后按清单校验上游 gzip，
+ * 再解压、以 level 19 重新压缩，最后用交付哈希复核。这样 CI 不需要预上传 R2。
+ */
+const fetchUpstream = async (asset) => {
+  if (!asset.upstream || !asset.upstreamBytes || !asset.upstreamSha256) {
+    throw new Error(`${asset.name} 缺少 upstream 字段，无法生成 zstd 资产`);
+  }
+  const url = new URL(asset.upstream, manifest.fallback.baseUrl).href;
+  const response = await fetch(url, {
+    headers: { 'Accept-Encoding': 'identity' },
+    redirect: 'follow',
+  });
+  if (!response.ok) throw new Error(`upstream HTTP ${response.status}: ${url}`);
+  const data = Buffer.from(await response.arrayBuffer());
+  if (data.length !== asset.upstreamBytes || sha256(data) !== asset.upstreamSha256) {
+    throw new Error(`${asset.name} 上游 gzip 校验失败`);
+  }
+  return data;
+};
+
+const toZstd = (asset, upstream) => {
+  const raw = gunzipSync(upstream);
+  const data = zstdCompressSync(raw, {
+    params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+  });
+  if (raw.length !== asset.uncompressedBytes || sha256(raw) !== asset.uncompressedSha256) {
+    throw new Error(`${asset.name} 解压后的字节数或 SHA-256 与清单不一致`);
+  }
+  verify(asset, data);
+  return data;
 };
 
 const fetchFromSources = async (asset) => {
@@ -88,6 +122,9 @@ for (const asset of manifest.assets) {
   if (asset.local && existsSync(path.join(root, asset.local))) {
     data = readFileSync(path.join(root, asset.local));
     verify(asset, data);
+  } else if (asset.encoding === 'zstd') {
+    data = toZstd(asset, await fetchUpstream(asset));
+    label = 'upstream gzip -> zstd';
   } else {
     ({ data, label } = await fetchFromSources(asset));
   }

@@ -24,7 +24,7 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: 代码格式
@@ -46,7 +46,7 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # 覆盖率阈值写在 vitest.config.ts，低于阈值即失败。
@@ -69,10 +69,10 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # build:web 跳过 143 MB 资产下载，运行时由 /cdn 网关按需拉取。
+      # build:web 跳过 102 MB 资产下载，运行时由 /cdn 网关按需拉取。
       - run: pnpm run build:web
       - name: 产物契约
         run: pnpm run verify:build
@@ -94,7 +94,7 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v8
@@ -143,7 +143,7 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # 只审生产依赖：开发工具链的告警不阻塞发布，但会在日志里可见。
@@ -163,7 +163,7 @@ jobs:
           version: 12.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # 认证失败时 wrangler 只回一句 9106，看不出是 token 值坏了还是权限不够。
@@ -185,7 +185,7 @@ jobs:
           head -c 400 /tmp/probe.json
           echo
           [ "$code" = "200" ] || exit 1
-      # 必须用完整 build：build:web 会跳过 143 MB 兜底副本，丢掉 SW 的第三级回退。
+      # 必须用完整 build：build:web 会跳过 102 MB 兜底副本，丢掉 SW 的第三级回退。
       - name: 缓存 Lean 资产
         uses: actions/cache@v6
         with:

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import assetsSource from '../node_modules/@wasm-idle/lsp/dist/lean4/assets.js?raw';
+import bundledRuntimeSource from '../node_modules/@wasm-idle/lsp/dist/bundledLean4Runtime.js?raw';
 import runtimeWorkerSource from '../node_modules/@wasm-idle/lsp/dist/lean4/runtime-worker.js?raw';
 import workerSource from '../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?raw';
 
@@ -25,5 +26,12 @@ describe('@wasm-idle/lsp 补丁', () => {
   it('pthread 池保持 16/8：再小会让文件检查静默不产生诊断', () => {
     expect(workerSource).toContain("startProcess(['-j4', '--worker', document.uri], 16,");
     expect(workerSource).toContain("startProcess(['-j2', '--server'], 8,");
+  });
+
+  it('用同源 wasm 解码器解 zstd 资产', () => {
+    expect(workerSource).toContain("receipt.encoding === 'zstd'");
+    expect(workerSource).toContain("new URL('/vendor/zstddec.mjs', self.location.origin).href");
+    expect(workerSource).toContain('@vite-ignore');
+    expect(bundledRuntimeSource).toContain('"encoding": "zstd"');
   });
 });

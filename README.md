@@ -23,7 +23,7 @@
 
 直接打开 <https://criticalthinking.de5.net>，选一门课点「运行」即可，无需注册或安装。
 
-- 首次会下载约 143MB 运行时，之后走浏览器持久缓存（二次进入通常 4–7 秒可用）。
+- 首次会下载约 102MB 运行时，之后走浏览器持久缓存（二次进入通常 4–7 秒可用）。
 - 需要 cross-origin isolation 与 SharedArrayBuffer，Chromium 系浏览器体验最佳。
 - 低内存设备（`navigator.deviceMemory ≤ 4`）不会自动下载，需要手动点「启动 Lean」。
 - 只想读课程时不必启动引擎：课程正文直接可看，编辑器页默认也不自动下载。
@@ -98,7 +98,7 @@
 ```bash
 pnpm install         # 安装依赖并应用 patches/ 里的 @wasm-idle/lsp 补丁
 pnpm run dev         # 开发服务器（首次会下载并校验运行时资产）
-pnpm run build:web   # 只构建前端，跳过 143MB 资产
+pnpm run build:web   # 只构建前端，跳过 102MB 资产
 pnpm test            # Vitest + 覆盖率阈值
 pnpm run smoke       # 线上冒烟，发版后跑
 ```
@@ -121,7 +121,7 @@ pnpm run smoke       # 线上冒烟，发版后跑
 
 Lean Init IDE is a browser-native Lean 4 learning environment. The Lean 4.34.1 Init runtime and
 the real language server run in Web Workers, so you can write proofs and read diagnostics and
-goals without installing a toolchain. It is a static site on Cloudflare Pages; the 143 MB runtime
+goals without installing a toolchain. It is a static site on Cloudflare Pages; the 102 MB runtime
 streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Nine intro-level
 lessons, no backend, and no code upload.
 

@@ -264,7 +264,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
     // 用户再点同一块时就变成「重复声明」。面板本身是 sr-only，空文档不影响阅读。
     code: '',
     locale,
-    // 低内存设备与省流模式都不自动下载 143MB，让用户先确认。
+    // 低内存设备与省流模式都不自动下载 102MB，让用户先确认。
     autoStart: shouldAutoStart(currentMemoryTier(), saveData === true),
     onProgress: (progress) => reportProgress?.(progress),
   });

@@ -41,7 +41,25 @@ type ActiveRun = {
   lastPublishAt: number;
   opened: boolean;
   diagnostics: LspDiagnostic[];
+  /** 本次 run 对应的文档版本，用于过滤旧版本迟到的诊断。 */
+  version: number;
+  code: string;
+  imports: string;
 };
+
+type PublishDiagnostics = {
+  uri: string;
+  version?: number;
+  diagnostics: LspDiagnostic[];
+};
+
+/** 提取 import 行做比较：只有 import 变化才需要让 Lean 重建文档进程。 */
+const importLines = (code: string): string =>
+  code
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^(?:(?:public|private|meta)\s+)*import\s+/.test(line))
+    .join('\n');
 
 type ReadyWaiter = {
   resolve: (ready: boolean) => void;
@@ -61,6 +79,10 @@ export class LeanSession {
   private generation = 0;
   private activeRun: ActiveRun | null = null;
   private runTail: Promise<void> = Promise.resolve();
+  /** 上一次成功 run 的代码、import 集合与诊断，用于同文复用。 */
+  private lastRunCode: string | null = null;
+  private lastRunDiagnostics: LspDiagnostic[] | null = null;
+  private lastRunImports = '';
   private readonly readyWaiters = new Set<ReadyWaiter>();
   private readonly uri: string;
   private readonly languageId: string;
@@ -103,7 +125,10 @@ export class LeanSession {
   stop(): void {
     this.generation += 1;
     this.releaseResources();
-    this.settleRun([]);
+    this.settleRun([], undefined, false);
+    this.lastRunCode = null;
+    this.lastRunDiagnostics = null;
+    this.lastRunImports = '';
     this.setState('idle');
   }
 
@@ -131,7 +156,10 @@ export class LeanSession {
     });
   }
 
-  /** didClose/didOpen 是一个事务；串行排队避免并发 run 抢走彼此的诊断。 */
+  /**
+   * 串行排队避免并发 run 抢走彼此的诊断。同一 import 集合下复用文档进程，
+   * 只发 didChange 并重新等诊断；import 变化才 didClose/didOpen 让 Lean 重建进程。
+   */
   run(code: string, syncEditor: () => void): Promise<LspDiagnostic[]> {
     const generation = this.generation;
     const result = this.runTail.then(() =>
@@ -156,16 +184,19 @@ export class LeanSession {
       const connection = this.options.createConnection(server);
       this.connection = connection;
 
-      connection.onNotification(
-        'textDocument/publishDiagnostics',
-        (params: { uri: string; diagnostics: LspDiagnostic[] }) => {
-          if (params.uri.toLowerCase() === this.uri.toLowerCase() && this.activeRun?.opened) {
-            this.activeRun.diagnostics = params.diagnostics;
-            this.activeRun.lastPublishAt = Date.now();
-          }
-          this.options.onDiagnostics?.(params);
-        },
-      );
+      connection.onNotification('textDocument/publishDiagnostics', (params: PublishDiagnostics) => {
+        // Lean 会带上文档版本；run 期间只接受本次版本，避免旧版本的迟到诊断污染结果。
+        const run = this.activeRun;
+        const current =
+          params.uri.toLowerCase() === this.uri.toLowerCase() &&
+          run?.opened &&
+          (params.version === undefined || params.version === run.version);
+        if (current && run) {
+          run.diagnostics = params.diagnostics;
+          run.lastPublishAt = Date.now();
+        }
+        this.options.onDiagnostics?.(params);
+      });
       connection.onNotification('window/logMessage', (params: { message: string }) =>
         this.options.onLog?.(`server: ${params.message}`),
       );
@@ -209,6 +240,9 @@ export class LeanSession {
           text: code,
         },
       });
+      this.lastRunCode = null;
+      this.lastRunDiagnostics = null;
+      this.lastRunImports = importLines(code);
       this.setState('ready');
     } catch (error) {
       if (generation === this.generation) {
@@ -227,7 +261,19 @@ export class LeanSession {
     const ready = await this.waitForReady();
     if (!ready || generation !== this.generation || !this.connection) return [];
 
-    this.options.onLog?.(`[run] 开始，长度 ${code.length}`);
+    // 同一份代码直接复用上次诊断：课程里重复点“运行”不应再走一次 Lean。
+    if (code === this.lastRunCode && this.lastRunDiagnostics) {
+      this.options.onLog?.('[run] 复用上次诊断');
+      syncEditor();
+      return this.lastRunDiagnostics;
+    }
+
+    const imports = importLines(code);
+    const reopen = imports !== this.lastRunImports;
+    this.options.onLog?.(
+      `[run] 开始，长度 ${code.length}${reopen ? '（import 变化，重开文档）' : '（复用文档进程）'}`,
+    );
+
     return new Promise<LspDiagnostic[]>((resolve) => {
       const active: ActiveRun = {
         resolve,
@@ -236,11 +282,48 @@ export class LeanSession {
         lastPublishAt: Date.now(),
         opened: false,
         diagnostics: [],
+        version: this.version + 1,
+        code,
+        imports,
       };
       this.activeRun = active;
-      active.timer = window.setTimeout(() => this.settleRun([], active), this.diagnosticTimeoutMs);
+      active.timer = window.setTimeout(
+        () => this.settleRun([], active, false),
+        this.diagnosticTimeoutMs,
+      );
 
       const connection = this.connection!;
+      // Lean 会渐进发布诊断；documentSymbol 作为处理屏障，随后再留一个静默窗口，
+      // 避免 #check 这类比屏障晚几十毫秒到达的信息被丢掉。
+      const barrier = () => {
+        void connection
+          .sendRequest('textDocument/documentSymbol', { textDocument: { uri: this.uri } })
+          .then(
+            () => this.settleAfterQuiet(active),
+            (error: unknown) => {
+              this.options.onLog?.(
+                `[run] documentSymbol 失败：${error instanceof Error ? error.message : String(error)}`,
+              );
+              // 屏障失败时诊断可能不完整，不写入同文复用缓存。
+              this.settleRun(active.diagnostics, active, false);
+            },
+          );
+      };
+
+      if (!reopen) {
+        // 复用同一个 Lean 文档进程：只发 didChange，省掉 277MB Init 的重新拷贝与进程启动。
+        this.version += 1;
+        active.version = this.version;
+        active.opened = true;
+        connection.sendNotification('textDocument/didChange', {
+          textDocument: { uri: this.uri, version: this.version },
+          contentChanges: [{ text: code }],
+        });
+        syncEditor();
+        barrier();
+        return;
+      }
+
       connection.sendNotification('textDocument/didClose', { textDocument: { uri: this.uri } });
       window.setTimeout(() => {
         if (
@@ -252,6 +335,7 @@ export class LeanSession {
           return;
         }
         this.version += 1;
+        active.version = this.version;
         active.opened = true;
         this.connection.sendNotification('textDocument/didOpen', {
           textDocument: {
@@ -262,19 +346,7 @@ export class LeanSession {
           },
         });
         syncEditor();
-        // Lean 会渐进发布诊断；documentSymbol 作为处理屏障，随后再留一个静默窗口，
-        // 避免 #check 这类比屏障晚几十毫秒到达的信息被丢掉。
-        void connection
-          .sendRequest('textDocument/documentSymbol', { textDocument: { uri: this.uri } })
-          .then(
-            () => this.settleAfterQuiet(active),
-            (error: unknown) => {
-              this.options.onLog?.(
-                `[run] documentSymbol 失败：${error instanceof Error ? error.message : String(error)}`,
-              );
-              this.settleRun(active.diagnostics, active);
-            },
-          );
+        barrier();
       }, this.reopenDelayMs);
     });
   }
@@ -320,12 +392,17 @@ export class LeanSession {
     });
   }
 
-  private settleRun(diagnostics: LspDiagnostic[], expected?: ActiveRun): void {
+  private settleRun(diagnostics: LspDiagnostic[], expected?: ActiveRun, cache = true): void {
     const active = this.activeRun;
     if (!active || (expected && active !== expected)) return;
     this.activeRun = null;
     if (active.timer !== undefined) window.clearTimeout(active.timer);
     if (active.quietTimer !== undefined) window.clearTimeout(active.quietTimer);
+    if (cache && this.stateValue === 'ready') {
+      this.lastRunCode = active.code;
+      this.lastRunDiagnostics = diagnostics;
+      this.lastRunImports = active.imports;
+    }
     active.resolve(diagnostics);
   }
 

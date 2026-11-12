@@ -20,7 +20,7 @@ export const zh: Messages = {
     label: '设置',
     title: '偏好设置',
     autoStart: '打开编辑器页时自动下载 Lean',
-    autoStartHint: '关闭后需要手动点「启动 Lean」。首次下载约 143MB，只在你的浏览器里缓存。',
+    autoStartHint: '关闭后需要手动点「启动 Lean」。首次下载约 102MB，只在你的浏览器里缓存。',
   },
   home: {
     eyebrow: 'Lean 4 · WebAssembly · 浏览器内 LSP',
@@ -41,7 +41,7 @@ export const zh: Messages = {
       },
       {
         title: '一次下载，长期可用',
-        body: '约 143MB 运行时由站点同源网关从 Cloudflare R2 按 4MB 分片并行下发并做 SHA-256 校验，网关故障时自动回退 GitHub raw，之后走持久缓存。',
+        body: '约 102MB 运行时由站点同源网关从 Cloudflare R2 按 4MB 分片并行下发并做 SHA-256 校验，网关故障时回退镜像或同源静态副本，之后走持久缓存。',
       },
       {
         title: '开源双协议',
@@ -102,7 +102,7 @@ export const zh: Messages = {
           },
           {
             kind: 'p',
-            text: '编辑器完整地跑在你的浏览器里：首次需要下载约 143MB 运行时，之后会缓存；代码不会上传到任何服务器。',
+            text: '编辑器完整地跑在你的浏览器里：首次需要下载约 102MB 运行时，之后会缓存；代码不会上传到任何服务器。',
           },
         ],
         exercise: {
@@ -909,7 +909,7 @@ export const zh: Messages = {
   },
   playground: {
     title: 'Lean 编辑器',
-    hint: '首次启动需下载约 143MB 运行时，之后会持久缓存。',
+    hint: '首次启动需下载约 102MB 运行时，之后会持久缓存。',
     start: '启动 Lean',
     stop: '关闭 Lean',
     goalTitle: 'Goal',
@@ -944,7 +944,7 @@ export const zh: Messages = {
     statusLowMemory: '低内存设备 · 手动启动',
     lowMemoryHint:
       '检测到可用内存偏小：启动 Lean 需要约 400MB 空闲内存，已关闭自动下载。确认设备有余量后手动点「启动 Lean」。',
-    statusLoading: '加载运行时…（首次约 143MB）',
+    statusLoading: '加载运行时…（首次约 102MB）',
     statusStarting: '启动 LSP…',
     statusChunks: (loaded, total) => `${loaded} / ${total} MB`,
     statusChunkFallback: (name, message) => `分片回退 ${name}：${message}`,
@@ -1007,7 +1007,7 @@ export const zh: Messages = {
         heading: '本地存储',
         paragraphs: [
           '主题、语言、自动启动偏好、课程阅读进度与练习草稿保存在 localStorage；草稿只留在本机，不会上传。',
-          'Lean 运行时和诊断用的来源选择保存在 CacheStorage / IndexedDB，用于避免重复下载约 143MB。',
+          'Lean 运行时和诊断用的来源选择保存在 CacheStorage / IndexedDB，用于避免重复下载约 102MB。',
           '这些数据都可以在浏览器设置里随时清除，清除后站点仍可正常使用。',
         ],
       },

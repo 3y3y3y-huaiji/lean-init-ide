@@ -1,7 +1,7 @@
 /**
  * Lean 运行时资产下载器（Service Worker）。
  *
- * Cloudflare Pages 的静态资源不处理 Range，所以 143MB 的 Lean 运行时按
+ * Cloudflare Pages 的静态资源不处理 Range，所以 102MB 的 Lean 运行时按
  * Accept-Language 选择首选源：中文环境先走魔搭（ModelScope）镜像，其他环境
  * 先走站点同源的 /cdn/ 网关（Pages Function → R2 binding）；任一源失败都按
  * 顺序回退到另一个源，最后回退到固定 revision 的 GitHub raw 与同源全量请求。

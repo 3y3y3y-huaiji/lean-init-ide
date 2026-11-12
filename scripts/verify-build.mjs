@@ -92,9 +92,18 @@ if (!(await exists(headersPath))) {
   for (const requirement of [
     'Cross-Origin-Opener-Policy: same-origin',
     'Cross-Origin-Embedder-Policy: require-corp',
+    "connect-src 'self' data:",
   ]) {
     if (!headers.includes(requirement)) fail(`_headers 缺少 "${requirement}"`);
   }
+}
+
+// 4b. zstd 解码器：资产是 zstd，worker 启动时必须能加载同源解码器
+const zstdPath = resolve(dist, 'vendor/zstddec.mjs');
+if (!(await exists(zstdPath))) {
+  fail('缺少 dist/vendor/zstddec.mjs，zstd 资产无法解码');
+} else if (!(await readFile(zstdPath, 'utf8')).includes('ZSTDDecoder')) {
+  fail('dist/vendor/zstddec.mjs 不是有效的 zstd 解码器');
 }
 
 // 5. 静态资源与体积预算
@@ -118,15 +127,33 @@ if (!(await exists(assetsDir))) {
   const maps = files.filter((file) => file.path.endsWith('.map'));
   if (maps.length > 0) fail(`dist/assets 里混入了 ${maps.length} 个 sourcemap`);
 
+  const jsTexts = await Promise.all(jsFiles.map((file) => readFile(file.path, 'utf8')));
+  if (!jsTexts.some((text) => text.includes('zstddec.mjs'))) {
+    fail('worker 产物没有引用 zstddec.mjs，zstd 资产会在启动时失败');
+  }
+
   console.log(
     `静态资源：${jsFiles.length} 个 JS / ${(jsBytes / 1024 / 1024).toFixed(2)} MiB，${cssFiles.length} 个 CSS`,
   );
 }
 
-// 6. 提示同源兜底副本是否存在（CI 用 build:web，不会下载 143MB 资产）
+// 6. 同源兜底副本：存在时必须与 zstd 清单的字节数一致（防止旧 gzip 资产混入）
 const wasmDir = resolve(dist, 'wasm-lean4');
 if (!(await exists(wasmDir))) {
   console.log('提示：dist/wasm-lean4 不存在（CI 构建跳过资产下载，属预期）');
+} else {
+  const manifest = JSON.parse(await readFile(resolve(root, 'config/lean4-runtime.json'), 'utf8'));
+  for (const asset of manifest.assets) {
+    const file = resolve(wasmDir, asset.name);
+    if (!(await exists(file))) {
+      fail(`dist/wasm-lean4 缺少 ${asset.name}`);
+      continue;
+    }
+    const size = (await stat(file)).size;
+    if (size !== asset.bytes) {
+      fail(`dist/wasm-lean4/${asset.name} 为 ${size} 字节，清单要求 ${asset.bytes}`);
+    }
+  }
 }
 
 if (errors.length > 0) {

@@ -8,6 +8,7 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       'public/wasm-lean4/**',
+      'public/vendor/**',
       'public/sw.js',
       'scripts/assets/**',
       '.wrangler/**',

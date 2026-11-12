@@ -6,7 +6,7 @@ describe('auto-start setting', () => {
     localStorage.clear();
   });
 
-  it('defaults to off so the 143 MB download is opt-in', () => {
+  it('defaults to off so the 102 MB download is opt-in', () => {
     expect(getAutoStart()).toBe(false);
   });
 

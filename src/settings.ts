@@ -2,7 +2,7 @@ const AUTO_START_KEY = 'lean:auto-start';
 
 /**
  * 打开编辑器页时是否自动下载并启动 Lean。
- * 默认关闭：首次下载约 143MB，应由用户主动决定。
+ * 默认关闭：首次下载约 102MB，应由用户主动决定。
  */
 export const getAutoStart = (): boolean => {
   try {

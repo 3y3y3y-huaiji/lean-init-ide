@@ -9,7 +9,7 @@
 
 - 线上：<https://criticalthinking.de5.net>（单域名，`lean-init-ide.pages.dev` 仅作回退）
 - 托管：Cloudflare Pages（Git 集成，push `main` 即部署）
-- 运行时资产：约 143 MB，11 个对象，存放在 R2 桶，经站点同源 `/cdn/` 网关读取
+- 运行时资产：约 102 MB，11 个对象，存放在 R2 桶，经站点同源 `/cdn/` 网关读取
 
 ## 开始之前
 
@@ -32,7 +32,7 @@
 1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改动这些文件必须同步更新清单里的 `bytes` 与 `sha256`、**更换 `cacheKey`**，并重新上传到 R2。边缘缓存按 URL 缓存一年（`immutable`），不换版本键会让用户继续拿到旧对象。
 2. **`_routes.json` 的 include 只能是 `["/cdn/*", "/api/telemetry"]` 这两个精确路径。** 不要改成通配符或目录：扩大范围会让静态资源请求也进 Functions，首屏变慢。
 3. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`。
-4. **只用一个域名。** 不要引入第二个可访问的 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名会让用户换域名就从零开始下载 143 MB。
+4. **只用一个域名。** 不要引入第二个可访问的 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名会让用户换域名就从零开始下载 102 MB。
 5. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 6. **换行符统一 LF。** 仓库根 `.gitattributes` 已强制，不要用会写入 CRLF 的工具改文件。
 7. **课程内容只能落在 Init 范围内。** 运行时不含 Std / Lean / Lake / Mathlib，引用它们会编译失败。
@@ -70,7 +70,7 @@ pnpm run lint           # ESLint
 pnpm run typecheck      # 三份 tsconfig：应用 / SW / Functions
 pnpm test               # Vitest + 覆盖率阈值
 pnpm run verify:manifest # 资产清单结构 + local 资产字节与哈希
-pnpm run build:web      # 生产构建（跳过 143MB 资产）
+pnpm run build:web      # 生产构建（跳过 102MB 资产）
 pnpm run verify:build   # 产物契约
 pnpm run smoke          # 线上冒烟（发版后跑）
 ```

@@ -3,6 +3,7 @@ dist
 package-lock.json
 pnpm-lock.yaml
 public/wasm-lean4
+public/vendor
 public/sw.js
 scripts/assets
 wrangler.toml

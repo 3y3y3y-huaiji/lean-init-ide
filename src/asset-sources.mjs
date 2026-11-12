@@ -54,12 +54,17 @@ export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
 
   const addMirror = () => {
     if (!manifest.mirror) return;
-    add(manifest.mirror.label, manifest.mirror.baseUrl, `${manifest.cacheKey}/${asset.name}`, {
+    // 魔搭目录可用 prefix 固定（如 wasm-lean4），否则按 cacheKey 分目录。
+    const prefix = manifest.mirror.prefix ?? manifest.cacheKey;
+    add(manifest.mirror.label, manifest.mirror.baseUrl, `${prefix}/${asset.name}`, {
       cacheKey: false,
     });
   };
 
   const addFallback = () => {
+    // zstd 资产的 GitHub raw 仍是上游 gzip；字节格式不同，不能当回退源。
+    // 这类资产由 Service Worker 直接落到同源静态副本 / 已上传的镜像。
+    if (asset.encoding === 'zstd') return;
     add(manifest.fallback.label, manifest.fallback.baseUrl, asset.source);
   };
 

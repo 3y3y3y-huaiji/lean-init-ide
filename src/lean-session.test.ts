@@ -7,7 +7,7 @@ import {
   type LspDiagnostic,
 } from './lean-session';
 
-type DiagnosticParams = { uri: string; diagnostics: LspDiagnostic[] };
+type DiagnosticParams = { uri: string; version?: number; diagnostics: LspDiagnostic[] };
 
 const diagnostic = (message: string): LspDiagnostic => ({
   range: {
@@ -213,7 +213,7 @@ describe('LeanSession', () => {
     await expect(waiting).resolves.toBe(true);
   });
 
-  it('run 在启动期间等待就绪，重开文档后返回匹配 URI 的诊断', async () => {
+  it('run 在启动期间等待就绪，复用文档进程并返回匹配版本的诊断', async () => {
     const h = makeHarness();
     const sync = vi.fn();
 
@@ -223,17 +223,15 @@ describe('LeanSession', () => {
 
     await h.session.start('initial');
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.sent('textDocument/didClose')).toHaveLength(1);
-    expect(sync).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(300);
-    expect(h.sent('textDocument/didOpen').at(-1)?.[1]).toMatchObject({
-      textDocument: { version: 2, text: '#eval 1 + 1' },
-    });
+    expect(h.sent('textDocument/didClose')).toHaveLength(0);
     expect(sync).toHaveBeenCalledOnce();
+    expect(h.sent('textDocument/didChange').at(-1)?.[1]).toMatchObject({
+      textDocument: { version: 2 },
+      contentChanges: [{ text: '#eval 1 + 1' }],
+    });
 
     const list = [diagnostic('2')];
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: list });
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: list });
     h.completeRun();
 
     await expect(running).resolves.toEqual(list);
@@ -243,19 +241,19 @@ describe('LeanSession', () => {
     const h = makeHarness({ diagnosticSettleMs: 300 });
     await h.session.start('initial');
     const running = h.session.run('#check Nat.add', vi.fn());
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(0);
 
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [] });
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: [] });
     h.completeRun();
     await vi.advanceTimersByTimeAsync(100);
     const list = [diagnostic('Nat.add : Nat → Nat → Nat')];
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: list });
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: list });
 
     await vi.advanceTimersByTimeAsync(400);
     await expect(running).resolves.toEqual(list);
   });
 
-  it('重开期间的空诊断和渐进诊断不会提前结束 run', async () => {
+  it('复用文档期间的空诊断和渐进诊断不会提前结束 run', async () => {
     const h = makeHarness();
     await h.session.start('initial');
 
@@ -263,14 +261,14 @@ describe('LeanSession', () => {
     const running = h.session.run('#check Nat.add\n#eval 2 + 3', vi.fn());
     void running.then(received);
     await vi.advanceTimersByTimeAsync(0);
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [] });
-    await vi.advanceTimersByTimeAsync(300);
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: [] });
 
-    expect(h.sent('textDocument/didOpen')).toHaveLength(2);
+    expect(h.sent('textDocument/didOpen')).toHaveLength(1);
+    expect(h.sent('textDocument/didChange')).toHaveLength(1);
     const list = [diagnostic('Nat.add : Nat → Nat → Nat'), diagnostic('5')];
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [] });
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [list[0]!] });
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: list });
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: [] });
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: [list[0]!] });
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: list });
     await vi.advanceTimersByTimeAsync(0);
     expect(received).not.toHaveBeenCalled();
 
@@ -285,8 +283,8 @@ describe('LeanSession', () => {
     const received = vi.fn();
     const running = h.session.run('def answer := 42', vi.fn());
     void running.then(received);
-    await vi.advanceTimersByTimeAsync(300);
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [] });
+    await vi.advanceTimersByTimeAsync(0);
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: [] });
     await vi.advanceTimersByTimeAsync(0);
     expect(received).not.toHaveBeenCalled();
 
@@ -304,21 +302,90 @@ describe('LeanSession', () => {
     const second = h.session.run('second', secondSync);
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(h.sent('textDocument/didClose')).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(300);
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [diagnostic('first result')] });
+    expect(h.sent('textDocument/didClose')).toHaveLength(0);
+    expect(firstSync).toHaveBeenCalledOnce();
+    h.publish({
+      uri: 'file:///workspace/Main.lean',
+      version: 2,
+      diagnostics: [diagnostic('first result')],
+    });
     h.completeRun();
     await expect(first).resolves.toEqual([diagnostic('first result')]);
 
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.sent('textDocument/didClose')).toHaveLength(2);
-    expect(secondSync).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(300);
+    expect(h.sent('textDocument/didClose')).toHaveLength(0);
     expect(secondSync).toHaveBeenCalledOnce();
-    h.publish({ uri: 'file:///workspace/Main.lean', diagnostics: [diagnostic('second result')] });
+    expect(h.sent('textDocument/didChange').at(-1)?.[1]).toMatchObject({
+      textDocument: { version: 3 },
+      contentChanges: [{ text: 'second' }],
+    });
+    h.publish({
+      uri: 'file:///workspace/Main.lean',
+      version: 3,
+      diagnostics: [diagnostic('second result')],
+    });
     h.completeRun();
 
     await expect(second).resolves.toEqual([diagnostic('second result')]);
+  });
+
+  it('同一份代码再次 run 直接复用上次诊断，不再请求 Lean', async () => {
+    const h = makeHarness();
+    await h.session.start('initial');
+    const first = h.session.run('def answer := 42', vi.fn());
+    await vi.advanceTimersByTimeAsync(0);
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: [] });
+    h.completeRun();
+    await expect(first).resolves.toEqual([]);
+
+    const sync = vi.fn();
+    const second = h.session.run('def answer := 42', sync);
+    await expect(second).resolves.toEqual([]);
+    expect(sync).toHaveBeenCalledOnce();
+    expect(h.sent('textDocument/didChange')).toHaveLength(1);
+    expect(
+      h.connection.sendRequest.mock.calls.filter(
+        ([name]) => name === 'textDocument/documentSymbol',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('import 变化时重开文档，让 Lean 重建进程', async () => {
+    const h = makeHarness();
+    const sync = vi.fn();
+    await h.session.start('initial');
+
+    const running = h.session.run('import Init.Data.List\n#check List', sync);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.sent('textDocument/didClose')).toHaveLength(1);
+    expect(sync).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(h.sent('textDocument/didOpen').at(-1)?.[1]).toMatchObject({
+      textDocument: { version: 2, text: 'import Init.Data.List\n#check List' },
+    });
+    expect(sync).toHaveBeenCalledOnce();
+
+    const list = [diagnostic('List : Type u → Type u')];
+    h.publish({ uri: 'file:///workspace/Main.lean', version: 2, diagnostics: list });
+    h.completeRun();
+    await expect(running).resolves.toEqual(list);
+  });
+
+  it('忽略旧版本文档的迟到诊断', async () => {
+    const h = makeHarness();
+    await h.session.start('initial');
+    const running = h.session.run('new code', vi.fn());
+    await vi.advanceTimersByTimeAsync(0);
+
+    h.publish({
+      uri: 'file:///workspace/Main.lean',
+      version: 1,
+      diagnostics: [diagnostic('stale')],
+    });
+    h.completeRun();
+
+    await expect(running).resolves.toEqual([]);
   });
 
   it('忽略其他文档的诊断，等待就绪与等待诊断超时都返回空数组', async () => {
@@ -331,8 +398,12 @@ describe('LeanSession', () => {
 
     await h.session.start('initial');
     const running = h.session.run('no diagnostics', sync);
-    await vi.advanceTimersByTimeAsync(300);
-    h.publish({ uri: 'file:///workspace/Other.lean', diagnostics: [diagnostic('other')] });
+    await vi.advanceTimersByTimeAsync(0);
+    h.publish({
+      uri: 'file:///workspace/Other.lean',
+      version: 2,
+      diagnostics: [diagnostic('other')],
+    });
     await vi.advanceTimersByTimeAsync(1000);
 
     await expect(running).resolves.toEqual([]);

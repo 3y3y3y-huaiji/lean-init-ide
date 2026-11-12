@@ -166,7 +166,8 @@ overrides:
   dompurify: 3.4.17
 
 patchedDependencies:
-  '@wasm-idle/lsp@1.3.0': 6b3b41bf1db16ca88d478bcea422555976abbcce22a939d207ccf39d05d88801
+  '@wasm-idle/core@1.3.0': 7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144
+  '@wasm-idle/lsp@1.3.0': 85b027684f4221d748911a1fd7487368db52018ccb43f346964ba41891376e06
 
 importers:
 
@@ -174,10 +175,10 @@ importers:
     dependencies:
       '@wasm-idle/core':
         specifier: ^1.3.0
-        version: 1.3.0
+        version: 1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)
       '@wasm-idle/lsp':
         specifier: 1.3.0
-        version: 1.3.0(patch_hash=6b3b41bf1db16ca88d478bcea422555976abbcce22a939d207ccf39d05d88801)(typescript@6.0.3)
+        version: 1.3.0(patch_hash=85b027684f4221d748911a1fd7487368db52018ccb43f346964ba41891376e06)(typescript@6.0.3)
       monaco-editor:
         specifier: ^0.57.0
         version: 0.57.0
@@ -2035,20 +2036,20 @@ snapshots:
 
   '@vitest/spy@5.1.0': {}
 
-  '@wasm-idle/core@1.3.0':
+  '@wasm-idle/core@1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)':
     dependencies:
       fflate: 0.8.3
 
   '@wasm-idle/llvm-core@1.3.0':
     dependencies:
       '@bjorn3/browser_wasi_shim': 0.4.2
-      '@wasm-idle/core': 1.3.0
+      '@wasm-idle/core': 1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)
       fflate: 0.8.3
 
-  '@wasm-idle/lsp@1.3.0(patch_hash=6b3b41bf1db16ca88d478bcea422555976abbcce22a939d207ccf39d05d88801)(typescript@6.0.3)':
+  '@wasm-idle/lsp@1.3.0(patch_hash=85b027684f4221d748911a1fd7487368db52018ccb43f346964ba41891376e06)(typescript@6.0.3)':
     dependencies:
       '@bjorn3/browser_wasi_shim': 0.4.2
-      '@wasm-idle/core': 1.3.0
+      '@wasm-idle/core': 1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)
       '@wasm-idle/llvm-core': 1.3.0
       '@xmldom/xmldom': 0.9.12
       fflate: 0.8.3

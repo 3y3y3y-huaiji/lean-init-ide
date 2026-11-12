@@ -27,7 +27,7 @@ and propositional logic.
 
 Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sign-up, no install.
 
-- The first run downloads about 143 MB and then caches it in the browser (later visits are usually
+- The first run downloads about 102 MB and then caches it in the browser (later visits are usually
   ready in 4–7 seconds).
 - It requires cross-origin isolation and SharedArrayBuffer; Chromium-based browsers work best.
 - Low-memory devices (`navigator.deviceMemory ≤ 4`) do not auto-download; press **Start Lean**
@@ -98,7 +98,7 @@ Page views and Core Web Vitals are collected by Cloudflare Web Analytics.
 
 - **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.34.1 runs in a Web Worker and speaks LSP
   over postMessage.
-- **Asset layer**: a Service Worker fetches the ~143 MB runtime from a same-origin `/cdn/` gateway
+- **Asset layer**: a Service Worker fetches the ~102 MB runtime from a same-origin `/cdn/` gateway
   backed by R2 in 4 MB ranges, falling back to GitHub raw and a static copy.
 - **App layer**: a static site; routing, i18n and theming are all client-side, and Pages Functions
   only provide the asset gateway and the telemetry receiver.
@@ -111,7 +111,7 @@ Technical docs are currently in Chinese: [architecture](docs/ARCHITECTURE.md),
 ```bash
 pnpm install         # install dependencies and apply the @wasm-idle/lsp patches
 pnpm run dev         # dev server (downloads and verifies the runtime on first run)
-pnpm run build:web   # front-end build only, skipping the 143 MB assets
+pnpm run build:web   # front-end build only, skipping the 102 MB assets
 pnpm test            # Vitest + coverage thresholds
 pnpm run smoke       # production smoke test, after a release
 ```

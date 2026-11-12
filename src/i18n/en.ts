@@ -21,7 +21,7 @@ export const en: Messages = {
     title: 'Preferences',
     autoStart: 'Download Lean automatically when the editor opens',
     autoStartHint:
-      'When off you start Lean yourself. The first download is about 143 MB and stays cached in this browser.',
+      'When off you start Lean yourself. The first download is about 102 MB and stays cached in this browser.',
   },
   home: {
     eyebrow: 'Lean 4 · WebAssembly · LSP in the browser',
@@ -42,7 +42,7 @@ export const en: Messages = {
       },
       {
         title: 'Download once, cached for good',
-        body: 'The 143 MB runtime arrives in parallel 4 MB ranges from a same-origin Cloudflare R2 gateway, is verified with SHA-256, falls back to GitHub raw, then persists in the browser.',
+        body: 'The 102 MB runtime arrives in parallel 4 MB ranges from a same-origin Cloudflare R2 gateway, is verified with SHA-256, falls back to the mirror or the same-origin static copy, then persists in the browser.',
       },
       {
         title: 'Dual open-source license',
@@ -103,7 +103,7 @@ export const en: Messages = {
           },
           {
             kind: 'p',
-            text: 'The editor runs entirely in your browser: the first visit downloads about 143 MB, later visits use a persistent cache, and your code is never uploaded.',
+            text: 'The editor runs entirely in your browser: the first visit downloads about 102 MB, later visits use a persistent cache, and your code is never uploaded.',
           },
         ],
         exercise: {
@@ -910,7 +910,7 @@ export const en: Messages = {
   },
   playground: {
     title: 'Lean playground',
-    hint: 'The first run downloads about 143 MB of runtime; later visits use the persistent cache.',
+    hint: 'The first run downloads about 102 MB of runtime; later visits use the persistent cache.',
     start: 'Start Lean',
     stop: 'Stop Lean',
     goalTitle: 'Goal',
@@ -945,7 +945,7 @@ export const en: Messages = {
     statusLowMemory: 'Low-memory device · start manually',
     lowMemoryHint:
       'This device reports limited memory. Lean needs about 400 MB free, so the download no longer starts automatically — start it yourself when the device has room.',
-    statusLoading: 'Loading runtime… (about 143 MB on first run)',
+    statusLoading: 'Loading runtime… (about 102 MB on first run)',
     statusStarting: 'Starting the LSP…',
     statusChunks: (loaded, total) => `${loaded} / ${total} MB`,
     statusChunkFallback: (name, message) => `Chunk fallback ${name}: ${message}`,
@@ -1010,7 +1010,7 @@ export const en: Messages = {
         heading: 'Local storage',
         paragraphs: [
           'Theme, language, auto-start preference, lesson progress and exercise drafts live in localStorage; drafts never leave your browser.',
-          'The Lean runtime and the diagnostic source preference live in CacheStorage / IndexedDB, so the ~143 MB download is not repeated.',
+          'The Lean runtime and the diagnostic source preference live in CacheStorage / IndexedDB, so the ~102 MB download is not repeated.',
           'You can clear all of it from your browser settings at any time; the site still works.',
         ],
       },

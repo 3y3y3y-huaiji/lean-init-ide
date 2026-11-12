@@ -1,0 +1,13 @@
+diff --git a/dist/runtime-manifest.js b/dist/runtime-manifest.js
+--- a/dist/runtime-manifest.js
++++ b/dist/runtime-manifest.js
+@@ -195,7 +195,7 @@
+             if (typeof asset.mediaType !== 'string' || !asset.mediaType.includes('/')) {
+                 throw new TypeError(`Invalid media type for runtime ${runtime.runtimeId}: ${asset.key}`);
+             }
+             if (typeof asset.encoding !== 'string' ||
+-                !['identity', 'gzip', 'br'].includes(asset.encoding)) {
++                !['identity', 'gzip', 'br', 'zstd'].includes(asset.encoding)) {
+                 throw new TypeError(`Invalid asset encoding for runtime ${runtime.runtimeId}: ${asset.key}`);
+             }
+             if (asset.encoding === 'identity' &&

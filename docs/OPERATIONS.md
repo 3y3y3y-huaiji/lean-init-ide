@@ -11,14 +11,16 @@ static / test / build / audit  →  deploy  →  smoke
 ```
 
 `deploy` job 只在 `main` 分支、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
-它跑完整 `pnpm run build`（含 143 MB 同源兜底副本，`build:web` 会省掉这一层），
+它跑完整 `pnpm run build`（含 102 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
-仍失败则整条流水线标红。
+仍失败则整条流水线标红。运行时资产由维护者用 `pnpm run upload:assets` 手动上传，
+CI 不负责 R2 写入；换 `cacheKey` 后先传资产、再部署页面。
 
 ### 首次启用
 
 1. Cloudflare → My Profile → API Tokens → Create Token，权限选
-   `Account → Cloudflare Pages → Edit` 与 `Account → Account Settings → Read`
+   `Account → Cloudflare Pages → Edit` 与 `Account → Account Settings → Read`。
+   如果希望 CI 也负责上传运行时资产，再加 `Account → Workers R2 Storage → Edit`。
 2. GitHub 仓库 → Settings → Secrets and variables → Actions：
    - Secret `CLOUDFLARE_API_TOKEN`：上一步生成的 token
    - Secret `CLOUDFLARE_ACCOUNT_ID`：`6f20d0c99e90d1b8ccecc383ad3e27ad`
@@ -97,8 +99,9 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`：关闭摄像头、麦克风、定位、支付与 USB。
 
-改 CSP 时注意三点：去掉 `'wasm-unsafe-eval'` 会让 Lean 直接起不来；去掉 `blob:` 会让 Worker
-里的动态模块导入失败；去掉 `static.cloudflareinsights.com` 会让 Web Analytics 静默失效。
+改 CSP 时注意四点：去掉 `'wasm-unsafe-eval'` 会让 Lean 直接起不来；去掉 `blob:` 会让 Worker
+里的动态模块导入失败；去掉 `static.cloudflareinsights.com` 会让 Web Analytics 静默失效；
+`connect-src` 的 `data:` 是 `public/vendor/zstddec.mjs` 加载内嵌 wasm 所需，去掉后 zstd 资产会在启动时失败。
 本地 e2e 由 `scripts/local-gateway.mjs` 读取同一份 `_headers`，所以 CSP 写错会在 CI 的浏览器测试里暴露，
 不需要等到部署后才发现。
 
@@ -143,6 +146,21 @@ pnpm run upload:assets -- --verify-only
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
+清单里 `encoding: "zstd"` 的资产保留上游 `.gz.bin` 键名，但交付字节是 zstd；`fetch:assets` 会从
+GitHub raw 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩，
+再按 `bytes`/`sha256` 校验交付字节。构建机需要 **Node 24+**（内置 `zlib.zstdCompressSync`）。
+R2 与魔搭镜像上传的是 zstd 字节；GitHub raw 仍是 gzip，因此这类资产不参与 GitHub 回退，
+最后一级回退是同源静态副本。
+
+修改清单里的资产字节数/SHA-256 或 `cacheKey` 后，必须重新生成 LSP 补丁，把交付哈希同步进包内 profile：
+
+```bash
+pnpm run patch:lsp
+pnpm install --no-frozen-lockfile
+```
+
+否则浏览器拿到的 profile 与 `/cdn/` 上的对象会不一致，启动阶段会报 receipt mismatch。
+
 ## 运行指标与错误上报
 
 前端只记录启动链路的阶段耗时与未捕获错误，不含 cookie、用户代码或设备指纹；
@@ -180,7 +198,7 @@ beacon（Pages 项目注入 + zone 注入），建议在面板只保留一个，
 用第三方优选 IP 工具定期更新 A 记录。代价是失去 Cloudflare 的 WAF / 缓存，需要自己补限流与证书。
 
 **方案 B**：国内反代或对象存储镜像。必须保持与主站同源，否则 Service Worker 缓存与 localStorage
-按 origin 隔离，换域名等于让用户重下 143MB。
+按 origin 隔离，换域名等于让用户重下 102MB。
 
 代码侧提供两个诊断工具，不改 DNS 也能判断问题在哪一段：
 

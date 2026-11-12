@@ -57,7 +57,12 @@ const waitForGateway = async () => {
 const main = async () => {
   await waitForGateway();
   const browser = await chromium.launch({ channel, executablePath, headless: true });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  // 固定英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文环境优先命中外部镜像。
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    locale: 'en-US',
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+  });
   const page = await context.newPage();
   const failures = [];
 

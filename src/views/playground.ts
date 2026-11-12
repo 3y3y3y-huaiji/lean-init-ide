@@ -25,7 +25,7 @@ export const mountPlayground = (root: HTMLElement, locale: Locale) => {
   const lesson = messagesFor(locale).lesson.lessons.find((item) => item.slug === slug);
   const code = lesson?.exercise?.starter ?? DEFAULT_CODE;
 
-  // 低内存设备忽略自动启动偏好：下载 143MB 前必须有明确的人工确认。
+  // 低内存设备忽略自动启动偏好：下载 102MB 前必须有明确的人工确认。
   createLeanPanel(host, {
     variant: 'full',
     code,

@@ -43,13 +43,21 @@ describe('withCacheKey', () => {
 
 describe('assetSources', () => {
   it('puts the same-origin R2 gateway first and GitHub raw second', () => {
-    const sources = assetSources(manifest, assetByName('lean.wasm.gz.bin'));
+    const sources = assetSources(manifest, assetByName('lean.mjs'));
     expect(sources).toHaveLength(2);
     expect(sources[0]?.label).toBe('Pages Functions (R2)');
-    expect(sources[0]?.url).toBe(`/cdn/lean.wasm.gz?r=${manifest.cacheKey}`);
+    expect(sources[0]?.url).toBe(`/cdn/lean.mjs?r=${manifest.cacheKey}`);
     expect(sources[1]?.label).toBe('GitHub raw');
     expect(sources[1]?.url).toContain('raw.githubusercontent.com');
     expect(sources[1]?.url).toContain(`?r=${manifest.cacheKey}`);
+  });
+
+  it('zstd 资产不回退到 GitHub raw 的上游 gzip', () => {
+    const asset = assetByName('lean.wasm.gz.bin');
+    expect(asset.encoding).toBe('zstd');
+    const sources = assetSources(manifest, asset);
+    expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)']);
+    expect(sources[0]?.url).toBe(`/cdn/lean.wasm.gz.bin?r=${manifest.cacheKey}`);
   });
 
   it('resolves the relative primary to an absolute URL for Node builds', () => {
@@ -93,7 +101,7 @@ describe('assetSources', () => {
     } as RuntimeManifest;
 
     it('mirrorFirst 时排在最前，按 cacheKey 目录取文件且不带 ?r=', () => {
-      const sources = assetSources(mirrored, assetByName('lean.wasm.gz.bin'), undefined, {
+      const sources = assetSources(mirrored, assetByName('lean.mjs'), undefined, {
         mirrorFirst: true,
       });
       expect(sources.map((source) => source.label)).toEqual([
@@ -102,7 +110,34 @@ describe('assetSources', () => {
         'GitHub raw',
       ]);
       expect(sources[0]?.url).toBe(
-        `https://modelscope.cn/datasets/example/lean4-assets/resolve/master/${manifest.cacheKey}/lean.wasm.gz.bin`,
+        `https://modelscope.cn/datasets/example/lean4-assets/resolve/master/${manifest.cacheKey}/lean.mjs`,
+      );
+    });
+
+    it('zstd 资产只保留镜像与同源网关', () => {
+      const sources = assetSources(mirrored, assetByName('lean.wasm.gz.bin'), undefined, {
+        mirrorFirst: true,
+      });
+      expect(sources.map((source) => source.label)).toEqual([
+        'ModelScope (CN)',
+        'Pages Functions (R2)',
+      ]);
+    });
+
+    it('配置 prefix 时镜像目录固定，不再拼 cacheKey', () => {
+      const prefixed = {
+        ...manifest,
+        mirror: {
+          label: 'ModelScope (CN)',
+          baseUrl: 'https://modelscope.cn/datasets/example/lean4-assets/resolve/master/',
+          prefix: 'wasm-lean4',
+        },
+      } as RuntimeManifest;
+      const sources = assetSources(prefixed, assetByName('lean.mjs'), undefined, {
+        mirrorFirst: true,
+      });
+      expect(sources[0]?.url).toBe(
+        'https://modelscope.cn/datasets/example/lean4-assets/resolve/master/wasm-lean4/lean.mjs',
       );
     });
 
@@ -125,7 +160,7 @@ describe('assetSources', () => {
 
   describe('诊断用的强制源', () => {
     it('githubFirst 把 GitHub 排到最前，其余源保留做回退', () => {
-      const sources = assetSources(manifest, assetByName('lean.wasm.gz.bin'), undefined, {
+      const sources = assetSources(manifest, assetByName('lean.mjs'), undefined, {
         githubFirst: true,
       });
       expect(sources.map((source) => source.label)).toEqual(['GitHub raw', 'Pages Functions (R2)']);
@@ -176,8 +211,17 @@ describe('runtime manifest', () => {
       expect(asset.key).toBeTruthy();
     }
     const total = ranged.reduce((sum, asset) => sum + asset.bytes, 0);
-    expect(total).toBeGreaterThan(130_000_000);
-    expect(total).toBeLessThan(150_000_000);
+    expect(total).toBeGreaterThan(95_000_000);
+    expect(total).toBeLessThan(115_000_000);
+    for (const asset of ranged) {
+      if (asset.encoding !== 'zstd') continue;
+      const upstreamBytes = asset.upstreamBytes ?? 0;
+      const uncompressedBytes = asset.uncompressedBytes ?? 0;
+      expect(asset.upstream).toMatch(/\.gz$/);
+      expect(upstreamBytes).toBeGreaterThan(asset.bytes);
+      expect(uncompressedBytes).toBeGreaterThan(upstreamBytes);
+      expect(asset.uncompressedSha256).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 
   it('has unique names and keys, with relative primary and HTTPS fallback', () => {

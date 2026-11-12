@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * 把运行时补丁应用到 @wasm-idle/lsp 包目录，用于生成 pnpm patch。
@@ -34,7 +34,7 @@ const applyPatch = (relativePath, from, to, label) => {
 };
 
 /**
- * 1. 资产并发从 3 提到 6：143MB Init 由 6 个 ~22MB pack 主导，6 路正好吃满长肥管道。
+ * 1. 资产并发从 3 提到 6：102MB Init 由 6 个 ~22MB pack 主导，6 路正好吃满长肥管道。
  */
 applyPatch(
   path.join('lean4', 'assets.js'),
@@ -58,7 +58,7 @@ applyPatch(
 );
 
 /**
- * 3. 解压完一个资产就释放压缩态引用，启动峰值不再同时持有 143MB 压缩态 + 415MB 解压态。
+ * 3. 解压完一个资产就释放压缩态引用，启动峰值不再同时持有 102MB 压缩态 + 415MB 解压态。
  *    preflight 结果是冻结对象，先浅拷贝成可变对象再 delete。
  */
 applyPatch(
@@ -88,7 +88,33 @@ applyPatch(
 );
 
 /**
- * 4. MEMFS 直接接管解压后的视图，省掉每个进程一份 415MB 拷贝（canOwn）。
+ * 4. 用浏览器端 wasm zstd 解码器替换 gzip 流：资产从 136 MiB 降到约 102 MiB。
+ *    解码器放在 public/vendor/zstddec.mjs，由 worker 以同源绝对路径动态加载，
+ *    不进入包依赖图，避免 pnpm 的隔离 node_modules 解析问题。
+ */
+applyPatch(leanWorker, 'let library;', 'let zstdDecoder;\nlet library;', 'zstd decoder slot');
+applyPatch(
+  leanWorker,
+  "        if ('encoding' in receipt && receipt.encoding === 'gzip') {",
+  `        if ('encoding' in receipt && receipt.encoding === 'zstd') {
+            if (!zstdDecoder) {
+                const zstdDecoderUrl = new URL('/vendor/zstddec.mjs', self.location.origin).href;
+                const { ZSTDDecoder } = await import(/* @vite-ignore */ zstdDecoderUrl);
+                zstdDecoder = new ZSTDDecoder();
+                await zstdDecoder.init();
+            }
+            bytes = zstdDecoder.decode(new Uint8Array(delivered), receipt.uncompressed.bytes);
+            if (bytes.length !== receipt.uncompressed.bytes ||
+                hex(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes))) !==
+                    receipt.uncompressed.sha256)
+                throw new Error(\`Lean \${name} decoded receipt mismatch.\`);
+        }
+        else if ('encoding' in receipt && receipt.encoding === 'gzip') {`,
+  'zstd asset decoding',
+);
+
+/**
+ * 5. MEMFS 直接接管解压后的视图，省掉每个进程一份 415MB 拷贝（canOwn）。
  *    库目录只读；文档 #eval 写入的是 /workspace，不会改共享 pack。
  */
 applyPatch(
@@ -106,21 +132,32 @@ const workerPath = path.join(root, 'scripts', 'assets', 'runner-worker.js');
 const workerBytes = readFileSync(workerPath);
 const workerSha = createHash('sha256').update(workerBytes).digest('hex');
 const runtimePath = path.join(lspDist, 'bundledLean4Runtime.js');
-const runtimeSource = readFileSync(runtimePath, 'utf8');
-const receipt = /(workerReceipt:\s*\{\s*bytes:\s*)\d+(,\s*sha256:\s*')[a-f0-9]+(')/;
-if (!receipt.test(runtimeSource)) {
-  throw new Error('lsp patch: workerReceipt shape changed; update the patch.');
+
+/**
+ * 6. 把 config/lean4-runtime.json 的交付哈希同步进包内 profile。
+ *    这里直接 import 干净包里的 profile、改 assets 再整体写回，避免用正则
+ *    逐个匹配六个 pack；上游升级后字段形状变化会在这里立刻暴露。
+ */
+const manifest = JSON.parse(readFileSync(path.join(root, 'config', 'lean4-runtime.json'), 'utf8'));
+const { WASM_LEAN4_PROFILE: profile } = await import(pathToFileURL(runtimePath).href);
+for (const asset of manifest.assets) {
+  const entry = profile.assets[asset.name];
+  if (!entry) continue;
+  entry.bytes = asset.bytes;
+  entry.sha256 = asset.sha256;
+  if (asset.encoding === 'zstd') {
+    entry.encoding = 'zstd';
+    entry.uncompressed = {
+      bytes: asset.uncompressedBytes,
+      sha256: asset.uncompressedSha256,
+    };
+  }
 }
-const nextRuntime = runtimeSource.replace(
-  receipt,
-  (_match, prefix, middle, suffix) =>
-    `${prefix}${workerBytes.length}${middle}${workerSha}${suffix}`,
+profile.workerReceipt = { bytes: workerBytes.length, sha256: workerSha };
+writeFileSync(
+  runtimePath,
+  `export const WASM_LEAN4_PROFILE = ${JSON.stringify(profile, null, 4)};\n//# sourceMappingURL=bundledLean4Runtime.js.map\n`,
 );
-if (nextRuntime !== runtimeSource) {
-  writeFileSync(runtimePath, nextRuntime);
-  console.log(
-    `lsp patch: workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`,
-  );
-} else {
-  console.log('lsp patch: workerReceipt already synced');
-}
+console.log(
+  `lsp patch: profile assets synced; workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`,
+);

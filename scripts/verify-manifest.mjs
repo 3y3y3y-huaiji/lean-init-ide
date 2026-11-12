@@ -96,6 +96,26 @@ if (!Array.isArray(assets) || assets.length === 0) {
       fail(`${label}.contentType 缺少 MIME 主/子类型`);
     }
 
+    if (asset?.encoding !== undefined && !['gzip', 'zstd'].includes(asset.encoding)) {
+      fail(`${label}.encoding 只能是 gzip 或 zstd`);
+    }
+    if (asset?.encoding === 'zstd') {
+      for (const field of ['upstream', 'upstreamSha256', 'uncompressedSha256']) {
+        if (!isNonEmptyString(asset?.[field])) fail(`${label}.${field} 必须是非空字符串`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(asset?.upstreamSha256 ?? '')) {
+        fail(`${label}.upstreamSha256 必须是 64 位小写十六进制`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(asset?.uncompressedSha256 ?? '')) {
+        fail(`${label}.uncompressedSha256 必须是 64 位小写十六进制`);
+      }
+      for (const field of ['upstreamBytes', 'uncompressedBytes']) {
+        if (!Number.isSafeInteger(asset?.[field]) || asset[field] <= 0) {
+          fail(`${label}.${field} 必须是正整数`);
+        }
+      }
+    }
+
     const key = asset?.key;
     if (typeof key === 'string') {
       if (key.startsWith('/')) fail(`${label}.key 不能以 / 开头`);

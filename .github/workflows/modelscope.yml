@@ -1,0 +1,51 @@
+name: ModelScope Mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify_only:
+        description: 只校验远端 Range/CORS，不重新上传
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: 上传运行时资产
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 和 CI 其它 job 共用资产缓存；命中时 fetch:assets 只做哈希校验。
+      - name: 缓存 Lean 资产
+        uses: actions/cache@v4
+        with:
+          path: public/wasm-lean4
+          key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
+      - name: 准备 Lean 资产
+        run: pnpm run fetch:assets
+      - name: 配置 git 身份
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: 上传到 ModelScope
+        env:
+          MODELSCOPE_USERNAME: ${{ secrets.MODELSCOPE_USERNAME }}
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO: ${{ secrets.MODELSCOPE_REPO }}
+        run: |
+          if [ "${{ inputs.verify_only }}" = "true" ]; then
+            pnpm run upload:modelscope -- --verify-only
+          else
+            pnpm run upload:modelscope
+          fi

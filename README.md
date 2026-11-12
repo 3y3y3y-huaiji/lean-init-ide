@@ -6,6 +6,28 @@
 
 参与开发前先读 [AGENTS.md](AGENTS.md)：那里列了不可违反的硬约束、模块边界和已知陷阱。
 
+## 这是什么
+
+一个**不用安装任何工具链**的 Lean 4 学习环境。Lean 4.34.1 的 Init 运行时被编译成 WebAssembly，
+语言服务器跑在浏览器的 Web Worker 里：打开网页就能写证明、看诊断、看 Goal，代码不会上传，也没有后端。
+
+适合三类使用场景：
+
+- 想试试 Lean、但不想装 elan / Lake / Mathlib 的人
+- 课堂上给学生演示「命题即类型」的环境
+- 想研究「语言服务器能不能跑在浏览器里」的开发者
+
+项目只内置 Init，不含 Std / Lean / Lake / Mathlib，所以课程限定在基础类型、List 与命题逻辑。
+
+## 快速开始
+
+直接打开 <https://criticalthinking.de5.net>，选一门课点「运行」即可，无需注册或安装。
+
+- 首次会下载约 143MB 运行时：按 4MB 分片并行下载、逐块 SHA-256 校验，之后走浏览器持久缓存（二次进入通常 4–7 秒可用）。
+- 需要 cross-origin isolation 与 SharedArrayBuffer，Chromium 系浏览器体验最佳。
+- 低内存设备（`navigator.deviceMemory ≤ 4`）不会自动下载，需要手动点「启动 Lean」。
+- 只想读课程时不必启动引擎：课程正文直接可看，编辑器页默认也不自动下载。
+
 ## 功能
 
 - 真实 Lean 4.34.1 Init 运行时，在浏览器内完成解析、精化与诊断
@@ -21,6 +43,24 @@
 
 - 只带 **Init**，不含 Std / Lean / Lake / Mathlib，课程内容需限定在 Init 的范围内
 - 需要 cross-origin isolation（COOP/COEP）与 SharedArrayBuffer，Chromium 系浏览器体验最佳
+- 已知问题：connectives 课程的第 2、3 个代码块连续运行时可能报 `already declared`（语言服务器复用了同一文档 URI），内容与结论不受影响，修复排在首个补丁版本
+
+## 课程
+
+8 节课都只用 Init，每节 3 个可运行代码块加一个练习；练习会带着 starter 跳到编辑器页。
+
+| 课时 | 主题 | 关键动作 |
+| --- | --- | --- |
+| `first-proof` | 先让 Lean 说句话 | `#check`、`#eval`、`rfl` |
+| `implication` | 命题即类型 | `intro`、`exact`、函数组合 |
+| `connectives` | 与、或怎么拆 | `⟨hp, hq⟩`、`h.1` / `h.2`、`cases` |
+| `induction` | 用 induction 证明交换律 | `induction ... with`、`simp only` |
+| `rewrite` | 用 rw 改写目标 | `rw [Nat.add_comm]`、`rw [h]` |
+| `simp` | 让 simp 收尾 | `simp`、`simp only [Nat.succ_add]` |
+| `quantifiers` | ∀ 与 ∃ 怎么用 | 把 `∀` 当函数用、`⟨n, 证明⟩`、拆存在量词 |
+| `list-structure` | 归纳类型与结构 | List 的 `nil` / `cons`、`structure`、`#eval` |
+
+课程内容在 `src/i18n/zh.ts` 与 `src/i18n/en.ts`，中英文键集合由 `locale-parity` 测试强制一致。
 
 ## 本地开发
 
@@ -290,6 +330,12 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 `public/_headers` 里给 `/sw.js` 写的 `no-cache` 未必生效（实测 `max-age=14400`）。
 浏览器对 Service Worker 脚本有独立缓存策略，影响有限，但更新延迟属于可预期范围。
 
+## 版本与发布
+
+- 首个公开版本 `v0.1.0`：8 节入门课、启动链路指标、低内存策略、隐私说明、国内源诊断。
+- `main` 上每次推送都会由 CI 部署；正式版本额外打 annotated tag，便于回滚与对外引用。
+- 回滚方式见上一节；运行时资产由清单里的 `cacheKey` 决定，回滚页面不会改动 R2 对象。
+
 ## 目录结构
 
 ```
@@ -334,6 +380,20 @@ wrangler.toml        Pages 项目配置与 R2 binding
 | 国内部分网络打不开、换 IP 就好 | 跑 `pnpm run probe:sources`，再用 `?source=` 逐源验证；确认是 Anycast IP 被 reset 后按「国内访问与源诊断」处理 |
 
 开发模式下 `window.__monaco` 与 `window.__editor` 可用；URL 加 `?fresh` 会清空资产缓存重新下载。
+
+## 贡献
+
+- 改代码前先读 [AGENTS.md](AGENTS.md) 的硬约束与模块边界；资产清单、源解析、Range 语义各有唯一入口。
+- 提交前跑完整门禁（见「质量门禁」），一个提交只做一件事，提交信息写清楚「为什么」。
+- 课程内容只能落在 Init 范围内；用户可见文案必须中英文同时补齐。
+
+## English overview
+
+Lean Init IDE is a browser-native Lean 4 learning environment. The Lean 4.34.1 Init runtime and
+the real language server run in Web Workers, so you can write proofs and read diagnostics and
+goals without installing a toolchain. It is a static site on Cloudflare Pages; the 143 MB runtime
+streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Eight intro-level
+lessons, no backend, and no code upload.
 
 ## 许可证
 

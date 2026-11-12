@@ -225,6 +225,163 @@ export const en: Messages = {
             'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
         },
       },
+      {
+        slug: 'rewrite',
+        navTitle: '05 · Rewriting with rw',
+        title: 'Rewrite the goal with rw',
+        lead: 'rfl only closes goals that are equal by definition. When a subexpression must be replaced, feed an equation into rw.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'Look at both sides first: if computation turns them into the same expression, rfl is enough. Otherwise, rewrite the goal with a known equation.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_comm_rw (a b : Nat) : a + b = b + a := by\n  rw [Nat.add_comm]',
+          },
+          {
+            kind: 'p',
+            text: 'rw uses an equation left to right by default: it replaces the left side with the right side in the goal. rw [← h] goes the other way.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem eq_swap (a b : Nat) (h : a = b) : b = a := by\n  rw [h]',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'rw rewrites every matching occurrence in the goal. If you want a single spot changed, reconsider the approach before one rw turns the goal inside out.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_assoc_rw (a b c : Nat) : a + b + c = a + (b + c) := by\n  rw [Nat.add_assoc]',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove a * 1 = a with one existing multiplication equation, using only rw.',
+          cta: 'Try it in the editor',
+          starter: 'theorem mul_one_rw (a : Nat) : a * 1 = a := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'simp',
+        navTitle: '06 · simp and simplification',
+        title: 'Let simp finish the goal',
+        lead: 'simp is a curated set of rewrite rules. Used well it closes computation goals in one line; used blindly it can wander.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'simp applies every equation tagged @[simp]. Goals like a + 0 = a reduce by definition, so one simp finishes them.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_zero_simp (a : Nat) : a + 0 = a := by\n  simp',
+          },
+          {
+            kind: 'p',
+            text: 'simp only restricts the rule set to exactly what you list, which keeps behaviour predictable.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem succ_add_simp (a b : Nat) : Nat.succ a + b = Nat.succ (a + b) := by\n  simp only [Nat.succ_add]',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'simp is a finisher: it stops when the goal becomes True. When it makes no progress, the goal needs intro, cases or induction instead.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_succ_simp (a b : Nat) : a + Nat.succ b = Nat.succ (a + b) := by\n  simp only [Nat.add_succ]',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Remove both zeros in one go: a + 0 + 0 = a.',
+          cta: 'Try it in the editor',
+          starter: 'theorem add_zero_twice (a : Nat) : a + 0 + 0 = a := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'quantifiers',
+        navTitle: '07 · Forall and exists',
+        title: 'Using ∀ and ∃',
+        lead: '∀ is a function type; ∃ is a dependent pair. One takes an argument, the other unpacks a witness.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'An element of ∀ n : Nat, P n is a function: give it n and it returns a proof of P n. So to prove a statement for every n, intro n brings n into context.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem forall_apply (P : Nat → Prop) (h : ∀ n, P n) : P 0 := h 0',
+          },
+          {
+            kind: 'p',
+            text: '∃ n, P n is a package: a concrete n (the witness) plus a proof of P n. Build it with the anonymous constructor ⟨n, proof⟩.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem exists_intro : ∃ n : Nat, n + n = 4 := ⟨2, rfl⟩',
+          },
+          {
+            kind: 'p',
+            text: 'To use an existential you must unpack it: cases h with | intro n hn => ... where n is the witness and hn is the property.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem exists_swap (P Q : Nat → Prop) (h : ∃ n, P n ∧ Q n) : ∃ n, Q n ∧ P n := by\n  cases h with\n  | intro n hn => exact ⟨n, hn.2, hn.1⟩',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'Here intro unpacks an existential; it is not the intro that introduces a hypothesis at the start of a proof. Same name, different job.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Apply the forall statement to n = 3 and prove P 3.',
+          cta: 'Try it in the editor',
+          starter: 'theorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'list-structure',
+        navTitle: '08 · Lists and structures',
+        title: 'Inductive types and structures',
+        lead: 'List inducts just like Nat, except the constructors are nil and cons; structure packs several values into one new type.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'List Nat has two constructors: [] and x :: xs. induction xs with therefore has two branches: nil and cons.',
+          },
+          {
+            kind: 'code',
+            code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih => simp [ih]',
+          },
+          {
+            kind: 'p',
+            text: 'structure packs fields into a type; the anonymous constructor fills them in declaration order, and dot notation accesses fields.',
+          },
+          {
+            kind: 'code',
+            code: 'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.sum (p : Point) : Nat := p.x + p.y\n\n#eval (Point.mk 3 4).sum',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'structure ships with Init; do not expect Std deriving instances or extended syntax here.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Add a scale function to Point that multiplies both coordinates by k, then prove scaling by 1 leaves it unchanged.',
+          cta: 'Try it in the editor',
+          starter:
+            'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
+        },
+      },
     ],
   },
   playground: {

@@ -94,7 +94,7 @@ describe('课程页交互绑定', () => {
     document.body.innerHTML = renderLesson('zh', 'first-proof');
   });
 
-  it('挂载隐藏的 runner，用紧凑变体并带上第一段代码', () => {
+  it('挂载隐藏的 runner，用紧凑变体且不预置代码', () => {
     bindLesson(document.body, 'zh', 'first-proof');
 
     expect(createLeanPanel).toHaveBeenCalledTimes(1);
@@ -104,7 +104,8 @@ describe('课程页交互绑定', () => {
     ];
     expect(options.variant).toBe('compact');
     expect(options.locale).toBe('zh');
-    expect(options.code.length).toBeGreaterThan(0);
+    // 预置代码会被语言服务器先声明一次，用户点同一块时就变成重复声明。
+    expect(options.code).toBe('');
   });
 
   it('点运行把对应代码交给引擎，并把诊断渲染到输出区', async () => {

@@ -12,7 +12,7 @@
 - 诊断、Goal（`$/lean/plainGoal`）、悬停、补全、跳转定义
 - 中英文界面，`/zh/`、`/en/` 双前缀，可切换并记住偏好
 - 亮色 / 暗色 / 跟随系统三种主题，Monaco 主题同步
-- 入门课程：从 `#check` 到第一个归纳证明，代码可一键载入编辑器
+- 入门课程 8 节：从 `#check`、`rfl` 到 `rw` / `simp`、∀/∃、List 归纳与 structure，代码可一键载入编辑器
 - 首次加载约 143MB 运行时，之后持久缓存；Service Worker 经站点同源 `/cdn/` 网关（Pages Functions → R2）按 4MB 分片并行下载，失败回退 GitHub raw，最后回退同源静态副本
 - 低内存设备（`navigator.deviceMemory ≤ 4`）不自动下载，持久缓存上限从 512MB 降到 128MB，启动前由用户确认
 - 隐私说明页：`/zh/privacy`、`/en/privacy`，页脚有入口；写明指标字段、采样、本地存储与退出方式

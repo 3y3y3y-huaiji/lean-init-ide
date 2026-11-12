@@ -223,6 +223,163 @@ export const zh: Messages = {
             'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
         },
       },
+      {
+        slug: 'rewrite',
+        navTitle: '05 · 改写与 rw',
+        title: '用 rw 改写目标',
+        lead: 'rfl 只能收掉定义上相等的目标；遇到需要替换的目标，就要用 rw 把等式喂进去。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '证明等式时先看两边能不能靠计算变成同一个表达式：能，rfl 就够了；不能，就用一条已知等式去改写目标。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_comm_rw (a b : Nat) : a + b = b + a := by\n  rw [Nat.add_comm]',
+          },
+          {
+            kind: 'p',
+            text: 'rw 默认把等式从左往右用：把目标里出现的左边换成右边。写成 rw [← h] 则反过来。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem eq_swap (a b : Nat) (h : a = b) : b = a := by\n  rw [h]',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'rw 会重写目标中所有匹配的位置。只想改一处时，先想清楚是不是该换一种写法，别让一次 rw 改得面目全非。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_assoc_rw (a b c : Nat) : a + b + c = a + (b + c) := by\n  rw [Nat.add_assoc]',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '用一条已有的乘法等式证明 a * 1 = a，只允许用 rw。',
+          cta: '在编辑器中动手',
+          starter: 'theorem mul_one_rw (a : Nat) : a * 1 = a := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'simp',
+        navTitle: '06 · simp 与化简',
+        title: '让 simp 收尾',
+        lead: 'simp 是一组带索引的改写规则；用得好可以一行收掉计算型目标，用不好会把目标越化越远。',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'simp 会自动应用库里标了 @[simp] 的等式。像 a + 0 = a 这种由定义直接可化的目标，一行 simp 就结束。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_zero_simp (a : Nat) : a + 0 = a := by\n  simp',
+          },
+          {
+            kind: 'p',
+            text: 'simp only 只使用你列出的引理，不额外展开任何东西，行为更可预测。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem succ_add_simp (a b : Nat) : Nat.succ a + b = Nat.succ (a + b) := by\n  simp only [Nat.succ_add]',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'simp 是终结技：化简到 True 就结束。它不动的时候，说明目标需要引入、拆分或归纳，换回 intro / cases / induction。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem add_succ_simp (a b : Nat) : a + Nat.succ b = Nat.succ (a + b) := by\n  simp only [Nat.add_succ]',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '把两个 0 一次化掉：a + 0 + 0 = a。',
+          cta: '在编辑器中动手',
+          starter: 'theorem add_zero_twice (a : Nat) : a + 0 + 0 = a := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'quantifiers',
+        navTitle: '07 · 全称与存在',
+        title: '∀ 与 ∃ 怎么用',
+        lead: '∀ 是函数类型，∃ 是依赖对。前者给参数，后者拆见证。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '命题 ∀ n : Nat, P n 的元素是一个函数：给它一个 n，它返回 P n 的证明。所以证明「对所有 n 成立」时，我们写 intro n 把 n 取进来。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem forall_apply (P : Nat → Prop) (h : ∀ n, P n) : P 0 := h 0',
+          },
+          {
+            kind: 'p',
+            text: '∃ n, P n 则是一个包裹：一个具体的 n（见证）加上 P n 的证明。构造它用匿名构造子 ⟨n, 证明⟩。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem exists_intro : ∃ n : Nat, n + n = 4 := ⟨2, rfl⟩',
+          },
+          {
+            kind: 'p',
+            text: '使用存在命题时必须拆开它：cases h with | intro n hn => ...，n 是见证，hn 是它满足性质。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem exists_swap (P Q : Nat → Prop) (h : ∃ n, P n ∧ Q n) : ∃ n, Q n ∧ P n := by\n  cases h with\n  | intro n hn => exact ⟨n, hn.2, hn.1⟩',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: '这里的 intro 是拆存在量词，不是证明开头引入假设的那个 intro。名字一样，作用完全不同。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '把「对所有 n 成立」用到 n = 3 上，证明 P 3。',
+          cta: '在编辑器中动手',
+          starter: 'theorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'list-structure',
+        navTitle: '08 · List 与 structure',
+        title: '归纳类型与结构',
+        lead: 'List 的归纳和 Nat 一样，只是构造子从 zero/succ 换成了 nil/cons；structure 则把几个值打包成一个新类型。',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'List Nat 只有两个构造子：[] 和 x :: xs。所以 induction xs with 也是两个分支：nil 与 cons。',
+          },
+          {
+            kind: 'code',
+            code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih => simp [ih]',
+          },
+          {
+            kind: 'p',
+            text: 'structure 把若干字段打包成一个类型，匿名构造子按声明顺序填值；点号可以直接访问字段。',
+          },
+          {
+            kind: 'code',
+            code: 'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.sum (p : Point) : Nat := p.x + p.y\n\n#eval (Point.mk 3 4).sum',
+          },
+          {
+            kind: 'note',
+            tone: 'warn',
+            text: 'structure 属于 Init，可以用；但别指望 Std 里的 deriving 实例和扩展语法，这个运行时只带 Init。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '给 Point 加一个 scale 函数，把两个坐标同时乘以 k，并证明乘以 1 不变。',
+          cta: '在编辑器中动手',
+          starter:
+            'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
+        },
+      },
     ],
   },
   playground: {

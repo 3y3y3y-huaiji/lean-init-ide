@@ -216,7 +216,9 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   let reportProgress: ((progress: LeanPanelProgress) => void) | null = null;
   const panel = createLeanPanel(runnerHost, {
     variant: 'compact',
-    code: first,
+    // 预置空文档：课程页的代码块按需 run；预先塞入第一块会让它被声明一次，
+    // 用户再点同一块时就变成「重复声明」。面板本身是 sr-only，空文档不影响阅读。
+    code: '',
     locale,
     // 低内存设备与省流模式都不自动下载 143MB，让用户先确认。
     autoStart: shouldAutoStart(currentMemoryTier(), saveData === true),

@@ -4,7 +4,7 @@ import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
 import type { ThemePreference } from '../theme';
 
-export type ActivePage = 'home' | 'lesson' | 'playground';
+export type ActivePage = 'home' | 'lesson' | 'playground' | 'privacy';
 
 const REPO_URL = 'https://github.com/3y3y3y-huaiji/lean-init-ide';
 
@@ -115,6 +115,7 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
       <span>${t.footer.note}</span>
       <span class="inline-flex gap-4">
         <a href="${REPO_URL}" target="_blank" rel="noreferrer">${t.footer.repo}</a>
+        <a href="/${locale}/privacy">${t.footer.privacy}</a>
         <span>${t.footer.license}</span>
       </span>
     </footer>

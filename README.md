@@ -15,6 +15,7 @@
 - 入门课程：从 `#check` 到第一个归纳证明，代码可一键载入编辑器
 - 首次加载约 143MB 运行时，之后持久缓存；Service Worker 经站点同源 `/cdn/` 网关（Pages Functions → R2）按 4MB 分片并行下载，失败回退 GitHub raw，最后回退同源静态副本
 - 低内存设备（`navigator.deviceMemory ≤ 4`）不自动下载，持久缓存上限从 512MB 降到 128MB，启动前由用户确认
+- 隐私说明页：`/zh/privacy`、`/en/privacy`，页脚有入口；写明指标字段、采样、本地存储与退出方式
 
 ## 限制
 
@@ -168,6 +169,9 @@ pnpm run upload:assets -- --verify-only
 - 接收端：`functions/api/telemetry.ts`，校验后返回 204；`public/_routes.json` 只放行 `/api/telemetry` 与 `/cdn/*` 两个精确路径
 - 限流：接收端自带固定窗口兜底（单 IP 每分钟 30 次、单 isolate 每分钟 600 次，超限返回 429），
   不依赖 Cloudflare 的 WAF 规则额度；状态只在 isolate 内存里，跨节点不共享，属于尽力而为
+
+字段清单、采样比例、本地存储与退出方式（Do Not Track / 拦截 `/api/telemetry`）同时写在站内
+`/zh/privacy`、`/en/privacy`，改动采集范围时必须同步那一页。
 
 没有声明 Analytics Engine binding，指标以一行 JSON 落 Workers Logs，用
 `pnpm dlx wrangler pages deployment tail --project-name=lean-init-ide` 查看。

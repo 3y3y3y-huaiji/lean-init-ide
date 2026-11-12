@@ -6,6 +6,7 @@ import { resolveRoute, type Route } from './router';
 import { initTelemetry, track } from './telemetry';
 import { bindLayout, renderLayout } from './views/layout';
 import { renderHome } from './views/home';
+import { renderPrivacy } from './views/privacy';
 
 const app = document.querySelector<HTMLElement>('#app');
 
@@ -33,6 +34,8 @@ const pageTitle = (route: Route): string => {
     }
     case 'playground':
       return `${t.playground.title} · Lean Init IDE`;
+    case 'privacy':
+      return `${t.privacy.title} · Lean Init IDE`;
     case 'notFound':
       return `${t.notFound.title} · Lean Init IDE`;
     default:
@@ -61,6 +64,9 @@ const boot = async (route: Route, root: HTMLElement) => {
       mount = () => mountPlayground(root, route.locale);
       break;
     }
+    case 'privacy':
+      content = renderPrivacy(route.locale);
+      break;
     case 'notFound':
       content = renderNotFound(route.locale);
       break;

@@ -268,10 +268,67 @@ export const en: Messages = {
     logLowMemory:
       'Low-memory device: auto-start disabled and the persistent cache capped at 128 MB',
   },
+  privacy: {
+    eyebrow: 'Transparency',
+    title: 'Privacy notice',
+    updated: 'Last updated: 2026-11-12',
+    intro:
+      'This is a front-end-only teaching project: Lean runs inside your browser and the code you write is never uploaded. To diagnose startup failures and performance, we collect a small amount of anonymous runtime telemetry.',
+    sections: [
+      {
+        heading: 'What we collect',
+        paragraphs: [
+          'The page type (home / lesson / playground), interface language and a timestamp.',
+          'Startup stages: whether the service worker registered, which asset source was used, bytes downloaded, download duration, time until the language server is ready, and time to the first diagnostics.',
+          'Error summaries: error name, a message truncated to 120 characters, and a stack frame count; never the code in your editor.',
+          'A device tier flag: whether the device reports limited memory (derived from navigator.deviceMemory); no model or device identifier is recorded.',
+        ],
+      },
+      {
+        heading: 'What we do not collect',
+        paragraphs: [
+          'Our code sets no cookies, writes no user identifier, performs no fingerprinting, and loads no third-party analytics, advertising or social scripts.',
+          'Editor contents and exercise code are never sent to a server.',
+        ],
+      },
+      {
+        heading: 'How it is used',
+        paragraphs: [
+          'The data only answers questions such as “which startup step fails”, “which source is slow” and “do low-memory devices fail”. It is sent at a 50% sample rate, with error events always sent.',
+          'The receiver validates the payload and writes short-lived service logs (Cloudflare Workers Logs, auto-expiring after a few days). It is never stored in a database, sold or shared.',
+          'Cloudflare, as the host, processes request metadata (including IP) in short-lived logs for security and troubleshooting; retention is set by the platform and we do not correlate it with anything.',
+        ],
+      },
+      {
+        heading: 'Local storage',
+        paragraphs: [
+          'Theme, language and auto-start preferences live in localStorage.',
+          'The Lean runtime and the diagnostic source preference live in CacheStorage / IndexedDB, so the ~143 MB download is not repeated.',
+          'You can clear all of it from your browser settings at any time; the site still works.',
+        ],
+      },
+      {
+        heading: 'How to opt out',
+        paragraphs: [
+          'With Do Not Track enabled, this site sends no runtime telemetry at all.',
+          'You can also block /api/telemetry with a content blocker; no functionality is affected.',
+        ],
+      },
+      {
+        heading: 'Contact',
+        paragraphs: [
+          'For privacy questions or deletion requests, reach us through the GitHub Issues of the repository.',
+        ],
+      },
+    ],
+    note: 'This page describes the project; it is not legal advice.',
+    backHome: 'Back home',
+  },
   footer: {
     license: 'Apache-2.0 OR MulanPSL-2.0',
     note: 'A real Lean LSP in the browser · Init only',
     repo: 'Source',
+    privacy: 'Privacy',
   },
   notFound: {
     title: 'Page not found',

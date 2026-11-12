@@ -111,10 +111,20 @@ export type Messages = {
     logStopped: string;
     logLowMemory: string;
   };
+  privacy: {
+    eyebrow: string;
+    title: string;
+    updated: string;
+    intro: string;
+    sections: Array<{ heading: string; paragraphs: string[] }>;
+    note: string;
+    backHome: string;
+  };
   footer: {
     license: string;
     note: string;
     repo: string;
+    privacy: string;
   };
   notFound: {
     title: string;

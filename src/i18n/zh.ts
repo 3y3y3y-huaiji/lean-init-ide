@@ -264,10 +264,65 @@ export const zh: Messages = {
     logStopped: '已关闭 Lean 引擎，worker 与内存已释放',
     logLowMemory: '低内存设备：已关闭自动启动，持久缓存上限下调到 128MB',
   },
+  privacy: {
+    eyebrow: '透明度',
+    title: '隐私说明',
+    updated: '最后更新：2026-11-12',
+    intro:
+      '这是一个纯前端教学项目：Lean 运行时在浏览器里执行，你写的代码不会上传。为了定位启动失败和性能问题，我们会收集少量匿名运行指标。',
+    sections: [
+      {
+        heading: '收集什么',
+        paragraphs: [
+          '页面类型（首页 / 课程 / 编辑器）、界面语言与时间戳。',
+          '启动链路：Service Worker 是否注册成功、资产下载的来源与字节数、下载耗时、语言服务器就绪耗时、首帧诊断耗时。',
+          '错误摘要：错误名称、截断到 120 字符的说明与调用栈行数；不包含编辑器里的代码。',
+          '设备分档：是否属于低内存设备（由 navigator.deviceMemory 推导），不记录具体型号或设备标识。',
+        ],
+      },
+      {
+        heading: '不收集什么',
+        paragraphs: [
+          '站点代码不设置 cookie、不写入用户标识、不做设备指纹，也不接入第三方统计、广告或社交插件。',
+          '编辑器内容与练习代码不会上传到服务器。',
+        ],
+      },
+      {
+        heading: '怎么使用',
+        paragraphs: [
+          '指标只用于回答「启动卡在哪一步、哪个源慢、低端设备是否失败」，按 50% 采样发送，错误事件优先。',
+          '接收端只做校验并写短期服务日志（Cloudflare Workers Logs，默认数天后过期），不落数据库、不出售或共享。',
+          'Cloudflare 作为托管方会在短期日志中处理请求元数据（含 IP），用于安全与排障，保留期由平台决定；本站不主动关联这些记录。',
+        ],
+      },
+      {
+        heading: '本地存储',
+        paragraphs: [
+          '主题、语言与自动启动偏好保存在 localStorage。',
+          'Lean 运行时和诊断用的来源选择保存在 CacheStorage / IndexedDB，用于避免重复下载约 143MB。',
+          '这些数据都可以在浏览器设置里随时清除，清除后站点仍可正常使用。',
+        ],
+      },
+      {
+        heading: '如何退出',
+        paragraphs: [
+          '浏览器开启「请勿跟踪（Do Not Track）」后，本站不再发送任何运行指标。',
+          '也可以用内容拦截器屏蔽 /api/telemetry；不影响任何功能。',
+        ],
+      },
+      {
+        heading: '联系',
+        paragraphs: ['与隐私相关的问题或数据删除请求，请通过仓库的 GitHub Issues 联系。'],
+      },
+    ],
+    note: '本页是项目说明，不构成法律意见。',
+    backHome: '回到首页',
+  },
   footer: {
     license: 'Apache-2.0 OR MulanPSL-2.0',
     note: '浏览器内真实 Lean LSP · 仅支持 Init',
     repo: '源码',
+    privacy: '隐私',
   },
   notFound: {
     title: '页面不存在',

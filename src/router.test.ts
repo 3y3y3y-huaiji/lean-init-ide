@@ -37,6 +37,13 @@ describe('resolveRoute', () => {
     });
   });
 
+  it('resolves the privacy page', () => {
+    expect(resolveRoute('/en/privacy', 'zh')).toEqual({
+      kind: 'route',
+      route: { page: 'privacy', locale: 'en' },
+    });
+  });
+
   it('treats unrelated localized paths as not found', () => {
     expect(resolveRoute('/zh/nope', 'en')).toEqual({
       kind: 'route',

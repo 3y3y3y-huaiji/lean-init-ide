@@ -13,7 +13,7 @@
   },
   "mirror": {
     "label": "ModelScope",
-    "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master"
+    "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/"
   },
   "assets": [
     {

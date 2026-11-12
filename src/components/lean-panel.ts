@@ -75,7 +75,7 @@ const panelHeadingClass =
   'm-0 flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px] text-xs font-[650] uppercase tracking-[0.07em] text-muted';
 
 const pillClass =
-  'inline-flex min-h-9 max-w-[240px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
+  'inline-flex min-h-9 min-w-0 max-w-[240px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
 
 const mutedItemClass = 'mb-1 px-2 py-2 text-[13px] text-muted';
 
@@ -180,7 +180,7 @@ const renderMarkup = (
 ) => {
   const compact = variant === 'compact';
   const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
-  const start = `<button class="${buttonClass}" type="button" data-role="start">${t.start}</button>`;
+  const start = `<button class="${buttonClass} max-[400px]:px-3" type="button" data-role="start">${t.start}</button>`;
 
   const panelToggle = (key: string, label: string) => `
     <label class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
@@ -213,7 +213,7 @@ const renderMarkup = (
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">${status}${start}</div>
+          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${status}${start}</div>
         </div>
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">
@@ -222,7 +222,7 @@ const renderMarkup = (
               ? `<a class="${ghostButtonClass}" href="/${locale}/learn/${encodeURIComponent(lessonSlug)}">← ${t.backToLesson}</a>`
               : ''
           }
-          <button class="${ghostButtonClass}" type="button" data-role="reset">${t.resetCode}</button>
+          <button class="${ghostButtonClass} data-[armed=true]:border-err/60 data-[armed=true]:bg-err/10 data-[armed=true]:text-err" type="button" data-role="reset">${t.resetCode}</button>
           <button class="${ghostButtonClass}" type="button" data-role="export">${t.exportCode}</button>
           <span data-role="passed" hidden class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-ok/45 bg-ok/10 px-3 py-1 text-xs font-[650] text-ok">✓ ${t.lessonPassed}</span>
         </div>
@@ -367,9 +367,25 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     },
   });
 
-  // 练习工具条：重置回 starter，或把当前代码导出成 .lean 文件。
+  // 练习工具条：重置先进入一次「确认重置？」状态，再点才覆盖代码，避免手滑。
+  let resetArmTimer: number | undefined;
+  const disarmReset = () => {
+    window.clearTimeout(resetArmTimer);
+    if (!resetEl) return;
+    delete resetEl.dataset.armed;
+    resetEl.textContent = t.resetCode;
+  };
+
   resetEl?.addEventListener('click', () => {
-    if (model.getValue() !== code && !window.confirm(t.resetConfirm)) return;
+    if (resetEl.dataset.armed !== 'true') {
+      if (model.getValue() === code) return;
+      resetEl.dataset.armed = 'true';
+      resetEl.textContent = t.resetConfirmAction;
+      window.clearTimeout(resetArmTimer);
+      resetArmTimer = window.setTimeout(disarmReset, 3000);
+      return;
+    }
+    disarmReset();
     if (draftKey) clearDraft(draftKey);
     if (passedEl) passedEl.hidden = true;
     model.setValue(code);
@@ -377,6 +393,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     editor.revealLine(1);
     editor.focus();
   });
+  resetEl?.addEventListener('blur', disarmReset);
 
   exportEl?.addEventListener('click', () => {
     const blob = new Blob([model.getValue()], { type: 'text/plain;charset=utf-8' });
@@ -882,6 +899,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   model.onDidChangeContent(() => {
     updateStatement();
     scheduleDraftSave();
+    disarmReset();
     // 改回 sorry 或删掉目标定理时立即收起徽章，不用等下一轮诊断。
     if (passedEl && exerciseStarter && !isExerciseSolved(code, model.getValue(), lastDiagnostics)) {
       passedEl.hidden = true;

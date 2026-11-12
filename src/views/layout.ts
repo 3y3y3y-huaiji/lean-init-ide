@@ -57,7 +57,7 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
           <span class="truncate">Lean Init IDE</span>
         </a>
         <nav class="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:order-3 max-[640px]:w-full min-[641px]:ml-2 min-[641px]:flex-1 min-[641px]:pb-0">${nav}</nav>
-        <div class="order-2 ml-auto flex shrink-0 items-center gap-1.5 min-[641px]:order-none min-[641px]:ml-0 min-[901px]:gap-2">
+        <div class="order-2 ml-auto flex shrink-0 items-center gap-1.5 max-[400px]:gap-1 min-[641px]:order-none min-[641px]:ml-0 min-[901px]:gap-2">
           <a
             id="lang-switch"
             class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"

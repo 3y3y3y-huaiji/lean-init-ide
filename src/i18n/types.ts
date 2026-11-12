@@ -97,8 +97,8 @@ export type Messages = {
     abbreviationDetail: string;
     backToLesson: string;
     resetCode: string;
-    /** 重置前确认，避免手滑覆盖代码。 */
-    resetConfirm: string;
+    /** 第一次点击重置后按钮变成的确认态。 */
+    resetConfirmAction: string;
     exportCode: string;
     lessonPassed: string;
     expand: string;

@@ -438,7 +438,7 @@ export const zh: Messages = {
     abbreviationDetail: 'Unicode 缩写',
     backToLesson: '回到本课',
     resetCode: '重置题目',
-    resetConfirm: '重置会丢弃当前代码，确定回到题目初始状态吗？',
+    resetConfirmAction: '确认重置？',
     exportCode: '导出 .lean',
     lessonPassed: '本关已通过',
     expand: '展开',

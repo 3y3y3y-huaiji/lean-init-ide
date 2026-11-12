@@ -439,7 +439,7 @@ export const en: Messages = {
     abbreviationDetail: 'Unicode abbreviation',
     backToLesson: 'Back to lesson',
     resetCode: 'Reset exercise',
-    resetConfirm: 'Reset will discard your current code. Return to the starter?',
+    resetConfirmAction: 'Confirm reset?',
     exportCode: 'Export .lean',
     lessonPassed: 'Exercise passed',
     expand: 'Expand',

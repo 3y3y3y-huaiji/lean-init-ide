@@ -116,6 +116,7 @@ chore(ci): 依赖审计只审生产依赖
 - **`wrangler.toml` 顶层 binding 不落到 production/preview**：Git 集成部署读的是 `[[env.*.r2_buckets]]`，两处都要写。
 - **指标端点依赖 `_routes.json` 的精确 include**：删掉 `/api/telemetry` 后请求会落到 SPA fallback 并返回 HTML，接收端看起来「没生效」。
 - **Analytics Engine binding 尚未声明**：指标现在只写 Workers Logs；要改数据点需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`，接收端会自动切换。
+- **Cloudflare Web Analytics 会注入第三方 beacon**：上 CSP 时要放行 `static.cloudflareinsights.com`（脚本）与 `cloudflareinsights.com`（上报）；它带 `Cross-Origin-Resource-Policy: cross-origin`，不影响 COEP。页面可能同时有 Pages 与 zone 两个 beacon，重复统计要在面板关掉一个。
 - **rollup 解析不了 `lean-panel.ts` 的类型语法**：v8 覆盖率在补算未覆盖文件时会报 `PARSE_ERROR`，故显式排除。
 
 ## 文档维护

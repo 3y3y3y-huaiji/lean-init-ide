@@ -178,6 +178,13 @@ pnpm run upload:assets -- --verify-only
 以后要接 Analytics Engine，在 `wrangler.toml` 的 production / preview 同时加
 `[[env.*.analytics_engine_datasets]] binding = "TELEMETRY"`，接收端会自动改写成数据点，无需改代码。
 
+站点同时启用了 Cloudflare Web Analytics（代理自动注入 `static.cloudflareinsights.com` 的 beacon），
+提供页面浏览与 Core Web Vitals，和自建指标分工不同、不能互相替代。实测页面里出现了两个不同 token 的
+beacon（Pages 项目注入 + zone 注入），建议在面板只保留一个，避免同一批访问被重复统计。
+该脚本响应带 `Cross-Origin-Resource-Policy: cross-origin`，在 COEP 下可正常加载；
+以后上 CSP 时需要放行 `script-src https://static.cloudflareinsights.com` 与
+`connect-src https://cloudflareinsights.com`。
+
 ## 国内访问与源诊断
 
 已知现象：AliDNS / DNSPod 的 DoH 解析一致，但分到的部分 Anycast IPv4（如 `104.21.91.203`、

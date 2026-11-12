@@ -444,8 +444,15 @@ export const en: Messages = {
       {
         heading: 'What we do not collect',
         paragraphs: [
-          'Our code sets no cookies, writes no user identifier, performs no fingerprinting, and loads no third-party analytics, advertising or social scripts.',
+          'Our code sets no cookies, writes no user identifier, performs no fingerprinting, and loads no advertising or social scripts.',
           'Editor contents and exercise code are never sent to a server.',
+        ],
+      },
+      {
+        heading: 'Third-party analytics',
+        paragraphs: [
+          'The site enables Cloudflare Web Analytics: Cloudflare collects aggregate page views and Core Web Vitals without cookies or fingerprinting. Those requests go straight to Cloudflare and never touch our /api/telemetry receiver.',
+          'Cloudflare processes that data under its own privacy policy; this site only sees aggregate reports and cannot link them to a person.',
         ],
       },
       {

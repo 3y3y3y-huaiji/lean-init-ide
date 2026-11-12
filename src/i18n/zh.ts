@@ -440,8 +440,15 @@ export const zh: Messages = {
       {
         heading: '不收集什么',
         paragraphs: [
-          '站点代码不设置 cookie、不写入用户标识、不做设备指纹，也不接入第三方统计、广告或社交插件。',
+          '站点代码不设置 cookie、不写入用户标识、不做设备指纹，也不接入广告或社交插件。',
           '编辑器内容与练习代码不会上传到服务器。',
+        ],
+      },
+      {
+        heading: '第三方统计',
+        paragraphs: [
+          '站点启用了 Cloudflare Web Analytics：由 Cloudflare 以无 cookie、无指纹的方式收集聚合的页面浏览与 Core Web Vitals，请求直接发往 Cloudflare，不经过本站的 /api/telemetry 接收端。',
+          '这部分数据由 Cloudflare 按其隐私政策处理；本站只能看到聚合报表，无法关联到个人。',
         ],
       },
       {

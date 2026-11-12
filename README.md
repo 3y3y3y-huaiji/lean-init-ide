@@ -1,5 +1,13 @@
 <h3>简体中文 | <a href="README.en.md">English</a></h3>
 
+# English overview
+
+Lean Init IDE is a browser-native Lean 4 learning environment. The Lean 4.34.1 Init runtime and
+the real language server run in Web Workers, so you can write proofs and read diagnostics and
+goals without installing a toolchain. It is a static site on Cloudflare Pages; the 102 MB runtime
+streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Nine intro-level
+lessons, no backend, and no code upload.
+
 # Lean Init IDE
 
 浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 中的 Lean 语言服务器。打开网页即可写证明、看诊断、看 Goal，不需要安装 Lean 工具链，也没有后端。
@@ -116,14 +124,6 @@ pnpm run smoke       # 线上冒烟，发版后跑
 - [架构与运行时分发](docs/ARCHITECTURE.md)
 - [本地开发与质量门禁](docs/DEVELOPMENT.md)
 - [部署、指标与排查](docs/OPERATIONS.md)
-
-## English overview
-
-Lean Init IDE is a browser-native Lean 4 learning environment. The Lean 4.34.1 Init runtime and
-the real language server run in Web Workers, so you can write proofs and read diagnostics and
-goals without installing a toolchain. It is a static site on Cloudflare Pages; the 102 MB runtime
-streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Nine intro-level
-lessons, no backend, and no code upload.
 
 ## 许可证
 

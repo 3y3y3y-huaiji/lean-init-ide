@@ -93,8 +93,10 @@ export type Messages = {
     hintLabel: string;
     /** 目录里已完成课时的标记说明。 */
     completedLabel: string;
-    /** 目录里已读但未完成课时的标记说明。 */
-    visitedLabel: string;
+    /** 练习区的完成条件说明。 */
+    exerciseCompletionHint: string;
+    /** 目录顶部的完成计数。 */
+    completedCount: (done: number, total: number) => string;
     /** 运行中的占位文案。 */
     running: string;
     /** 运行后没有任何输出时的提示。 */

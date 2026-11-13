@@ -85,7 +85,9 @@ export const en: Messages = {
     goalLabel: 'Goal changes',
     hintLabel: 'Hint',
     completedLabel: 'Completed',
-    visitedLabel: 'Read, exercise not finished',
+    exerciseCompletionHint:
+      'Keep the named theorem, remove every sorry and leave no errors; the lesson is then marked as completed automatically.',
+    completedCount: (done, total) => `${done} / ${total} completed`,
     running: 'Running…',
     noOutput: 'No errors, no output',
     proofAccepted: 'Proof accepted · Lean has no remaining goals',
@@ -133,10 +135,10 @@ export const en: Messages = {
         ],
         exercise: {
           title: 'Exercise',
-          body: 'Change the #eval expression to something you like, then open the editor and put the cursor on rfl — the GOAL panel shows ⊢ 6 * 7 = 42. Change 6 to 5 and watch the diagnostics react.',
-          hint: '#eval shows a value and #check shows a type. The example opens a proof with := by, and rfl closes it by computation. Make the equation false and Lean reports an error immediately.',
+          body: 'Change the #eval expression to something you like, then replace the sorry in six_seven with rfl and watch the GOAL panel go from ⊢ 6 * 7 = 42 to no goals.',
+          hint: '#eval shows a value and #check shows a type; six_seven closes with rfl. Change 6 to 5 and Lean reports an error immediately; change it back and it passes.',
           cta: 'Try it in the editor',
-          starter: '#eval 6 * 7\n#check Nat.mul\n\nexample : 6 * 7 = 42 := by\n  rfl\n',
+          starter: '#eval 6 * 7\n#check Nat.mul\n\ntheorem six_seven : 6 * 7 = 42 := by\n  sorry\n',
         },
       },
       {
@@ -179,10 +181,11 @@ export const en: Messages = {
         ],
         exercise: {
           title: 'Exercise',
-          body: 'Change #eval 2 + 3 into a computation you like, then write your own #check.',
-          hint: 'Use #check for the type and #eval for the value. To ask Lean to verify an equality, write example : ... := rfl instead of #eval.',
+          body: 'Change #eval 2 + 3 to something you like, then replace the sorry in two_add_two with rfl.',
+          hint: 'Use #check for the type and #eval for the value; two_add_two opens with := by, and rfl closes it by computation.',
           cta: 'Try it in the editor',
-          starter: '#check Nat.mul\n#eval 6 * 7\n',
+          starter:
+            '#check Nat.mul\n#eval 6 * 7\n\ntheorem two_add_two : 2 + 2 = 4 := by\n  sorry\n',
         },
       },
       {
@@ -628,7 +631,7 @@ export const en: Messages = {
           hint: 'For Even 8 take k = 4 and use ⟨4, rfl⟩. For the theorem, rcases ha and hb, refine ⟨x + y, ?_⟩, rw [hx, hy], then finish with grind.',
           cta: 'Try it in the editor',
           starter:
-            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample : Even 8 := by\n  sorry\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
+            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_eight : Even 8 := by\n  sorry\n\ntheorem even_sum (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
         },
       },
       {

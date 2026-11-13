@@ -148,26 +148,47 @@ describe('课程页交互绑定', () => {
     document.body.innerHTML = renderLesson('zh', 'first-proof');
   });
 
-  it('进入课程记为已读，目录用空心圈标记已读课时', () => {
+  it('进入课程记为已读，但未完成时目录不显示标记', () => {
     markLessonVisited('first-proof');
     document.body.innerHTML = renderLesson('zh', 'implication');
     bindLesson(document.body, 'zh', 'implication');
 
     const seen = document.body.querySelector<HTMLAnchorElement>('[data-lesson-slug="first-proof"]');
-    expect(seen?.textContent).toContain('○');
-    expect(seen?.querySelector('span')?.title).toBe(messagesFor('zh').lesson.visitedLabel);
+    expect(seen?.textContent).not.toContain('○');
+    expect(seen?.querySelector('span')).toBeNull();
     expect(readProgress().has('implication')).toBe(true);
   });
 
-  it('练习完成的课时在目录里显示实心勾', () => {
+  it('练习完成的课时在目录里显示实心勾，并更新顶部计数', () => {
     markLessonCompleted('first-proof');
     document.body.innerHTML = renderLesson('zh', 'implication');
     bindLesson(document.body, 'zh', 'implication');
 
+    const t = messagesFor('zh').lesson;
     const done = document.body.querySelector<HTMLAnchorElement>('[data-lesson-slug="first-proof"]');
     expect(done?.textContent).toContain('✓');
-    expect(done?.querySelector('span')?.title).toBe(messagesFor('zh').lesson.completedLabel);
+    expect(done?.querySelector('span')?.title).toBe(t.completedLabel);
     expect(readCompleted().has('first-proof')).toBe(true);
+    expect(document.body.querySelector('[data-role="toc-progress"]')?.textContent).toBe(
+      t.completedCount(1, t.lessons.length),
+    );
+  });
+
+  it('练习区显示完成条件，完成后换成徽章', () => {
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    const t = messagesFor('zh').lesson;
+    const status = document.body.querySelector<HTMLElement>('[data-role="exercise-status"]');
+    expect(status?.textContent).toBe(t.exerciseCompletionHint);
+
+    markLessonCompleted('first-proof');
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    const done = document.body.querySelector<HTMLElement>('[data-role="exercise-status"]');
+    expect(done?.textContent).toContain('✓');
+    expect(done?.textContent).toContain(t.completedLabel);
   });
 
   it('挂载隐藏的 runner，用紧凑变体且不预置代码', () => {

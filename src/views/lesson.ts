@@ -7,7 +7,7 @@ import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
 import type { LessonPage, LessonTrack } from '../i18n/types';
-import { markLessonVisited, readCompleted, readProgress } from '../progress';
+import { markLessonVisited, readCompleted } from '../progress';
 import { escapeHtml } from './html';
 
 const codeBlockOpen = 'overflow-hidden rounded-xl border border-line bg-panel-soft';
@@ -153,7 +153,10 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
   const exercise = page.exercise
     ? `
       <section class="mt-8 rounded-2xl border border-accent bg-accent-soft p-6">
-        <h2 class="mt-0 mb-2.5 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
+        <div class="mb-2.5 flex flex-wrap items-center gap-2">
+          <h2 class="m-0 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
+          <span data-role="exercise-status" hidden></span>
+        </div>
         <p class="mt-0 mb-4 text-muted">${escapeHtml(page.exercise.body)}</p>
         ${
           page.exercise.hint
@@ -170,7 +173,10 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
   return `
     <div class="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-6 max-[1040px]:grid-cols-1">
       <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1040px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
-        <p class="m-0 mb-2 px-2.5 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
+        <div class="mb-2 flex items-baseline justify-between gap-2 px-2.5">
+          <p class="m-0 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
+          <span data-role="toc-progress" class="font-mono text-[10px] tabular-nums text-muted"></span>
+        </div>
         <ol class="m-0 list-none space-y-0.5 p-0">${toc}</ol>
       </nav>
 
@@ -267,20 +273,32 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
 
-  // 进度只存在浏览器里：进入课程即记为已读；练习通过后目录里换成实心勾。
-  const visited = readProgress();
+  // 进度只存在浏览器里：进入课程即记为已读；练习通过后目录里打勾。
   const completed = readCompleted();
   markLessonVisited(page.slug);
   for (const link of root.querySelectorAll<HTMLAnchorElement>('[data-lesson-slug]')) {
-    const slug = link.dataset.lessonSlug ?? '';
-    const done = completed.has(slug);
-    if (!done && !visited.has(slug)) continue;
+    if (!completed.has(link.dataset.lessonSlug ?? '')) continue;
     const mark = document.createElement('span');
-    mark.className = done ? 'ml-auto pl-2 text-accent' : 'ml-auto pl-2 text-muted';
+    mark.className = 'ml-auto pl-2 text-accent';
     mark.setAttribute('aria-hidden', 'true');
-    mark.textContent = done ? '✓' : '○';
-    mark.title = done ? t.completedLabel : t.visitedLabel;
+    mark.textContent = '✓';
+    mark.title = t.completedLabel;
     link.append(mark);
+  }
+
+  // 目录顶部显示总完成度，练习区说明完成条件；都不依赖服务端。
+  const counter = t.completedCount(completed.size, t.lessons.length);
+  for (const el of root.querySelectorAll<HTMLElement>('[data-role="toc-progress"]')) {
+    el.textContent = counter;
+  }
+  const exerciseStatus = root.querySelector<HTMLElement>('[data-role="exercise-status"]');
+  if (exerciseStatus) {
+    const done = completed.has(page.slug);
+    exerciseStatus.hidden = false;
+    exerciseStatus.textContent = done ? `✓ ${t.completedLabel}` : t.exerciseCompletionHint;
+    exerciseStatus.className = done
+      ? 'inline-flex items-center rounded-full border border-ok/45 bg-ok/10 px-2.5 py-0.5 text-[11px] font-[650] text-ok'
+      : 'w-full text-[11.5px] leading-normal text-muted';
   }
 
   const codes = page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));

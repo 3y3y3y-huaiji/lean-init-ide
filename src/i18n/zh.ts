@@ -83,7 +83,9 @@ export const zh: Messages = {
     goalLabel: 'Goal 变化',
     hintLabel: '提示',
     completedLabel: '已完成',
-    visitedLabel: '已读，未完成练习',
+    exerciseCompletionHint:
+      '保留题目中的定理名、删掉所有 sorry 且没有错误后，本课会自动标记为已完成。',
+    completedCount: (done, total) => `已完成 ${done} / ${total}`,
     running: '运行中…',
     noOutput: '没有错误，也没有输出',
     proofAccepted: '证明通过 · Lean 已接受，没有待证目标',
@@ -131,10 +133,10 @@ export const zh: Messages = {
         ],
         exercise: {
           title: '练习',
-          body: '把 #eval 的算式换成你喜欢的；然后打开编辑器，把光标停在 rfl 上——GOAL 面板会显示 ⊢ 6 * 7 = 42。再把 6 改成 5，看诊断怎么变。',
-          hint: '#eval 看值，#check 看类型；最后的 example 用 := by 展开，rfl 直接由计算关闭目标。把等式改成一个不成立的算式，Lean 会立刻报错。',
+          body: '把 #eval 的算式换成你喜欢的；再把 six_seven 里的 sorry 换成 rfl，看 GOAL 面板如何从 ⊢ 6 * 7 = 42 变成没有目标。',
+          hint: '#eval 看值，#check 看类型；six_seven 用 rfl 就能关闭。把 6 改成 5，Lean 会立刻报错，改回来又通过。',
           cta: '在编辑器中动手',
-          starter: '#eval 6 * 7\n#check Nat.mul\n\nexample : 6 * 7 = 42 := by\n  rfl\n',
+          starter: '#eval 6 * 7\n#check Nat.mul\n\ntheorem six_seven : 6 * 7 = 42 := by\n  sorry\n',
         },
       },
       {
@@ -177,10 +179,11 @@ export const zh: Messages = {
         ],
         exercise: {
           title: '练习',
-          body: '把 #eval 2 + 3 改成你喜欢的算式，再自己写一个 #check 看看结果。',
-          hint: '先 #check 看类型，再 #eval 看值；如果想让 Lean 检查一条等式，用 example : ... := rfl，而不是 #eval。',
+          body: '把 #eval 2 + 3 改成你喜欢的算式，再把 two_add_two 的 sorry 换成 rfl。',
+          hint: '先 #check 看类型，再 #eval 看值；two_add_two 用 := by 展开后，rfl 直接由计算关闭目标。',
           cta: '在编辑器中动手',
-          starter: '#check Nat.mul\n#eval 6 * 7\n',
+          starter:
+            '#check Nat.mul\n#eval 6 * 7\n\ntheorem two_add_two : 2 + 2 = 4 := by\n  sorry\n',
         },
       },
       {
@@ -626,7 +629,7 @@ export const zh: Messages = {
           hint: 'Even 8 取 k = 4，用 ⟨4, rfl⟩；第二个定理先 rcases ha、rcases hb，再 refine ⟨x + y, ?_⟩，rw [hx, hy] 后用 grind 收尾。',
           cta: '在编辑器中动手',
           starter:
-            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample : Even 8 := by\n  sorry\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
+            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_eight : Even 8 := by\n  sorry\n\ntheorem even_sum (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
         },
       },
       {

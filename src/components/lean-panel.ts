@@ -154,6 +154,19 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       </section>
       <section data-panel="diagnostics" class="${panelClass(compact)} min-h-0 flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
+        <div
+          data-role="run-ok"
+          hidden
+          role="status"
+          aria-live="polite"
+          class="mx-2 mt-2 flex items-start gap-2 rounded-lg border border-ok/45 bg-ok/10 px-2.5 py-2 text-[12.5px] leading-normal text-ok"
+        >
+          <span aria-hidden="true" class="text-[13px] font-bold leading-[1.4]">✓</span>
+          <span class="min-w-0">
+            <strong data-role="run-ok-title" class="font-[650]"></strong>
+            <span data-role="run-ok-detail" class="block text-[11.5px] text-muted"></span>
+          </span>
+        </div>
         <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2 max-[900px]:max-h-[280px]">
           <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
         </ul>
@@ -264,6 +277,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const logEl = host.querySelector<HTMLPreElement>('[data-role="log"]')!;
   const diagnosticsEl = host.querySelector<HTMLUListElement>('[data-role="diagnostics"]')!;
   const diagCountEl = host.querySelector<HTMLElement>('[data-role="count"]')!;
+  const runOkEl = host.querySelector<HTMLElement>('[data-role="run-ok"]');
+  const runOkTitleEl = host.querySelector<HTMLElement>('[data-role="run-ok-title"]');
+  const runOkDetailEl = host.querySelector<HTMLElement>('[data-role="run-ok-detail"]');
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
   const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
   const resetEl = host.querySelector<HTMLButtonElement>('[data-role="reset"]');
@@ -680,6 +696,21 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     updatePassedBadge(params.diagnostics);
     lastDiagnostics = params.diagnostics;
 
+    // 没有错误时给一个显眼的成功提示框；日志里那行 initialize 太容易被忽略。
+    const errorCount = params.diagnostics.filter(
+      (diagnostic) => diagnostic.severity === 1 || diagnostic.severity === undefined,
+    ).length;
+    const warningCount = params.diagnostics.filter(
+      (diagnostic) => diagnostic.severity === 2,
+    ).length;
+    if (runOkEl && runOkTitleEl && runOkDetailEl) {
+      runOkEl.hidden = errorCount > 0;
+      if (errorCount === 0) {
+        runOkTitleEl.textContent = t.runPassed;
+        runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
+      }
+    }
+
     diagnosticsEl.replaceChildren();
     diagCountEl.textContent = String(params.diagnostics.length);
 
@@ -968,6 +999,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     goalSupported = true;
     runStartedAt = 0;
     firstDiagnosticsReported = false;
+    if (runOkEl) runOkEl.hidden = true;
     setStatus(memoryTier === 'low' ? t.statusLowMemory : t.statusIdle, 'idle');
     setProgress(0);
     goalEl.textContent = t.goalPlaceholder;
@@ -983,6 +1015,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     void navigator.storage?.persist?.().catch(() => {});
     setStatus(t.statusLoading, 'loading');
     setProgress(0);
+    if (runOkEl) runOkEl.hidden = true;
     const startedAt = performance.now();
     runStartedAt = startedAt;
     firstDiagnosticsReported = false;

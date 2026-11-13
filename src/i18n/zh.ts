@@ -1097,6 +1097,9 @@ export const zh: Messages = {
     goalHint: '将光标移入 by 块内查看当前证明目标',
     diagnosticsTitle: '诊断',
     diagnosticsPlaceholder: '启动 Lean 后显示诊断',
+    runPassed: '运行通过',
+    runPassedDetail: (warnings, ms) =>
+      warnings > 0 ? `${warnings} 个警告 · ${ms}ms` : `没有错误 · ${ms}ms`,
     severityError: '错误',
     severityWarning: '警告',
     severityInfo: '信息',

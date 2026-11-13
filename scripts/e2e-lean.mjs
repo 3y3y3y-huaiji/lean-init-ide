@@ -44,7 +44,7 @@ const main = async () => {
   const startedAt = Date.now();
   const stamp = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
 
-  await page.goto(`${origin}/zh/playground`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${origin}/zh/playground?debug`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1000);
 
   const env = await page.evaluate(async () => {
@@ -83,14 +83,21 @@ const main = async () => {
   console.log(`[${stamp()}] 启动 Lean（默认示例）`);
 
   const read = () =>
-    page.evaluate(() => ({
-      state: globalThis.document.querySelector('[data-role="status"]')?.dataset.state,
-      status: globalThis.document.querySelector('[data-role="status"]')?.textContent ?? '',
-      log: globalThis.document.querySelector('[data-role="log"]')?.textContent ?? '',
-      diagnostics: [...globalThis.document.querySelectorAll('[data-role="diagnostics"] li')].map(
-        (node) => (node.textContent ?? '').trim(),
-      ),
-    }));
+    page.evaluate(() => {
+      const runOk = globalThis.document.querySelector('[data-role="run-ok"]');
+      return {
+        state: globalThis.document.querySelector('[data-role="status"]')?.dataset.state,
+        status: globalThis.document.querySelector('[data-role="status"]')?.textContent ?? '',
+        log: globalThis.document.querySelector('[data-role="log"]')?.textContent ?? '',
+        runOk: {
+          visible: Boolean(runOk) && !runOk.hidden,
+          text: (runOk?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        },
+        diagnostics: [...globalThis.document.querySelectorAll('[data-role="diagnostics"] li')].map(
+          (node) => (node.textContent ?? '').trim(),
+        ),
+      };
+    });
 
   const deadline = Date.now() + timeoutMs;
   let result;
@@ -117,10 +124,40 @@ const main = async () => {
   console.log('诊断:', JSON.stringify(final.diagnostics));
   console.log('日志:\n' + final.log);
 
+  // 第二阶段：换成无错误代码，确认界面上出现「运行通过」提示框，而不是只在日志里。
+  let successText = '';
+  if (result?.ok && final.runOk.visible) {
+    console.error('E2E FAIL: 有错误的示例不应显示运行通过');
+    await browser.close();
+    process.exit(1);
+  }
+  if (result?.ok) {
+    await page.evaluate(() => {
+      const editor = globalThis.__editor;
+      if (!editor) throw new Error('debug editor handle missing');
+      editor.setValue('example : 2 + 2 = 4 := rfl');
+    });
+    const successDeadline = Date.now() + Math.min(timeoutMs, 60_000);
+    while (Date.now() < successDeadline) {
+      await page.waitForTimeout(500);
+      const snapshot = await read();
+      if (snapshot.runOk.visible && snapshot.runOk.text.includes('运行通过')) {
+        successText = snapshot.runOk.text;
+        break;
+      }
+      if (badLogPattern.test(snapshot.log)) break;
+    }
+    if (successText) console.log(`[${stamp()}] 成功提示框: ${successText}`);
+    else console.error('E2E FAIL: 无错误代码没有显示运行通过提示框');
+  }
+
   await browser.close();
 
   if (!result?.ok) {
     console.error(`E2E FAIL: ${result?.reason ?? '等待诊断超时'}`);
+    process.exit(1);
+  }
+  if (!successText) {
     process.exit(1);
   }
   console.log(`E2E PASS: ${result.initializeLine?.trim()}`);

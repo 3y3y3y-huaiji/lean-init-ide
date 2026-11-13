@@ -1099,6 +1099,11 @@ export const en: Messages = {
     goalHint: 'Move the cursor inside the by block to see the current goal',
     diagnosticsTitle: 'Diagnostics',
     diagnosticsPlaceholder: 'Diagnostics appear after Lean starts',
+    runPassed: 'Run passed',
+    runPassedDetail: (warnings, ms) =>
+      warnings > 0
+        ? `${warnings} warning${warnings === 1 ? '' : 's'} · ${ms} ms`
+        : `No errors · ${ms} ms`,
     severityError: 'Error',
     severityWarning: 'Warning',
     severityInfo: 'Info',

@@ -112,6 +112,10 @@ export type Messages = {
     goalHint: string;
     diagnosticsTitle: string;
     diagnosticsPlaceholder: string;
+    /** 诊断批次没有错误时，在诊断面板顶部显示的成功提示。 */
+    runPassed: string;
+    /** 成功提示的细节：警告数量与诊断耗时。 */
+    runPassedDetail: (warnings: number, ms: number) => string;
     /** 诊断按 LSP severity 分组，避免把 #eval / #check 的输出当成报错。 */
     severityError: string;
     severityWarning: string;

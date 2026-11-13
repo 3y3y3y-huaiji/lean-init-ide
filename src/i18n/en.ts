@@ -1117,6 +1117,7 @@ export const en: Messages = {
     panelsTitle: 'Panels',
     showPanels: 'Visible panels',
     resizeHint: 'Drag to resize the editor',
+    splitHint: 'Drag to resize the columns',
     logCompletion: (line, column, count) => `completion @${line}:${column} -> ${count} items`,
     logHover: (line, column, found) => `hover ${line}:${column} -> ${found ? 'result' : 'null'}`,
     logRequestFailed: (method, message) => `${method} failed: ${message}`,

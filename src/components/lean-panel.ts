@@ -16,6 +16,7 @@ import { clearDraft, readDraft, saveDraft } from '../draft';
 import { clearRuntimeCache } from '../runtime-cache';
 import { isExerciseSolved, isExerciseStarter } from '../exercise';
 import { findDeclaration } from '../lean-declaration';
+import { stripGoalFence } from '../lean-goal';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
@@ -106,10 +107,11 @@ const diagnosticMessageClass = 'text-[13px] leading-normal';
 
 const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compact: boolean) => `
   <div
+    data-role="workspace"
     class="${
       compact
         ? 'flex min-h-0 flex-1 flex-col gap-2 p-2.5'
-        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_clamp(320px,32vw,380px)] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
+        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_6px_clamp(320px,32vw,380px)] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
     }"
   >
     <section
@@ -129,9 +131,16 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
              title="${t.resizeHint}"
              class="group flex h-3 shrink-0 cursor-row-resize touch-none items-center justify-center"
            ><span class="h-[3px] w-12 rounded-full bg-line transition-colors group-hover:bg-accent"></span></div>`
-        : ''
+        : `<div
+             data-role="split"
+             role="separator"
+             aria-orientation="vertical"
+             title="${t.splitHint}"
+             class="flex cursor-col-resize touch-none items-center justify-center max-[900px]:hidden"
+           ><span class="h-12 w-[3px] rounded-full bg-line transition-colors hover:bg-accent"></span></div>`
     }
     <aside
+      data-role="aside"
       class="${
         compact
           ? 'contents'
@@ -202,19 +211,30 @@ const renderMarkup = (
       <span>${label}</span>
     </label>`;
 
-  const panelsMenu = compact
-    ? `<details class="relative shrink-0" data-role="panels">
-         <summary class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg" title="${t.panelsTitle}">
-           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5h10M2 7h10M2 10.5h10"/></svg>
-         </summary>
-         <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
-           <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
-           ${panelToggle('goal', t.goalTitle)}
-           ${panelToggle('diagnostics', t.diagnosticsTitle)}
-           ${panelToggle('log', t.logTitle)}
-         </div>
-       </details>`
-    : '';
+  const panelsMenu = (iconOnly: boolean) => `
+    <details class="relative shrink-0" data-role="panels">
+      <summary
+        class="${
+          iconOnly
+            ? 'flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg'
+            : `${ghostButtonClass} cursor-pointer list-none`
+        }"
+        title="${t.panelsTitle}"
+      >
+        ${
+          iconOnly
+            ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5h10M2 7h10M2 10.5h10"/></svg>`
+            : `${t.panelsTitle}
+               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>`
+        }
+      </summary>
+      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
+        <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
+        ${panelToggle('goal', t.goalTitle)}
+        ${panelToggle('diagnostics', t.diagnosticsTitle)}
+        ${panelToggle('log', t.logTitle)}
+      </div>
+    </details>`;
 
   if (!compact) {
     return `
@@ -227,7 +247,7 @@ const renderMarkup = (
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${status}${start}</div>
+          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${panelsMenu(false)}${status}${start}</div>
         </div>
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">
@@ -252,7 +272,7 @@ const renderMarkup = (
           <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
           <strong class="truncate text-sm">${t.title}</strong>
         </div>
-        <div class="flex shrink-0 items-center gap-2">${status}${panelsMenu}${start}</div>
+        <div class="flex shrink-0 items-center gap-2">${status}${panelsMenu(true)}${start}</div>
       </div>
       <div class="h-[3px] shrink-0 bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
       ${renderWorkspace(t, true)}
@@ -434,14 +454,19 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const PANELS_KEY = 'lean-panel:panels';
   const DEFAULT_RATIO = 0.45;
 
-  const readLayout = (): { editorRatio: number; panels: Record<string, boolean> } => {
+  const readLayout = (
+    compact: boolean,
+  ): { editorRatio: number; panelWidth: number | null; panels: Record<string, boolean> } => {
     const fallback = {
       editorRatio: DEFAULT_RATIO,
-      panels: { goal: true, diagnostics: true, log: false },
+      panelWidth: null,
+      // 完整编辑器默认显示日志；紧凑面板默认收起，给诊断留空间。
+      panels: { goal: true, diagnostics: true, log: !compact },
     };
     try {
       const stored = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') as {
         editorRatio?: unknown;
+        panelWidth?: unknown;
       };
       const panels = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '{}') as Record<
         string,
@@ -454,6 +479,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           stored.editorRatio <= 0.7
             ? stored.editorRatio
             : DEFAULT_RATIO,
+        panelWidth:
+          typeof stored.panelWidth === 'number' &&
+          stored.panelWidth >= 300 &&
+          stored.panelWidth <= 800
+            ? stored.panelWidth
+            : null,
         panels: { ...fallback.panels, ...panels },
       };
     } catch {
@@ -461,7 +492,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
   };
 
-  const layout = readLayout();
+  const layout = readLayout(variant === 'compact');
   const editorWrap = host.querySelector<HTMLElement>('[data-role="editor-wrap"]');
   const resizeHandle = host.querySelector<HTMLElement>('[data-role="resize"]');
 
@@ -491,9 +522,77 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
         try {
-          localStorage.setItem(LAYOUT_KEY, JSON.stringify({ editorRatio: layout.editorRatio }));
+          localStorage.setItem(
+            LAYOUT_KEY,
+            JSON.stringify({ editorRatio: layout.editorRatio, panelWidth: layout.panelWidth }),
+          );
         } catch {
           // 隐私模式下写不了，忽略即可。
+        }
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // 完整编辑器允许拖动左右分栏；窄屏恢复单列，避免内联样式压过响应式布局。
+  const workspaceEl = host.querySelector<HTMLElement>('[data-role="workspace"]');
+  const splitHandle = host.querySelector<HTMLElement>('[data-role="split"]');
+  const wideQuery = window.matchMedia('(min-width: 901px)');
+
+  const splitColumns = (width: number) => `minmax(0, 1fr) 6px ${width}px`;
+
+  const applySplit = () => {
+    if (!workspaceEl || !splitHandle || layout.panelWidth === null) return;
+    if (!wideQuery.matches) {
+      workspaceEl.style.gridTemplateColumns = '';
+      return;
+    }
+    const style = window.getComputedStyle(workspaceEl);
+    const contentWidth =
+      workspaceEl.clientWidth -
+      Number.parseFloat(style.paddingLeft) -
+      Number.parseFloat(style.paddingRight);
+    // 6px 分隔条 + 两段 16px gap + 编辑器至少 320px。
+    const width = Math.max(300, Math.min(layout.panelWidth, contentWidth - 320 - 38));
+    workspaceEl.style.gridTemplateColumns = splitColumns(width);
+  };
+
+  applySplit();
+  wideQuery.addEventListener('change', applySplit);
+
+  if (splitHandle && workspaceEl) {
+    splitHandle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const asideEl = host.querySelector<HTMLElement>('[data-role="aside"]');
+      const startWidth = asideEl?.getBoundingClientRect().width ?? 340;
+      const style = window.getComputedStyle(workspaceEl);
+      const contentWidth =
+        workspaceEl.clientWidth -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight);
+      const maxWidth = Math.max(300, contentWidth - 320 - 38);
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const next = startWidth + (startX - moveEvent.clientX);
+        layout.panelWidth = Math.min(maxWidth, Math.max(300, next));
+        if (wideQuery.matches) {
+          workspaceEl.style.gridTemplateColumns = splitColumns(layout.panelWidth);
+        }
+      };
+
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        try {
+          localStorage.setItem(
+            LAYOUT_KEY,
+            JSON.stringify({ editorRatio: layout.editorRatio, panelWidth: layout.panelWidth }),
+          );
+        } catch {
+          // 同上。
         }
       };
 
@@ -970,7 +1069,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         '$/lean/plainGoal',
         positionParams(position),
       );
-      const text = result?.rendered?.trim() || (result?.goals ?? []).join('\n\n').trim();
+      const rendered = result?.rendered ? stripGoalFence(result.rendered) : '';
+      const text = rendered || (result?.goals ?? []).join('\n\n').trim();
       if (text) {
         goalEl.textContent = text;
         return;
@@ -1078,6 +1178,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     saveDraftNow();
     session.stop();
     stopThemeSync();
+    wideQuery.removeEventListener('change', applySplit);
     model.dispose();
     editor.dispose();
   });

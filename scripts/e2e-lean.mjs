@@ -151,6 +151,59 @@ const main = async () => {
     else console.error('E2E FAIL: 无错误代码没有显示运行通过提示框');
   }
 
+  // 第三阶段：左右分栏可拖拽，日志面板可从「面板显示」里隐藏。
+  let splitWidth = 0;
+  if (result?.ok && successText) {
+    const aside = page.locator('[data-role="aside"]');
+    const before = await aside.evaluate((node) => node.getBoundingClientRect().width);
+    const box = await page.locator('[data-role="split"]').boundingBox();
+    if (!box) throw new Error('找不到左右分栏拖拽条');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 - 100, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.up();
+    const after = await aside.evaluate((node) => node.getBoundingClientRect().width);
+    if (after < before + 60) throw new Error(`分栏拖拽无效: ${before} -> ${after}`);
+    splitWidth = Math.round(after);
+    console.log(`[${stamp()}] 分栏宽度: ${Math.round(before)} -> ${splitWidth}`);
+
+    await page.click('[data-role="panels"] summary');
+    await page.locator('[data-panel-toggle="log"]').click();
+    const logHidden = await page.evaluate(
+      () => globalThis.document.querySelector('[data-panel="log"]')?.hidden ?? false,
+    );
+    if (!logHidden) throw new Error('取消勾选后日志面板没有隐藏');
+    console.log(`[${stamp()}] 日志面板已隐藏`);
+  }
+
+  // 第四阶段：Goal 面板不能把 plainGoal 返回的 ```lean 围栏当成正文显示。
+  let goalText = '';
+  if (result?.ok && successText) {
+    await page.evaluate(() => {
+      const editor = globalThis.__editor;
+      editor.setValue('theorem goal_demo (a : Nat) : a + 0 = a := by\n  sorry');
+      editor.setPosition({ lineNumber: 2, column: 3 });
+      editor.focus();
+    });
+    const goalDeadline = Date.now() + Math.min(timeoutMs, 30_000);
+    while (Date.now() < goalDeadline) {
+      await page.waitForTimeout(500);
+      goalText = await page.evaluate(
+        () => globalThis.document.querySelector('[data-role="goal"]')?.textContent ?? '',
+      );
+      if (goalText.includes('⊢') && goalText.includes('a + 0 = a')) break;
+    }
+    if (goalText.includes('```')) {
+      console.error(`E2E FAIL: Goal 面板显示了 Markdown 围栏: ${goalText}`);
+      process.exit(1);
+    }
+    if (!goalText.includes('⊢')) {
+      console.error(`E2E FAIL: Goal 面板没有显示目标: ${goalText}`);
+      process.exit(1);
+    }
+    console.log(`[${stamp()}] Goal: ${goalText.replace(/\s+/g, ' ').trim()}`);
+  }
+
   await browser.close();
 
   if (!result?.ok) {
@@ -158,6 +211,14 @@ const main = async () => {
     process.exit(1);
   }
   if (!successText) {
+    process.exit(1);
+  }
+  if (!splitWidth) {
+    console.error('E2E FAIL: 没有验证左右分栏拖拽');
+    process.exit(1);
+  }
+  if (!goalText) {
+    console.error('E2E FAIL: 没有读到 Goal 文本');
     process.exit(1);
   }
   console.log(`E2E PASS: ${result.initializeLine?.trim()}`);

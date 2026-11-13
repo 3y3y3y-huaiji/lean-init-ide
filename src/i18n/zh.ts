@@ -1113,6 +1113,7 @@ export const zh: Messages = {
     panelsTitle: '面板显示',
     showPanels: '显示面板',
     resizeHint: '拖动调整编辑器高度',
+    splitHint: '拖动调整左右栏宽度',
     logCompletion: (line, column, count) => `补全 @${line}:${column} -> ${count} 项`,
     logHover: (line, column, found) => `悬停 ${line}:${column} -> ${found ? '有结果' : 'null'}`,
     logRequestFailed: (method, message) => `${method} 失败：${message}`,

@@ -132,6 +132,8 @@ export type Messages = {
     panelsTitle: string;
     showPanels: string;
     resizeHint: string;
+    /** 左右栏分隔条的拖拽提示。 */
+    splitHint: string;
     logCompletion: (line: number, column: number, count: number) => string;
     logHover: (line: number, column: number, found: boolean) => string;
     logRequestFailed: (method: string, message: string) => string;

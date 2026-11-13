@@ -130,10 +130,10 @@ export const en: Messages = {
         ],
         exercise: {
           title: 'Exercise',
-          body: 'Change the #eval expression to something you like, then #check a name you are curious about.',
-          hint: 'Use #eval to see a value and #check to see a type. Neither command needs a proof, and neither takes := rfl.',
+          body: 'Change the #eval expression to something you like, then open the editor and put the cursor on rfl — the GOAL panel shows ⊢ 6 * 7 = 42. Change 6 to 5 and watch the diagnostics react.',
+          hint: '#eval shows a value and #check shows a type. The example opens a proof with := by, and rfl closes it by computation. Make the equation false and Lean reports an error immediately.',
           cta: 'Try it in the editor',
-          starter: '#eval 6 * 7\n#check Nat.mul\n',
+          starter: '#eval 6 * 7\n#check Nat.mul\n\nexample : 6 * 7 = 42 := by\n  rfl\n',
         },
       },
       {
@@ -560,6 +560,72 @@ export const en: Messages = {
           cta: 'Try it in the editor',
           starter:
             'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-proof-style',
+        track: 'math',
+        navTitle: 'M0 · Translating proofs',
+        title: 'Translating a math proof into Lean',
+        lead: 'Before divisibility, line up the phrases you already use in math class — “let”, “take”, “split into cases”, “induct” — with the Lean tactics that express them.',
+        blocks: [
+          {
+            kind: 'p',
+            text: 'A math proof and a Lean proof are the same proof at different levels of precision: in class you may write “clearly”, but Lean asks for every step to be checkable. Here are four common sentence patterns.',
+          },
+          {
+            kind: 'p',
+            text: 'Pattern 1: “Let a = 2x and b = 2y.” In class this introduces notation; in Lean you must first unpack the existential. rcases turns “there exists some x” into a concrete x plus an equation.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) :\n    ∃ x y, a = 2 * x ∧ b = 2 * y := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  exact ⟨x, y, hx, hy⟩',
+          },
+          {
+            kind: 'goal',
+            text: 'Start: ⊢ ∃ x y, a = 2 * x ∧ b = 2 * y\nrcases ha: x : Nat, hx : a = 2 * x (“let a = 2x”)\nrcases hb: y : Nat, hy : b = 2 * y\nexact ⟨x, y, hx, hy⟩: no goals left',
+          },
+          {
+            kind: 'p',
+            text: 'Pattern 2: “Take k = x + y.” In class naming the witness is usually enough; Lean hands it over with refine or exact and then rewrites the remaining equation. Here is the full “even + even is even” proof, translated sentence by sentence.',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b) := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  refine ⟨x + y, ?_⟩\n  rw [hx, hy]\n  omega',
+          },
+          {
+            kind: 'goal',
+            text: 'Start: ⊢ Even (a + b), i.e. ⊢ ∃ k, a + b = 2 * k\nrcases: get x, y with hx : a = 2 * x and hy : b = 2 * y\nrefine ⟨x + y, ?_⟩: ⊢ a + b = 2 * (x + y) (take k = x + y)\nrw [hx, hy]: ⊢ 2 * x + 2 * y = 2 * (x + y)\nomega: no goals left',
+          },
+          {
+            kind: 'p',
+            text: 'Pattern 3: “Split into cases.” In class: “if n = 0 then …, otherwise …”. Lean uses by_cases and proves each branch separately.',
+          },
+          {
+            kind: 'code',
+            code: 'example (n : Nat) : n = 0 ∨ n ≠ 0 := by\n  by_cases h : n = 0\n  · exact Or.inl h\n  · exact Or.inr h',
+          },
+          {
+            kind: 'p',
+            text: 'Pattern 4: “Induct on n.” Prove n = 0, then assume n = k and prove n = k + 1. Lean writes induction n with | zero => ... | succ k ih => ...; lesson 05 practised it, and the divisibility and parity proofs will reuse it.',
+          },
+          {
+            kind: 'note',
+            text: 'omega is Lean’s linear arithmetic finisher: addition, subtraction, multiplication by constants and inequalities. It is not a magic “obvious” button — it checks the arithmetic before accepting the goal.',
+          },
+          {
+            kind: 'details',
+            summary: 'Which words from ordinary proofs trip Lean up?',
+            text: '“Clearly”, “without loss of generality” and “similarly” do not exist in Lean. Ask yourself which definition or hypothesis the step used: unfold the definition with rw or rcases, hand over the hypothesis with exact, and you have supplied the step the machine wants.',
+          },
+        ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove Even 8 with a witness, then write the “even + even is even” proof yourself, following the steps above.',
+          hint: 'For Even 8 take k = 4 and use ⟨4, rfl⟩. For the theorem, rcases ha and hb, refine ⟨x + y, ?_⟩, rw [hx, hy], then finish with omega.',
+          cta: 'Try it in the editor',
+          starter:
+            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample : Even 8 := by\n  sorry\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
         },
       },
       {

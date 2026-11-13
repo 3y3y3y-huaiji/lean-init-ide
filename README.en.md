@@ -41,7 +41,7 @@ Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sig
 - Lean Unicode abbreviations: type `\to` or `\forall` and press space or Tab to get `→` or `∀`
 - Bilingual UI (`/zh/` and `/en/`), remembers your choice
 - Light / dark / system themes, with Monaco following along
-- 21 lessons: 9 intro + 12 math & verification; code blocks run in place, exercises open the playground with a starter
+- 22 lessons: 9 intro + 13 math & verification; code blocks run in place, exercises open the playground with a starter
 - Exercise drafts stay in your browser across reloads, with one-click reset and `.lean` export
 - The runtime streams in 4 MB ranges with per-chunk verification and automatic source fallback
 - Low-memory devices skip auto-download and cap the persistent cache at 128 MB

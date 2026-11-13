@@ -128,10 +128,10 @@ export const zh: Messages = {
         ],
         exercise: {
           title: '练习',
-          body: '把 #eval 的算式换成你喜欢的，再 #check 一个你好奇的名字。',
-          hint: '先写 #eval 看值，再写 #check 看类型；这两个命令都不需要证明，也不要给它们加 := rfl。',
+          body: '把 #eval 的算式换成你喜欢的；然后打开编辑器，把光标停在 rfl 上——GOAL 面板会显示 ⊢ 6 * 7 = 42。再把 6 改成 5，看诊断怎么变。',
+          hint: '#eval 看值，#check 看类型；最后的 example 用 := by 展开，rfl 直接由计算关闭目标。把等式改成一个不成立的算式，Lean 会立刻报错。',
           cta: '在编辑器中动手',
-          starter: '#eval 6 * 7\n#check Nat.mul\n',
+          starter: '#eval 6 * 7\n#check Nat.mul\n\nexample : 6 * 7 = 42 := by\n  rfl\n',
         },
       },
       {
@@ -558,6 +558,72 @@ export const zh: Messages = {
           cta: '在编辑器中动手',
           starter:
             'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
+        },
+      },
+      {
+        slug: 'math-proof-style',
+        track: 'math',
+        navTitle: 'M0 · 数学证明翻译',
+        title: '把数学证明翻译成 Lean',
+        lead: '先不急着做整除题：把「设、取、分情况、归纳」这些数学课上的说法，逐句对应到 Lean 策略。',
+        blocks: [
+          {
+            kind: 'p',
+            text: '数学证明和 Lean 证明不是两套东西，差别只在精确度：数学课上可以写「显然」，Lean 要求每一步都能被检查。下面用四个常见句式做对照。',
+          },
+          {
+            kind: 'p',
+            text: '对照一：「设 a = 2x、b = 2y」——数学课上这句话是在引入记号，Lean 里必须先把存在量词拆开。rcases 就是把「存在某个 x」变成「手上有一个具体的 x 和等式」。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) :\n    ∃ x y, a = 2 * x ∧ b = 2 * y := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  exact ⟨x, y, hx, hy⟩',
+          },
+          {
+            kind: 'goal',
+            text: '证明开始：⊢ ∃ x y, a = 2 * x ∧ b = 2 * y\nrcases ha：x : Nat，hx : a = 2 * x（数学课上的「设 a = 2x」）\nrcases hb：y : Nat，hy : b = 2 * y\nexact ⟨x, y, hx, hy⟩：没有剩余目标',
+          },
+          {
+            kind: 'p',
+            text: '对照二：「取 k = x + y」——数学课上说出这个 witness 就够了；Lean 用 refine 或 exact 把它交出去，剩下的等式再逐步改写。下面把「偶数 + 偶数还是偶数」的完整自然语言证明逐句翻译成 Lean。',
+          },
+          {
+            kind: 'code',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b) := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  refine ⟨x + y, ?_⟩\n  rw [hx, hy]\n  omega',
+          },
+          {
+            kind: 'goal',
+            text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases：得到 x、y 与 hx : a = 2 * x、hy : b = 2 * y\nrefine ⟨x + y, ?_⟩：⊢ a + b = 2 * (x + y)（取 k = x + y）\nrw [hx, hy]：⊢ 2 * x + 2 * y = 2 * (x + y)\nomega：没有剩余目标',
+          },
+          {
+            kind: 'p',
+            text: '对照三：「分情况讨论」——数学课上写「若 n = 0 则…，否则…」；Lean 用 by_cases，两个分支各证一次。',
+          },
+          {
+            kind: 'code',
+            code: 'example (n : Nat) : n = 0 ∨ n ≠ 0 := by\n  by_cases h : n = 0\n  · exact Or.inl h\n  · exact Or.inr h',
+          },
+          {
+            kind: 'p',
+            text: '对照四：「数学归纳法」——先证 n = 0，再假设 n = k 成立并证 n = k + 1。Lean 的写法是 induction n with | zero => ... | succ k ih => ...，第 05 节已经练过，后面的整除、奇偶证明会反复用到。',
+          },
+          {
+            kind: 'note',
+            text: 'omega 是 Lean 自带的线性算术收尾工具：加减、乘常数、不等式都能自动处理。它不是「显然」，而是真的把每一步算清楚后才接受。',
+          },
+          {
+            kind: 'details',
+            summary: '自然语言里哪些词最容易被 Lean 卡住？',
+            text: '「显然」「不妨设」「同理」在 Lean 里都不存在。遇到它们时先问自己：这一步到底用了哪个定义、哪条假设？把定义用 rw 或 rcases 展开，把假设用 exact 交出去，通常就能补上机器要求的那一步。',
+          },
+        ],
+        exercise: {
+          title: '练习',
+          body: '先用 witness 证明 Even 8，再把「偶数 + 偶数还是偶数」按上面的步骤自己写一遍。',
+          hint: 'Even 8 取 k = 4，用 ⟨4, rfl⟩；第二个定理先 rcases ha、rcases hb，再 refine ⟨x + y, ?_⟩，rw [hx, hy] 后用 omega 收尾。',
+          cta: '在编辑器中动手',
+          starter:
+            'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample : Even 8 := by\n  sorry\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
         },
       },
       {

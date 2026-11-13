@@ -29,6 +29,7 @@ const SLUGS = [
   'simp',
   'quantifiers',
   'list-structure',
+  'math-proof-style',
   'math-divisibility',
   'math-parity',
   'math-gcd',

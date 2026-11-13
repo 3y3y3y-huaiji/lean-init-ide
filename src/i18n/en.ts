@@ -591,11 +591,11 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b) := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  refine ⟨x + y, ?_⟩\n  rw [hx, hy]\n  omega',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b) := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  refine ⟨x + y, ?_⟩\n  rw [hx, hy]\n  grind',
           },
           {
             kind: 'goal',
-            text: 'Start: ⊢ Even (a + b), i.e. ⊢ ∃ k, a + b = 2 * k\nrcases: get x, y with hx : a = 2 * x and hy : b = 2 * y\nrefine ⟨x + y, ?_⟩: ⊢ a + b = 2 * (x + y) (take k = x + y)\nrw [hx, hy]: ⊢ 2 * x + 2 * y = 2 * (x + y)\nomega: no goals left',
+            text: 'Start: ⊢ Even (a + b), i.e. ⊢ ∃ k, a + b = 2 * k\nrcases: get x, y with hx : a = 2 * x and hy : b = 2 * y\nrefine ⟨x + y, ?_⟩: ⊢ a + b = 2 * (x + y) (take k = x + y)\nrw [hx, hy]: ⊢ 2 * x + 2 * y = 2 * (x + y)\ngrind: no goals left',
           },
           {
             kind: 'p',
@@ -611,7 +611,7 @@ export const en: Messages = {
           },
           {
             kind: 'note',
-            text: 'omega is Lean’s linear arithmetic finisher: addition, subtraction, multiplication by constants and inequalities. It is not a magic “obvious” button — it checks the arithmetic before accepting the goal.',
+            text: 'grind is Lean’s built-in automation tactic: it handles linear arithmetic, equalities and propositional reasoning. It is not a magic “obvious” button — it checks the steps before accepting the goal.',
           },
           {
             kind: 'details',
@@ -622,7 +622,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove Even 8 with a witness, then write the “even + even is even” proof yourself, following the steps above.',
-          hint: 'For Even 8 take k = 4 and use ⟨4, rfl⟩. For the theorem, rcases ha and hb, refine ⟨x + y, ?_⟩, rw [hx, hy], then finish with omega.',
+          hint: 'For Even 8 take k = 4 and use ⟨4, rfl⟩. For the theorem, rcases ha and hb, refine ⟨x + y, ?_⟩, rw [hx, hy], then finish with grind.',
           cta: 'Try it in the editor',
           starter:
             'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample : Even 8 := by\n  sorry\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
@@ -701,7 +701,7 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by omega⟩',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by grind⟩',
           },
           {
             kind: 'p',
@@ -709,19 +709,19 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem odd_add_odd (a b : Nat) (ha : Odd a) (hb : Odd b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y + 1, by omega⟩',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem odd_add_odd (a b : Nat) (ha : Odd a) (hb : Odd b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y + 1, by grind⟩',
           },
           {
             kind: 'p',
-            text: 'A number cannot be both even and odd. Assume both, and omega sees that 2k = 2j + 1 is impossible.',
+            text: 'A number cannot be both even and odd. Assume both, and grind sees that 2k = 2j + 1 is impossible.',
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  omega',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  grind',
           },
           {
             kind: 'note',
-            text: 'omega is Lean’s built-in linear arithmetic solver. It handles addition, subtraction, multiplication by constants and inequalities; for products of variables you need your own lemmas.',
+            text: 'grind is Lean’s built-in automation tactic. It handles linear arithmetic, equalities and propositional reasoning; for products of variables you still need your own lemmas.',
           },
         ],
         exercise: {
@@ -797,7 +797,7 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_one : ¬ Prime 1 := by\n  intro h\n  rcases h with ⟨h2, _⟩\n  omega\n\ntheorem not_prime_four : ¬ Prime 4 := by\n  intro h\n  rcases h with ⟨_, hd⟩\n  have h2 : 2 ∣ 4 := ⟨2, rfl⟩\n  have h := hd 2 h2\n  omega',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_one : ¬ Prime 1 := by\n  intro h\n  rcases h with ⟨h2, _⟩\n  grind\n\ntheorem not_prime_four : ¬ Prime 4 := by\n  intro h\n  rcases h with ⟨_, hd⟩\n  have h2 : 2 ∣ 4 := ⟨2, rfl⟩\n  have h := hd 2 h2\n  grind',
           },
           {
             kind: 'p',
@@ -805,7 +805,7 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · omega\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by omega) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by omega)\n    omega',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · grind\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by grind) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by grind)\n    grind',
           },
           {
             kind: 'note',
@@ -980,11 +980,11 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by omega)\n      have h2 := ih (k + 1) (by omega)\n      simp [fib, Nat.pow_succ]\n      omega',
+            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by grind)\n      have h2 := ih (k + 1) (by grind)\n      simp [fib, Nat.pow_succ]\n      grind',
           },
           {
             kind: 'goal',
-            text: 'Strong hypothesis: ih : ∀ m, m < n → fib m ≤ 2 ^ m\nk + 2 branch: ⊢ fib (k + 2) ≤ 2 ^ (k + 2)\nUnfold fib: ⊢ fib k + fib (k + 1) ≤ 2 ^ (k + 2)\nUse ih k and ih (k + 1) for the two upper bounds\nsimp and omega finish: no goals left',
+            text: 'Strong hypothesis: ih : ∀ m, m < n → fib m ≤ 2 ^ m\nk + 2 branch: ⊢ fib (k + 2) ≤ 2 ^ (k + 2)\nUnfold fib: ⊢ fib k + fib (k + 1) ≤ 2 ^ (k + 2)\nUse ih k and ih (k + 1) for the two upper bounds\nsimp and grind finish: no goals left',
           },
           {
             kind: 'note',
@@ -993,13 +993,13 @@ export const en: Messages = {
           {
             kind: 'details',
             summary: 'Why two induction hypotheses here?',
-            text: 'At k + 2, fib depends on both fib k and fib (k + 1). Ordinary induction only gives the previous term; strong induction gives an ih for every m < k + 2, so you can instantiate it at m = k and m = k + 1. The price is proving m < n each time, which omega handles here.',
+            text: 'At k + 2, fib depends on both fib k and fib (k + 1). Ordinary induction only gives the previous term; strong induction gives an ih for every m < k + 2, so you can instantiate it at m = k and m = k + 1. The price is proving m < n each time, which grind handles here.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Prove that Fibonacci is nondecreasing: F(n) ≤ F(n+1).',
-          hint: 'Use strong induction on n. Close 0 and 1 with simp [fib]; in the k + 2 branch unfold fib (k + 2) to fib k + fib (k+1), then use ih (k+1) and omega.',
+          hint: 'Use strong induction on n. Close 0 and 1 with simp [fib]; in the k + 2 branch unfold fib (k + 2) to fib k + fib (k+1), then use ih (k+1) and grind.',
           cta: 'Try it in the editor',
           starter:
             'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
@@ -1080,7 +1080,7 @@ export const en: Messages = {
           },
           {
             kind: 'code',
-            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega',
+            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind',
           },
           {
             kind: 'note',
@@ -1092,7 +1092,7 @@ export const en: Messages = {
           body: 'Use sum_append to prove that swapping the two lists does not change the total.',
           cta: 'Try it in the editor',
           starter:
-            'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
+            'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
         },
       },
       {

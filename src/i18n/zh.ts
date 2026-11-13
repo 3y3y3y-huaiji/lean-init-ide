@@ -589,11 +589,11 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b) := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  refine ⟨x + y, ?_⟩\n  rw [hx, hy]\n  omega',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b) := by\n  rcases ha with ⟨x, hx⟩\n  rcases hb with ⟨y, hy⟩\n  refine ⟨x + y, ?_⟩\n  rw [hx, hy]\n  grind',
           },
           {
             kind: 'goal',
-            text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases：得到 x、y 与 hx : a = 2 * x、hy : b = 2 * y\nrefine ⟨x + y, ?_⟩：⊢ a + b = 2 * (x + y)（取 k = x + y）\nrw [hx, hy]：⊢ 2 * x + 2 * y = 2 * (x + y)\nomega：没有剩余目标',
+            text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases：得到 x、y 与 hx : a = 2 * x、hy : b = 2 * y\nrefine ⟨x + y, ?_⟩：⊢ a + b = 2 * (x + y)（取 k = x + y）\nrw [hx, hy]：⊢ 2 * x + 2 * y = 2 * (x + y)\ngrind：没有剩余目标',
           },
           {
             kind: 'p',
@@ -609,7 +609,7 @@ export const zh: Messages = {
           },
           {
             kind: 'note',
-            text: 'omega 是 Lean 自带的线性算术收尾工具：加减、乘常数、不等式都能自动处理。它不是「显然」，而是真的把每一步算清楚后才接受。',
+            text: 'grind 是 Lean 自带的自动化证明策略：线性算术、等式与命题推理都能自动处理。它不是「显然」，而是真的把每一步算清楚后才接受。',
           },
           {
             kind: 'details',
@@ -620,7 +620,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '先用 witness 证明 Even 8，再把「偶数 + 偶数还是偶数」按上面的步骤自己写一遍。',
-          hint: 'Even 8 取 k = 4，用 ⟨4, rfl⟩；第二个定理先 rcases ha、rcases hb，再 refine ⟨x + y, ?_⟩，rw [hx, hy] 后用 omega 收尾。',
+          hint: 'Even 8 取 k = 4，用 ⟨4, rfl⟩；第二个定理先 rcases ha、rcases hb，再 refine ⟨x + y, ?_⟩，rw [hx, hy] 后用 grind 收尾。',
           cta: '在编辑器中动手',
           starter:
             'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\nexample : Even 8 := by\n  sorry\n\nexample (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
@@ -699,7 +699,7 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by omega⟩',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by grind⟩',
           },
           {
             kind: 'p',
@@ -707,19 +707,19 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem odd_add_odd (a b : Nat) (ha : Odd a) (hb : Odd b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y + 1, by omega⟩',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem odd_add_odd (a b : Nat) (ha : Odd a) (hb : Odd b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y + 1, by grind⟩',
           },
           {
             kind: 'p',
-            text: '同一个数不能既是偶数又是奇数。假设两者都成立，omega 会发现 2k = 2j + 1 不可能。',
+            text: '同一个数不能既是偶数又是奇数。假设两者都成立，grind 会发现 2k = 2j + 1 不可能。',
           },
           {
             kind: 'code',
-            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  omega',
+            code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  grind',
           },
           {
             kind: 'note',
-            text: 'omega 是 Lean 自带的线性算术求解器，能处理加减、乘常数和不等式；遇到变量之间的乘法，就要自己给引理。',
+            text: 'grind 是 Lean 自带的自动化证明策略，能做线性算术、等式与命题推理；遇到变量之间的乘法，就要自己给引理。',
           },
         ],
         exercise: {
@@ -795,7 +795,7 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_one : ¬ Prime 1 := by\n  intro h\n  rcases h with ⟨h2, _⟩\n  omega\n\ntheorem not_prime_four : ¬ Prime 4 := by\n  intro h\n  rcases h with ⟨_, hd⟩\n  have h2 : 2 ∣ 4 := ⟨2, rfl⟩\n  have h := hd 2 h2\n  omega',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_one : ¬ Prime 1 := by\n  intro h\n  rcases h with ⟨h2, _⟩\n  grind\n\ntheorem not_prime_four : ¬ Prime 4 := by\n  intro h\n  rcases h with ⟨_, hd⟩\n  have h2 : 2 ∣ 4 := ⟨2, rfl⟩\n  have h := hd 2 h2\n  grind',
           },
           {
             kind: 'p',
@@ -803,7 +803,7 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · omega\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by omega) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by omega)\n    omega',
+            code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · grind\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by grind) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by grind)\n    grind',
           },
           {
             kind: 'note',
@@ -978,11 +978,11 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by omega)\n      have h2 := ih (k + 1) (by omega)\n      simp [fib, Nat.pow_succ]\n      omega',
+            code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by grind)\n      have h2 := ih (k + 1) (by grind)\n      simp [fib, Nat.pow_succ]\n      grind',
           },
           {
             kind: 'goal',
-            text: '强归纳假设：ih : ∀ m, m < n → fib m ≤ 2 ^ m\nk + 2 分支：⊢ fib (k + 2) ≤ 2 ^ (k + 2)\n展开 fib：⊢ fib k + fib (k + 1) ≤ 2 ^ (k + 2)\n用 ih k 和 ih (k + 1) 得到两个上界\nsimp 与 omega 收尾：没有剩余目标',
+            text: '强归纳假设：ih : ∀ m, m < n → fib m ≤ 2 ^ m\nk + 2 分支：⊢ fib (k + 2) ≤ 2 ^ (k + 2)\n展开 fib：⊢ fib k + fib (k + 1) ≤ 2 ^ (k + 2)\n用 ih k 和 ih (k + 1) 得到两个上界\nsimp 与 grind 收尾：没有剩余目标',
           },
           {
             kind: 'note',
@@ -991,13 +991,13 @@ export const zh: Messages = {
           {
             kind: 'details',
             summary: '为什么这里要拿两个归纳假设？',
-            text: 'fib 在 k + 2 处同时依赖 fib k 和 fib (k + 1)。普通归纳只给前一项，强归纳的 ih 则对每个 m < k + 2 都给假设，所以能分别取 m = k 和 m = k + 1。代价是每次使用都要证明 m < n，这里用 omega 完成。',
+            text: 'fib 在 k + 2 处同时依赖 fib k 和 fib (k + 1)。普通归纳只给前一项，强归纳的 ih 则对每个 m < k + 2 都给假设，所以能分别取 m = k 和 m = k + 1。代价是每次使用都要证明 m < n，这里用 grind 完成。',
           },
         ],
         exercise: {
           title: '练习',
           body: '证明斐波那契数列单调不减：F(n) ≤ F(n+1)。',
-          hint: '对 n 用强归纳；0 和 1 直接 simp [fib]；k + 2 分支把 fib (k + 2) 展开成 fib k + fib (k+1)，再用 ih (k+1) 和 omega。',
+          hint: '对 n 用强归纳；0 和 1 直接 simp [fib]；k + 2 分支把 fib (k + 2) 展开成 fib k + fib (k+1)，再用 ih (k+1) 和 grind。',
           cta: '在编辑器中动手',
           starter:
             'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
@@ -1078,7 +1078,7 @@ export const zh: Messages = {
           },
           {
             kind: 'code',
-            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega',
+            code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind',
           },
           {
             kind: 'note',
@@ -1090,7 +1090,7 @@ export const zh: Messages = {
           body: '利用 sum_append 证明两个列表交换顺序后总和不变。',
           cta: '在编辑器中动手',
           starter:
-            'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    omega\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
+            'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
         },
       },
       {

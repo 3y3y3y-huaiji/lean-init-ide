@@ -67,6 +67,7 @@ const TACTICS = [
   'field_simp',
   'fin_cases',
   'funext',
+  'grind',
   'have',
   'induction',
   'intro',

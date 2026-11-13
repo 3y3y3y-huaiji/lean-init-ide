@@ -68,8 +68,9 @@ Each lesson has two to four runnable code blocks and one exercise, all within In
 
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
+| `math-proof-style` | Translating a math proof | `rcases`, `refine`, `by_cases` and `induction` for “let / take / cases / induct” |
 | `math-divisibility` | Divisibility as a definition | Existential `∣`, transitivity, `dvd_add` |
-| `math-parity` | Parity and the first real proof | `Even` / `Odd`, unpacking ∃, `omega` |
+| `math-parity` | Parity and the first real proof | `Even` / `Odd`, unpacking ∃, `grind` |
 | `math-gcd` | Specifying the GCD | `IsGcd`, proving `Nat.gcd` meets it, uniqueness |
 | `math-primes` | Primes and counterexamples | `Prime`, refutation, arbitrary divisors |
 | `math-sets` | Sets: membership and subsets | Predicate sets, `Subset`, union |

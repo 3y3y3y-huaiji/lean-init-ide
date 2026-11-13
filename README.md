@@ -70,8 +70,9 @@ lessons, no backend, and no code upload.
 
 | 课时 | 主题 | 关键动作 |
 | --- | --- | --- |
+| `math-proof-style` | 把数学证明翻译成 Lean | 「设 / 取 / 分情况 / 归纳」对应 `rcases`、`refine`、`by_cases`、`induction` |
 | `math-divisibility` | 整除：把词写成定义 | `∣` 的存在性定义、传递性、`dvd_add` |
-| `math-parity` | 奇偶与第一个证明 | `Even` / `Odd`、拆存在量词、`omega` |
+| `math-parity` | 奇偶与第一个证明 | `Even` / `Odd`、拆存在量词、`grind` |
 | `math-gcd` | 最大公约数的规格 | `IsGcd`、`Nat.gcd` 的规格证明、唯一性 |
 | `math-primes` | 素数与反例 | `Prime` 定义、反证、处理任意因子 |
 | `math-sets` | 集合：属于与子集 | 谓词式集合、`Subset`、并集 |

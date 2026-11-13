@@ -222,6 +222,29 @@ const main = async () => {
     console.log(`[${stamp()}] Goal: ${goalText.replace(/\s+/g, ' ').trim()}`);
   }
 
+  // 第五阶段：反斜杠缩写候选的每一行都要标出对应的 Unicode 符号，而不是只有选中行。
+  if (result?.ok && successText) {
+    await page.evaluate(() => {
+      const editor = globalThis.__editor;
+      editor.setValue('');
+      editor.setPosition({ lineNumber: 1, column: 1 });
+      editor.focus();
+    });
+    await page.keyboard.type('\\');
+    await page.waitForSelector('.suggest-widget .monaco-list-row', { timeout: 15_000 });
+    const rows = await page.evaluate(() =>
+      [...globalThis.document.querySelectorAll('.suggest-widget .monaco-list-row')]
+        .slice(0, 6)
+        .map((row) => (row.textContent ?? '').replace(/\s+/g, ' ').trim()),
+    );
+    const unannotated = rows.filter((row) => !row.includes('Unicode 缩写'));
+    if (rows.length === 0 || unannotated.length > 0) {
+      console.error(`E2E FAIL: 缩写候选缺少 Unicode 标注: ${JSON.stringify(rows)}`);
+      process.exit(1);
+    }
+    console.log(`[${stamp()}] 缩写候选: ${JSON.stringify(rows.slice(0, 3))}`);
+  }
+
   await browser.close();
 
   if (!result?.ok) {

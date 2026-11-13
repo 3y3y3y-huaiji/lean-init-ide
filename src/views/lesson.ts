@@ -32,13 +32,33 @@ const pickLesson = (lessons: LessonPage[], slug?: string): { page: LessonPage; i
   return { page: lessons[index]!, index };
 };
 
-const renderBlocks = (page: LessonPage, runLabel: string): { html: string; codeCount: number } => {
+const renderBlocks = (
+  page: LessonPage,
+  runLabel: string,
+  goalLabel: string,
+): { html: string; codeCount: number } => {
   let codeIndex = 0;
 
   const html = page.blocks
     .map((block) => {
       if (block.kind === 'p') {
         return `<p class="mt-0 mb-4 text-[15px] leading-[1.75] text-fg">${escapeHtml(block.text)}</p>`;
+      }
+
+      if (block.kind === 'goal') {
+        return `
+          <div class="my-5 rounded-xl border border-line bg-panel-soft px-4 py-3">
+            <p class="m-0 mb-2 text-[10px] font-[650] uppercase tracking-[0.08em] text-muted">${escapeHtml(goalLabel)}</p>
+            <pre class="m-0 overflow-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.7] text-fg"><code>${escapeHtml(block.text)}</code></pre>
+          </div>`;
+      }
+
+      if (block.kind === 'details') {
+        return `
+          <details class="my-4 rounded-lg border border-line bg-panel-soft px-4 py-3">
+            <summary class="cursor-pointer text-[13px] font-semibold text-fg">${escapeHtml(block.summary)}</summary>
+            <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${escapeHtml(block.text)}</p>
+          </details>`;
       }
 
       if (block.kind === 'note') {
@@ -71,7 +91,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
   const { page, index } = pickLesson(t.lessons, slug);
   const prev = t.lessons[index - 1];
   const next = t.lessons[index + 1];
-  const body = renderBlocks(page, t.runInEditor);
+  const body = renderBlocks(page, t.runInEditor, t.goalLabel);
 
   const trackOf = (lesson: LessonPage): LessonTrack => lesson.track ?? 'intro';
   const toc = (['intro', 'math'] as const)
@@ -135,6 +155,14 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       <section class="mt-8 rounded-2xl border border-accent bg-accent-soft p-6">
         <h2 class="mt-0 mb-2.5 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
         <p class="mt-0 mb-4 text-muted">${escapeHtml(page.exercise.body)}</p>
+        ${
+          page.exercise.hint
+            ? `<details class="mb-4 rounded-lg border border-line bg-panel px-4 py-3">
+                 <summary class="cursor-pointer text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
+                 <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${escapeHtml(page.exercise.hint)}</p>
+               </details>`
+            : ''
+        }
         <a class="${buttonClass} max-[520px]:w-full" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(page.exercise.cta)}</a>
       </section>`
     : '';

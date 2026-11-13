@@ -81,6 +81,8 @@ export const en: Messages = {
     prev: 'Previous',
     next: 'Next',
     runInEditor: 'Run',
+    goalLabel: 'Goal changes',
+    hintLabel: 'Hint',
     running: 'Running…',
     noOutput: 'No errors, no output',
     proofAccepted: 'Proof accepted · Lean has no remaining goals',
@@ -104,6 +106,20 @@ export const en: Messages = {
           },
           { kind: 'code', code: '#check Nat.add' },
           {
+            kind: 'p',
+            text: 'Here is the smallest proof. An equality is a type in Lean, and rfl is the proof that both sides reduce to exactly the same value.',
+          },
+          { kind: 'code', code: 'example : 2 + 2 = 4 := rfl' },
+          {
+            kind: 'goal',
+            text: 'Start: ⊢ 2 + 2 = 4\nAfter rfl: no goals left\n\nrfl is not magic; it just computes both sides to the same value.',
+          },
+          {
+            kind: 'details',
+            summary: 'Why is there no by here?',
+            text: 'rfl is a proof term, so it can sit directly after :=. You only need := by when a proof takes several tactics. The two forms are equivalent; the tactic form is better for showing intermediate steps.',
+          },
+          {
             kind: 'note',
             text: 'This course only ships Init, the core library bundled with Lean. No Std, Lean, Lake or Mathlib, so you will not see import Mathlib later.',
           },
@@ -115,6 +131,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Change the #eval expression to something you like, then #check a name you are curious about.',
+          hint: 'Use #eval to see a value and #check to see a type. Neither command needs a proof, and neither takes := rfl.',
           cta: 'Try it in the editor',
           starter: '#eval 6 * 7\n#check Nat.mul\n',
         },
@@ -143,14 +160,24 @@ export const en: Messages = {
             code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ 2 + 2 = 4\nAfter rfl: no goals left\n\nThe #check line only asks for the type; it does not create a proof goal.',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'rfl means “true by definition”. It only closes computation goals; anything that needs reasoning requires a tactic.',
+          },
+          {
+            kind: 'details',
+            summary: 'Why can rfl not prove 0 + a = a?',
+            text: 'Nat.add recurses on its second argument: a + 0 reduces to a, so a + 0 = a is definitional. But 0 + a is stuck when a is a variable, so it needs induction on a. Lesson 05 makes this distinction explicit.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Change #eval 2 + 3 into a computation you like, then write your own #check.',
+          hint: 'Use #check for the type and #eval for the value. To ask Lean to verify an equality, write example : ... := rfl instead of #eval.',
           cta: 'Try it in the editor',
           starter: '#check Nat.mul\n#eval 6 * 7\n',
         },
@@ -174,6 +201,10 @@ export const en: Messages = {
             code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ P → P\nAfter intro h: h : P ⊢ P\nAfter exact h: no goals left',
+          },
+          {
             kind: 'note',
             text: 'intro h turns the goal P → P into “given h : P, prove P”; exact h hands back that assumption.',
           },
@@ -186,14 +217,24 @@ export const en: Messages = {
             code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  exact h2 (h1 hp)',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ P → R\nAfter intro hp: hp : P ⊢ R\nFeed hp to h1: h1 hp : Q\nFeed that to h2: h2 (h1 hp) : R, goal closed',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'If the goal is P → Q, your first move is almost always intro. Trying to reason about it without introducing the hypothesis is where people get stuck.',
+          },
+          {
+            kind: 'details',
+            summary: 'What does intro actually do?',
+            text: 'The goal P → Q is a function type. intro h means “assume I am given a proof of P, call it h”; the goal then becomes Q. It does not prove P; it turns the left side of the arrow into a new hypothesis.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Prove (P → Q) → (Q → R) → P → R, the arrow form of trans_imp.',
+          hint: 'The goal is all arrows, so intro repeatedly until (P → Q), (Q → R) and P are all in context. Then feed the output of the first premise into the second.',
           cta: 'Try it in the editor',
           starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
         },
@@ -221,6 +262,10 @@ export const en: Messages = {
             code: 'theorem and_comm (P Q : Prop) : P ∧ Q → Q ∧ P := by\n  intro h\n  exact ⟨h.2, h.1⟩',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ P ∧ Q → Q ∧ P\nAfter intro h: h : P ∧ Q ⊢ Q ∧ P\nProject h.2 and h.1: proofs of Q and P\nPack with ⟨h.2, h.1⟩: no goals left',
+          },
+          {
             kind: 'p',
             text: 'Disjunction is asymmetric: to prove P ∨ Q you only need one side, via Or.inl or Or.inr. To use P ∨ Q you must split into cases, which is what cases does.',
           },
@@ -229,14 +274,24 @@ export const en: Messages = {
             code: 'theorem or_comm (P Q : Prop) : P ∨ Q → Q ∨ P := by\n  intro h\n  cases h with\n  | inl hp => exact Or.inr hp\n  | inr hq => exact Or.inl hq',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ P ∨ Q → Q ∨ P\nAfter intro h: h : P ∨ Q ⊢ Q ∨ P\nBranch inl hp: hp : P ⊢ Q ∨ P, use Or.inr hp\nBranch inr hq: hq : Q ⊢ Q ∨ P, use Or.inl hq',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'Construct with inl / inr, consume with cases. Reversing them is the most common blocker: you cannot extract a side out of an “or” without case analysis.',
+          },
+          {
+            kind: 'details',
+            summary: 'Why can you not just exact h?',
+            text: 'h has type P ∨ Q while the goal is Q ∨ P. They are different types, so Lean rejects h. You must cases on h and construct the opposite branch in each case.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Prove (P ∧ Q) ∨ R → P ∨ R. Use cases on the disjunction, then project from the conjunction.',
+          hint: 'intro, then cases on the disjunction. In the (P ∧ Q) branch project the left side and use Or.inl; in the R branch use Or.inr. Both branches must produce P ∨ R.',
           cta: 'Try it in the editor',
           starter: 'theorem or_and (P Q R : Prop) : (P ∧ Q) ∨ R → P ∨ R := by\n  sorry\n',
         },
@@ -247,6 +302,18 @@ export const en: Messages = {
         title: 'Prove commutativity by induction',
         lead: 'Addition is not commutative by computation alone. It needs induction on one argument — the most important proof pattern in Lean.',
         blocks: [
+          {
+            kind: 'p',
+            text: 'Remember this detail: Nat.add recurses on its second argument. a + 0 reduces to a, so a + 0 = a is definitional; but 0 + a is stuck when a is a variable, which is why one needs rfl and the other needs induction.',
+          },
+          {
+            kind: 'code',
+            code: 'example (a : Nat) : a + 0 = a := rfl\n\nexample (a : Nat) : 0 + a = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp [ih]',
+          },
+          {
+            kind: 'goal',
+            text: 'a + 0 = a: ⊢ a + 0 = a, rfl closes it\n\n0 + a = a:\nzero branch: ⊢ 0 + 0 = 0, rfl\nsucc branch: ih : 0 + a = a\n             ⊢ 0 + Nat.succ a = Nat.succ a\nAfter simp [ih]: no goals left',
+          },
           {
             kind: 'p',
             text: 'Goal: for any natural numbers a and b, show a + b = b + a. Unfolding alone will not finish it, so induct on a.',
@@ -260,6 +327,10 @@ export const en: Messages = {
             code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp only [Nat.succ_add, Nat.add_succ, ih]',
           },
           {
+            kind: 'goal',
+            text: 'Before induction a: ⊢ a + b = b + a\nzero branch: ⊢ 0 + b = b + 0, simp closes it\nsucc branch: ih : a + b = b + a\n             ⊢ Nat.succ a + b = b + Nat.succ a\nAfter simp only [Nat.succ_add, Nat.add_succ, ih]: no goals left',
+          },
+          {
             kind: 'note',
             text: 'In the zero branch simp turns 0 + b into b; in the succ branch Nat.succ_add rewrites succ a + b to succ (a + b), then ih finishes it.',
           },
@@ -268,13 +339,15 @@ export const en: Messages = {
             text: 'The goal of this lesson is commutativity, a + b = b + a. To watch the proof state step by step, open the editor and put the cursor inside the by block: the first line of the Goal panel is always the theorem’s goal, and the lines below describe the current step.',
           },
           {
-            kind: 'code',
-            code: 'theorem add_zero (a : Nat) : a + 0 = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp',
+            kind: 'details',
+            summary: 'Why can 0 + a = a not be proved by rfl?',
+            text: 'rfl requires both sides to be definitionally equal. Nat.add pattern-matches on its second argument: a + 0 reduces to a; but the second argument of 0 + a is the variable a, so Lean cannot decide whether it is 0 or succ and gets stuck. Induction on a splits that unknown into the two constructors and lets computation continue.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Write add_zero yourself, then try zero_add: 0 + a = a. Both sorry placeholders are yours to fill.',
+          hint: 'add_zero needs no induction: rfl is enough. For zero_add, induct on a, use rfl in the zero branch, and the induction hypothesis ih in the succ branch.',
           cta: 'Try it in the editor',
           starter:
             'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
@@ -303,9 +376,18 @@ export const en: Messages = {
             code: 'theorem eq_swap (a b : Nat) (h : a = b) : b = a := by\n  rw [h]',
           },
           {
+            kind: 'goal',
+            text: 'Start: h : a = b ⊢ b = a\nAfter rw [h]: replace a with b in the goal, giving ⊢ b = b\nrw sees both sides are equal and closes the goal with rfl',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'rw rewrites every matching occurrence in the goal. If you want a single spot changed, reconsider the approach before one rw turns the goal inside out.',
+          },
+          {
+            kind: 'details',
+            summary: 'When do you need rw [← h]?',
+            text: 'rw [h] uses the equation left to right. If the goal already matches the right-hand side and you want to replace it with the left-hand side, use rw [← h] to run the equation backwards. #check the lemma first to see its direction.',
           },
           {
             kind: 'code',
@@ -315,6 +397,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove a * 1 = a with one existing multiplication equation, using only rw.',
+          hint: 'Run #check Nat.mul_one to see its direction; if it matches the goal, a single rw is enough.',
           cta: 'Try it in the editor',
           starter: 'theorem mul_one_rw (a : Nat) : a * 1 = a := by\n  sorry\n',
         },
@@ -334,6 +417,10 @@ export const en: Messages = {
             code: 'theorem add_zero_simp (a : Nat) : a + 0 = a := by\n  simp',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ a + 0 = a\nAfter simp: both sides reduce to the same expression, no goals left',
+          },
+          {
             kind: 'p',
             text: 'simp only restricts the rule set to exactly what you list, which keeps behaviour predictable.',
           },
@@ -347,6 +434,11 @@ export const en: Messages = {
             text: 'simp is a finisher: it stops when the goal becomes True. When it makes no progress, the goal needs intro, cases or induction instead.',
           },
           {
+            kind: 'details',
+            summary: 'rw or simp — which one?',
+            text: 'rw is precise: you name the equation and direction, which suits a final step with a clear shape. simp searches the rule set automatically, which is convenient for finishing but hides the intermediate steps. In teaching code prefer simp only [ ... ] so the lemmas are explicit and recursion in the browser stays under control.',
+          },
+          {
             kind: 'code',
             code: 'theorem add_succ_simp (a b : Nat) : a + Nat.succ b = Nat.succ (a + b) := by\n  simp only [Nat.add_succ]',
           },
@@ -354,6 +446,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Remove both zeros in one go: a + 0 + 0 = a.',
+          hint: 'Try rfl first and see whether definitional reduction already closes it; if not, use simp only [Nat.add_zero] instead of full simp.',
           cta: 'Try it in the editor',
           starter: 'theorem add_zero_twice (a : Nat) : a + 0 + 0 = a := by\n  sorry\n',
         },
@@ -381,6 +474,10 @@ export const en: Messages = {
             code: 'theorem exists_intro : ∃ n : Nat, n + n = 4 := ⟨2, rfl⟩',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ ∃ n, n + n = 4\nProvide witness 2: ⊢ 2 + 2 = 4\nrfl closes it: no goals left',
+          },
+          {
             kind: 'p',
             text: 'To use an existential you must unpack it: cases h with | intro n hn => ... where n is the witness and hn is the property.',
           },
@@ -389,14 +486,24 @@ export const en: Messages = {
             code: 'theorem exists_swap (P Q : Nat → Prop) (h : ∃ n, P n ∧ Q n) : ∃ n, Q n ∧ P n := by\n  cases h with\n  | intro n hn => exact ⟨n, hn.2, hn.1⟩',
           },
           {
+            kind: 'goal',
+            text: 'Start: h : ∃ n, P n ∧ Q n ⊢ ∃ n, Q n ∧ P n\nAfter cases h: n : Nat, hn : P n ∧ Q n ⊢ ∃ n, Q n ∧ P n\nUse the same n as witness: ⊢ Q n ∧ P n\nProject hn.2 and hn.1: no goals left',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'Here intro unpacks an existential; it is not the intro that introduces a hypothesis at the start of a proof. Same name, different job.',
+          },
+          {
+            kind: 'details',
+            summary: 'A mnemonic for ∀ and ∃',
+            text: 'To prove ∀, intro the arbitrary element; to use ∀, apply it (h 3). To prove ∃, supply a witness (⟨n, proof⟩); to use ∃, cases it into the witness and property. The four moves pair up neatly.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Apply the forall statement to n = 3 and prove P 3.',
+          hint: 'h is already a function. Apply it to 3; this goal needs no intro and no cases.',
           cta: 'Try it in the editor',
           starter: 'theorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
         },
@@ -416,6 +523,10 @@ export const en: Messages = {
             code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih =>\n    simp only [List.map_cons, List.length_cons]\n    rw [ih]',
           },
           {
+            kind: 'goal',
+            text: 'Before induction xs: ⊢ (xs.map (fun x => x + 0)).length = xs.length\nnil branch: ⊢ ([] .map ...).length = [].length, rfl\ncons branch: ih : (xs.map ...).length = xs.length\n             ⊢ ((x :: xs).map ...).length = (x :: xs).length\nAfter simp only: ⊢ (xs.map ...).length + 1 = xs.length + 1\nAfter rw [ih]: no goals left',
+          },
+          {
             kind: 'p',
             text: 'By default simp would close the goal with List.length_map and never use the induction hypothesis; simp only unfolds the constructors, and rw [ih] uses ih explicitly.',
           },
@@ -432,10 +543,20 @@ export const en: Messages = {
             tone: 'warn',
             text: 'structure ships with Init; do not expect Std deriving instances or extended syntax here.',
           },
+          {
+            kind: 'details',
+            summary: 'Why not just use simp here?',
+            text: 'Full simp could well close the theorem by finding a high-level lemma such as List.length_map, and the induction hypothesis ih would never appear. While learning, simp only unfolds the constructors and rw [ih] makes the use of the induction hypothesis explicit.',
+          },
+          {
+            kind: 'note',
+            text: 'The next lesson starts the math track. You will reuse today’s three moves: turn a concept into a definition, build a witness, and induct on a data structure. Only the objects change: divisibility, parity, sets.',
+          },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Add a scale function to Point that multiplies both coordinates by k, then prove scaling by 1 leaves it unchanged.',
+          hint: 'To prove two structures equal, first cases p to expose the fields, then simp [Point.scale] to reduce both coordinates.',
           cta: 'Try it in the editor',
           starter:
             'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
@@ -454,8 +575,17 @@ export const en: Messages = {
           },
           { kind: 'code', code: '#check (2 ∣ 6)\n\nexample : 2 ∣ 6 := ⟨3, rfl⟩' },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ 2 ∣ 6\nRead ∣ as an existential: ⊢ ∃ k, 6 = 2 * k\nProvide witness 3: ⊢ 6 = 2 * 3\nrfl closes it: no goals left',
+          },
+          {
             kind: 'p',
             text: '⟨3, rfl⟩ is the evidence: 3 is the witness, and rfl checks that 6 and 2 × 3 are equal by definition. Proving an existence statement means constructing a witness.',
+          },
+          {
+            kind: 'details',
+            summary: 'From List to math: how do you unpack ∣?',
+            text: 'Last lesson you inducted on List constructors; now the object is a proposition. ∣ is itself a definition returning Prop, and rcases h with ⟨k, hk⟩ turns “there exists k” into a concrete k and an equation. To see the expansion, use #print Dvd.dvd or #check (2 ∣ 6); no Mathlib import is needed.',
           },
           {
             kind: 'p',
@@ -478,6 +608,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove that every number divides 0, and that 1 divides every number.',
+          hint: 'Both goals are existential: give the witness directly—0 for dvd_zero, a for one_dvd; the matching multiplication equations close by rfl.',
           cta: 'Try it in the editor',
           starter:
             'theorem dvd_zero (a : Nat) : a ∣ 0 := by\n  sorry\n\ntheorem one_dvd (a : Nat) : 1 ∣ a := by\n  sorry\n',
@@ -648,6 +779,10 @@ export const en: Messages = {
             code: 'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ntheorem subset_trans {α : Type} (A B C : Set α) (h1 : Subset A B) (h2 : Subset B C) : Subset A C := by\n  intro x hx\n  exact h2 x (h1 x hx)',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ Subset A C\nUnfold Subset: ⊢ ∀ x, A x → C x\nAfter intro x hx: x : α, hx : A x ⊢ C x\nFeed hx to h1: h1 x hx : B x\nFeed that to h2: h2 x (h1 x hx) : C x, goal closed',
+          },
+          {
             kind: 'p',
             text: 'The union A ∪ B contains x when A x or B x holds, so A is always a subset of A ∪ B.',
           },
@@ -659,10 +794,16 @@ export const en: Messages = {
             kind: 'note',
             text: 'The notation x ∈ A is another way to write A x. This lesson avoids extra type classes and reads A x as “A accepts x”.',
           },
+          {
+            kind: 'details',
+            summary: 'Why do set proofs always start with intro?',
+            text: 'Subset is defined as ∀ x, A x → C x, so the proof starts by bringing an arbitrary x and a premise A x into context. After that, h1 x hx and h2 x ... are just function applications. Set proofs look like prose but have the same structure as function composition from lesson 03.',
+          },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Define intersection and prove that it is a subset of its left argument.',
+          hint: 'Start with intro x hx. The type of hx is A x ∧ B x, so hx.1 is exactly A x.',
           cta: 'Try it in the editor',
           starter:
             'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetInter {α : Type} (A B : Set α) : Set α := fun x => A x ∧ B x\n\ntheorem inter_subset_left {α : Type} (A B : Set α) : Subset (SetInter A B) A := by\n  sorry\n',
@@ -776,13 +917,23 @@ export const en: Messages = {
             code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by omega)\n      have h2 := ih (k + 1) (by omega)\n      simp [fib, Nat.pow_succ]\n      omega',
           },
           {
+            kind: 'goal',
+            text: 'Strong hypothesis: ih : ∀ m, m < n → fib m ≤ 2 ^ m\nk + 2 branch: ⊢ fib (k + 2) ≤ 2 ^ (k + 2)\nUnfold fib: ⊢ fib k + fib (k + 1) ≤ 2 ^ (k + 2)\nUse ih k and ih (k + 1) for the two upper bounds\nsimp and omega finish: no goals left',
+          },
+          {
             kind: 'note',
             text: 'Strong induction is not a new axiom; it follows from ordinary induction. It is just more convenient.',
+          },
+          {
+            kind: 'details',
+            summary: 'Why two induction hypotheses here?',
+            text: 'At k + 2, fib depends on both fib k and fib (k + 1). Ordinary induction only gives the previous term; strong induction gives an ih for every m < k + 2, so you can instantiate it at m = k and m = k + 1. The price is proving m < n each time, which omega handles here.',
           },
         ],
         exercise: {
           title: 'Exercise',
           body: 'Prove that Fibonacci is nondecreasing: F(n) ≤ F(n+1).',
+          hint: 'Use strong induction on n. Close 0 and 1 with simp [fib]; in the k + 2 branch unfold fib (k + 2) to fib k + fib (k+1), then use ih (k+1) and omega.',
           cta: 'Try it in the editor',
           starter:
             'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
@@ -815,13 +966,31 @@ export const en: Messages = {
             kind: 'note',
             text: 'Proving sortedness is left as the exercise; proving membership first and sortedness second is the usual split.',
           },
+          {
+            kind: 'goal',
+            text: 'sorted_insert must prove: Sorted xs → Sorted (insertNat x xs)\nnil branch: ⊢ Sorted [x], simp [insertNat, Sorted]\ncons and x ≤ y: ⊢ Sorted (x :: y :: ys)\ncons and ¬ x ≤ y: ⊢ Sorted (y :: insertNat x ys)\nThe main theorem sort_sorted inducts on xs and calls sorted_insert in the cons branch',
+          },
+          {
+            kind: 'details',
+            summary: 'Why split the sorting proof in two?',
+            text: 'Insertion sort correctness depends on two separate facts: insertNat preserves sortedness, and sort preserves it recursively. Prove sorted_insert first, and the main theorem sort_sorted becomes one induction plus one call. Naming the helper also makes the failing branch easier to locate.',
+          },
+          {
+            kind: 'code',
+            code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih',
+          },
+          {
+            kind: 'note',
+            text: 'The two sorry placeholders above are intentional: they are the exercise skeleton. Lean will show sorry warnings when you run it; those are not errors, and they disappear once you fill in the branches.',
+          },
         ],
         exercise: {
           title: 'Exercise',
-          body: 'Prove that inserting x into a sorted list keeps it sorted.',
+          body: 'Fill in both branches of the helper sorted_insert, then run the whole file and check that sort_sorted no longer depends on sorry.',
+          hint: 'The x ≤ y branch uses the first half of h together with hxy; the ¬ x ≤ y branch first applies ih to get Sorted (insertNat x ys), then shows y ≤ the head of insertNat x ys. Splitting ys first makes it clearer.',
           cta: 'Try it in the editor',
           starter:
-            'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  sorry\n',
+            'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih\n',
         },
       },
       {

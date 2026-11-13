@@ -79,6 +79,8 @@ export const zh: Messages = {
     prev: '上一篇',
     next: '下一篇',
     runInEditor: '运行',
+    goalLabel: 'Goal 变化',
+    hintLabel: '提示',
     running: '运行中…',
     noOutput: '没有错误，也没有输出',
     proofAccepted: '证明通过 · Lean 已接受，没有待证目标',
@@ -102,6 +104,20 @@ export const zh: Messages = {
           },
           { kind: 'code', code: '#check Nat.add' },
           {
+            kind: 'p',
+            text: '先看一个最小的证明。等式在 Lean 里是一个类型，rfl 则是「两边按定义算出来完全一样」的证明。',
+          },
+          { kind: 'code', code: 'example : 2 + 2 = 4 := rfl' },
+          {
+            kind: 'goal',
+            text: '证明开始：⊢ 2 + 2 = 4\n执行 rfl：没有剩余目标\n\nrfl 不是魔法，它只是把两边都算到同一个值。',
+          },
+          {
+            kind: 'details',
+            summary: '为什么这里不用写 by？',
+            text: 'rfl 本身就是一个证明项，可以直接接在 := 后面。只有需要多步策略时，才写 := by 再换行。两种写法等价，后者更适合展示中间过程。',
+          },
+          {
             kind: 'note',
             text: '这门课只带 Init——Lean 自带的基础库。没有 Std、Lean、Lake 或 Mathlib，所以后面的代码里不会出现 import Mathlib。',
           },
@@ -113,6 +129,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '把 #eval 的算式换成你喜欢的，再 #check 一个你好奇的名字。',
+          hint: '先写 #eval 看值，再写 #check 看类型；这两个命令都不需要证明，也不要给它们加 := rfl。',
           cta: '在编辑器中动手',
           starter: '#eval 6 * 7\n#check Nat.mul\n',
         },
@@ -141,14 +158,24 @@ export const zh: Messages = {
             code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ 2 + 2 = 4\n执行 rfl：没有剩余目标\n\n#check 那一行只是在问「这个命题是什么类型」，不会产生证明目标。',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'rfl 表示「由定义直接成立」。它只能关闭计算型等式，遇到需要推理的命题就要换策略。',
+          },
+          {
+            kind: 'details',
+            summary: '为什么 rfl 证不了 0 + a = a？',
+            text: 'Nat.add 是对第二个参数递归定义的：a + 0 直接化成 a，所以 a + 0 = a 是定义相等；但 0 + a 在 a 是变量时卡住了，只能对 a 做归纳。第 05 节会把这个区别讲透。',
           },
         ],
         exercise: {
           title: '练习',
           body: '把 #eval 2 + 3 改成你喜欢的算式，再自己写一个 #check 看看结果。',
+          hint: '先 #check 看类型，再 #eval 看值；如果想让 Lean 检查一条等式，用 example : ... := rfl，而不是 #eval。',
           cta: '在编辑器中动手',
           starter: '#check Nat.mul\n#eval 6 * 7\n',
         },
@@ -172,6 +199,10 @@ export const zh: Messages = {
             code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ P → P\n执行 intro h：h : P ⊢ P\n执行 exact h：没有剩余目标',
+          },
+          {
             kind: 'note',
             text: 'intro h 把目标 P → P 变成「已有假设 h : P，要证 P」；exact h 直接用这个假设交差。',
           },
@@ -184,14 +215,24 @@ export const zh: Messages = {
             code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  exact h2 (h1 hp)',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ P → R\n执行 intro hp：hp : P ⊢ R\n把 hp 喂给 h1：得到 h1 hp : Q\n再把结果喂给 h2：得到 h2 (h1 hp) : R，目标关闭',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: '如果目标形如 P → Q，第一步几乎总是 intro。不 intro 直接想，很容易卡住。',
+          },
+          {
+            kind: 'details',
+            summary: 'intro 到底做了什么？',
+            text: '目标 P → Q 是一个函数类型。intro h 相当于「假设给我一个 P 的证明，我叫它 h」，然后目标只剩 Q。它不是证明假设 P，而是把箭头左边变成新的已知条件。',
           },
         ],
         exercise: {
           title: '练习',
           body: '证明 (P → Q) → (Q → R) → P → R，也就是把 trans_imp 的前提写成箭头形式。',
+          hint: '目标全是箭头，先连续 intro，把 (P → Q)、(Q → R) 和 P 都拿进来；最后把第一个前提的输出喂给第二个前提。',
           cta: '在编辑器中动手',
           starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
         },
@@ -219,6 +260,10 @@ export const zh: Messages = {
             code: 'theorem and_comm (P Q : Prop) : P ∧ Q → Q ∧ P := by\n  intro h\n  exact ⟨h.2, h.1⟩',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ P ∧ Q → Q ∧ P\n执行 intro h：h : P ∧ Q ⊢ Q ∧ P\n取 h.2 和 h.1：得到 Q 与 P 的证明\n用 ⟨h.2, h.1⟩ 打包：没有剩余目标',
+          },
+          {
             kind: 'p',
             text: '析取麻烦一点：要证 P ∨ Q，只需给出其中一边，用 Or.inl 或 Or.inr。要使用 P ∨ Q，则必须分两种情况讨论，这就是 cases。',
           },
@@ -227,14 +272,24 @@ export const zh: Messages = {
             code: 'theorem or_comm (P Q : Prop) : P ∨ Q → Q ∨ P := by\n  intro h\n  cases h with\n  | inl hp => exact Or.inr hp\n  | inr hq => exact Or.inl hq',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ P ∨ Q → Q ∨ P\n执行 intro h：h : P ∨ Q ⊢ Q ∨ P\n分支 inl hp：hp : P ⊢ Q ∨ P，用 Or.inr hp\n分支 inr hq：hq : Q ⊢ Q ∨ P，用 Or.inl hq',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: '构造用 inl / inr，使用用 cases。方向搞反是最常见的卡点：手里有「或」就想直接取，是不行的。',
+          },
+          {
+            kind: 'details',
+            summary: '为什么不能直接 exact h？',
+            text: 'h 的类型是 P ∨ Q，而目标是 Q ∨ P。两边不是同一个类型，Lean 不接受。必须 cases 把 h 拆成两种情况，分别构造对方需要的那个分支。',
           },
         ],
         exercise: {
           title: '练习',
           body: '证明 (P ∧ Q) → (Q ∧ P) 的析取版本：(P ∨ Q) → (Q ∨ P) 你已经见过了，试试 (P ∧ Q) ∨ R → P ∨ R。',
+          hint: '先 intro，再 cases 假设。(P ∧ Q) 分支取左边再用 Or.inl；R 分支直接 Or.inr。两个分支都要给出 P ∨ R。',
           cta: '在编辑器中动手',
           starter: 'theorem or_and (P Q R : Prop) : (P ∧ Q) ∨ R → P ∨ R := by\n  sorry\n',
         },
@@ -245,6 +300,18 @@ export const zh: Messages = {
         title: '用 induction 证明交换律',
         lead: '加法交换律不能靠展开算出来，需要对其中一个参数做归纳。这是 Lean 里最重要的证明模式。',
         blocks: [
+          {
+            kind: 'p',
+            text: '先记住一个容易混淆的细节：Nat.add 是对第二个参数递归定义的。a + 0 直接化成 a，所以 a + 0 = a 是定义相等；但 0 + a 在 a 是变量时卡住了，这就是为什么一个 rfl 能证，另一个必须归纳。',
+          },
+          {
+            kind: 'code',
+            code: 'example (a : Nat) : a + 0 = a := rfl\n\nexample (a : Nat) : 0 + a = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp [ih]',
+          },
+          {
+            kind: 'goal',
+            text: 'a + 0 = a：⊢ a + 0 = a，rfl 直接关闭\n\n0 + a = a：\nzero 分支：⊢ 0 + 0 = 0，rfl\nsucc 分支：ih : 0 + a = a\n           ⊢ 0 + Nat.succ a = Nat.succ a\n执行 simp [ih]：没有剩余目标',
+          },
           {
             kind: 'p',
             text: '目标：对任意自然数 a、b，证明 a + b = b + a。直接展开做不完，需要对 a 做归纳。',
@@ -258,6 +325,10 @@ export const zh: Messages = {
             code: 'theorem add_comm (a b : Nat) : a + b = b + a := by\n  induction a with\n  | zero => simp\n  | succ a ih => simp only [Nat.succ_add, Nat.add_succ, ih]',
           },
           {
+            kind: 'goal',
+            text: 'induction a 前：⊢ a + b = b + a\nzero 分支：⊢ 0 + b = b + 0，simp 收尾\nsucc 分支：ih : a + b = b + a\n           ⊢ Nat.succ a + b = b + Nat.succ a\n执行 simp only [Nat.succ_add, Nat.add_succ, ih]：没有剩余目标',
+          },
+          {
             kind: 'note',
             text: 'zero 分支里 simp 把 0 + b 化简成 b；succ 分支里 Nat.succ_add 把 succ a + b 变成 succ (a + b)，再用归纳假设 ih 改写。',
           },
@@ -266,13 +337,15 @@ export const zh: Messages = {
             text: '本节的目标是交换律 a + b = b + a。写完后想逐步看证明状态，点「在编辑器中动手」，把光标移到 by 块内部：Goal 面板第一行始终是这条定理要证的目标，下面的行才是当前这一步的状态。',
           },
           {
-            kind: 'code',
-            code: 'theorem add_zero (a : Nat) : a + 0 = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp',
+            kind: 'details',
+            summary: '为什么 0 + a = a 不能 rfl？',
+            text: 'rfl 要求两边在定义上相等。Nat.add 的模式匹配落在第二个参数上：a + 0 可以直接化简成 a；而 0 + a 的第二个参数是变量 a，Lean 不知道它到底是 0 还是 succ，只能停在这里。对 a 做归纳，就是把未知的 a 拆成 0 和 succ 两种情况，让定义继续化简。',
           },
         ],
         exercise: {
           title: '练习',
           body: '把 add_zero 自己写一遍，再尝试证明 zero_add：0 + a = a。两个 sorry 都需要你补上。',
+          hint: 'add_zero 不需要归纳，直接 rfl；zero_add 对 a 归纳，zero 分支 rfl，succ 分支用归纳假设 ih。',
           cta: '在编辑器中动手',
           starter:
             'theorem add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem zero_add (a : Nat) : 0 + a = a := by\n  sorry\n',
@@ -301,9 +374,18 @@ export const zh: Messages = {
             code: 'theorem eq_swap (a b : Nat) (h : a = b) : b = a := by\n  rw [h]',
           },
           {
+            kind: 'goal',
+            text: '证明开始：h : a = b ⊢ b = a\n执行 rw [h]：把目标里的 a 换成 b，得到 ⊢ b = b\nrw 发现两边相同，自动用 rfl 关闭目标',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'rw 会重写目标中所有匹配的位置。只想改一处时，先想清楚是不是该换一种写法，别让一次 rw 改得面目全非。',
+          },
+          {
+            kind: 'details',
+            summary: '什么时候要写 rw [← h]？',
+            text: 'rw [h] 默认把等式的左边换成右边。如果目标里的形式与等式右边一致、而你想换成左边，就要写 rw [← h] 反过来用。先 #check 看引理的方向，再决定箭头。',
           },
           {
             kind: 'code',
@@ -313,6 +395,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '用一条已有的乘法等式证明 a * 1 = a，只允许用 rw。',
+          hint: '先 #check Nat.mul_one 看它的方向；如果和目标完全同向，一条 rw 就够了。',
           cta: '在编辑器中动手',
           starter: 'theorem mul_one_rw (a : Nat) : a * 1 = a := by\n  sorry\n',
         },
@@ -332,6 +415,10 @@ export const zh: Messages = {
             code: 'theorem add_zero_simp (a : Nat) : a + 0 = a := by\n  simp',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ a + 0 = a\n执行 simp：化简到两边相同，没有剩余目标',
+          },
+          {
             kind: 'p',
             text: 'simp only 只使用你列出的引理，不额外展开任何东西，行为更可预测。',
           },
@@ -345,6 +432,11 @@ export const zh: Messages = {
             text: 'simp 是终结技：化简到 True 就结束。它不动的时候，说明目标需要引入、拆分或归纳，换回 intro / cases / induction。',
           },
           {
+            kind: 'details',
+            summary: 'rw 和 simp 到底怎么选？',
+            text: 'rw 是精确替换：你指定哪条等式、哪个方向，适合目标结构清楚的最后一步；simp 是自动搜索：它按规则库扫一遍，适合收尾，但中间过程不透明。教学代码里优先用 simp only [ ... ]，把使用的引理写清楚，也避免在浏览器里出现过深的递归展开。',
+          },
+          {
             kind: 'code',
             code: 'theorem add_succ_simp (a b : Nat) : a + Nat.succ b = Nat.succ (a + b) := by\n  simp only [Nat.add_succ]',
           },
@@ -352,6 +444,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '把两个 0 一次化掉：a + 0 + 0 = a。',
+          hint: '先试 rfl，观察它能不能靠定义直接关闭；如果不行，再用 simp only [Nat.add_zero]，不要一上来就全量 simp。',
           cta: '在编辑器中动手',
           starter: 'theorem add_zero_twice (a : Nat) : a + 0 + 0 = a := by\n  sorry\n',
         },
@@ -379,6 +472,10 @@ export const zh: Messages = {
             code: 'theorem exists_intro : ∃ n : Nat, n + n = 4 := ⟨2, rfl⟩',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ ∃ n, n + n = 4\n提供 witness 2：⊢ 2 + 2 = 4\nrfl 收尾：没有剩余目标',
+          },
+          {
             kind: 'p',
             text: '使用存在命题时必须拆开它：cases h with | intro n hn => ...，n 是见证，hn 是它满足性质。',
           },
@@ -387,14 +484,24 @@ export const zh: Messages = {
             code: 'theorem exists_swap (P Q : Nat → Prop) (h : ∃ n, P n ∧ Q n) : ∃ n, Q n ∧ P n := by\n  cases h with\n  | intro n hn => exact ⟨n, hn.2, hn.1⟩',
           },
           {
+            kind: 'goal',
+            text: '证明开始：h : ∃ n, P n ∧ Q n ⊢ ∃ n, Q n ∧ P n\ncases h 后：n : Nat，hn : P n ∧ Q n ⊢ ∃ n, Q n ∧ P n\n用同一个 n 作为 witness：⊢ Q n ∧ P n\n取 hn.2 和 hn.1 打包：没有剩余目标',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: '这里的 intro 是拆存在量词，不是证明开头引入假设的那个 intro。名字一样，作用完全不同。',
+          },
+          {
+            kind: 'details',
+            summary: '∀ 和 ∃ 的记忆口诀',
+            text: '证明 ∀ 用 intro（把任意元素拿进来），使用 ∀ 用应用（h 3）；证明 ∃ 用 witness（⟨n, 证明⟩），使用 ∃ 用 cases（把 witness 和性质拆出来）。四个动作正好两两对应。',
           },
         ],
         exercise: {
           title: '练习',
           body: '把「对所有 n 成立」用到 n = 3 上，证明 P 3。',
+          hint: 'h 本身就是一个函数，直接把 3 应用上去；这里不需要 intro，也不需要 cases。',
           cta: '在编辑器中动手',
           starter: 'theorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
         },
@@ -414,6 +521,10 @@ export const zh: Messages = {
             code: 'theorem length_map_zero (xs : List Nat) : (xs.map (fun x => x + 0)).length = xs.length := by\n  induction xs with\n  | nil => rfl\n  | cons x xs ih =>\n    simp only [List.map_cons, List.length_cons]\n    rw [ih]',
           },
           {
+            kind: 'goal',
+            text: 'induction xs 前：⊢ (xs.map (fun x => x + 0)).length = xs.length\nnil 分支：⊢ ([] .map ...).length = [].length，rfl\ncons 分支：ih : (xs.map ...).length = xs.length\n           ⊢ ((x :: xs).map ...).length = (x :: xs).length\nsimp only 后：⊢ (xs.map ...).length + 1 = xs.length + 1\nrw [ih] 后：没有剩余目标',
+          },
+          {
             kind: 'p',
             text: 'simp 默认会用 List.length_map 直接证掉目标，归纳假设反而用不上；这里用 simp only 只展开构造子，再 rw [ih] 显式使用它。',
           },
@@ -430,10 +541,20 @@ export const zh: Messages = {
             tone: 'warn',
             text: 'structure 属于 Init，可以用；但别指望 Std 里的 deriving 实例和扩展语法，这个运行时只带 Init。',
           },
+          {
+            kind: 'details',
+            summary: '为什么这里不直接 simp？',
+            text: '全量 simp 确实可能直接证掉这条定理，但它会自己找到 List.length_map 之类的高层引理，归纳假设 ih 就没机会出场。学习阶段用 simp only 只展开构造子，再显式 rw [ih]，你才能看到「归纳假设如何被使用」这条主线。',
+          },
+          {
+            kind: 'note',
+            text: '下一节开始进入数学篇。你会反复用到今天的三件事：把概念写成定义、构造 witness、对数据结构做归纳。区别只是对象从 List 换成了整除、奇偶和集合。',
+          },
         ],
         exercise: {
           title: '练习',
           body: '给 Point 加一个 scale 函数，把两个坐标同时乘以 k，并证明乘以 1 不变。',
+          hint: '证明两个 structure 相等，通常先 cases p 把字段拆开，再用 simp [Point.scale] 化简两个坐标。',
           cta: '在编辑器中动手',
           starter:
             'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
@@ -452,8 +573,17 @@ export const zh: Messages = {
           },
           { kind: 'code', code: '#check (2 ∣ 6)\n\nexample : 2 ∣ 6 := ⟨3, rfl⟩' },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ 2 ∣ 6\n把 ∣ 读成存在量词：⊢ ∃ k, 6 = 2 * k\n提供 witness 3：⊢ 6 = 2 * 3\nrfl 收尾：没有剩余目标',
+          },
+          {
             kind: 'p',
             text: '⟨3, rfl⟩ 就是证据：3 是那个 k，rfl 表示 6 和 2 × 3 按定义相等。证明存在性命题，核心就是构造一个 witness。',
+          },
+          {
+            kind: 'details',
+            summary: '从 List 到数学：怎么把 ∣ 拆开？',
+            text: '上一节你对 List 的构造子做归纳；这一节对象变成了命题。∣ 本身就是一个返回 Prop 的定义，rcases h with ⟨k, hk⟩ 会把「存在 k」拆成具体的 k 和等式。想看它到底展开成什么，用 #print Dvd.dvd 或 #check (2 ∣ 6)，不需要额外导入 Mathlib。',
           },
           {
             kind: 'p',
@@ -476,6 +606,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '证明任何数都整除 0，并且 1 整除任何数。',
+          hint: '两个目标都是存在命题，直接给 witness：dvd_zero 用 0，one_dvd 用 a；对应的乘法等式都能被 rfl 收掉。',
           cta: '在编辑器中动手',
           starter:
             'theorem dvd_zero (a : Nat) : a ∣ 0 := by\n  sorry\n\ntheorem one_dvd (a : Nat) : 1 ∣ a := by\n  sorry\n',
@@ -646,6 +777,10 @@ export const zh: Messages = {
             code: 'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ntheorem subset_trans {α : Type} (A B C : Set α) (h1 : Subset A B) (h2 : Subset B C) : Subset A C := by\n  intro x hx\n  exact h2 x (h1 x hx)',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ Subset A C\n展开 Subset：⊢ ∀ x, A x → C x\n执行 intro x hx：x : α，hx : A x ⊢ C x\n把 hx 喂给 h1：得到 h1 x hx : B x\n再把结果喂给 h2：得到 h2 x (h1 x hx) : C x，目标关闭',
+          },
+          {
             kind: 'p',
             text: '并集：A ∪ B 的元素满足 A x 或 B x，所以 A 一定是 A ∪ B 的子集。',
           },
@@ -657,10 +792,16 @@ export const zh: Messages = {
             kind: 'note',
             text: '符号 ∈ 只是 A x 的另一种写法；本课不用额外类型类，直接读作“A 接受 x”。',
           },
+          {
+            kind: 'details',
+            summary: '集合证明为什么总是 intro？',
+            text: 'Subset 的定义是 ∀ x, A x → C x，所以证明一开头就是把任意 x 和前提 A x 拿进来；之后的 h1 x hx、h2 x ... 都是函数应用。集合论证明看起来在写文字，实际结构和第 03 节的函数复合完全一样。',
+          },
         ],
         exercise: {
           title: '练习',
           body: '定义交集，并证明交集是左边集合的子集。',
+          hint: '先 intro x hx；hx 的类型是 A x ∧ B x，取 hx.1 就是 A x。',
           cta: '在编辑器中动手',
           starter:
             'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetInter {α : Type} (A B : Set α) : Set α := fun x => A x ∧ B x\n\ntheorem inter_subset_left {α : Type} (A B : Set α) : Subset (SetInter A B) A := by\n  sorry\n',
@@ -774,13 +915,23 @@ export const zh: Messages = {
             code: 'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  induction n using Nat.strongRecOn with\n  | ind n ih =>\n    match n with\n    | 0 => simp [fib]\n    | 1 => simp [fib]\n    | k + 2 =>\n      have h1 := ih k (by omega)\n      have h2 := ih (k + 1) (by omega)\n      simp [fib, Nat.pow_succ]\n      omega',
           },
           {
+            kind: 'goal',
+            text: '强归纳假设：ih : ∀ m, m < n → fib m ≤ 2 ^ m\nk + 2 分支：⊢ fib (k + 2) ≤ 2 ^ (k + 2)\n展开 fib：⊢ fib k + fib (k + 1) ≤ 2 ^ (k + 2)\n用 ih k 和 ih (k + 1) 得到两个上界\nsimp 与 omega 收尾：没有剩余目标',
+          },
+          {
             kind: 'note',
             text: '强归纳不是新公理，它可以从普通归纳推出来；只是用起来更顺手。',
+          },
+          {
+            kind: 'details',
+            summary: '为什么这里要拿两个归纳假设？',
+            text: 'fib 在 k + 2 处同时依赖 fib k 和 fib (k + 1)。普通归纳只给前一项，强归纳的 ih 则对每个 m < k + 2 都给假设，所以能分别取 m = k 和 m = k + 1。代价是每次使用都要证明 m < n，这里用 omega 完成。',
           },
         ],
         exercise: {
           title: '练习',
           body: '证明斐波那契数列单调不减：F(n) ≤ F(n+1)。',
+          hint: '对 n 用强归纳；0 和 1 直接 simp [fib]；k + 2 分支把 fib (k + 2) 展开成 fib k + fib (k+1)，再用 ih (k+1) 和 omega。',
           cta: '在编辑器中动手',
           starter:
             'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
@@ -813,13 +964,31 @@ export const zh: Messages = {
             kind: 'note',
             text: '有序性的证明留作练习；先证成员保持，再证有序，是这类证明的常见拆法。',
           },
+          {
+            kind: 'goal',
+            text: 'sorted_insert 要证：Sorted xs → Sorted (insertNat x xs)\nnil 分支：⊢ Sorted [x]，simp [insertNat, Sorted]\ncons 且 x ≤ y：⊢ Sorted (x :: y :: ys)\ncons 且 ¬ x ≤ y：⊢ Sorted (y :: insertNat x ys)\n主定理 sort_sorted 对 xs 归纳，cons 分支直接调用 sorted_insert',
+          },
+          {
+            kind: 'details',
+            summary: '为什么把排序证明拆成两步？',
+            text: '插入排序的正确性依赖两个独立事实：insertNat 保持有序，以及 sort 递归地保持有序。先证 sorted_insert 这个辅助引理，主定理 sort_sorted 就只剩一次归纳和一次调用。把辅助引理单独命名，也让报错位置更容易定位。',
+          },
+          {
+            kind: 'code',
+            code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih',
+          },
+          {
+            kind: 'note',
+            text: '上面的两个 sorry 是故意留下的练习骨架。运行时会出现 sorry 警告，那不是错误；把分支补完后警告会消失。',
+          },
         ],
         exercise: {
           title: '练习',
-          body: '证明把 x 插入有序表后仍然有序。',
+          body: '补完辅助引理 sorted_insert 的两个分支，再运行整份文件，确认主定理 sort_sorted 不依赖 sorry。',
+          hint: 'x ≤ y 分支要用 h 的前半段和 hxy；¬ x ≤ y 分支要先用 ih 得到 Sorted (insertNat x ys)，再证明 y ≤ insertNat x ys 的第一个元素。先拆 ys 会更清楚。',
           cta: '在编辑器中动手',
           starter:
-            'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  sorry\n',
+            'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih\n',
         },
       },
       {

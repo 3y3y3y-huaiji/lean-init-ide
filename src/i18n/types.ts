@@ -1,7 +1,11 @@
-/** 课程正文的块级元素：段落、可运行代码、提示框。 */
+/** 课程正文的块级元素：段落、可运行代码、目标旁白、折叠提示、提示框。 */
 export type LessonBlock =
   | { kind: 'p'; text: string }
   | { kind: 'code'; code: string }
+  /** 逐行 Goal 旁白：保留换行，用等宽字体显示 ⊢ 与假设。 */
+  | { kind: 'goal'; text: string }
+  /** 不直接给答案的折叠提示。 */
+  | { kind: 'details'; summary: string; text: string }
   | { kind: 'note'; text: string; tone?: 'info' | 'warn' };
 
 /** 课程路径：入门课与数学/验证课分开组织，但共用同一个路由。 */
@@ -20,6 +24,7 @@ export type LessonPage = {
   exercise?: {
     title: string;
     body: string;
+    hint?: string;
     cta: string;
     starter: string;
   };
@@ -80,6 +85,10 @@ export type Messages = {
     next: string;
     /** 代码块上的按钮：就地运行并显示输出。 */
     runInEditor: string;
+    /** Goal 旁白块的标题。 */
+    goalLabel: string;
+    /** 练习折叠提示的标题。 */
+    hintLabel: string;
     /** 运行中的占位文案。 */
     running: string;
     /** 运行后没有任何输出时的提示。 */

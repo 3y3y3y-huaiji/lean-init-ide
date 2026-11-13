@@ -76,6 +76,16 @@ describe('课程页渲染', () => {
     }
   });
 
+  it('渲染 Goal 旁白和练习折叠提示', () => {
+    const html = renderLesson('zh', 'induction');
+    const t = messagesFor('zh').lesson;
+
+    expect(html).toContain(t.goalLabel);
+    expect(html).toContain('⊢ a + b = b + a');
+    expect(html).toContain('为什么 0 + a = a 不能 rfl？');
+    expect(html).toContain(t.hintLabel);
+  });
+
   it('窄屏目录把全部课时收进可展开的 details', () => {
     const lessons = lessonsOf('zh');
     const html = renderLesson('zh', lessons[1]!.slug);

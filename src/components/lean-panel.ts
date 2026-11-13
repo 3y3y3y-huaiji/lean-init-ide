@@ -18,6 +18,7 @@ import { isExerciseSolved, isExerciseStarter } from '../exercise';
 import { findDeclaration } from '../lean-declaration';
 import { stripGoalFence } from '../lean-goal';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
+import { markLessonCompleted } from '../progress';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
@@ -445,8 +446,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   // 只有带 sorry 的具名练习才有「过关」概念；还必须保留 starter 里的定理名。
   const exerciseStarter = isExerciseStarter(code);
   const updatePassedBadge = (list: LspDiagnostic[]) => {
-    if (!passedEl || !exerciseStarter) return;
-    passedEl.hidden = !isExerciseSolved(code, model.getValue(), list);
+    if (!exerciseStarter) return;
+    const solved = isExerciseSolved(code, model.getValue(), list);
+    if (passedEl) passedEl.hidden = !solved;
+    // 从课程练习进入 playground 时带 lessonSlug：通过即写入完成进度。
+    if (solved && lessonSlug) markLessonCompleted(lessonSlug);
   };
 
   // 编辑器与诊断的空间分配由用户拖动决定；面板显隐也持久化，避免每次进来重调。

@@ -1,6 +1,6 @@
 import { isLocale, type Locale } from './i18n';
 
-export type Page = 'home' | 'lesson' | 'playground' | 'privacy' | 'notFound';
+export type Page = 'home' | 'lesson' | 'playground' | 'privacy' | 'reference' | 'notFound';
 
 export type Route = {
   page: Page;
@@ -31,6 +31,8 @@ export const resolveRoute = (pathname: string, fallbackLocale: Locale): RouteRes
   if (rest.length === 0) return { kind: 'route', route: { page: 'home', locale: first } };
   if (rest[0] === 'playground')
     return { kind: 'route', route: { page: 'playground', locale: first } };
+  if (rest[0] === 'reference')
+    return { kind: 'route', route: { page: 'reference', locale: first } };
   if (rest[0] === 'privacy') return { kind: 'route', route: { page: 'privacy', locale: first } };
   if (rest[0] === 'learn') {
     // 目录页没有独立形态，直接落到第一节。

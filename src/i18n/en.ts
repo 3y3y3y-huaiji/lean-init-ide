@@ -6,6 +6,7 @@ export const en: Messages = {
     lesson: 'First lesson',
     playground: 'Playground',
     github: 'GitHub',
+    reference: 'Reference',
   },
   theme: {
     label: 'Theme',
@@ -83,6 +84,8 @@ export const en: Messages = {
     runInEditor: 'Run',
     goalLabel: 'Goal changes',
     hintLabel: 'Hint',
+    completedLabel: 'Completed',
+    visitedLabel: 'Read, exercise not finished',
     running: 'Running…',
     noOutput: 'No errors, no output',
     proofAccepted: 'Proof accepted · Lean has no remaining goals',
@@ -704,6 +707,10 @@ export const en: Messages = {
             code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by grind⟩',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ Even (a + b), i.e. ⊢ ∃ k, a + b = 2 * k\nrcases ha with ⟨x, rfl⟩: a is replaced by 2 * x\nrcases hb with ⟨y, rfl⟩: b is replaced by 2 * y\nexact ⟨x + y, by grind⟩: take k = x + y; grind closes the multiplication identity',
+          },
+          {
             kind: 'p',
             text: 'Adding two odd numbers leaves an extra 1, which again makes a multiple of 2.',
           },
@@ -720,6 +727,11 @@ export const en: Messages = {
             code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  grind',
           },
           {
+            kind: 'details',
+            summary: 'Why can rfl sit right after rcases?',
+            text: '⟨x, rfl⟩ makes Lean substitute a directly with x, which reads as “assume a = 2x”. With ⟨x, hx⟩ the equation hx : a = 2 * x is kept, and you have to rw [hx] yourself. Both work; the first is shorter, the second keeps the original value around.',
+          },
+          {
             kind: 'note',
             text: 'grind is Lean’s built-in automation tactic. It handles linear arithmetic, equalities and propositional reasoning; for products of variables you still need your own lemmas.',
           },
@@ -727,6 +739,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove that an even number times any natural number is still even.',
+          hint: 'Unpack h into a = 2 * k; the goal becomes ∃ j, a * b = 2 * j. Take j = k * b, then rw [hk] and finish with grind.',
           cta: 'Try it in the editor',
           starter:
             'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  sorry\n',
@@ -756,12 +769,21 @@ export const en: Messages = {
             code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_is_gcd (a b : Nat) : IsGcd a b (Nat.gcd a b) := by\n  constructor\n  · exact Nat.gcd_dvd_left a b\n  constructor\n  · exact Nat.gcd_dvd_right a b\n  · intro e hea heb\n    exact Nat.dvd_gcd hea heb',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ IsGcd a b (Nat.gcd a b), i.e. (Nat.gcd a b ∣ a) ∧ (Nat.gcd a b ∣ b) ∧ maximality\nconstructor: split into the two divisibility goals, then “every common divisor divides it”\nNat.gcd_dvd_left / Nat.gcd_dvd_right: supply the two divisibility facts\nintro e hea heb: enter the maximality goal; Nat.dvd_gcd hea heb closes it',
+          },
+          {
             kind: 'p',
             text: 'Another benefit: a value satisfying the specification is unique. If both d and e satisfy IsGcd, then d = e.',
           },
           {
             kind: 'code',
             code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_unique (a b d e : Nat) (hd : IsGcd a b d) (he : IsGcd a b e) : d = e := by\n  rcases hd with ⟨hda, hdb, hdg⟩\n  rcases he with ⟨hea, heb, heg⟩\n  exact Nat.dvd_antisymm (heg d hda hdb) (hdg e hea heb)',
+          },
+          {
+            kind: 'details',
+            summary: 'Why not write a GCD algorithm ourselves?',
+            text: 'Because “how to compute” and “what to compute” are separate questions. IsGcd describes the property the result must satisfy; as long as Nat.gcd meets it, callers do not care whether the implementation uses Euclid’s algorithm or anything else. That is separation of specification and implementation.',
           },
           {
             kind: 'note',
@@ -771,6 +793,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove that if 2 divides a and b, then 2 divides their greatest common divisor.',
+          hint: 'Do not unfold gcd: exact Nat.dvd_gcd ha hb. It says exactly “a divisor of both numbers divides their gcd”.',
           cta: 'Try it in the editor',
           starter:
             'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem two_dvd_gcd (a b : Nat) (ha : 2 ∣ a) (hb : 2 ∣ b) : 2 ∣ Nat.gcd a b := by\n  sorry\n',
@@ -808,6 +831,15 @@ export const en: Messages = {
             code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · grind\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by grind) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by grind)\n    grind',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ Prime 2, i.e. 2 ≤ 2 ∧ ∀ d, d ∣ 2 → d = 1 ∨ d = 2\nconstructor: split into two goals\nthe first goal 2 ≤ 2 is closed by grind\nintro d hd: Nat.le_of_dvd gives d ≤ 2 and Nat.pos_of_dvd_of_pos gives 0 < d\ngrind: 0 < d and d ≤ 2 force d = 1 or d = 2',
+          },
+          {
+            kind: 'details',
+            summary: 'Where do d ≤ 2 and 0 < d come from?',
+            text: 'Nat.le_of_dvd says “a positive divisor of n is at most n”, so it first needs 0 < 2; Nat.pos_of_dvd_of_pos says “a positive number’s divisor is positive”. Together they translate “d is a factor of 2” into range conditions, and grind finishes the case split.',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'Euclid proved that there are infinitely many primes by constructing n! + 1. This runtime does not include a factorial library, so we only keep the idea: assume finitely many primes, multiply them and add one, and get a number divisible by none of the known primes.',
@@ -816,6 +848,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove that 6 is not prime. Hint: find a divisor that is neither 1 nor 6.',
+          hint: 'Use rcases h with ⟨_, hd⟩ to get “every divisor is 1 or 6”; build h2 : 2 ∣ 6 := ⟨3, rfl⟩, apply hd 2 h2 to get a contradiction, then grind.',
           cta: 'Try it in the editor',
           starter:
             'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_six : ¬ Prime 6 := by\n  sorry\n',
@@ -899,12 +932,21 @@ export const en: Messages = {
             code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ntheorem injective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Injective f) (hg : Injective g) : Injective (fun x => g (f x)) := by\n  intro a b h\n  apply hf\n  apply hg\n  exact h',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ Injective (fun x => g (f x)), i.e. ∀ a b, g (f a) = g (f b) → a = b\nintro a b h: h : g (f a) = g (f b), goal a = b\napply hf: goal becomes f a = f b\napply hg: goal becomes g (f a) = g (f b)\nexact h: no goals left',
+          },
+          {
             kind: 'p',
             text: 'The identity function is both injective and surjective, hence bijective.',
           },
           {
             kind: 'code',
             code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem surjective_id {α : Type} : Surjective (fun x : α => x) := by\n  intro b\n  exact ⟨b, rfl⟩\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  constructor\n  · intro a b h\n    exact h\n  · exact surjective_id',
+          },
+          {
+            kind: 'details',
+            summary: 'How do I choose between apply and exact?',
+            text: 'exact needs a proof whose type matches the goal exactly; apply replaces the goal with the premises of some lemma. For goal f a = f b, apply hf turns it into g (f a) = g (f b), because that is exactly the premise hf needs.',
           },
           {
             kind: 'note',
@@ -914,6 +956,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Prove that a composition of surjections is surjective.',
+          hint: 'After intro c, use hg to get b with g b = c, then hf to get a with f a = b; finish with exact ⟨a, by rw [ha, hb]⟩.',
           cta: 'Try it in the editor',
           starter:
             'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
@@ -943,8 +986,17 @@ export const en: Messages = {
             code: 'def SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_refl {α : Type} (xs : List α) : SameLength xs xs := rfl\n\ntheorem same_length_symm {α : Type} (xs ys : List α) (h : SameLength xs ys) :\n    SameLength ys xs := by\n  exact h.symm\n\ntheorem same_length_trans {α : Type} (xs ys zs : List α)\n    (h1 : SameLength xs ys) (h2 : SameLength ys zs) : SameLength xs zs := by\n  exact h1.trans h2',
           },
           {
+            kind: 'goal',
+            text: 'same_length_refl: ⊢ SameLength xs xs, i.e. xs.length = xs.length; rfl closes it\nsame_length_symm: h : xs.length = ys.length; h.symm gives the reverse equation\nsame_length_trans: h1 : xs.length = ys.length, h2 : ys.length = zs.length; h1.trans h2 joins them',
+          },
+          {
             kind: 'p',
             text: 'An equivalence relation puts objects into classes: objects in the same class are “the same in some sense”. Mathematical classification usually means choosing the right equivalence relation.',
+          },
+          {
+            kind: 'details',
+            summary: 'Why can a structure proof use where?',
+            text: 'IsEquivalence is a structure whose three fields are the three properties. where is just syntax for filling the fields one by one, equivalent to refine ⟨?_, ?_, ?_⟩ followed by separate proofs. The {x y} arguments are implicit and inferred from the goal.',
           },
           {
             kind: 'note',
@@ -954,6 +1006,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Combine the three properties into one IsEquivalence proof.',
+          hint: 'Fill the fields with where: refl := fun _ => rfl; symm := fun h => h.symm; trans := fun h1 h2 => h1.trans h2.',
           cta: 'Try it in the editor',
           starter:
             'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_equiv {α : Type} : IsEquivalence (SameLength (α := α)) := by\n  sorry\n',
@@ -1083,6 +1136,15 @@ export const en: Messages = {
             code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind',
           },
           {
+            kind: 'goal',
+            text: 'Start: ⊢ sum (xs ++ ys) = sum xs + sum ys\ninduction xs with: xs is where both sum and ++ recurse\nnil: simp [sum] leaves sum ys on both sides\ncons x xs ih: simp [sum, ih] leaves associativity of addition; grind closes it',
+          },
+          {
+            kind: 'details',
+            summary: 'Why induct on xs instead of ys?',
+            text: 'Both sum and ++ recurse on the first list: sum (x :: xs) and (x :: xs) ++ ys both unpack x first. Inducting on xs makes the induction hypothesis fit those definitions; inducting on ys cannot unpack sum (x :: xs). Follow the recursive definition when choosing the induction variable.',
+          },
+          {
             kind: 'note',
             text: 'With an accumulator argument, sum becomes tail recursive; the proof then needs an accumulator invariant, which is the next exercise.',
           },
@@ -1090,6 +1152,7 @@ export const en: Messages = {
         exercise: {
           title: 'Exercise',
           body: 'Use sum_append to prove that swapping the two lists does not change the total.',
+          hint: 'rw [sum_append, Nat.add_comm]: rewrite the left side to sum xs + sum ys, then commute the addition.',
           cta: 'Try it in the editor',
           starter:
             'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
@@ -1106,7 +1169,10 @@ export const en: Messages = {
             kind: 'p',
             text: '#print axioms lists the axioms a theorem depends on. Core arithmetic theorems usually depend on none.',
           },
-          { kind: 'code', code: '#print axioms Nat.add_comm\n\n#check Classical.choice' },
+          {
+            kind: 'code',
+            code: '#print axioms Nat.add_comm\n\n#check Classical.choice\n#check Classical.em',
+          },
           {
             kind: 'p',
             text: 'sorry generates sorryAx and makes any proposition “true”. It is fine for drafts, not for delivery.',
@@ -1116,11 +1182,23 @@ export const en: Messages = {
             code: 'theorem cheat : 1 = 2 := by\n  sorry\n\n#print axioms cheat',
           },
           {
+            kind: 'details',
+            summary: 'Why do core arithmetic theorems need no axioms?',
+            text: 'Nat.add_comm is derived step by step from the definition of Nat, with no extra assumptions, so #print axioms prints nothing. Classical.choice is an axiom we choose to accept for non-constructive reasoning; theorems that use it list Classical.choice among their dependencies.',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: 'Seeing sorryAx means the proof is unfinished; course code and CI should never leave sorry behind.',
           },
         ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Prove excluded middle with Classical.em, then check its dependencies with #print axioms.',
+          hint: 'Use exact Classical.em P as the proof; the #print axioms my_em output will show Classical.choice.',
+          cta: 'Try it in the editor',
+          starter: 'theorem my_em (P : Prop) : P ∨ ¬ P := by\n  sorry\n\n#print axioms my_em\n',
+        },
       },
       {
         slug: 'math-mathlib',
@@ -1146,10 +1224,23 @@ export const en: Messages = {
             code: '#check Nat.gcd_dvd_left\n#check Nat.dvd_gcd\n#check List.mem_append',
           },
           {
+            kind: 'details',
+            summary: 'How is the course’s mini library different from Mathlib?',
+            text: 'Names and direction match, but Mathlib has full namespaces, instances, automation lemmas and cross-domain connections. The course’s Even has a definition and a few exercises; Mathlib’s Nat.Even connects to divisibility, modular arithmetic and prime distribution. Learn the definitions and proof patterns first; moving to Mathlib is mostly a matter of looking up names.',
+          },
+          {
             kind: 'note',
             text: 'To continue locally: install elan, create a project with lake new, and require mathlib in the lakefile. The first build takes a while, but then the whole library is available.',
           },
         ],
+        exercise: {
+          title: 'Exercise',
+          body: 'Before you leave, prove Even 4 with a witness, then #check a few Mathlib names.',
+          hint: 'Even 4 is ∃ k, 4 = 2 * k. Take k = 2 and finish with ⟨2, rfl⟩.',
+          cta: 'Try it in the editor',
+          starter:
+            'theorem even_four : ∃ k, 4 = 2 * k := by\n  sorry\n\n#check List.mem_append\n#check Nat.gcd_dvd_left\n',
+        },
       },
     ],
   },
@@ -1218,6 +1309,120 @@ export const en: Messages = {
     logStopped: 'Lean engine stopped, worker and memory released',
     logLowMemory:
       'Low-memory device: auto-start disabled and the persistent cache capped at 128 MB',
+  },
+  reference: {
+    eyebrow: 'Lean 4 · Reference',
+    title: 'Tactics and symbols at a glance',
+    lead: 'The tactics, symbols and errors you reach for most, all on one page. Come back when you forget one instead of rereading a whole lesson.',
+    tacticsTitle: 'Tactics',
+    tacticsLead: 'Look things up by “what am I trying to do”, not by memorising names.',
+    tactics: [
+      {
+        name: 'intro h',
+        body: 'When the goal is P → Q or ∀ x, ..., bring the premise or variable into context.',
+        example: '⊢ P → Q  →  intro h  →  h : P ⊢ Q',
+      },
+      {
+        name: 'exact h',
+        body: 'You already hold a proof whose type matches the goal exactly.',
+        example: 'h : P  →  exact h closes ⊢ P',
+      },
+      {
+        name: 'apply h',
+        body: 'Replace the goal with the premises of lemma h; useful when applying a lemma rather than handing over a proof.',
+        example: 'hf : Injective f, ⊢ a = b  →  apply hf  →  ⊢ f a = f b',
+      },
+      {
+        name: 'rcases h with ⟨x, hx⟩',
+        body: 'Unpack an existential, conjunction or disjunction; use it when h is a proof.',
+        example: 'h : ∃ k, n = 2 * k  →  rcases h with ⟨k, hk⟩',
+      },
+      {
+        name: 'induction n with',
+        body: 'Structural induction on a natural or a list; follow the recursive definition when choosing the variable.',
+        example: 'induction n with | zero => ... | succ k ih => ...',
+      },
+      {
+        name: 'rw [h]',
+        body: 'Rewrite the goal with an equation; use ← for the other direction.',
+        example: 'h : a = b  →  rw [h] replaces a with b in the goal',
+      },
+      {
+        name: 'simp [defs]',
+        body: 'Simplify with definitions and simp lemmas; simp only narrows the set of lemmas.',
+        example: 'simp [sum, ih]',
+      },
+      {
+        name: 'grind',
+        body: 'Finish linear arithmetic, equalities and propositional reasoning automatically.',
+        example: 'after rw [hx, hy]  →  grind',
+      },
+      {
+        name: 'by_cases h : P',
+        body: 'Split the goal into the P and ¬P cases.',
+        example: 'by_cases h : n = 0  →  prove both branches',
+      },
+      {
+        name: 'constructor',
+        body: 'Split a ∧, ↔ or structure goal and prove each subgoal.',
+        example: '⊢ P ∧ Q  →  constructor',
+      },
+    ],
+    symbolsTitle: 'Symbols',
+    symbolsLead:
+      'Type the backslash abbreviation and press space or Tab; the editor also offers completions.',
+    symbols: [
+      { symbol: '→', abbreviation: '\\to', meaning: 'implication / function type' },
+      { symbol: '←', abbreviation: '\\leftarrow', meaning: 'reverse / assignment (gets)' },
+      { symbol: '↔', abbreviation: '\\iff', meaning: 'if and only if' },
+      { symbol: '∀', abbreviation: '\\forall', meaning: 'universal quantifier' },
+      { symbol: '∃', abbreviation: '\\exists', meaning: 'existential quantifier' },
+      { symbol: '∧', abbreviation: '\\and', meaning: 'and' },
+      { symbol: '∨', abbreviation: '\\or', meaning: 'or' },
+      { symbol: '¬', abbreviation: '\\not', meaning: 'not' },
+      { symbol: '∣', abbreviation: '\\mid', meaning: 'divides' },
+      { symbol: '∈', abbreviation: '\\in', meaning: 'member of' },
+      { symbol: '⊆', abbreviation: '\\subseteq', meaning: 'subset' },
+      {
+        symbol: '⟨ ⟩',
+        abbreviation: '\\langle \\rangle',
+        meaning: 'constructor / anonymous constructor',
+      },
+    ],
+    errorsTitle: 'Common errors',
+    errorsLead:
+      'Check which line the error points at, then put the cursor inside the proof to read the goal.',
+    errors: [
+      {
+        error: 'type mismatch',
+        cause: 'A proof or value has a different type from the one expected.',
+        fix: 'Read expected / got in the message, and use #check to confirm the type of a name.',
+      },
+      {
+        error: 'unknown identifier',
+        cause: 'The name is misspelled, in another namespace, or not imported.',
+        fix: 'Search with #check; watch for prefixes such as Nat. and List.',
+      },
+      {
+        error: 'unsolved goals',
+        cause: 'Some goal is still open, often a missing branch or final step.',
+        fix: 'Put the cursor inside the proof and read the goal; add exact, rfl or grind.',
+      },
+      {
+        error: "declaration uses 'sorry'",
+        cause: 'A sorry placeholder is still present, so the proof is not finished.',
+        fix: 'Close each goal; course exercises require zero sorry.',
+      },
+      {
+        error: 'function expected',
+        cause: 'A non-function is being applied, usually from brackets or argument order.',
+        fix: 'Use #check to inspect the type, then fix argument order and brackets.',
+      },
+    ],
+    ctaTitle: 'Keep practising',
+    ctaBody: 'A reference saves you once; muscle memory comes from writing.',
+    ctaPlayground: 'Open the playground',
+    ctaLesson: 'Back to lesson one',
   },
   privacy: {
     eyebrow: 'Transparency',

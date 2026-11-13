@@ -3,7 +3,7 @@ import { applySourcePreference } from './asset-source';
 import { buttonClass } from './components/ui';
 import { detectLocale, messagesFor, type Locale } from './i18n';
 import { applyPageMeta } from './meta';
-import { readProgress } from './progress';
+import { readCompleted, readProgress } from './progress';
 import { resolveRoute, type Route } from './router';
 import { initTelemetry, track } from './telemetry';
 import { bindLayout, renderLayout } from './views/layout';
@@ -38,6 +38,8 @@ const pageTitle = (route: Route): string => {
       return `${t.playground.title} · Lean Init IDE`;
     case 'privacy':
       return `${t.privacy.title} · Lean Init IDE`;
+    case 'reference':
+      return `${t.reference.title} · Lean Init IDE`;
     case 'notFound':
       return `${t.notFound.title} · Lean Init IDE`;
     default:
@@ -74,11 +76,16 @@ const boot = async (route: Route, root: HTMLElement) => {
     case 'privacy':
       content = renderPrivacy(route.locale);
       break;
+    case 'reference': {
+      const { renderReference } = await import('./views/reference');
+      content = renderReference(route.locale);
+      break;
+    }
     case 'notFound':
       content = renderNotFound(route.locale);
       break;
     default:
-      content = renderHome(route.locale, readProgress());
+      content = renderHome(route.locale, readProgress(), readCompleted());
   }
 
   root.innerHTML = renderLayout(

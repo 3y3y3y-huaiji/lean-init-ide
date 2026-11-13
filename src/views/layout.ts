@@ -6,7 +6,7 @@ import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
 import type { ThemePreference } from '../theme';
 
-export type ActivePage = 'home' | 'lesson' | 'playground' | 'privacy';
+export type ActivePage = 'home' | 'lesson' | 'playground' | 'privacy' | 'reference';
 
 const REPO_URL = 'https://github.com/3y3y3y-huaiji/lean-init-ide';
 
@@ -34,6 +34,7 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
     { page: 'home', href: `/${locale}/`, label: t.nav.home },
     { page: 'lesson', href: `/${locale}/learn/${FIRST_LESSON_SLUG}`, label: t.nav.lesson },
     { page: 'playground', href: `/${locale}/playground`, label: t.nav.playground },
+    { page: 'reference', href: `/${locale}/reference`, label: t.nav.reference },
   ];
 
   const navLink = (isActive: boolean) =>

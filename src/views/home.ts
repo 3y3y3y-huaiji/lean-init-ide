@@ -1,23 +1,33 @@
 import { buttonClass, ghostButtonLgClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
-import { firstUnvisitedLesson } from '../progress';
+import { firstUncompletedLesson } from '../progress';
 import { FIRST_LESSON_SLUG } from '../router';
 
-export const renderHome = (locale: Locale, visited: ReadonlySet<string> = new Set()): string => {
+export const renderHome = (
+  locale: Locale,
+  visited: ReadonlySet<string> = new Set(),
+  completed: ReadonlySet<string> = new Set(),
+): string => {
   const t = messagesFor(locale).home;
   const lessonMsgs = messagesFor(locale).lesson;
   const lessonSlugs = lessonMsgs.lessons.map((lesson) => lesson.slug);
-  const target = firstUnvisitedLesson(lessonSlugs, visited) ?? FIRST_LESSON_SLUG;
-  const cta = visited.size > 0 ? t.continueCta : t.ctaPrimary;
+  const target = firstUncompletedLesson(lessonSlugs, completed) ?? FIRST_LESSON_SLUG;
+  const cta = visited.size > 0 || completed.size > 0 ? t.continueCta : t.ctaPrimary;
 
   const introLessons = lessonMsgs.lessons.filter((lesson) => (lesson.track ?? 'intro') === 'intro');
   const mathLessons = lessonMsgs.lessons.filter((lesson) => lesson.track === 'math');
   const introTarget =
-    firstUnvisitedLesson(
+    firstUncompletedLesson(
       introLessons.map((lesson) => lesson.slug),
-      visited,
+      completed,
     ) ?? FIRST_LESSON_SLUG;
-  const mathTarget = mathLessons[0]?.slug;
+  const mathTarget =
+    mathLessons.length > 0
+      ? firstUncompletedLesson(
+          mathLessons.map((lesson) => lesson.slug),
+          completed,
+        )
+      : undefined;
 
   const pathCard = (track: 'intro' | 'math', lessons: typeof introLessons, href: string) => `
     <article class="rounded-2xl border border-line bg-panel p-6">

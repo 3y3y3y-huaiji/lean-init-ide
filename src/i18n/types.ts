@@ -36,6 +36,8 @@ export type Messages = {
     lesson: string;
     playground: string;
     github: string;
+    /** 策略与符号速查页。 */
+    reference: string;
   };
   theme: {
     label: string;
@@ -89,6 +91,10 @@ export type Messages = {
     goalLabel: string;
     /** 练习折叠提示的标题。 */
     hintLabel: string;
+    /** 目录里已完成课时的标记说明。 */
+    completedLabel: string;
+    /** 目录里已读但未完成课时的标记说明。 */
+    visitedLabel: string;
     /** 运行中的占位文案。 */
     running: string;
     /** 运行后没有任何输出时的提示。 */
@@ -175,6 +181,24 @@ export type Messages = {
     sections: Array<{ heading: string; paragraphs: string[] }>;
     note: string;
     backHome: string;
+  };
+  reference: {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    tacticsTitle: string;
+    tacticsLead: string;
+    tactics: Array<{ name: string; body: string; example: string }>;
+    symbolsTitle: string;
+    symbolsLead: string;
+    symbols: Array<{ symbol: string; abbreviation: string; meaning: string }>;
+    errorsTitle: string;
+    errorsLead: string;
+    errors: Array<{ error: string; cause: string; fix: string }>;
+    ctaTitle: string;
+    ctaBody: string;
+    ctaPlayground: string;
+    ctaLesson: string;
   };
   footer: {
     license: string;

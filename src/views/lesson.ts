@@ -7,7 +7,7 @@ import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
 import type { LessonPage, LessonTrack } from '../i18n/types';
-import { markLessonVisited, readProgress } from '../progress';
+import { markLessonVisited, readCompleted, readProgress } from '../progress';
 import { escapeHtml } from './html';
 
 const codeBlockOpen = 'overflow-hidden rounded-xl border border-line bg-panel-soft';
@@ -267,15 +267,19 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
 
-  // 进度只存在浏览器里：进入课程即记为已读，目录里给已读课时打勾。
+  // 进度只存在浏览器里：进入课程即记为已读；练习通过后目录里换成实心勾。
   const visited = readProgress();
+  const completed = readCompleted();
   markLessonVisited(page.slug);
   for (const link of root.querySelectorAll<HTMLAnchorElement>('[data-lesson-slug]')) {
-    if (!visited.has(link.dataset.lessonSlug ?? '')) continue;
+    const slug = link.dataset.lessonSlug ?? '';
+    const done = completed.has(slug);
+    if (!done && !visited.has(slug)) continue;
     const mark = document.createElement('span');
-    mark.className = 'ml-auto pl-2 text-accent';
+    mark.className = done ? 'ml-auto pl-2 text-accent' : 'ml-auto pl-2 text-muted';
     mark.setAttribute('aria-hidden', 'true');
-    mark.textContent = '✓';
+    mark.textContent = done ? '✓' : '○';
+    mark.title = done ? t.completedLabel : t.visitedLabel;
     link.append(mark);
   }
 

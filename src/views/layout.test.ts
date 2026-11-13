@@ -22,14 +22,16 @@ describe('页面骨架渲染', () => {
     setPath('/zh/learn/first-proof');
   });
 
-  it('导航渲染三项并高亮当前页', () => {
+  it('导航渲染四项并高亮当前页', () => {
     const t = messagesFor('zh');
     const html = renderLayout('zh', 'lesson', '');
 
     expect(html).toContain(t.nav.home);
     expect(html).toContain(t.nav.lesson);
     expect(html).toContain(t.nav.playground);
+    expect(html).toContain(t.nav.reference);
     expect(html).toContain(`href="/zh/learn/what-is-lean"`);
+    expect(html).toContain('href="/zh/reference"');
     expect(html).toContain('bg-accent-soft');
   });
 

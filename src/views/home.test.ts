@@ -13,10 +13,15 @@ describe('首页渲染', () => {
     expect(renderHome('en')).toContain('href="/en/playground"');
   });
 
-  it('有进度时继续学习指向第一节未读课', () => {
-    const html = renderHome('zh', new Set(['what-is-lean']));
+  it('有完成进度时继续学习指向第一节未完成课', () => {
+    const html = renderHome('zh', new Set(['what-is-lean']), new Set(['what-is-lean']));
     expect(html).toContain('href="/zh/learn/first-proof"');
     expect(html).toContain(messagesFor('zh').home.continueCta);
+  });
+
+  it('只有已读、没有完成时，继续学习回到第一节未完成课', () => {
+    const html = renderHome('zh', new Set(['first-proof']), new Set());
+    expect(html).toContain('href="/zh/learn/what-is-lean"');
   });
 
   it('每条特性都渲染成独立卡片', () => {

@@ -6,6 +6,7 @@ export const zh: Messages = {
     lesson: '入门课',
     playground: '编辑器',
     github: 'GitHub',
+    reference: '速查表',
   },
   theme: {
     label: '主题',
@@ -81,6 +82,8 @@ export const zh: Messages = {
     runInEditor: '运行',
     goalLabel: 'Goal 变化',
     hintLabel: '提示',
+    completedLabel: '已完成',
+    visitedLabel: '已读，未完成练习',
     running: '运行中…',
     noOutput: '没有错误，也没有输出',
     proofAccepted: '证明通过 · Lean 已接受，没有待证目标',
@@ -702,6 +705,10 @@ export const zh: Messages = {
             code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_add_even (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by grind⟩',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases ha with ⟨x, rfl⟩：a 被替换成 2 * x\nrcases hb with ⟨y, rfl⟩：b 被替换成 2 * y\nexact ⟨x + y, by grind⟩：取 k = x + y，grind 收掉乘法等式',
+          },
+          {
             kind: 'p',
             text: '奇数 + 奇数会多出一个 1，正好又凑成 2 的倍数。',
           },
@@ -718,6 +725,11 @@ export const zh: Messages = {
             code: 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by\n  intro h\n  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩\n  grind',
           },
           {
+            kind: 'details',
+            summary: 'rcases 后面为什么能直接写 rfl？',
+            text: '⟨x, rfl⟩ 让 Lean 用 x 直接替换掉等式里的 a，相当于「不妨设 a = 2x」。如果写成 ⟨x, hx⟩，假设 hx : a = 2 * x 会保留下来，之后就要自己 rw [hx]。两种写法都能过，前者更短，后者在需要保留原值时更清楚。',
+          },
+          {
             kind: 'note',
             text: 'grind 是 Lean 自带的自动化证明策略，能做线性算术、等式与命题推理；遇到变量之间的乘法，就要自己给引理。',
           },
@@ -725,6 +737,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '证明偶数乘以任何自然数仍然是偶数。',
+          hint: '先把 h 拆成 a = 2 * k；目标变成 ∃ j, a * b = 2 * j，取 j = k * b，再用 rw [hk] 和 grind 收尾。',
           cta: '在编辑器中动手',
           starter:
             'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  sorry\n',
@@ -754,12 +767,21 @@ export const zh: Messages = {
             code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_is_gcd (a b : Nat) : IsGcd a b (Nat.gcd a b) := by\n  constructor\n  · exact Nat.gcd_dvd_left a b\n  constructor\n  · exact Nat.gcd_dvd_right a b\n  · intro e hea heb\n    exact Nat.dvd_gcd hea heb',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ IsGcd a b (Nat.gcd a b)，展开为 (Nat.gcd a b ∣ a) ∧ (Nat.gcd a b ∣ b) ∧ 最大性\nconstructor：先拆成两个整除目标，再证「任何公约数都整除它」\nNat.gcd_dvd_left / Nat.gcd_dvd_right：直接给出两个整除\nintro e hea heb：进入最大性目标；Nat.dvd_gcd hea heb 收尾',
+          },
+          {
             kind: 'p',
             text: '规格还有一个好处：满足规格的值唯一。如果 d 和 e 都满足 IsGcd，那么 d = e。',
           },
           {
             kind: 'code',
             code: 'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_unique (a b d e : Nat) (hd : IsGcd a b d) (he : IsGcd a b e) : d = e := by\n  rcases hd with ⟨hda, hdb, hdg⟩\n  rcases he with ⟨hea, heb, heg⟩\n  exact Nat.dvd_antisymm (heg d hda hdb) (hdg e hea heb)',
+          },
+          {
+            kind: 'details',
+            summary: '为什么不自己写一个 gcd 算法？',
+            text: '因为「怎么算」和「算什么」是两件事。IsGcd 描述的是结果必须满足的性质；只要 Nat.gcd 满足这条规格，调用它的定理就不关心内部用的是欧几里得算法还是别的实现。这就是规格与实现分离。',
           },
           {
             kind: 'note',
@@ -769,6 +791,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '证明：如果 2 整除 a 和 b，那么 2 整除它们的最大公约数。',
+          hint: '不用展开 gcd，直接 exact Nat.dvd_gcd ha hb：它正好说的是「同时整除两个数，就整除它们的 gcd」。',
           cta: '在编辑器中动手',
           starter:
             'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem two_dvd_gcd (a b : Nat) (ha : 2 ∣ a) (hb : 2 ∣ b) : 2 ∣ Nat.gcd a b := by\n  sorry\n',
@@ -806,6 +829,15 @@ export const zh: Messages = {
             code: 'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem prime_two : Prime 2 := by\n  constructor\n  · grind\n  · intro d hd\n    have hle : d ≤ 2 := Nat.le_of_dvd (by grind) hd\n    have hpos : 0 < d := Nat.pos_of_dvd_of_pos hd (by grind)\n    grind',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ Prime 2，展开为 2 ≤ 2 ∧ ∀ d, d ∣ 2 → d = 1 ∨ d = 2\nconstructor：分成两个目标\n第一个目标 2 ≤ 2 直接由 grind 收尾\nintro d hd：由 Nat.le_of_dvd 得 d ≤ 2，由 Nat.pos_of_dvd_of_pos 得 0 < d\ngrind：d 同时满足 0 < d 和 d ≤ 2，只能是 1 或 2',
+          },
+          {
+            kind: 'details',
+            summary: 'd ≤ 2 和 0 < d 是从哪来的？',
+            text: 'Nat.le_of_dvd 说「正数整除 n，则除数 ≤ n」，所以要先给它 0 < 2；Nat.pos_of_dvd_of_pos 说「正数被 n 整除，则除数 > 0」。这两个引理把「d 是 2 的因子」翻译成范围条件，剩下的交给 grind。',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: '“素数有无穷多个”是欧几里得的经典结论。它的证明需要构造 n! + 1，而本运行时不带阶乘库，所以这里只保留思路：假设只有有限个素数，把它们乘起来加一，会得到一个不被任何已知素数整除的数。',
@@ -814,6 +846,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '证明 6 不是素数。提示：找一个既不是 1 也不是 6 的因子。',
+          hint: 'rcases h with ⟨_, hd⟩ 拿到「因子只能是 1 或 6」；再令 h2 : 2 ∣ 6 := ⟨3, rfl⟩，用 hd 2 h2 得到矛盾，最后 grind。',
           cta: '在编辑器中动手',
           starter:
             'def Prime (n : Nat) : Prop := 2 ≤ n ∧ ∀ d, d ∣ n → d = 1 ∨ d = n\n\ntheorem not_prime_six : ¬ Prime 6 := by\n  sorry\n',
@@ -897,12 +930,21 @@ export const zh: Messages = {
             code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ntheorem injective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Injective f) (hg : Injective g) : Injective (fun x => g (f x)) := by\n  intro a b h\n  apply hf\n  apply hg\n  exact h',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ Injective (fun x => g (f x))，展开为 ∀ a b, g (f a) = g (f b) → a = b\nintro a b h：h : g (f a) = g (f b)，目标 a = b\napply hf：目标变成 f a = f b\napply hg：目标变成 g (f a) = g (f b)\nexact h：没有剩余目标',
+          },
+          {
             kind: 'p',
             text: '恒等函数既单又满，所以是双射。',
           },
           {
             kind: 'code',
             code: 'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem surjective_id {α : Type} : Surjective (fun x : α => x) := by\n  intro b\n  exact ⟨b, rfl⟩\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  constructor\n  · intro a b h\n    exact h\n  · exact surjective_id',
+          },
+          {
+            kind: 'details',
+            summary: 'apply 和 exact 到底怎么选？',
+            text: 'exact 要求你手里已经有一个和目标完全一致的证明；apply 则是把目标换成某个引理的前提。比如目标是 f a = f b，apply hf 会把目标变成 g (f a) = g (f b)，因为 hf 正好需要这个前提。',
           },
           {
             kind: 'note',
@@ -912,6 +954,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '证明两个满射的复合仍然是满射。',
+          hint: 'intro c 后先用 hg 取 b 使 g b = c，再用 hf 取 a 使 f a = b；最后 exact ⟨a, by rw [ha, hb]⟩。',
           cta: '在编辑器中动手',
           starter:
             'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
@@ -941,8 +984,17 @@ export const zh: Messages = {
             code: 'def SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_refl {α : Type} (xs : List α) : SameLength xs xs := rfl\n\ntheorem same_length_symm {α : Type} (xs ys : List α) (h : SameLength xs ys) :\n    SameLength ys xs := by\n  exact h.symm\n\ntheorem same_length_trans {α : Type} (xs ys zs : List α)\n    (h1 : SameLength xs ys) (h2 : SameLength ys zs) : SameLength xs zs := by\n  exact h1.trans h2',
           },
           {
+            kind: 'goal',
+            text: 'same_length_refl：⊢ SameLength xs xs，展开为 xs.length = xs.length，rfl 收尾\nsame_length_symm：h : xs.length = ys.length，h.symm 得到反向等式\nsame_length_trans：h1 : xs.length = ys.length，h2 : ys.length = zs.length，h1.trans h2 把两端接起来',
+          },
+          {
             kind: 'p',
             text: '等价关系把对象分堆：同一堆里的东西“在某种意义下一样”。数学里的分类，通常就是找一个合适的等价关系。',
+          },
+          {
+            kind: 'details',
+            summary: 'structure 的证明为什么能写 where？',
+            text: 'IsEquivalence 是一个 structure，三个字段就是三条性质。where 只是逐字段填值的语法糖，等价于 refine ⟨?_, ?_, ?_⟩ 再分别证明。字段声明里的 {x y} 是隐式参数，Lean 会根据目标自动推断。',
           },
           {
             kind: 'note',
@@ -952,6 +1004,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '把三条性质组合成一个 IsEquivalence 证明。',
+          hint: '用 where 依次填：refl := fun _ => rfl；symm := fun h => h.symm；trans := fun h1 h2 => h1.trans h2。',
           cta: '在编辑器中动手',
           starter:
             'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_equiv {α : Type} : IsEquivalence (SameLength (α := α)) := by\n  sorry\n',
@@ -1081,6 +1134,15 @@ export const zh: Messages = {
             code: 'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind',
           },
           {
+            kind: 'goal',
+            text: '证明开始：⊢ sum (xs ++ ys) = sum xs + sum ys\ninduction xs with：xs 同时是 sum 和 ++ 递归的位置\nnil：simp [sum]，两边都化成 sum ys\ncons x xs ih：simp [sum, ih] 后剩加法结合律，grind 收尾',
+          },
+          {
+            kind: 'details',
+            summary: '为什么归纳 xs 而不是 ys？',
+            text: 'sum 和 ++ 都按第一个列表递归：sum (x :: xs) 与 (x :: xs) ++ ys 都会先拆出 x。对 xs 归纳，归纳假设正好能套进这两个定义；对 ys 归纳则拆不开 sum (x :: xs)。归纳变量要跟着递归定义走。',
+          },
+          {
             kind: 'note',
             text: '如果加上累加器参数，求和可以写成尾递归；证明会变成“累加器不变量”，那是下一层练习。',
           },
@@ -1088,6 +1150,7 @@ export const zh: Messages = {
         exercise: {
           title: '练习',
           body: '利用 sum_append 证明两个列表交换顺序后总和不变。',
+          hint: 'rw [sum_append, Nat.add_comm]：先把左边换成 sum xs + sum ys，再用加法交换律收尾。',
           cta: '在编辑器中动手',
           starter:
             'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
@@ -1104,7 +1167,10 @@ export const zh: Messages = {
             kind: 'p',
             text: '#print axioms 会列出定理依赖的公理。核心算术定理通常不依赖任何公理。',
           },
-          { kind: 'code', code: '#print axioms Nat.add_comm\n\n#check Classical.choice' },
+          {
+            kind: 'code',
+            code: '#print axioms Nat.add_comm\n\n#check Classical.choice\n#check Classical.em',
+          },
           {
             kind: 'p',
             text: 'sorry 会生成 sorryAx，让任何命题“成立”。它适合草稿，不适合交付。',
@@ -1114,11 +1180,23 @@ export const zh: Messages = {
             code: 'theorem cheat : 1 = 2 := by\n  sorry\n\n#print axioms cheat',
           },
           {
+            kind: 'details',
+            summary: '为什么核心算术定理不依赖公理？',
+            text: 'Nat.add_comm 这类结论是从 Nat 的定义一步步证出来的，没有额外的假设，所以 #print axioms 输出为空。Classical.choice 则是主动接受的公理，用来做非构造性推理；用到它的定理会把 Classical.choice 列在依赖里。',
+          },
+          {
             kind: 'note',
             tone: 'warn',
             text: '看到 sorryAx 就说明证明还没完成；课程代码和 CI 都不应该留下 sorry。',
           },
         ],
+        exercise: {
+          title: '练习',
+          body: '用 Classical.em 证明排中律，再用 #print axioms 看看它依赖了什么。',
+          hint: '证明体直接写 exact Classical.em P；运行后看 #print axioms my_em 的输出，会看到 Classical.choice。',
+          cta: '在编辑器中动手',
+          starter: 'theorem my_em (P : Prop) : P ∨ ¬ P := by\n  sorry\n\n#print axioms my_em\n',
+        },
       },
       {
         slug: 'math-mathlib',
@@ -1144,10 +1222,23 @@ export const zh: Messages = {
             code: '#check Nat.gcd_dvd_left\n#check Nat.dvd_gcd\n#check List.mem_append',
           },
           {
+            kind: 'details',
+            summary: '课程的迷你库和 Mathlib 差在哪？',
+            text: '名字和方向一致，但 Mathlib 的版本有完整的命名空间、实例、自动化引理和跨领域连接。比如课程里的 Even 只有定义和几条练习，Mathlib 的 Nat.Even 则和整除、模运算、素数分布都连在一起。先把定义和证明套路练熟，迁移到 Mathlib 主要是查名字。',
+          },
+          {
             kind: 'note',
             text: '本地继续学：先装 elan，再用 lake new 建项目，在 lakefile 里 require mathlib；首次编译会比较久，但之后就能用整套数学库。',
           },
         ],
+        exercise: {
+          title: '练习',
+          body: '离开课程前，用 witness 证明 Even 4，再用 #check 看几个 Mathlib 名字。',
+          hint: 'Even 4 就是 ∃ k, 4 = 2 * k，取 k = 2，用 ⟨2, rfl⟩ 收尾。',
+          cta: '在编辑器中动手',
+          starter:
+            'theorem even_four : ∃ k, 4 = 2 * k := by\n  sorry\n\n#check List.mem_append\n#check Nat.gcd_dvd_left\n',
+        },
       },
     ],
   },
@@ -1212,6 +1303,114 @@ export const zh: Messages = {
     logStartFailed: (message) => `启动失败：${message}`,
     logStopped: '已关闭 Lean 引擎，worker 与内存已释放',
     logLowMemory: '低内存设备：已关闭自动启动，持久缓存上限下调到 128MB',
+  },
+  reference: {
+    eyebrow: 'Lean 4 · 速查',
+    title: '策略与符号速查',
+    lead: '写证明时最常用的策略、符号和报错，集中在一页。忘了就回来扫一眼，不用翻完整课程。',
+    tacticsTitle: '常用策略',
+    tacticsLead: '按「我想做什么」查，而不是背名字。',
+    tactics: [
+      {
+        name: 'intro h',
+        body: '目标形如 P → Q 或 ∀ x, ... 时，把前提或变量引入成假设。',
+        example: '⊢ P → Q  →  intro h  →  h : P ⊢ Q',
+      },
+      {
+        name: 'exact h',
+        body: '手里有一个和目标类型完全一致的证明，直接交出去。',
+        example: 'h : P  →  exact h 关闭 ⊢ P',
+      },
+      {
+        name: 'apply h',
+        body: '把目标换成引理 h 的前提，适合「用一条引理」而不是直接交证明。',
+        example: 'hf : Injective f，⊢ a = b  →  apply hf  →  ⊢ f a = f b',
+      },
+      {
+        name: 'rcases h with ⟨x, hx⟩',
+        body: '拆开存在量词、合取或析取；h 是证明时用它。',
+        example: 'h : ∃ k, n = 2 * k  →  rcases h with ⟨k, hk⟩',
+      },
+      {
+        name: 'induction n with',
+        body: '对自然数或列表做结构归纳；归纳变量要跟着递归定义走。',
+        example: 'induction n with | zero => ... | succ k ih => ...',
+      },
+      {
+        name: 'rw [h]',
+        body: '按等式改写目标；方向不对时用 ←。',
+        example: 'h : a = b  →  rw [h] 把目标里的 a 换成 b',
+      },
+      {
+        name: 'simp [defs]',
+        body: '用定义和 simp 引理化简目标；simp only 可以限制范围。',
+        example: 'simp [sum, ih]',
+      },
+      {
+        name: 'grind',
+        body: '自动收尾线性算术、等式与命题推理。',
+        example: 'rw [hx, hy] 之后  →  grind',
+      },
+      {
+        name: 'by_cases h : P',
+        body: '把目标分成 P 与 ¬P 两种情况。',
+        example: 'by_cases h : n = 0  →  两个分支各证一次',
+      },
+      {
+        name: 'constructor',
+        body: '拆开 ∧、↔ 或 structure 目标，逐个子目标证明。',
+        example: '⊢ P ∧ Q  →  constructor',
+      },
+    ],
+    symbolsTitle: '常用符号',
+    symbolsLead: '输入反斜杠缩写后按空格或 Tab 展开；课程编辑器里也会弹出候选。',
+    symbols: [
+      { symbol: '→', abbreviation: '\\to', meaning: '蕴含 / 函数类型' },
+      { symbol: '←', abbreviation: '\\leftarrow', meaning: '反向 / 赋值（gets）' },
+      { symbol: '↔', abbreviation: '\\iff', meaning: '当且仅当' },
+      { symbol: '∀', abbreviation: '\\forall', meaning: '全称量词' },
+      { symbol: '∃', abbreviation: '\\exists', meaning: '存在量词' },
+      { symbol: '∧', abbreviation: '\\and', meaning: '并且' },
+      { symbol: '∨', abbreviation: '\\or', meaning: '或者' },
+      { symbol: '¬', abbreviation: '\\not', meaning: '否定' },
+      { symbol: '∣', abbreviation: '\\mid', meaning: '整除' },
+      { symbol: '∈', abbreviation: '\\in', meaning: '属于' },
+      { symbol: '⊆', abbreviation: '\\subseteq', meaning: '子集' },
+      { symbol: '⟨ ⟩', abbreviation: '\\langle \\rangle', meaning: '构造 / 匿名构造子' },
+    ],
+    errorsTitle: '常见报错',
+    errorsLead: '先看报错指向哪一行，再把光标移到证明里看 Goal。',
+    errors: [
+      {
+        error: 'type mismatch',
+        cause: '证明或值的类型和期望不一致。',
+        fix: '看报错里的 expected / got，用 #check 确认名字的类型。',
+      },
+      {
+        error: 'unknown identifier',
+        cause: '名字拼错、命名空间不对，或没有导入。',
+        fix: '用 #check 搜名字；注意 Nat.、List. 这类前缀。',
+      },
+      {
+        error: 'unsolved goals',
+        cause: '还有目标没关闭，常见于少写分支或最后一步。',
+        fix: '把光标放进证明看 Goal，补 exact、rfl 或 grind。',
+      },
+      {
+        error: "declaration uses 'sorry'",
+        cause: '还有 sorry 占位，证明没有真正完成。',
+        fix: '逐个关闭 Goal；课程练习要求 sorry 清零。',
+      },
+      {
+        error: 'function expected',
+        cause: '把非函数当成函数应用，通常是括号或参数顺序错了。',
+        fix: '用 #check 看类型，检查参数顺序与括号。',
+      },
+    ],
+    ctaTitle: '继续动手',
+    ctaBody: '速查只能救急，肌肉记忆还是靠写。',
+    ctaPlayground: '打开编辑器',
+    ctaLesson: '回到第一课',
   },
   privacy: {
     eyebrow: '透明度',

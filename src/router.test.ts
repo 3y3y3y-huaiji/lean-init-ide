@@ -44,6 +44,13 @@ describe('resolveRoute', () => {
     });
   });
 
+  it('resolves the reference page', () => {
+    expect(resolveRoute('/zh/reference', 'en')).toEqual({
+      kind: 'route',
+      route: { page: 'reference', locale: 'zh' },
+    });
+  });
+
   it('treats unrelated localized paths as not found', () => {
     expect(resolveRoute('/zh/nope', 'en')).toEqual({
       kind: 'route',

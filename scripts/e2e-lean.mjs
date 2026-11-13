@@ -245,6 +245,56 @@ const main = async () => {
     console.log(`[${stamp()}] 缩写候选: ${JSON.stringify(rows.slice(0, 3))}`);
   }
 
+  // 第六阶段：练习通过后写入完成进度，而不只是显示一次徽章。
+  let completionOk = false;
+  if (result?.ok && successText) {
+    await page.goto(`${origin}/zh/playground?lesson=math-parity&debug`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.click('[data-role="start"]');
+    await page.waitForSelector('[data-role="status"][data-state="ready"]', { timeout: 240_000 });
+    await page.evaluate(() => {
+      globalThis.__editor.setValue(
+        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  rcases h with ⟨k, rfl⟩\n  exact ⟨k * b, by rw [Nat.mul_assoc]⟩\n',
+      );
+    });
+    const completionDeadline = Date.now() + 30_000;
+    while (Date.now() < completionDeadline) {
+      await page.waitForTimeout(500);
+      completionOk = await page.evaluate(() => {
+        const badge = globalThis.document.querySelector('[data-role="passed"]');
+        const raw = globalThis.localStorage.getItem('lean:progress:completed') ?? '[]';
+        try {
+          return !badge?.hidden && JSON.parse(raw).includes('math-parity');
+        } catch {
+          return false;
+        }
+      });
+      if (completionOk) break;
+    }
+    if (!completionOk) {
+      console.error('E2E FAIL: 练习通过后没有写入完成进度');
+      process.exit(1);
+    }
+    console.log(`[${stamp()}] 完成进度已写入 math-parity`);
+  }
+
+  // 第七阶段：速查表路由必须能直接打开。
+  if (result?.ok) {
+    await page.goto(`${origin}/zh/reference`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('h1');
+    const referenceOk = await page.evaluate(() => {
+      const title = globalThis.document.querySelector('h1')?.textContent ?? '';
+      const text = globalThis.document.body.textContent ?? '';
+      return title.includes('速查') && text.includes('grind') && text.includes('type mismatch');
+    });
+    if (!referenceOk) {
+      console.error('E2E FAIL: 速查表页面没有正确渲染');
+      process.exit(1);
+    }
+    console.log(`[${stamp()}] 速查表页面正常`);
+  }
+
   await browser.close();
 
   if (!result?.ok) {

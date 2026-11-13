@@ -45,13 +45,31 @@ const main = async () => {
   const stamp = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
 
   await page.goto(`${origin}/zh/playground?debug`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1000);
 
+  // 慢 runner 上 Service Worker 的注册与激活可能超过 1s；等 ready 再断言，避免固定等待造成偶发失败。
   const env = await page.evaluate(async () => {
-    const registration = await navigator.serviceWorker.getRegistration();
+    const registration =
+      'serviceWorker' in navigator
+        ? await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((resolve) => setTimeout(() => resolve(null), 30_000)),
+          ])
+        : null;
+    const worker = registration?.active ?? null;
+    // ready 之后 active worker 可能还停在 activating，再等一次状态切换。
+    if (worker && worker.state !== 'activated') {
+      await Promise.race([
+        new Promise((resolve) => {
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'activated') resolve(null);
+          });
+        }),
+        new Promise((resolve) => setTimeout(resolve, 10_000)),
+      ]);
+    }
     return {
       crossOriginIsolated: globalThis.crossOriginIsolated,
-      worker: registration?.active?.state ?? null,
+      worker: worker?.state ?? null,
       controlled: Boolean(navigator.serviceWorker.controller),
     };
   });
@@ -65,7 +83,7 @@ const main = async () => {
       () =>
         new Promise((resolve) => {
           if (navigator.serviceWorker.controller) return resolve(true);
-          const timer = setTimeout(() => resolve(false), 5000);
+          const timer = setTimeout(() => resolve(false), 10_000);
           navigator.serviceWorker.addEventListener(
             'controllerchange',
             () => {

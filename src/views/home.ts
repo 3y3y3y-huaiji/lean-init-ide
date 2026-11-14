@@ -3,11 +3,11 @@ import { messagesFor, type Locale } from '../i18n';
 import { firstUncompletedLesson } from '../progress';
 import { FIRST_LESSON_SLUG } from '../router';
 
-export const renderHome = (
+const computeHomeState = (
   locale: Locale,
   visited: ReadonlySet<string> = new Set(),
   completed: ReadonlySet<string> = new Set(),
-): string => {
+) => {
   const t = messagesFor(locale).home;
   const lessonMsgs = messagesFor(locale).lesson;
   const lessonSlugs = lessonMsgs.lessons.map((lesson) => lesson.slug);
@@ -29,12 +29,23 @@ export const renderHome = (
         )
       : undefined;
 
+  return { t, lessonMsgs, target, cta, introLessons, mathLessons, introTarget, mathTarget };
+};
+
+export const renderHome = (
+  locale: Locale,
+  visited: ReadonlySet<string> = new Set(),
+  completed: ReadonlySet<string> = new Set(),
+): string => {
+  const { t, lessonMsgs, target, cta, introLessons, mathLessons, introTarget, mathTarget } =
+    computeHomeState(locale, visited, completed);
+
   const pathCard = (track: 'intro' | 'math', lessons: typeof introLessons, href: string) => `
     <article class="rounded-2xl border border-line bg-panel p-6">
       <h3 class="mt-0 mb-2 text-[17px] font-bold">${lessonMsgs.tracks[track].title}</h3>
       <p class="mt-0 mb-3 text-sm text-muted">${lessonMsgs.tracks[track].lead}</p>
       <p class="mt-0 mb-4 text-xs uppercase tracking-[0.08em] text-muted">${t.pathMeta(lessons.length)}</p>
-      <a class="${buttonClass}" href="/${locale}/learn/${href}">${t.courseCta}</a>
+      <a class="${buttonClass}" data-home-cta="${track}" href="/${locale}/learn/${href}">${t.courseCta}</a>
     </article>`;
 
   const features = t.features
@@ -53,7 +64,7 @@ export const renderHome = (
       <h1 class="mt-0 mb-4 text-[clamp(32px,5.4vw,52px)] tracking-[-0.02em]">${t.title}</h1>
       <p class="mt-0 mb-6.5 max-w-[640px] text-[clamp(15px,1.6vw,18px)] text-muted">${t.lead}</p>
       <div class="flex flex-wrap gap-3">
-        <a class="${buttonClass}" href="/${locale}/learn/${target}">${cta}</a>
+        <a class="${buttonClass}" data-home-cta="primary" href="/${locale}/learn/${target}">${cta}</a>
         <a class="${ghostButtonLgClass}" href="/${locale}/playground">${t.ctaSecondary}</a>
       </div>
     </section>
@@ -78,4 +89,23 @@ export const renderHome = (
       </article>
     </section>
   `;
+};
+
+/** SSG 静态页水合：就地更新进度相关的 CTA 链接与文案，避免整树重建重置 LCP。 */
+export const hydrateHome = (
+  root: HTMLElement,
+  locale: Locale,
+  visited: ReadonlySet<string> = new Set(),
+  completed: ReadonlySet<string> = new Set(),
+): void => {
+  const { cta, target, introTarget, mathTarget } = computeHomeState(locale, visited, completed);
+  const primary = root.querySelector<HTMLAnchorElement>('[data-home-cta="primary"]');
+  if (primary) {
+    primary.href = `/${locale}/learn/${target}`;
+    primary.textContent = cta;
+  }
+  const intro = root.querySelector<HTMLAnchorElement>('[data-home-cta="intro"]');
+  if (intro) intro.href = `/${locale}/learn/${introTarget}`;
+  const math = root.querySelector<HTMLAnchorElement>('[data-home-cta="math"]');
+  if (math && mathTarget) math.href = `/${locale}/learn/${mathTarget}`;
 };

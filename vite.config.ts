@@ -8,6 +8,7 @@ const headers = {
 
 export default defineConfig({
   plugins: [tailwindcss()],
+  build: { manifest: true },
   server: { headers },
   preview: { headers },
 });

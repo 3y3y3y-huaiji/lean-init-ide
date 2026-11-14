@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createProgressTracker } from './sw-progress';
+import { createAssetNotifyGate, createProgressTracker } from './sw-progress';
 
 describe('跨资产下载进度', () => {
   it('累计多个资产的已下载字节，总字节固定为清单大小', () => {
@@ -23,5 +23,19 @@ describe('跨资产下载进度', () => {
     const tracker = createProgressTracker(500);
 
     expect(tracker.record('a', -10)).toEqual({ loaded: 0, total: 500 });
+  });
+});
+
+describe('createAssetNotifyGate', () => {
+  it('不同并发资产独立节流且不互相丢包', () => {
+    const shouldNotify = createAssetNotifyGate(100);
+    expect(shouldNotify('a.bin', 1000, false)).toBe(true);
+    // 10ms 后另一个大文件上报不应被 a.bin 的时间戳拦截
+    expect(shouldNotify('b.bin', 1010, false)).toBe(true);
+    // 同一个文件在 100ms 窗口内被节流，完成消息强制放行
+    expect(shouldNotify('a.bin', 1050, false)).toBe(false);
+    expect(shouldNotify('a.bin', 1050, true)).toBe(true);
+    expect(shouldNotify('a.bin', 1101, false)).toBe(false);
+    expect(shouldNotify('a.bin', 1151, false)).toBe(true);
   });
 });

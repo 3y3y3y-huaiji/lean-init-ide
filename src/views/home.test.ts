@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { messagesFor } from '../i18n';
-import { renderHome } from './home';
+import { hydrateHome, renderHome } from './home';
 
 describe('首页渲染', () => {
   it('主行动按钮指向当前语言的课程页', () => {
@@ -46,5 +46,19 @@ describe('首页渲染', () => {
   it('两种语言的标题都出现在页面里', () => {
     expect(renderHome('zh')).toContain(messagesFor('zh').home.title);
     expect(renderHome('en')).toContain(messagesFor('en').home.title);
+  });
+
+  it('hydrateHome 原地更新进度链接与文案且不替换主标题节点', () => {
+    document.body.innerHTML = renderHome('zh');
+    const originalH1 = document.body.querySelector('h1');
+
+    hydrateHome(document.body, 'zh', new Set(['what-is-lean']), new Set(['what-is-lean']));
+
+    expect(document.body.querySelector('h1')).toBe(originalH1);
+    const primary = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="primary"]');
+    expect(primary?.getAttribute('href')).toBe('/zh/learn/first-proof');
+    expect(primary?.textContent).toBe(messagesFor('zh').home.continueCta);
+    const intro = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="intro"]');
+    expect(intro?.getAttribute('href')).toBe('/zh/learn/first-proof');
   });
 });

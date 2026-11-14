@@ -404,7 +404,42 @@ const main = async () => {
     if (telemetryStatus !== 204) {
       throw new Error(`/api/telemetry 期望 204，实际 ${telemetryStatus}`);
     }
-    console.log(`[${stamp()}] 速查表 / 英文路由 / 遥测端点正常`);
+
+    // 第十一阶段：验证 SSG 水合标记、根路径原地规范化，以及布局偏移 CLS < 0.05。
+    await page.addInitScript(() => {
+      globalThis.__e2eCls = 0;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (!entry.hadRecentInput) globalThis.__e2eCls += entry.value;
+        }
+      }).observe({ type: 'layout-shift', buffered: true });
+    });
+    for (const checkPath of ['/zh/learn/what-is-lean', '/zh/playground']) {
+      await page.goto(`${origin}${checkPath}`, { waitUntil: 'load' });
+      await page.waitForTimeout(400);
+      const perf = await page.evaluate(() => ({
+        ssg:
+          globalThis.document.head
+            .querySelector('meta[name="lean-ssg"]')
+            ?.getAttribute('content') ?? '',
+        h1: globalThis.document.querySelector('h1')?.textContent?.trim() ?? '',
+        cls: globalThis.__e2eCls ?? 0,
+      }));
+      if (perf.ssg !== checkPath) {
+        throw new Error(`${checkPath} 缺少匹配的 SSG 标记，实际为 "${perf.ssg}"`);
+      }
+      if (!perf.h1) throw new Error(`${checkPath} 主标题为空`);
+      if (perf.cls >= 0.05) {
+        throw new Error(`${checkPath} 累积布局偏移过大: CLS=${perf.cls.toFixed(4)}`);
+      }
+    }
+    await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('h1');
+    const rootPath = await page.evaluate(() => globalThis.location.pathname);
+    if (rootPath !== '/en/' && rootPath !== '/zh/') {
+      throw new Error(`根路径原地规范化失败，实际路径为 ${rootPath}`);
+    }
+    console.log(`[${stamp()}] 速查表 / 英文路由 / 遥测端点 / SSG 与 CLS 校验正常`);
     console.log(`E2E PASS: ${result.initializeLine?.trim()}`);
   } finally {
     await browser.close();

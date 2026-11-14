@@ -21,3 +21,21 @@ export const createProgressTracker = (totalBytes: number) => {
     },
   };
 };
+
+/** 按资产各自节流：多个并发下载的大文件互不抢占通知窗口。 */
+export const createAssetNotifyGate = (intervalMs = 100) => {
+  const lastAtByName = new Map<string, number>();
+
+  return (name: string, now: number, done: boolean): boolean => {
+    if (done) {
+      lastAtByName.set(name, now);
+      return true;
+    }
+    const previous = lastAtByName.get(name);
+    if (previous !== undefined && now - previous < intervalMs) {
+      return false;
+    }
+    lastAtByName.set(name, now);
+    return true;
+  };
+};

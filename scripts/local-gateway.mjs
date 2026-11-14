@@ -150,15 +150,23 @@ const serveStatic = (request, response) => {
     response.end();
     return;
   }
-  if (!existsSync(file) || statSync(file).isDirectory()) {
-    const candidate = path.join(dist, `${pathname.replace(/^\//, '')}.html`);
-    file = existsSync(candidate) ? candidate : path.join(dist, 'index.html');
+  if (existsSync(file) && statSync(file).isDirectory()) {
+    const index = path.join(file, 'index.html');
+    if (existsSync(index)) file = index;
   }
+  if (!existsSync(file) || statSync(file).isDirectory()) {
+    const trimmed = pathname.replace(/^\/+|\/+$/g, '');
+    const candidate = trimmed ? path.join(dist, `${trimmed}.html`) : '';
+    file = candidate && existsSync(candidate) ? candidate : path.join(dist, 'index.html');
+  }
+  const cacheControl = pathname.startsWith('/assets/')
+    ? 'public, max-age=31536000, immutable'
+    : 'no-cache';
   const headers = {
     ...pageHeaders,
     ...baseHeaders,
     'Content-Type': mime[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
-    'Cache-Control': file.endsWith('sw.js') ? 'no-cache' : 'no-cache',
+    'Cache-Control': cacheControl,
     'Content-Length': String(statSync(file).size),
   };
   response.writeHead(200, headers);

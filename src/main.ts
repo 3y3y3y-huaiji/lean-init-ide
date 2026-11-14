@@ -1,51 +1,19 @@
 import './index.css';
 import { applySourcePreference } from './asset-source';
-import { buttonClass } from './components/ui';
-import { detectLocale, loadLocale, messagesFor, type Locale } from './i18n';
+import { detectLocale, loadLocale, otherLocale } from './i18n';
 import { applyPageMeta } from './meta';
+import { pageTitle, renderNotFound } from './page-meta';
 import { readCompleted, readProgress } from './progress';
-import { resolveRoute, type Route } from './router';
+import { canonicalRoutePath, resolveRoute, type Route } from './router';
 import { initTelemetry, track } from './telemetry';
 import { bindLayout, renderLayout } from './views/layout';
-import { renderHome } from './views/home';
+import { hydrateHome, renderHome } from './views/home';
 import { renderPrivacy } from './views/privacy';
 
 const app = document.querySelector<HTMLElement>('#app');
 
 initTelemetry();
 void applySourcePreference(location.search);
-
-const renderNotFound = (locale: Locale): string => {
-  const t = messagesFor(locale).notFound;
-  return `
-    <section class="max-w-[560px] py-12">
-      <h1 class="mt-0 mb-3">${t.title}</h1>
-      <p class="mt-0 mb-5 text-muted">${t.body}</p>
-      <a class="${buttonClass}" href="/${locale}/">${t.cta}</a>
-    </section>
-  `;
-};
-
-const pageTitle = (route: Route): string => {
-  const t = messagesFor(route.locale);
-  switch (route.page) {
-    case 'lesson': {
-      const lesson =
-        t.lesson.lessons.find((item) => item.slug === route.slug) ?? t.lesson.lessons[0];
-      return `${lesson?.title ?? t.lesson.tocTitle} · Lean Init IDE`;
-    }
-    case 'playground':
-      return `${t.playground.title} · Lean Init IDE`;
-    case 'privacy':
-      return `${t.privacy.title} · Lean Init IDE`;
-    case 'reference':
-      return `${t.reference.title} · Lean Init IDE`;
-    case 'notFound':
-      return `${t.notFound.title} · Lean Init IDE`;
-    default:
-      return 'Lean Init IDE';
-  }
-};
 
 const boot = async (route: Route, root: HTMLElement) => {
   await loadLocale(route.locale);
@@ -58,8 +26,41 @@ const boot = async (route: Route, root: HTMLElement) => {
   document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
   track('boot', { page: route.page, locale: route.locale });
 
+  const ssgPath = document.head.querySelector<HTMLMetaElement>('meta[name="lean-ssg"]')?.content;
+  const canHydrate = Boolean(ssgPath && ssgPath === canonicalRoutePath(route));
+
+  if (canHydrate) {
+    // SSG 已预先渲染首屏 DOM，这里只原地补充交互状态，避免替换 #app 导致 LCP 延后或布局抖动。
+    if (location.search || location.hash) {
+      const langSwitch = root.querySelector<HTMLAnchorElement>('#lang-switch');
+      if (langSwitch) {
+        const rest = location.pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '') || '/';
+        langSwitch.href = `/${otherLocale(route.locale)}${rest}${location.search}${location.hash}`;
+      }
+    }
+    bindLayout(root, route.locale);
+    switch (route.page) {
+      case 'home':
+        hydrateHome(root, route.locale, readProgress(), readCompleted());
+        break;
+      case 'lesson': {
+        const { bindLesson } = await import('./views/lesson');
+        bindLesson(root, route.locale, route.slug);
+        break;
+      }
+      case 'playground': {
+        const { mountPlayground } = await import('./views/playground');
+        await mountPlayground(root, route.locale);
+        break;
+      }
+      default:
+        break;
+    }
+    return;
+  }
+
   let content: string;
-  let mount: (() => void) | undefined;
+  let mount: (() => void | Promise<void>) | undefined;
 
   switch (route.page) {
     case 'lesson': {
@@ -70,7 +71,7 @@ const boot = async (route: Route, root: HTMLElement) => {
     }
     case 'playground': {
       const { renderPlayground, mountPlayground } = await import('./views/playground');
-      content = renderPlayground();
+      content = renderPlayground(route.locale);
       mount = () => mountPlayground(root, route.locale);
       break;
     }
@@ -95,13 +96,18 @@ const boot = async (route: Route, root: HTMLElement) => {
     content,
   );
   bindLayout(root, route.locale);
-  mount?.();
+  await mount?.();
 };
 
-const resolution = resolveRoute(location.pathname, detectLocale());
+const fallbackLocale = detectLocale();
+let resolution = resolveRoute(location.pathname, fallbackLocale);
 
+// 用 history.replaceState 原地规范化 URL，避免再发一次整页 HTML 请求增加 TTFB。
 if (resolution.kind === 'redirect') {
-  location.replace(resolution.path);
-} else if (app) {
+  history.replaceState(null, '', `${resolution.path}${location.search}${location.hash}`);
+  resolution = resolveRoute(location.pathname, fallbackLocale);
+}
+
+if (resolution.kind === 'route' && app) {
   void boot(resolution.route, app);
 }

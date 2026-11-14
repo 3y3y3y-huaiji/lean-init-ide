@@ -26,7 +26,7 @@ import {
 } from './asset-sources.mjs';
 import { downloadRanges } from './sw-download';
 import { loadRangedAsset } from './sw-assemble';
-import { createProgressTracker } from './sw-progress';
+import { createAssetNotifyGate, createProgressTracker } from './sw-progress';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
 
@@ -151,17 +151,14 @@ sw.addEventListener('fetch', (event) => {
   );
 });
 
-let lastNotifyAt = 0;
+const shouldNotifyAsset = createAssetNotifyGate(100);
 
 async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
   const overall = progressTracker.record(name, loaded);
 
-  // 分片内进度按流式上报，多个资产同时下载时会很密；页面 10Hz 已经足够。
-  // 完成消息必须放行，否则进度条可能停在 99%。
-  const done = loaded >= total;
-  const now = Date.now();
-  if (!done && now - lastNotifyAt < 100) return;
-  lastNotifyAt = now;
+  // 分片内进度按资产各自节流；单资产或全局完成消息必须放行，否则进度条可能停在 99%。
+  const done = loaded >= total || overall.loaded >= overall.total;
+  if (!shouldNotifyAsset(name, Date.now(), done)) return;
 
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {

@@ -26,12 +26,23 @@ const themeIcons: Record<ThemePreference, string> = {
 
 const slidersIcon = `<svg ${iconAttrs}><path d="M2 4.5h3M9 4.5h5M2 11.5h5M11 11.5h3"/><circle cx="7" cy="4.5" r="1.6"/><circle cx="9" cy="11.5" r="1.6"/></svg>`;
 
-export const renderLayout = (locale: Locale, active: ActivePage, content: string): string => {
+export type LayoutUrl = {
+  pathname: string;
+  search?: string;
+  hash?: string;
+};
+
+export const renderLayout = (
+  locale: Locale,
+  active: ActivePage,
+  content: string,
+  url: LayoutUrl = typeof location !== 'undefined' ? location : { pathname: `/${locale}/` },
+): string => {
   const t = messagesFor(locale);
   const other = otherLocale(locale);
-  const rest = location.pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '') || '/';
+  const rest = url.pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '') || '/';
   // 切换语言时保留查询串：练习页的 ?lesson= 不能丢，否则会退回空白编辑器。
-  const suffix = `${location.search}${location.hash}`;
+  const suffix = `${url.search ?? ''}${url.hash ?? ''}`;
   const pref = getThemePreference();
   const themeLabel = `${t.theme.label} · ${t.theme[pref]}`;
 

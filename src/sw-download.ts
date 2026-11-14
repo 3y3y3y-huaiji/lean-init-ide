@@ -62,7 +62,8 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
 
   const ranges = buildRanges(total, chunkBytes);
   const parts = new Array<ArrayBuffer>(ranges.length);
-  let loaded = 0;
+  let committed = 0;
+  let maxReported = 0;
   let next = 0;
   // 正在下载的分片按 key 记录已收到的字节：4MB 分片在慢网络下要几十秒，
   // 只在分片完成时汇报会让进度条长时间停在原地，看起来像“没了”。
@@ -77,7 +78,10 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
     lastReportAt = at;
     let partial = 0;
     for (const bytes of inflight.values()) partial += bytes;
-    onProgress({ loaded: loaded + partial, total });
+    // 分片完成时先将字节并入 committed 再删除 inflight，并用单调上界兜底：
+    // 即便遇到瞬时分片重试清零 inflight，进度条也不会回退。
+    maxReported = Math.max(maxReported, Math.min(total, committed + partial));
+    onProgress({ loaded: maxReported, total });
   };
 
   const fetchOnce = async (start: number, end: number, budgetMs: number): Promise<ArrayBuffer> => {
@@ -97,6 +101,8 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
       if (bytes.byteLength !== expected) {
         throw new Error(`range ${start}-${end} returned ${bytes.byteLength} bytes`);
       }
+      committed += bytes.byteLength;
+      report(true);
       return bytes;
     }
 
@@ -115,14 +121,19 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
         report();
       }
     } catch (error) {
+      await reader.cancel().catch(() => {});
       inflight.delete(key);
       report(true);
       throw error;
     }
-    inflight.delete(key);
     if (received !== expected) {
+      inflight.delete(key);
+      report(true);
       throw new Error(`range ${start}-${end} returned ${received} bytes`);
     }
+    committed += received;
+    inflight.delete(key);
+    report(true);
     return bytes.buffer;
   };
 
@@ -165,10 +176,7 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
       next += 1;
       if (index >= ranges.length) return;
       const [start, end] = ranges[index]! satisfies ByteRange;
-      const part = await fetchRange(start, end, 0);
-      parts[index] = part;
-      loaded += part.byteLength;
-      report(true);
+      parts[index] = await fetchRange(start, end, 0);
     }
   };
 

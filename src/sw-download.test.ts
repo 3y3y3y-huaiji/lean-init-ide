@@ -175,4 +175,137 @@ describe('downloadRanges', () => {
 
     expect(peak).toBe(2);
   });
+
+  it('分片二分重试与并发交错时进度单调不减', async () => {
+    const body = bytes(16);
+    const seen: number[] = [];
+    let tick = 1000;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const [start, end] = rangeOf(init);
+      if (start === 0 && end === 7) {
+        let step = 0;
+        const cancel = vi.fn().mockResolvedValue(undefined);
+        return {
+          status: 206,
+          body: {
+            getReader: () => ({
+              cancel,
+              read: () => {
+                if (step === 0) {
+                  step += 1;
+                  tick += 200;
+                  return Promise.resolve({ done: false, value: body.slice(0, 3) });
+                }
+                return new Promise((_resolve, reject) => {
+                  init?.signal?.addEventListener(
+                    'abort',
+                    () => reject(init.signal?.reason ?? new Error('aborted')),
+                    { once: true },
+                  );
+                });
+              },
+            }),
+          },
+        } as unknown as Response;
+      }
+      const slice = body.slice(start, end + 1);
+      const mid = Math.ceil(slice.length / 2);
+      let step = 0;
+      return {
+        status: 206,
+        body: {
+          getReader: () => ({
+            cancel: vi.fn().mockResolvedValue(undefined),
+            read: async () => {
+              tick += 200;
+              if (step === 0) {
+                step += 1;
+                return { done: false, value: slice.slice(0, mid) };
+              }
+              if (step === 1) {
+                step += 1;
+                return { done: false, value: slice.slice(mid) };
+              }
+              return { done: true, value: undefined };
+            },
+          }),
+        },
+      } as unknown as Response;
+    });
+
+    const parts = await downloadRanges(
+      base({
+        fetchImpl,
+        total: 16,
+        chunkBytes: 8,
+        parallel: 2,
+        retries: 0,
+        timeoutMs: 30,
+        now: () => tick,
+        onProgress: ({ loaded }) => seen.push(loaded),
+      }),
+    );
+
+    expect(new Uint8Array(parts.flatMap((part) => [...new Uint8Array(part)]))).toEqual(body);
+    expect(seen.length).toBeGreaterThan(2);
+    for (let i = 1; i < seen.length; i += 1) {
+      expect(seen[i]!).toBeGreaterThanOrEqual(seen[i - 1]!);
+    }
+    expect(seen.at(-1)).toBe(16);
+  });
+
+  it('流式读取超出预期字节时取消 reader 并抛错', async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    let step = 0;
+    const fakeResponse = {
+      status: 206,
+      body: {
+        getReader: () => ({
+          read: vi.fn(async () => {
+            if (step === 0) {
+              step += 1;
+              return { done: false, value: new Uint8Array([1, 2, 3, 4, 5]) };
+            }
+            return { done: true, value: undefined };
+          }),
+          cancel,
+        }),
+      },
+    } as unknown as Response;
+
+    await expect(
+      downloadRanges(
+        base({
+          total: 4,
+          chunkBytes: 4,
+          retries: 0,
+          maxSplitDepth: 0,
+          fetchImpl: vi.fn(async () => fakeResponse),
+        }),
+      ),
+    ).rejects.toThrow('returned more than 4 bytes');
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('响应体缺少流式 reader 时仍正常触发完成进度', async () => {
+    const body = bytes(4);
+    const seen: number[] = [];
+    const fakeResponse = {
+      status: 206,
+      body: null,
+      arrayBuffer: async () => body.slice().buffer,
+    } as unknown as Response;
+
+    const parts = await downloadRanges(
+      base({
+        total: 4,
+        chunkBytes: 4,
+        fetchImpl: vi.fn(async () => fakeResponse),
+        onProgress: ({ loaded }) => seen.push(loaded),
+      }),
+    );
+
+    expect(new Uint8Array(parts[0]!)).toEqual(body);
+    expect(seen).toEqual([4]);
+  });
 });

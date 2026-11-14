@@ -20,11 +20,25 @@ import { findDeclaration } from '../lean-declaration';
 import { stripGoalFence } from '../lean-goal';
 import { LEAN_LANGUAGE_ID, registerLean } from '../lean-language';
 import { markLessonCompleted } from '../progress';
+import {
+  computeDiagnosticsLatencyMs,
+  decideCrashRecovery,
+  isAssetRelatedError,
+  nextAutoRestartDelayMs,
+} from '../lean-recovery';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
-import { buttonClass, ghostButtonClass } from './ui';
+import {
+  diagnosticBadgeClass,
+  diagnosticClass,
+  diagnosticLocationClass,
+  diagnosticMessageClass,
+  mutedItemClass,
+  renderLeanMarkup,
+  type LeanPanelVariant,
+} from './lean-markup';
 
 (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
   getWorker: () => new editorWorker(),
@@ -32,7 +46,7 @@ import { buttonClass, ghostButtonClass } from './ui';
 
 registerLean(monaco);
 
-export type LeanPanelVariant = 'full' | 'compact';
+export type { LeanPanelVariant };
 
 export type LeanPanelProgressKind = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -50,6 +64,8 @@ export type LeanPanelOptions = {
   locale: Locale;
   /** 面板可见时自动启动，省掉一次点击后的等待。 */
   autoStart?: boolean;
+  /** 主包加载前用户已主动点过「启动 Lean」：挂载后立即启动（不延迟、不受低内存自动启动限制）。 */
+  startImmediately?: boolean;
   /** 从课程练习进来时提供，用于显示「回到本课」并命名导出文件。 */
   lessonSlug?: string;
   /** 提供时按该 key 自动保存草稿，刷新后恢复。 */
@@ -72,261 +88,32 @@ export type LeanPanel = {
 
 export type { LspDiagnostic };
 
-const panelClass = (compact: boolean) =>
-  `flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-panel ${
-    compact ? 'max-h-[150px]' : 'max-[900px]:max-h-[320px]'
-  }`;
-
-const panelHeadingClass =
-  'm-0 flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px] text-xs font-[650] uppercase tracking-[0.07em] text-muted';
-
-const pillClass =
-  'inline-flex min-h-9 min-w-0 max-w-[240px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-line px-3 py-1 text-[13px] text-muted data-[state=loading]:border-warn/45 data-[state=loading]:text-warn data-[state=ready]:border-ok/45 data-[state=ready]:text-ok data-[state=error]:border-err/45 data-[state=error]:text-err';
-
-const mutedItemClass = 'mb-1 px-2 py-2 text-[13px] text-muted';
-
-const diagnosticClass =
-  'grid w-full [font:inherit] cursor-pointer grid-cols-[auto_auto_1fr] items-center gap-2 rounded-lg border border-line bg-transparent px-2 py-[7px] text-left text-fg hover:border-line-strong hover:bg-panel-soft';
-
-/** LSP severity：1 错误、2 警告、3 信息、4 提示；#eval / #check 的输出属于 3。 */
-const diagnosticLocationClass = (severity?: number) =>
-  `whitespace-nowrap font-mono text-xs leading-normal ${
-    severity === 2
-      ? 'text-warn'
-      : severity === 1 || severity === undefined
-        ? 'text-err'
-        : 'text-accent'
-  }`;
-
-const diagnosticBadgeClass = (severity?: number) =>
-  `whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-[650] leading-none ${
-    severity === 2
-      ? 'border-warn/40 bg-warn/10 text-warn'
-      : severity === 1 || severity === undefined
-        ? 'border-err/40 bg-err/10 text-err'
-        : 'border-accent/40 bg-accent-soft text-accent'
-  }`;
-
-const diagnosticMessageClass = 'text-[13px] leading-normal';
-
-const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compact: boolean) => `
-  <div
-    data-role="workspace"
-    class="${
-      compact
-        ? 'flex min-h-0 flex-1 flex-col gap-2 p-2.5'
-        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_6px_clamp(320px,32vw,380px)] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
-    }"
-  >
-    <section
-      ${compact ? 'data-role="editor-wrap" style="flex:0 0 45%"' : ''}
-      class="${
-        compact
-          ? 'relative min-h-[130px] overflow-hidden rounded-xl border border-line bg-editor-bg'
-          : 'relative h-[calc(100dvh-292px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52dvh] max-[900px]:min-h-[360px]'
-      }"
-    ><div class="absolute inset-0" data-role="editor"></div></section>
-    ${
-      compact
-        ? `<div
-             data-role="resize"
-             role="separator"
-             aria-orientation="horizontal"
-             title="${t.resizeHint}"
-             class="group flex h-3 shrink-0 cursor-row-resize touch-none items-center justify-center"
-           ><span class="h-[3px] w-12 rounded-full bg-line transition-colors group-hover:bg-accent"></span></div>`
-        : `<div
-             data-role="split"
-             role="separator"
-             aria-orientation="vertical"
-             title="${t.splitHint}"
-             class="flex cursor-col-resize touch-none items-center justify-center max-[900px]:hidden"
-           ><span class="h-12 w-[3px] rounded-full bg-line transition-colors hover:bg-accent"></span></div>`
-    }
-    <aside
-      data-role="aside"
-      class="${
-        compact
-          ? 'contents'
-          : 'flex h-[calc(100dvh-292px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
-      }"
-    >
-      <section data-panel="goal" class="${panelClass(compact)} shrink-0">
-        <h2 class="${panelHeadingClass}">${t.goalTitle}</h2>
-        <div
-          data-role="goal-statement"
-          hidden
-          class="truncate border-b border-line px-3.5 py-1.5 font-mono text-[11.5px] leading-[1.5] text-muted"
-        ></div>
-        <pre
-          data-role="goal"
-          class="m-0 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-[13px] leading-[1.6] text-fg ${
-            compact ? 'max-h-[64px]' : 'max-h-[170px]'
-          }"
-        >${t.goalPlaceholder}</pre>
-      </section>
-      <section data-panel="diagnostics" class="${panelClass(compact)} min-h-0 flex-1">
-        <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
-        <div
-          data-role="load-failure"
-          hidden
-          role="alert"
-          class="mx-2 mt-2 rounded-lg border border-err/45 bg-err/10 px-2.5 py-2 text-[12.5px] leading-normal"
-        >
-          <p data-role="load-failure-title" class="m-0 font-[650] text-err"></p>
-          <p data-role="load-failure-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
-          <p data-role="load-failure-error" class="m-0 mb-2 break-words font-mono text-[10.5px] leading-normal text-muted"></p>
-          <div class="flex flex-wrap gap-2">
-            <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="github">${t.sourceGithub}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-muted hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="auto">${t.sourceAuto}</button>
-          </div>
-        </div>
-        <div
-          data-role="crash"
-          hidden
-          role="alert"
-          class="mx-2 mt-2 rounded-lg border border-err/45 bg-err/10 px-2.5 py-2 text-[12.5px] leading-normal"
-        >
-          <p data-role="crash-title" class="m-0 font-[650] text-err"></p>
-          <p data-role="crash-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
-          <div class="flex flex-wrap gap-2">
-            <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="crash-restart">${t.restartLean}</button>
-            <button class="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:text-fg" type="button" data-role="crash-copy">${t.copyError}</button>
-          </div>
-        </div>
-        <div
-          data-role="run-ok"
-          hidden
-          role="status"
-          aria-live="polite"
-          class="mx-2 mt-2 flex items-start gap-2 rounded-lg border border-ok/45 bg-ok/10 px-2.5 py-2 text-[12.5px] leading-normal text-ok"
-        >
-          <span aria-hidden="true" class="text-[13px] font-bold leading-[1.4]">✓</span>
-          <span class="min-w-0">
-            <strong data-role="run-ok-title" class="font-[650]"></strong>
-            <span data-role="run-ok-detail" class="block text-[11.5px] text-muted"></span>
-          </span>
-        </div>
-        <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2 max-[900px]:max-h-[280px]">
-          <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
-        </ul>
-      </section>
-      ${
-        compact
-          ? `<details data-panel="log" class="${panelClass(true)} shrink-0">
-               <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">${t.expand}</span></summary>
-               <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
-             </details>`
-          : `<section data-panel="log" class="${panelClass(false)} flex-1">
-               <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
-               <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted max-[900px]:max-h-[220px]"></pre>
-             </section>`
-      }
-    </aside>
-  </div>
-`;
-
-const renderMarkup = (
-  locale: Locale,
-  variant: LeanPanelVariant,
-  t: ReturnType<typeof messagesFor>['playground'],
-  lessonSlug?: string,
-) => {
-  const compact = variant === 'compact';
-  const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
-  const start = `<button class="${buttonClass} max-[400px]:px-3" type="button" data-role="start">${t.start}</button>`;
-
-  const panelToggle = (key: string, label: string) => `
-    <label class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
-      <input type="checkbox" data-panel-toggle="${key}" checked class="accent-[var(--accent)]" />
-      <span>${label}</span>
-    </label>`;
-
-  const panelsMenu = (iconOnly: boolean) => `
-    <details class="relative shrink-0" data-role="panels">
-      <summary
-        class="${
-          iconOnly
-            ? 'flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg'
-            : `${ghostButtonClass} cursor-pointer list-none`
-        }"
-        title="${t.panelsTitle}"
-      >
-        ${
-          iconOnly
-            ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5h10M2 7h10M2 10.5h10"/></svg>`
-            : `${t.panelsTitle}
-               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>`
-        }
-      </summary>
-      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
-        <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
-        ${panelToggle('goal', t.goalTitle)}
-        ${panelToggle('diagnostics', t.diagnosticsTitle)}
-        ${panelToggle('log', t.logTitle)}
-      </div>
-    </details>`;
-
-  if (!compact) {
-    return `
-      <section class="flex min-h-[calc(100dvh-61px)] flex-col max-[900px]:min-h-0">
-        <div
-          class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start max-[900px]:gap-3"
-        >
-          <div class="min-w-0">
-            <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">Lean 4.34.1 · WebAssembly · Init only</p>
-            <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
-            <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${panelsMenu(false)}${status}${start}</div>
-        </div>
-        <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
-        <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">
-          ${
-            lessonSlug
-              ? `<a class="${ghostButtonClass}" href="/${locale}/learn/${encodeURIComponent(lessonSlug)}">← ${t.backToLesson}</a>`
-              : ''
-          }
-          <button class="${ghostButtonClass} data-[armed=true]:border-err/60 data-[armed=true]:bg-err/10 data-[armed=true]:text-err" type="button" data-role="reset">${t.resetCode}</button>
-          <button class="${ghostButtonClass}" type="button" data-role="export">${t.exportCode}</button>
-          <span data-role="passed" hidden class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-ok/45 bg-ok/10 px-3 py-1 text-xs font-[650] text-ok">✓ ${t.lessonPassed}</span>
-        </div>
-        ${renderWorkspace(t, false)}
-      </section>
-    `;
-  }
-
-  return `
-    <section class="flex h-full flex-col overflow-hidden rounded-[14px] border border-line bg-panel">
-      <div class="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
-        <div class="flex min-w-0 flex-col">
-          <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
-          <strong class="truncate text-sm">${t.title}</strong>
-        </div>
-        <div class="flex shrink-0 items-center gap-2">${status}${panelsMenu(true)}${start}</div>
-      </div>
-      <div class="h-[3px] shrink-0 bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
-      ${renderWorkspace(t, true)}
-      <div class="shrink-0 px-3.5 pb-3 pt-1.5 text-right text-xs">
-        <a class="text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
-      </div>
-    </section>
-  `;
-};
-
 export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): LeanPanel => {
-  const { variant, code, locale, autoStart = false, lessonSlug, draftKey, onProgress } = options;
+  const {
+    variant,
+    code,
+    locale,
+    autoStart = false,
+    startImmediately = false,
+    lessonSlug,
+    draftKey,
+    onProgress,
+  } = options;
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
   const draft = draftKey ? readDraft(draftKey) : null;
 
-  host.innerHTML = renderMarkup(locale, variant, t, lessonSlug);
+  // 若 SSG 已渲染完整外框且无需动态挂载练习回链，复用原 DOM 保持首屏 H1/布局不被替换。
+  const hasPrerendered =
+    !lessonSlug &&
+    host.querySelector<HTMLElement>('[data-ssr-markup]')?.dataset.ssrMarkup === variant;
+  if (!hasPrerendered) {
+    host.innerHTML = renderLeanMarkup(locale, variant, t, lessonSlug);
+  }
 
   const statusEl = host.querySelector<HTMLElement>('[data-role="status"]')!;
   const startEl = host.querySelector<HTMLButtonElement>('[data-role="start"]')!;
+  startEl.disabled = false;
   const barEl = host.querySelector<HTMLElement>('[data-role="bar"]')!;
   const logEl = host.querySelector<HTMLPreElement>('[data-role="log"]')!;
   const diagnosticsEl = host.querySelector<HTMLUListElement>('[data-role="diagnostics"]')!;
@@ -351,156 +138,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const exportEl = host.querySelector<HTMLButtonElement>('[data-role="export"]');
   const passedEl = host.querySelector<HTMLElement>('[data-role="passed"]');
 
-  const uri = 'file:///workspace/Main.lean';
-  const model = monaco.editor.createModel(
-    draft?.code ?? code,
-    LEAN_LANGUAGE_ID,
-    monaco.Uri.parse(uri),
-  );
-  const editor = monaco.editor.create(host.querySelector<HTMLElement>('[data-role="editor"]')!, {
-    model,
-    theme: getResolvedTheme() === 'light' ? 'vs' : 'vs-dark',
-    automaticLayout: true,
-    minimap: { enabled: false },
-    fontSize: 15,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-    lineHeight: 24,
-    scrollBeyondLastLine: false,
-    padding: { top: 16, bottom: 16 },
-    renderLineHighlight: 'all',
-    tabSize: 2,
-    wordWrap: 'on',
-  });
-
-  const stopThemeSync = onResolvedThemeChange((theme) => {
-    monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
-  });
-
-  // Lean 的 \to / \forall 缩写：Tab 或空格后替换成 Unicode 符号。
-  // 空格已经插入，所以替换范围要排除最后那个空格；Tab 则需要自己移动光标。
-  const expandAbbreviation = (offset: number): boolean => {
-    const position = editor.getPosition();
-    if (!position) return false;
-    const line = model.getLineContent(position.lineNumber);
-    const targetColumn = position.column - offset;
-    const match = matchAbbreviation(line, targetColumn);
-    if (!match) return false;
-    editor.executeEdits('lean-abbreviations', [
-      {
-        range: new monaco.Range(
-          position.lineNumber,
-          match.startColumn,
-          position.lineNumber,
-          targetColumn,
-        ),
-        text: match.symbol,
-        forceMoveMarkers: true,
-      },
-    ]);
-    if (offset === 0) {
-      editor.setPosition({
-        lineNumber: position.lineNumber,
-        column: match.startColumn + match.symbol.length,
-      });
-    }
-    return true;
-  };
-
-  editor.onKeyDown((event) => {
-    if (event.keyCode === monaco.KeyCode.Tab && expandAbbreviation(0)) {
-      event.preventDefault();
-    }
-  });
-
-  // Monaco 没有公开的单字符输入事件，这里从内容变更里识别「插入了一个空格」。
-  model.onDidChangeContent((event) => {
-    if (event.changes.length !== 1) return;
-    const change = event.changes[0];
-    if (change?.text === ' ' && change.rangeLength === 0) {
-      // 在变更事件里直接改文档会重入，推迟到当前事件处理完。
-      window.setTimeout(() => expandAbbreviation(1), 0);
-    }
-  });
-
-  // 输入 `\` 时给出缩写候选，忘了拼写也能选；选中后整段 `\name` 替换为符号。
-  monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
-    triggerCharacters: ['\\'],
-    provideCompletionItems: (completionModel, position) => {
-      const line = completionModel.getLineContent(position.lineNumber);
-      const query = findAbbreviationQuery(line, position.column);
-      if (!query) return { suggestions: [] };
-      const range = new monaco.Range(
-        position.lineNumber,
-        query.startColumn,
-        position.lineNumber,
-        position.column,
-      );
-      return {
-        suggestions: abbreviationSuggestions(query.query).map(({ name, symbol }, index) => ({
-          // 用对象形式的 label：Monaco 才会把 description 显示在每一行，而不是只在选中行显示 detail。
-          label: {
-            label: `\\${name}`,
-            description: `${symbol}\u2003\u2003${t.abbreviationDetail}`,
-          },
-          kind: monaco.languages.CompletionItemKind.Text,
-          insertText: symbol,
-          range,
-          // 用表内顺序而不是字母序，先出现 \to / \forall 这类高频缩写。
-          sortText: String(index).padStart(3, '0'),
-        })),
-      };
-    },
-  });
-
-  // 练习工具条：重置先进入一次「确认重置？」状态，再点才覆盖代码，避免手滑。
-  let resetArmTimer: number | undefined;
-  const disarmReset = () => {
-    window.clearTimeout(resetArmTimer);
-    if (!resetEl) return;
-    delete resetEl.dataset.armed;
-    resetEl.textContent = t.resetCode;
-  };
-
-  resetEl?.addEventListener('click', () => {
-    if (resetEl.dataset.armed !== 'true') {
-      if (model.getValue() === code) return;
-      resetEl.dataset.armed = 'true';
-      resetEl.textContent = t.resetConfirmAction;
-      window.clearTimeout(resetArmTimer);
-      resetArmTimer = window.setTimeout(disarmReset, 3000);
-      return;
-    }
-    disarmReset();
-    if (draftKey) clearDraft(draftKey);
-    if (passedEl) passedEl.hidden = true;
-    model.setValue(code);
-    editor.setPosition({ lineNumber: 1, column: 1 });
-    editor.revealLine(1);
-    editor.focus();
-  });
-  resetEl?.addEventListener('blur', disarmReset);
-
-  exportEl?.addEventListener('click', () => {
-    const blob = new Blob([model.getValue()], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${lessonSlug ?? 'playground'}.lean`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  });
-
-  // 只有带 sorry 的具名练习才有「过关」概念；还必须保留 starter 里的定理名。
-  const exerciseStarter = isExerciseStarter(code);
-  const updatePassedBadge = (list: LspDiagnostic[]) => {
-    if (!exerciseStarter) return;
-    const solved = isExerciseSolved(code, model.getValue(), list);
-    if (passedEl) passedEl.hidden = !solved;
-    // 从课程练习进入 playground 时带 lessonSlug：通过即写入完成进度。
-    if (solved && lessonSlug) markLessonCompleted(lessonSlug);
-  };
-
-  // 编辑器与诊断的空间分配由用户拖动决定；面板显隐也持久化，避免每次进来重调。
+  // 先恢复分栏宽度、编辑器占比与面板显隐，再创建 Monaco，避免首帧后布局重排引发 CLS。
   const LAYOUT_KEY = 'lean-panel:layout';
   const PANELS_KEY = 'lean-panel:panels';
   const DEFAULT_RATIO = 0.45;
@@ -671,6 +309,156 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     });
   }
 
+  const uri = 'file:///workspace/Main.lean';
+  const model = monaco.editor.createModel(
+    draft?.code ?? code,
+    LEAN_LANGUAGE_ID,
+    monaco.Uri.parse(uri),
+  );
+  const editor = monaco.editor.create(host.querySelector<HTMLElement>('[data-role="editor"]')!, {
+    model,
+    theme: getResolvedTheme() === 'light' ? 'vs' : 'vs-dark',
+    automaticLayout: true,
+    minimap: { enabled: false },
+    fontSize: 15,
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    lineHeight: 24,
+    scrollBeyondLastLine: false,
+    padding: { top: 16, bottom: 16 },
+    renderLineHighlight: 'all',
+    tabSize: 2,
+    wordWrap: 'on',
+  });
+  editor.layout();
+
+  const stopThemeSync = onResolvedThemeChange((theme) => {
+    monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
+  });
+
+  // Lean 的 \to / \forall 缩写：Tab 或空格后替换成 Unicode 符号。
+  // 空格已经插入，所以替换范围要排除最后那个空格；Tab 则需要自己移动光标。
+  const expandAbbreviation = (offset: number): boolean => {
+    const position = editor.getPosition();
+    if (!position) return false;
+    const line = model.getLineContent(position.lineNumber);
+    const targetColumn = position.column - offset;
+    const match = matchAbbreviation(line, targetColumn);
+    if (!match) return false;
+    editor.executeEdits('lean-abbreviations', [
+      {
+        range: new monaco.Range(
+          position.lineNumber,
+          match.startColumn,
+          position.lineNumber,
+          targetColumn,
+        ),
+        text: match.symbol,
+        forceMoveMarkers: true,
+      },
+    ]);
+    if (offset === 0) {
+      editor.setPosition({
+        lineNumber: position.lineNumber,
+        column: match.startColumn + match.symbol.length,
+      });
+    }
+    return true;
+  };
+
+  editor.onKeyDown((event) => {
+    if (event.keyCode === monaco.KeyCode.Tab && expandAbbreviation(0)) {
+      event.preventDefault();
+    }
+  });
+
+  // Monaco 没有公开的单字符输入事件，这里从内容变更里识别「插入了一个空格」。
+  model.onDidChangeContent((event) => {
+    if (event.changes.length !== 1) return;
+    const change = event.changes[0];
+    if (change?.text === ' ' && change.rangeLength === 0) {
+      // 在变更事件里直接改文档会重入，推迟到当前事件处理完。
+      window.setTimeout(() => expandAbbreviation(1), 0);
+    }
+  });
+
+  // 输入 `\` 时给出缩写候选，忘了拼写也能选；选中后整段 `\name` 替换为符号。
+  monaco.languages.registerCompletionItemProvider(LEAN_LANGUAGE_ID, {
+    triggerCharacters: ['\\'],
+    provideCompletionItems: (completionModel, position) => {
+      const line = completionModel.getLineContent(position.lineNumber);
+      const query = findAbbreviationQuery(line, position.column);
+      if (!query) return { suggestions: [] };
+      const range = new monaco.Range(
+        position.lineNumber,
+        query.startColumn,
+        position.lineNumber,
+        position.column,
+      );
+      return {
+        suggestions: abbreviationSuggestions(query.query).map(({ name, symbol }, index) => ({
+          // 用对象形式的 label：Monaco 才会把 description 显示在每一行，而不是只在选中行显示 detail。
+          label: {
+            label: `\\${name}`,
+            description: `${symbol}\u2003\u2003${t.abbreviationDetail}`,
+          },
+          kind: monaco.languages.CompletionItemKind.Text,
+          insertText: symbol,
+          range,
+          // 用表内顺序而不是字母序，先出现 \to / \forall 这类高频缩写。
+          sortText: String(index).padStart(3, '0'),
+        })),
+      };
+    },
+  });
+
+  // 练习工具条：重置先进入一次「确认重置？」状态，再点才覆盖代码，避免手滑。
+  let resetArmTimer: number | undefined;
+  const disarmReset = () => {
+    window.clearTimeout(resetArmTimer);
+    if (!resetEl) return;
+    delete resetEl.dataset.armed;
+    resetEl.textContent = t.resetCode;
+  };
+
+  resetEl?.addEventListener('click', () => {
+    if (resetEl.dataset.armed !== 'true') {
+      if (model.getValue() === code) return;
+      resetEl.dataset.armed = 'true';
+      resetEl.textContent = t.resetConfirmAction;
+      window.clearTimeout(resetArmTimer);
+      resetArmTimer = window.setTimeout(disarmReset, 3000);
+      return;
+    }
+    disarmReset();
+    if (draftKey) clearDraft(draftKey);
+    if (passedEl) passedEl.hidden = true;
+    model.setValue(code);
+    editor.setPosition({ lineNumber: 1, column: 1 });
+    editor.revealLine(1);
+    editor.focus();
+  });
+  resetEl?.addEventListener('blur', disarmReset);
+
+  exportEl?.addEventListener('click', () => {
+    const blob = new Blob([model.getValue()], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${lessonSlug ?? 'playground'}.lean`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  });
+
+  // 只有带 sorry 的具名练习才有「过关」概念；还必须保留 starter 里的定理名。
+  const exerciseStarter = isExerciseStarter(code);
+  const updatePassedBadge = (list: LspDiagnostic[]) => {
+    if (!exerciseStarter) return;
+    const solved = isExerciseSolved(code, model.getValue(), list);
+    if (passedEl) passedEl.hidden = !solved;
+    // 从课程练习进入 playground 时带 lessonSlug：通过即写入完成进度。
+    if (solved && lessonSlug) markLessonCompleted(lessonSlug);
+  };
+
   const log = (message: string) => {
     logEl.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
     logEl.scrollTop = logEl.scrollHeight;
@@ -697,6 +485,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let debounceTimer: number | undefined;
   // 成功提示必须等 documentSymbol 屏障和诊断静默窗口结束后再显示，避免先亮后灭。
   let successTimer: number | undefined;
+  let settleTimer: number | undefined;
   let successSeq = 0;
   // 屏障不可用（请求失败、返回 null 或超时）时退化为更长的静默窗口，不能让提示永远不出现。
   let barrierFallbackLogged = false;
@@ -716,7 +505,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let engineEverReady = false;
   let recoveryPending = false;
   let recoveryAttempt = 0;
+  let autoRecoverTimer: number | undefined;
+  let autoStartTimer: number | undefined;
+  let startInflight: Promise<boolean> | null = null;
   let lastCrashAt = 0;
+
+  const cancelAutoRecover = () => {
+    window.clearTimeout(autoRecoverTimer);
+    autoRecoverTimer = undefined;
+  };
+
+  const cancelAutoStart = () => {
+    window.clearTimeout(autoStartTimer);
+    autoStartTimer = undefined;
+  };
   let lastCrashMessage = '';
   let lastStartError: string | null = null;
   let lastAssetFallback: { name: string; message: string } | null = null;
@@ -835,6 +637,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const resetRunOk = () => {
     successSeq += 1;
     window.clearTimeout(successTimer);
+    successTimer = undefined;
+    window.clearTimeout(settleTimer);
+    settleTimer = undefined;
     if (runOkEl) runOkEl.hidden = true;
   };
 
@@ -844,7 +649,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
    * 屏障本身失败（返回 null、报错或超时）时不能一直不亮：退化为 600ms 静默窗口，
    * 期间只要有新诊断就会被 resetRunOk 撤销。
    */
-  const confirmRunSettled = async (seq: number, warningCount: number) => {
+  const confirmRunSettled = async (seq: number, warningCount: number, latencyMs: number) => {
     if (variant !== 'full' || seq !== successSeq || !session.isReady) return;
     let barrierOk = !runBarrierDisabled;
     if (barrierOk) {
@@ -858,20 +663,22 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         barrierOk = false;
       }
     }
+    if (seq !== successSeq || !session.isReady) return;
     if (!barrierOk && !barrierFallbackLogged) {
       barrierFallbackLogged = true;
       log(t.logRunBarrierFallback);
     }
-    window.setTimeout(
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(
       () => {
+        settleTimer = undefined;
         if (seq !== successSeq || !session.isReady) return;
         if (!runOkEl || !runOkTitleEl || !runOkDetailEl) return;
         if (lastDiagnostics.some((item) => item.severity === 1 || item.severity === undefined)) {
           return;
         }
-        const latency = lastEditAt ? performance.now() - lastEditAt : 0;
         runOkTitleEl.textContent = t.runPassed;
-        runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
+        runOkDetailEl.textContent = t.runPassedDetail(warningCount, latencyMs);
         runOkEl.hidden = false;
       },
       barrierOk ? 150 : 600,
@@ -885,7 +692,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const showLoadFailure = (message: string) => {
     if (!loadFailureEl || !loadFailureTitleEl || !loadFailureDetailEl || !loadFailureErrorEl)
       return;
-    const assetRelated = /asset|fetch|network|timeout|aborted|runtime/i.test(message);
+    const assetRelated = isAssetRelatedError(message);
     loadFailureTitleEl.textContent = assetRelated ? t.loadFailureTitle : t.startFailureTitle;
     loadFailureDetailEl.textContent = assetRelated ? t.loadFailureDetail : '';
     loadFailureDetailEl.hidden = !assetRelated;
@@ -898,7 +705,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const renderDiagnostics = (params: { uri: string; diagnostics: LspDiagnostic[] }) => {
     if (params.uri.toLowerCase() !== uri.toLowerCase()) return;
 
-    const latency = lastEditAt ? performance.now() - lastEditAt : 0;
+    const latency = computeDiagnosticsLatencyMs(lastEditAt, performance.now());
     if (!firstDiagnosticsReported) {
       firstDiagnosticsReported = true;
       track('first_diagnostics', {
@@ -907,7 +714,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       });
     }
     diagnosticSeq += 1;
-    setStatus(t.statusReady(diagnosticSeq, Math.round(latency)), 'ready');
+    setStatus(t.statusReady(diagnosticSeq, latency), 'ready');
 
     monaco.editor.setModelMarkers(
       model,
@@ -934,10 +741,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     const warningCount = params.diagnostics.filter(
       (diagnostic) => diagnostic.severity === 2,
     ).length;
-    if (errorCount === 0) {
+    if (variant === 'full' && errorCount === 0) {
       const seq = successSeq;
       successTimer = window.setTimeout(() => {
-        void confirmRunSettled(seq, warningCount);
+        successTimer = undefined;
+        void confirmRunSettled(seq, warningCount, latency);
       }, 200);
     }
 
@@ -947,7 +755,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (params.diagnostics.length === 0) {
       const item = document.createElement('li');
       item.className = mutedItemClass;
-      item.textContent = t.statusNoDiagnostics(Math.round(latency));
+      item.textContent = t.statusNoDiagnostics(latency);
       diagnosticsEl.append(item);
       return;
     }
@@ -1254,6 +1062,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   /** 关闭引擎：终止 worker 并释放它占的内存，编辑器内容保留。 */
   const stop = () => {
+    cancelAutoStart();
+    cancelAutoRecover();
+    window.clearTimeout(debounceTimer);
+    window.clearTimeout(goalTimer);
     session.stop();
     engineEverReady = false;
     recoveryPending = false;
@@ -1275,8 +1087,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     log(t.logStopped);
   };
 
-  const start = async (): Promise<boolean> => {
-    if (startEl.disabled) return false;
+  const runStart = async (): Promise<boolean> => {
     startEl.disabled = true;
     lastStartError = null;
     lastAssetFallback = null;
@@ -1349,8 +1160,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       }
       return false;
     } finally {
+      startInflight = null;
       startEl.disabled = false;
     }
+  };
+
+  const start = (): Promise<boolean> => {
+    cancelAutoRecover();
+    if (startInflight) return startInflight;
+    startInflight = runStart();
+    return startInflight;
   };
 
   startEl.addEventListener('click', () => {
@@ -1365,12 +1184,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   function handleRuntimeCrash(message: string) {
     const now = Date.now();
     // 同一次崩溃可能同时触发 onStatus 与 run 失败，2 秒内只处理第一条。
-    if (now - lastCrashAt < 2000) return;
-    // 课程内联面板不自动重启：它没有可见的崩溃横幅，交给代码块输出里的按钮显式恢复。
-    const canAutoRestart = variant === 'full' && now - lastCrashAt > 60_000;
+    const decision = decideCrashRecovery({ variant, now, lastCrashAt });
+    if (decision === 'ignore') return;
+    const canAutoRestart = decision === 'auto';
     lastCrashAt = now;
     lastCrashMessage = message;
 
+    cancelAutoRecover();
     session.stop();
     engineEverReady = false;
     recoveryPending = true;
@@ -1412,28 +1232,35 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     reportError('runtime-crash', message);
 
     if (canAutoRestart) {
-      log(t.logAutoRestart);
-      const autoRecover = (attempt: number) => {
+      const scheduleAutoRecover = (attempt: number) => {
+        const delay = nextAutoRestartDelayMs(attempt);
+        if (delay === null) {
+          if (crashRestartEl) crashRestartEl.disabled = false;
+          return;
+        }
+        recoveryAttempt = attempt;
+        log(t.logAutoRestart);
+        cancelAutoRecover();
         // 第一次等旧连接的 pending 请求结算后再启动；失败则再试一次，避免把瞬时竞态丢给用户。
-        window.setTimeout(
-          () => {
-            void start().then((ok) => {
-              if (ok || !recoveryPending) return;
-              if (attempt === 0) {
-                recoveryAttempt = 1;
-                log(t.logAutoRestart);
-                autoRecover(1);
-              }
-            });
-          },
-          attempt === 0 ? 800 : 1600,
-        );
+        autoRecoverTimer = window.setTimeout(() => {
+          autoRecoverTimer = undefined;
+          if (!recoveryPending) return;
+          void start().then((ok) => {
+            if (ok || !recoveryPending) return;
+            if (attempt === 0) {
+              scheduleAutoRecover(1);
+            } else if (crashRestartEl) {
+              crashRestartEl.disabled = false;
+            }
+          });
+        }, delay);
       };
-      autoRecover(0);
+      scheduleAutoRecover(0);
     }
   }
 
   crashRestartEl?.addEventListener('click', () => {
+    cancelAutoRecover();
     crashRestartEl.disabled = true;
     recoveryPending = true;
     recoveryAttempt = 1;
@@ -1466,6 +1293,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   const switchSource = (mode: AssetSourcePreference) => {
     const label = sourceLabel(mode);
+    cancelAutoStart();
+    cancelAutoRecover();
     for (const button of sourceButtons) button.disabled = true;
     hideLoadFailure();
     setStatus(t.sourceSwitching(label), 'loading');
@@ -1504,14 +1333,21 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     });
   }
 
-  if (autoStart && memoryTier !== 'low') {
+  if (startImmediately) {
+    void start();
+  } else if (autoStart && memoryTier !== 'low') {
     // 直接排一个短定时器：比 IntersectionObserver 更确定，也让下载尽早开始。
-    window.setTimeout(() => {
+    autoStartTimer = window.setTimeout(() => {
+      autoStartTimer = undefined;
       void start();
     }, 400);
   }
 
   window.addEventListener('pagehide', () => {
+    cancelAutoStart();
+    cancelAutoRecover();
+    resetRunOk();
+    window.clearTimeout(resetArmTimer);
     window.clearTimeout(draftTimer);
     window.clearTimeout(debounceTimer);
     window.clearTimeout(goalTimer);
@@ -1536,6 +1372,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     run,
     getProgress: () => ({ label: progressLabel, kind: progressKind, ratio: progressRatio }),
     restart: async () => {
+      cancelAutoStart();
+      cancelAutoRecover();
+      resetRunOk();
       session.stop();
       engineEverReady = false;
       recoveryPending = false;

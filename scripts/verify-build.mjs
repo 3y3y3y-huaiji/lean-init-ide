@@ -45,7 +45,7 @@ if (!(await exists(dist))) {
   process.exit(1);
 }
 
-// 1. 应用入口
+// 1. 应用入口与预渲染静态页
 const indexPath = resolve(dist, 'index.html');
 if (!(await exists(indexPath))) {
   fail('缺少 dist/index.html');
@@ -53,6 +53,27 @@ if (!(await exists(indexPath))) {
   const html = await readFile(indexPath, 'utf8');
   if (!html.includes('<div id="app">')) fail('index.html 缺少 #app 挂载点');
   if (!/<script[^>]+src="\/assets\//.test(html)) fail('index.html 没有引用打包后的入口脚本');
+}
+for (const rel of [
+  'zh/index.html',
+  'en/index.html',
+  'zh/playground.html',
+  'en/playground.html',
+  'zh/learn/what-is-lean.html',
+  'en/learn/what-is-lean.html',
+]) {
+  const file = resolve(dist, rel);
+  if (!(await exists(file))) {
+    fail(`缺少预渲染页面 dist/${rel}`);
+    continue;
+  }
+  const html = await readFile(file, 'utf8');
+  if (!html.includes('<div id="app">')) fail(`dist/${rel} 缺少 #app 挂载点`);
+  if (!html.includes('<meta name="lean-ssg"')) fail(`dist/${rel} 缺少 lean-ssg 标记`);
+  if (!/<h1[^>]*>[^<]+<\/h1>/.test(html)) fail(`dist/${rel} 没有预渲染主标题 <h1>`);
+}
+if (await exists(resolve(dist, '.vite'))) {
+  fail('dist/.vite 清单目录未在构建后清理');
 }
 
 // 2. Service Worker

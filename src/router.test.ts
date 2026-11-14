@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveRoute } from './router';
+import { canonicalRoutePath, resolveRoute } from './router';
 
 describe('resolveRoute', () => {
   it('resolves localized home', () => {
@@ -74,5 +74,17 @@ describe('resolveRoute', () => {
       kind: 'redirect',
       path: '/zh/learn/first-proof',
     });
+  });
+
+  it('formats canonical paths consistently for SSG matching', () => {
+    expect(canonicalRoutePath({ page: 'home', locale: 'zh' })).toBe('/zh/');
+    expect(canonicalRoutePath({ page: 'lesson', locale: 'en', slug: 'induction' })).toBe(
+      '/en/learn/induction',
+    );
+    expect(canonicalRoutePath({ page: 'lesson', locale: 'zh' })).toBe('/zh/learn/what-is-lean');
+    expect(canonicalRoutePath({ page: 'playground', locale: 'zh' })).toBe('/zh/playground');
+    expect(canonicalRoutePath({ page: 'reference', locale: 'en' })).toBe('/en/reference');
+    expect(canonicalRoutePath({ page: 'privacy', locale: 'zh' })).toBe('/zh/privacy');
+    expect(canonicalRoutePath({ page: 'notFound', locale: 'en' })).toBe('/en/');
   });
 });

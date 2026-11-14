@@ -8,9 +8,9 @@
   "scripts": {
     "dev": "vite",
     "predev": "node scripts/fetch-assets.mjs && pnpm run build:sw",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender.mjs",
     "prebuild": "node scripts/fetch-assets.mjs && pnpm run build:sw",
-    "build:web": "pnpm run build:sw && vite build",
+    "build:web": "pnpm run build:sw && vite build && node scripts/prerender.mjs",
     "build:sw": "esbuild src/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js",
     "preview": "vite preview",
     "gateway": "node scripts/local-gateway.mjs",

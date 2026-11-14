@@ -1,14 +1,16 @@
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 const STORAGE_KEY = 'lean:theme';
-const systemQuery = window.matchMedia('(prefers-color-scheme: light)');
+const systemQuery = isBrowser ? window.matchMedia('(prefers-color-scheme: light)') : null;
 const listeners = new Set<(theme: ResolvedTheme) => void>();
 
 let preference = readPreference();
 let resolved = resolve(preference);
 
 function readPreference(): ThemePreference {
+  if (!isBrowser) return 'system';
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
@@ -19,11 +21,12 @@ function readPreference(): ThemePreference {
 }
 
 function resolve(value: ThemePreference): ResolvedTheme {
-  if (value === 'system') return systemQuery.matches ? 'light' : 'dark';
+  if (value === 'system') return systemQuery?.matches ? 'light' : 'dark';
   return value;
 }
 
 function paint() {
+  if (!isBrowser) return;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.dataset.themePreference = preference;
 }
@@ -62,7 +65,7 @@ export const onResolvedThemeChange = (listener: (theme: ResolvedTheme) => void) 
   return () => listeners.delete(listener);
 };
 
-systemQuery.addEventListener('change', () => {
+systemQuery?.addEventListener('change', () => {
   if (preference !== 'system') return;
   const next = resolve('system');
   if (next === resolved) return;

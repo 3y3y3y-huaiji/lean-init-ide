@@ -192,8 +192,9 @@ describe('课程页交互绑定', () => {
     expect(done?.textContent).toContain(t.completedLabel);
   });
 
-  it('挂载隐藏的 runner，用紧凑变体且不预置代码', () => {
+  it('挂载隐藏的 runner，用紧凑变体且不预置代码', async () => {
     bindLesson(document.body, 'zh', 'first-proof');
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(createLeanPanel).toHaveBeenCalledTimes(1);
     const [, options] = createLeanPanel.mock.calls[0] as [
@@ -204,6 +205,37 @@ describe('课程页交互绑定', () => {
     expect(options.locale).toBe('zh');
     // 预置代码会被语言服务器先声明一次，用户点同一块时就变成重复声明。
     expect(options.code).toBe('');
+  });
+
+  it('低内存或省流模式下不主动挂载 Monaco，直到用户点击运行才按需加载一次', async () => {
+    Object.defineProperty(navigator, 'deviceMemory', { value: 2, configurable: true });
+    const panel = makePanel();
+    panel.run.mockResolvedValue([]);
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+
+    bindLesson(document.body, 'zh', 'first-proof');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(createLeanPanel).not.toHaveBeenCalled();
+
+    const first = document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!;
+    first.click();
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]')!;
+    expect(output.hidden).toBe(false);
+    expect(output.textContent).toContain('加载运行时…');
+    expect(first.disabled).toBe(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(createLeanPanel).toHaveBeenCalledTimes(1);
+    expect(panel.run).toHaveBeenCalledTimes(1);
+    expect(first.disabled).toBe(false);
+
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="1"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(createLeanPanel).toHaveBeenCalledTimes(1);
+    expect(panel.run).toHaveBeenCalledTimes(2);
+
+    delete (navigator as { deviceMemory?: number }).deviceMemory;
   });
 
   it('点运行把对应代码交给引擎，并把诊断渲染到输出区', async () => {
@@ -283,6 +315,7 @@ describe('课程页交互绑定', () => {
       document.body.querySelector<HTMLButtonElement>('button[data-run-index="1"]')!.disabled,
     ).toBe(true);
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const options = createLeanPanel.mock.calls[0]?.[1] as {
       onProgress?: (progress: { label: string; kind: string; ratio: number | null }) => void;
     };
@@ -298,9 +331,10 @@ describe('课程页交互绑定', () => {
     expect(button.disabled).toBe(false);
   });
 
-  it('代码块运行失败时显示重启按钮，点击后调用 panel.restart', async () => {
+  it('代码块运行失败时显示重启按钮，重启成功后就地自动重跑当前代码块', async () => {
     const panel = makePanel();
-    panel.run.mockRejectedValue(new Error('Lean pthread failed'));
+    panel.run.mockRejectedValueOnce(new Error('Lean pthread failed')).mockResolvedValueOnce([]);
+    panel.restart.mockResolvedValueOnce(true);
     createLeanPanel.mockReturnValue(panel);
     document.body.innerHTML = renderLesson('zh', 'first-proof');
     bindLesson(document.body, 'zh', 'first-proof');
@@ -315,8 +349,62 @@ describe('课程页交互绑定', () => {
 
     restart!.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(panel.restart).toHaveBeenCalledTimes(1);
-    expect(restart!.textContent).toContain(messagesFor('zh').lesson.restartDone);
+    expect(panel.run).toHaveBeenCalledTimes(2);
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.noOutput);
+  });
+
+  it('课程页重启失败时恢复按钮可再次尝试', async () => {
+    const panel = makePanel();
+    panel.run.mockRejectedValue(new Error('Lean worker crashed'));
+    panel.restart.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('boom'));
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
+    const restart = document.body.querySelector<HTMLButtonElement>(
+      '[data-output="0"] [data-role="restart-lean"]',
+    )!;
+    restart.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(restart.disabled).toBe(false);
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.restartFailed);
+
+    restart.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(restart.disabled).toBe(false);
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.restartFailed);
+  });
+
+  it('编辑器分片尚未挂载就失败时同样渲染错误卡片并支持就地重试', async () => {
+    const panel = makePanel();
+    panel.run.mockResolvedValueOnce([]);
+    createLeanPanel
+      .mockImplementationOnce(() => {
+        throw new Error('Failed to fetch dynamically imported module');
+      })
+      .mockReturnValueOnce(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.runCrashed);
+    expect(output?.textContent).toContain('Failed to fetch dynamically imported module');
+    const retry = document.body.querySelector<HTMLButtonElement>(
+      '[data-output="0"] [data-role="restart-lean"]',
+    )!;
+    retry.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(panel.run).toHaveBeenCalledTimes(1);
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.noOutput);
   });
 
   it('缺少挂载点时安全退出', () => {

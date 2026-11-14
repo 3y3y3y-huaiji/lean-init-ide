@@ -41,3 +41,18 @@ export const resolveRoute = (pathname: string, fallbackLocale: Locale): RouteRes
   }
   return { kind: 'route', route: { page: 'notFound', locale: first } };
 };
+
+export const canonicalRoutePath = (route: Route): string => {
+  switch (route.page) {
+    case 'lesson':
+      return `/${route.locale}/learn/${route.slug ?? FIRST_LESSON_SLUG}`;
+    case 'playground':
+      return `/${route.locale}/playground`;
+    case 'reference':
+      return `/${route.locale}/reference`;
+    case 'privacy':
+      return `/${route.locale}/privacy`;
+    default:
+      return `/${route.locale}/`;
+  }
+};

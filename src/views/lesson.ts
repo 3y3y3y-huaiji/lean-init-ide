@@ -1,9 +1,4 @@
-import {
-  createLeanPanel,
-  type LeanPanel,
-  type LeanPanelProgress,
-  type LspDiagnostic,
-} from '../components/lean-panel';
+import type { LeanPanel, LeanPanelProgress, LspDiagnostic } from '../components/lean-panel';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
@@ -270,12 +265,13 @@ export const dropSpuriousRedeclarations = (list: LspDiagnostic[], code: string):
     return occurrences > 1;
   });
 
-/** 课程代码块运行失败：给出错误和就地重启按钮，不要求用户刷新整页。 */
+/** 课程代码块运行失败或分片加载失败：给出统一错误卡片和就地重试/重启按钮，不要求刷新整页。 */
 const renderRunFailure = (
   output: HTMLElement,
   message: string,
-  panel: LeanPanel,
+  panel: LeanPanel | null,
   t: ReturnType<typeof messagesFor>['lesson'],
+  onRestarted: () => void,
 ) => {
   output.hidden = false;
   output.replaceChildren();
@@ -297,18 +293,28 @@ const renderRunFailure = (
   button.className =
     'cursor-pointer rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg transition hover:border-line-strong disabled:cursor-progress disabled:opacity-55';
   button.textContent = t.restartLean;
+  const markRestartFailed = () => {
+    button.disabled = false;
+    button.textContent = t.restartLean;
+    detail.textContent = t.restartFailed;
+  };
   button.addEventListener('click', () => {
+    if (!panel) {
+      onRestarted();
+      return;
+    }
     button.disabled = true;
     button.textContent = t.restarting;
-    void panel.restart().then((ok) => {
-      if (ok) {
-        button.textContent = t.restartDone;
-        return;
-      }
-      button.disabled = false;
-      button.textContent = t.restartLean;
-      detail.textContent = t.restartFailed;
-    });
+    void panel
+      .restart()
+      .then((ok) => {
+        if (ok) {
+          onRestarted();
+          return;
+        }
+        markRestartFailed();
+      })
+      .catch(markRestartFailed);
   });
 
   card.append(title, detail, button);
@@ -353,19 +359,90 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   if (!runnerHost || first === undefined) return;
 
   const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
+  const autoStart = shouldAutoStart(currentMemoryTier(), saveData === true);
   let reportProgress: ((progress: LeanPanelProgress) => void) | null = null;
-  const panel = createLeanPanel(runnerHost, {
-    variant: 'compact',
-    // 预置空文档：课程页的代码块按需 run；预先塞入第一块会让它被声明一次，
-    // 用户再点同一块时就变成「重复声明」。面板本身是 sr-only，空文档不影响阅读。
-    code: '',
-    locale,
-    // 低内存设备与省流模式都不自动下载 102MB，让用户先确认。
-    autoStart: shouldAutoStart(currentMemoryTier(), saveData === true),
-    onProgress: (progress) => reportProgress?.(progress),
-  });
+  let loadedPanel: LeanPanel | null = null;
+  let panelPromise: Promise<LeanPanel> | null = null;
+
+  // 按需动态加载 Monaco + LSP：阅读课程正文时不再被 3.5MB 编辑器主包阻塞首屏。
+  const ensurePanel = (): Promise<LeanPanel> => {
+    if (!panelPromise) {
+      panelPromise = import('../components/lean-panel')
+        .then(({ createLeanPanel }) => {
+          const created = createLeanPanel(runnerHost, {
+            variant: 'compact',
+            // 预置空文档：课程页的代码块按需 run；预先塞入第一块会让它被声明一次，
+            // 用户再点同一块时就变成「重复声明」。面板本身是 sr-only，空文档不影响阅读。
+            code: '',
+            locale,
+            // 低内存设备与省流模式都不自动下载 102MB，让用户先确认。
+            autoStart,
+            onProgress: (progress) => reportProgress?.(progress),
+          });
+          loadedPanel = created;
+          return created;
+        })
+        .catch((error: unknown) => {
+          panelPromise = null;
+          throw error;
+        });
+    }
+    return panelPromise;
+  };
+
+  if (autoStart) {
+    void ensurePanel().catch(() => {});
+  }
 
   const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('button[data-run-index]'));
+
+  const runCode = (code: string, output: HTMLElement) => {
+    const initial = loadedPanel?.getProgress() ?? {
+      label: messagesFor(locale).playground.statusLoading,
+      kind: 'loading' as const,
+      ratio: null,
+    };
+    output.hidden = false;
+    output.innerHTML = renderRunProgress(initial.label, initial.ratio);
+    for (const other of buttons) other.disabled = true;
+
+    const labelEl = output.querySelector<HTMLElement>('[data-role="run-label"]')!;
+    const timeEl = output.querySelector<HTMLElement>('[data-role="run-time"]')!;
+    const barEl = output.querySelector<HTMLElement>('[data-role="run-bar"]')!;
+    const startedAt = performance.now();
+    const tick = () => {
+      timeEl.textContent = formatElapsed(performance.now() - startedAt);
+    };
+    tick();
+    const timer = window.setInterval(tick, 100);
+
+    let bestRatio = initial.ratio;
+    reportProgress = (progress) => {
+      labelEl.textContent = progress.kind === 'ready' ? t.running : progress.label;
+      // 资产切换会让单资产百分比回落，课程页只展示本次运行的最高进度。
+      if (progress.ratio !== null) bestRatio = Math.max(bestRatio ?? 0, progress.ratio);
+      paintRunBar(barEl, bestRatio);
+    };
+
+    void ensurePanel()
+      .then((panel) => panel.run(code).then((list) => ({ panel, list })))
+      .then(({ list }) => {
+        renderOutput(
+          output,
+          dropSpuriousRedeclarations(list, code),
+          looksLikeProof(code) ? t.proofAccepted : t.noOutput,
+        );
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        renderRunFailure(output, message, loadedPanel, t, () => runCode(code, output));
+      })
+      .finally(() => {
+        window.clearInterval(timer);
+        reportProgress = null;
+        for (const other of buttons) other.disabled = false;
+      });
+  };
 
   for (const button of buttons) {
     button.addEventListener('click', () => {
@@ -373,49 +450,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
       const code = codes[index];
       const output = root.querySelector<HTMLElement>(`[data-output="${index}"]`);
       if (code === undefined || !output) return;
-
-      const initial = panel.getProgress();
-      output.hidden = false;
-      output.innerHTML = renderRunProgress(initial.label, initial.ratio);
-      for (const other of buttons) other.disabled = true;
-
-      const labelEl = output.querySelector<HTMLElement>('[data-role="run-label"]')!;
-      const timeEl = output.querySelector<HTMLElement>('[data-role="run-time"]')!;
-      const barEl = output.querySelector<HTMLElement>('[data-role="run-bar"]')!;
-      const startedAt = performance.now();
-      const tick = () => {
-        timeEl.textContent = formatElapsed(performance.now() - startedAt);
-      };
-      tick();
-      const timer = window.setInterval(tick, 100);
-
-      let bestRatio = initial.ratio;
-      reportProgress = (progress) => {
-        labelEl.textContent = progress.kind === 'ready' ? t.running : progress.label;
-        // 资产切换会让单资产百分比回落，课程页只展示本次运行的最高进度。
-        if (progress.ratio !== null) bestRatio = Math.max(bestRatio ?? 0, progress.ratio);
-        paintRunBar(barEl, bestRatio);
-      };
-
-      void panel
-        .run(code)
-        .then((list) => {
-          renderOutput(
-            output,
-            dropSpuriousRedeclarations(list, code),
-            looksLikeProof(code) ? t.proofAccepted : t.noOutput,
-          );
-        })
-        .catch((error: unknown) => {
-          const message =
-            error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-          renderRunFailure(output, message, panel, t);
-        })
-        .finally(() => {
-          window.clearInterval(timer);
-          reportProgress = null;
-          for (const other of buttons) other.disabled = false;
-        });
+      runCode(code, output);
     });
   }
 };

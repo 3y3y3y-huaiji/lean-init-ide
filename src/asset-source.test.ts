@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applySourcePreference } from './asset-source';
+import { applySourcePreference, setSourcePreference } from './asset-source';
 
 const put = vi.fn<(key: string, response: Response) => Promise<void>>(() => Promise.resolve());
 const remove = vi.fn<(key: string) => Promise<void>>(() => Promise.resolve());
@@ -55,5 +55,25 @@ describe('applySourcePreference', () => {
   it('没有 CacheStorage 时静默失败', async () => {
     vi.stubGlobal('caches', undefined);
     await expect(applySourcePreference('?source=cdn')).resolves.toBeUndefined();
+  });
+});
+
+describe('setSourcePreference', () => {
+  it('直接切换同源网关并通知 SW', async () => {
+    stubCaches();
+    stubController();
+    await setSourcePreference('cdn');
+
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledWith({ type: 'lean-source-mode', mode: 'cdn' });
+  });
+
+  it('传 null 恢复自动选择', async () => {
+    stubCaches();
+    stubController();
+    await setSourcePreference(null);
+
+    expect(remove).toHaveBeenCalledWith('/__lean/source-preference');
+    expect(postMessage).toHaveBeenCalledWith({ type: 'lean-source-mode', mode: null });
   });
 });

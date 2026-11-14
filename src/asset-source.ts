@@ -6,11 +6,11 @@
  */
 import { isSourceMode, SOURCE_PREFERENCE_CACHE, SOURCE_PREFERENCE_KEY } from './asset-sources.mjs';
 
-export const applySourcePreference = async (search: string): Promise<void> => {
-  const mode = new URLSearchParams(search).get('source');
-  if (mode === null) return;
+export type AssetSourcePreference = 'cdn' | 'mirror' | 'github' | null;
 
-  const valid = isSourceMode(mode);
+/** 写入（或清除）强制资产源，并通知已经运行的 Service Worker。 */
+export const setSourcePreference = async (mode: AssetSourcePreference): Promise<void> => {
+  const valid = mode !== null && isSourceMode(mode);
   try {
     const cache = await caches.open(SOURCE_PREFERENCE_CACHE);
     if (valid) {
@@ -25,4 +25,10 @@ export const applySourcePreference = async (search: string): Promise<void> => {
   } catch {
     // 隐私模式或非安全上下文没有 CacheStorage：诊断开关失效，但不影响正常使用。
   }
+};
+
+export const applySourcePreference = async (search: string): Promise<void> => {
+  const raw = new URLSearchParams(search).get('source');
+  if (raw === null) return;
+  await setSourcePreference(isSourceMode(raw) ? (raw as AssetSourcePreference) : null);
 };

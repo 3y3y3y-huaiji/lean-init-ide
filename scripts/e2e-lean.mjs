@@ -268,7 +268,32 @@ const main = async () => {
     if (!hiddenAfterLateError) throw new Error('晚到的错误没有收起运行通过');
     console.log(`[${stamp()}] 成功提示只在诊断结算后显示`);
 
-    // 第七阶段：练习通过后写入完成进度，而不只是显示一次徽章。
+    // 第七阶段：资产下载失败时给出可换源的恢复入口。
+    await page.evaluate(() =>
+      globalThis.__showLoadFailure('Failed to load runtime asset lean-init-00.pack.gz.bin'),
+    );
+    const failureUi = await page.evaluate(() => {
+      const card = globalThis.document.querySelector('[data-role="load-failure"]');
+      return {
+        visible: !!card && !card.hidden,
+        text: card?.textContent ?? '',
+        sources: [...(card?.querySelectorAll('[data-source]') ?? [])].map(
+          (button) => button.dataset.source,
+        ),
+      };
+    });
+    if (
+      !failureUi.visible ||
+      !failureUi.text.includes('运行时资产下载失败') ||
+      !failureUi.text.includes('lean-init-00.pack.gz.bin') ||
+      ['cdn', 'mirror', 'github', 'auto'].some((mode) => !failureUi.sources.includes(mode))
+    ) {
+      throw new Error(`资产失败恢复入口不完整: ${JSON.stringify(failureUi)}`);
+    }
+    console.log(`[${stamp()}] 资产失败换源入口正常`);
+    await page.evaluate(() => globalThis.__hideLoadFailure());
+
+    // 第八阶段：练习通过后写入完成进度，而不只是显示一次徽章。
     await page.goto(`${origin}/zh/playground?lesson=math-parity&debug`, {
       waitUntil: 'domcontentloaded',
     });
@@ -297,7 +322,7 @@ const main = async () => {
     if (!completionOk) throw new Error('练习通过后没有写入完成进度');
     console.log(`[${stamp()}] 完成进度已写入 math-parity`);
 
-    // 第八阶段：模拟 worker 崩溃，确认自动重启且编辑内容不丢。
+    // 第九阶段：模拟 worker 崩溃，确认自动重启且编辑内容不丢。
     await page.evaluate(() => {
       globalThis.__leanCrash(
         'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
@@ -315,7 +340,7 @@ const main = async () => {
     if (!preserved) throw new Error('崩溃重启后编辑内容丢失');
     console.log(`[${stamp()}] 崩溃自动重启完成，编辑内容保留`);
 
-    // 第九阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
+    // 第十阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
     await page.goto(`${origin}/zh/reference`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h1');
     const referenceOk = await page.evaluate(() => {

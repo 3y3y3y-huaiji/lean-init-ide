@@ -178,6 +178,17 @@ export type Messages = {
     restartLean: string;
     copyError: string;
     copyErrorDone: string;
+    /** 运行时资产下载失败时的换源与重试。 */
+    loadFailureTitle: string;
+    startFailureTitle: string;
+    loadFailureDetail: string;
+    retryLoad: string;
+    sourceCdn: string;
+    sourceMirror: string;
+    sourceGithub: string;
+    sourceAuto: string;
+    sourceSwitching: (label: string) => string;
+    assetFallbackLabel: (name: string, message: string) => string;
     statusLspReady: string;
     statusWaitingDiagnostics: string;
     statusReady: (count: number, ms: number) => string;
@@ -191,6 +202,8 @@ export type Messages = {
     logRuntimeCrash: (message: string) => string;
     logAutoRestart: string;
     logRecovered: string;
+    logSourceSwitched: (label: string) => string;
+    logSourceAuto: string;
     logInitialize: (seconds: string) => string;
     logStartFailed: (message: string) => string;
     logStopped: string;

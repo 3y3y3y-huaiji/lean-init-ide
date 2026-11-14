@@ -6,6 +6,7 @@ import editorWorker from '../../node_modules/monaco-editor/esm/vs/editor/editor.
 import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
+import { setSourcePreference, type AssetSourcePreference } from '../asset-source';
 import { cacheBudgetBytes, currentMemoryTier } from '../device';
 import {
   abbreviationSuggestions,
@@ -167,6 +168,23 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       <section data-panel="diagnostics" class="${panelClass(compact)} min-h-0 flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
         <div
+          data-role="load-failure"
+          hidden
+          role="alert"
+          class="mx-2 mt-2 rounded-lg border border-err/45 bg-err/10 px-2.5 py-2 text-[12.5px] leading-normal"
+        >
+          <p data-role="load-failure-title" class="m-0 font-[650] text-err"></p>
+          <p data-role="load-failure-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
+          <p data-role="load-failure-error" class="m-0 mb-2 break-words font-mono text-[10.5px] leading-normal text-muted"></p>
+          <div class="flex flex-wrap gap-2">
+            <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
+            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
+            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>
+            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="github">${t.sourceGithub}</button>
+            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-muted hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="auto">${t.sourceAuto}</button>
+          </div>
+        </div>
+        <div
           data-role="crash"
           hidden
           role="alert"
@@ -321,6 +339,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const crashDetailEl = host.querySelector<HTMLElement>('[data-role="crash-detail"]');
   const crashRestartEl = host.querySelector<HTMLButtonElement>('[data-role="crash-restart"]');
   const crashCopyEl = host.querySelector<HTMLButtonElement>('[data-role="crash-copy"]');
+  const loadFailureEl = host.querySelector<HTMLElement>('[data-role="load-failure"]');
+  const loadFailureTitleEl = host.querySelector<HTMLElement>('[data-role="load-failure-title"]');
+  const loadFailureDetailEl = host.querySelector<HTMLElement>('[data-role="load-failure-detail"]');
+  const loadFailureErrorEl = host.querySelector<HTMLElement>('[data-role="load-failure-error"]');
+  const retryLoadEl = host.querySelector<HTMLButtonElement>('[data-role="retry-load"]');
+  const sourceButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-source]')];
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
   const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
   const resetEl = host.querySelector<HTMLButtonElement>('[data-role="reset"]');
@@ -691,6 +715,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let recoveryAttempt = 0;
   let lastCrashAt = 0;
   let lastCrashMessage = '';
+  let lastStartError: string | null = null;
+  let lastAssetFallback: { name: string; message: string } | null = null;
   let freshHandled = false;
 
   const emitProgress = () =>
@@ -750,6 +776,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       source?: string;
     };
     if (data?.type === 'lean-asset-fallback' && data.name) {
+      lastAssetFallback = { name: data.name, message: data.message ?? 'unknown error' };
       log(t.statusChunkFallback(data.name, data.message ?? 'unknown error'));
       return;
     }
@@ -833,6 +860,23 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
       runOkEl.hidden = false;
     }, 150);
+  };
+
+  const hideLoadFailure = () => {
+    if (loadFailureEl) loadFailureEl.hidden = true;
+  };
+
+  const showLoadFailure = (message: string) => {
+    if (!loadFailureEl || !loadFailureTitleEl || !loadFailureDetailEl || !loadFailureErrorEl)
+      return;
+    const assetRelated = /asset|fetch|network|timeout|aborted|runtime/i.test(message);
+    loadFailureTitleEl.textContent = assetRelated ? t.loadFailureTitle : t.startFailureTitle;
+    loadFailureDetailEl.textContent = assetRelated ? t.loadFailureDetail : '';
+    loadFailureDetailEl.hidden = !assetRelated;
+    loadFailureErrorEl.textContent = lastAssetFallback
+      ? `${message}\n${t.assetFallbackLabel(lastAssetFallback.name, lastAssetFallback.message)}`
+      : message;
+    loadFailureEl.hidden = false;
   };
 
   const renderDiagnostics = (params: { uri: string; diagnostics: LspDiagnostic[] }) => {
@@ -1136,9 +1180,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   /** 会话层等待启动、串行重开文档并收集诊断；这里只同步 Monaco 的内容。 */
   const run = (code: string) => {
-    // 崩溃后会话已释放，run 会立刻返回空数组；这里改成显式失败，课程页才能显示恢复按钮。
+    // 崩溃或启动失败后会话已释放，run 会立刻返回空数组；改成显式失败，课程页才能显示恢复按钮。
     if (recoveryPending) {
       return Promise.reject(new Error(lastCrashMessage || 'Lean process crashed'));
+    }
+    if (lastStartError) {
+      return Promise.reject(new Error(lastStartError));
     }
     const crashAt = lastCrashAt;
     return session
@@ -1195,7 +1242,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     session.stop();
     engineEverReady = false;
     recoveryPending = false;
+    lastStartError = null;
+    lastAssetFallback = null;
     if (crashEl) crashEl.hidden = true;
+    hideLoadFailure();
     goalSupported = true;
     runStartedAt = 0;
     firstDiagnosticsReported = false;
@@ -1211,6 +1261,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const start = async (): Promise<boolean> => {
     if (startEl.disabled) return false;
     startEl.disabled = true;
+    lastStartError = null;
+    lastAssetFallback = null;
+    hideLoadFailure();
     // 首次下载约 102 MB；在用户手势中申请持久存储，避免浏览器清理已校验的缓存。
     void navigator.storage?.persist?.().catch(() => {});
     setStatus(t.statusLoading, 'loading');
@@ -1242,6 +1295,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       flushChange();
       startEl.textContent = t.stop;
       engineEverReady = true;
+      lastStartError = null;
+      hideLoadFailure();
       lastEditAt = performance.now();
       setStatus(t.statusWaitingDiagnostics, 'ready');
       log(t.logInitialize(((performance.now() - startedAt) / 1000).toFixed(2)));
@@ -1256,6 +1311,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       return true;
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      lastStartError = message;
       // 自动重启第一次失败很常见：旧连接的 pending 请求刚被 reject。保留恢复状态并重试一次，
       // 不要立刻把“自动重启失败”推给用户。
       if (!recoveryPending || recoveryAttempt >= 1) {
@@ -1269,6 +1325,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         crashDetailEl.textContent = t.crashAutoDetail(message);
         crashEl.hidden = false;
         if (crashRestartEl) crashRestartEl.disabled = false;
+      } else if (!recoveryPending) {
+        showLoadFailure(message);
       }
       return false;
     } finally {
@@ -1300,6 +1358,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     recoveryAttempt = 0;
     runStartedAt = 0;
     firstDiagnosticsReported = false;
+    lastStartError = null;
+    lastAssetFallback = null;
+    hideLoadFailure();
     startEl.textContent = t.start;
     setStatus(
       canAutoRestart ? t.statusRecovering : t.statusCrash,
@@ -1376,6 +1437,37 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       });
   });
 
+  const sourceLabel = (mode: AssetSourcePreference): string => {
+    if (mode === 'cdn') return t.sourceCdn;
+    if (mode === 'mirror') return t.sourceMirror;
+    if (mode === 'github') return t.sourceGithub;
+    return t.sourceAuto;
+  };
+
+  const switchSource = (mode: AssetSourcePreference) => {
+    const label = sourceLabel(mode);
+    for (const button of sourceButtons) button.disabled = true;
+    hideLoadFailure();
+    setStatus(t.sourceSwitching(label), 'loading');
+    log(mode === null ? t.logSourceAuto : t.logSourceSwitched(label));
+    void setSourcePreference(mode).finally(() => {
+      for (const button of sourceButtons) button.disabled = false;
+      void start();
+    });
+  };
+
+  for (const button of sourceButtons) {
+    button.addEventListener('click', () => {
+      const raw = button.dataset.source ?? 'auto';
+      switchSource(raw === 'auto' ? null : (raw as AssetSourcePreference));
+    });
+  }
+
+  retryLoadEl?.addEventListener('click', () => {
+    hideLoadFailure();
+    void start();
+  });
+
   // 开发环境与 ?debug 下暴露编辑器实例，方便控制台调试和自动化检查。
   if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
     Object.assign(window as unknown as Record<string, unknown>, {
@@ -1384,6 +1476,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       // 仅用于自动化验证崩溃恢复与成功提示时序，不对普通用户暴露。
       __leanCrash: handleRuntimeCrash,
       __renderDiagnostics: renderDiagnostics,
+      __showLoadFailure: showLoadFailure,
+      __hideLoadFailure: hideLoadFailure,
     });
   }
 

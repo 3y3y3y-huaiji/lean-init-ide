@@ -43,9 +43,11 @@ Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sig
 - Light / dark / system themes, with Monaco following along
 - 22 lessons: 9 intro + 13 math & verification; code blocks run in place, exercises open the playground with a starter
 - Exercise drafts stay in your browser across reloads, with one-click reset and `.lean` export
-- Passing an exercise records completion; the home “continue” link and TOC ✓ / ○ marks follow
+- Passing an exercise records completion; the home “continue” link and TOC ✓ marks follow
 - A bilingual reference page for tactics, symbols and common errors
 - The runtime streams in 4 MB ranges with per-chunk verification and automatic source fallback
+- When a download fails, the editor explains why and offers retry with a one-click source switch
+  (same-origin R2 / China mirror / GitHub / auto)
 - Low-memory devices skip auto-download and cap the persistent cache at 128 MB
 
 ## Lessons

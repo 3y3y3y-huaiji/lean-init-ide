@@ -167,7 +167,7 @@ overrides:
 
 patchedDependencies:
   '@wasm-idle/core@1.3.0': 7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144
-  '@wasm-idle/lsp@1.3.0': 85b027684f4221d748911a1fd7487368db52018ccb43f346964ba41891376e06
+  '@wasm-idle/lsp@1.3.0': 2fbda9a5c5b52b9a70b75df160d18651165cba409cb8b889ae3b8148c088758a
 
 importers:
 
@@ -178,7 +178,7 @@ importers:
         version: 1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)
       '@wasm-idle/lsp':
         specifier: 1.3.0
-        version: 1.3.0(patch_hash=85b027684f4221d748911a1fd7487368db52018ccb43f346964ba41891376e06)(typescript@6.0.3)
+        version: 1.3.0(patch_hash=2fbda9a5c5b52b9a70b75df160d18651165cba409cb8b889ae3b8148c088758a)(typescript@6.0.3)
       monaco-editor:
         specifier: ^0.57.0
         version: 0.57.0
@@ -2046,7 +2046,7 @@ snapshots:
       '@wasm-idle/core': 1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)
       fflate: 0.8.3
 
-  '@wasm-idle/lsp@1.3.0(patch_hash=85b027684f4221d748911a1fd7487368db52018ccb43f346964ba41891376e06)(typescript@6.0.3)':
+  '@wasm-idle/lsp@1.3.0(patch_hash=2fbda9a5c5b52b9a70b75df160d18651165cba409cb8b889ae3b8148c088758a)(typescript@6.0.3)':
     dependencies:
       '@bjorn3/browser_wasi_shim': 0.4.2
       '@wasm-idle/core': 1.3.0(patch_hash=7b53284c2d68f0f7b6d1a7eb29150f31c966bb2891afbf4b5b00aef3ac18b144)

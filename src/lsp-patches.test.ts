@@ -24,8 +24,14 @@ describe('@wasm-idle/lsp 补丁', () => {
   });
 
   it('pthread 池保持 16/8：再小会让文件检查静默不产生诊断', () => {
-    expect(workerSource).toContain("startProcess(['-j4', '--worker', document.uri], 16,");
+    expect(workerSource).toContain("'--worker', document.uri], 16,");
     expect(workerSource).toContain("startProcess(['-j2', '--server'], 8,");
+  });
+
+  it('递归深度上限校准为 544：再高会让 pthread 的 V8 栈溢出', () => {
+    expect(workerSource).toContain(
+      "startProcess(['-j4', '-DmaxRecDepth=544', '--worker', document.uri], 16,",
+    );
   });
 
   it('用同源 wasm 解码器解 zstd 资产', () => {

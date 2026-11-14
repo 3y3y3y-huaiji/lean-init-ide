@@ -58,6 +58,21 @@ applyPatch(
 );
 
 /**
+ * 2b. 放宽递归深度上限 512 -> 544。Lean 默认 `maxRecDepth` 只有 512，
+ *     Init 环境下的数列证明很容易触顶。浏览器实测：558 仍能返回「maximum
+ *     recursion depth」诊断，560 会让 pthread 抛 `RangeError: Maximum call
+ *     stack size exceeded` 并崩溃（增大 wasm 线程栈或 V8 --stack-size 都无法
+ *     提高，瓶颈是 V8 对 worker 线程的 wasm 栈保护）。取 544 留出约 3% 余量。
+ *     用户代码里的 `set_option maxRecDepth` 仍可覆盖，但超过 558 会崩溃。
+ */
+applyPatch(
+  leanWorker,
+  "startProcess(['-j4', '--worker', document.uri], 16,",
+  "startProcess(['-j4', '-DmaxRecDepth=544', '--worker', document.uri], 16,",
+  'lean maxRecDepth 512 -> 544',
+);
+
+/**
  * 3. 解压完一个资产就释放压缩态引用，启动峰值不再同时持有 102MB 压缩态 + 415MB 解压态。
  *    preflight 结果是冻结对象，先浅拷贝成可变对象再 delete。
  */

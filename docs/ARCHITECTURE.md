@@ -45,6 +45,30 @@ worker 启动时用 `public/vendor/zstddec.mjs` 的同源 wasm 解码，解压�
 
 访问控制、限流与资产维护的操作方式见 [OPERATIONS](OPERATIONS.md)。
 
+## 递归深度上限
+
+Lean 默认 `maxRecDepth = 512`，对只有 Init 的运行时来说偏低：数列题里 `simp`
+递归展开 `f n` 很容易触顶。`scripts/patch-lsp.mjs` 给文件进程显式传入
+`-DmaxRecDepth=544`，比默认多约 6%。
+
+这个值不是拍脑袋定的，也不能继续往上加。在 headless Chromium + 本地网关里用
+`f 0 = 0 | f (n+1) = f n + 1` + `simp [f]` 逐档实测（每档重新加载页面隔离崩溃）：
+
+| `maxRecDepth` | 结果 |
+| --- | --- |
+| 512 | `n = 165` 通过，`n = 170` 返回 `maximum recursion depth` 诊断 |
+| 544 | `n = 175` 通过，`n = 178` 返回同样的诊断 |
+| 558 | 仍返回诊断，不崩溃 |
+| 560 | pthread 抛 `RangeError: Maximum call stack size exceeded`，进程崩溃 |
+
+瓶颈是 V8 对 worker 线程的 wasm 栈保护，不是 Emscripten 声明的 8MiB 栈：
+把 pthread 栈调到 16MiB、主线程 32MiB，或加 Chromium `--js-flags=--stack-size`
+都无法把 560 这一档救回来。所以 544 是「留出约 3% 余量、又确实比默认多」的折中；
+再高会把可恢复的诊断变成崩溃（栈溢出时 `decideCrashRecovery` 只允许手动重启）。
+
+用户代码里的 `set_option maxRecDepth <num>` 仍可覆盖这个默认值；超过 558 会崩溃。
+要突破这个上限只能改架构（例如换用栈更大的 JS 引擎/线程模型），改参数无效。
+
 ## 目录结构
 
 ```

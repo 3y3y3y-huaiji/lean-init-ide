@@ -232,7 +232,7 @@ index cd8db8b..d7dffb0 100644
  		lean.FS.chdir('/workspace');
  		self.postMessage({ ready: true });
 diff --git a/dist/lean4/worker.js b/dist/lean4/worker.js
-index ecf242e..e17e894 100644
+index ecf242e..88d080a 100644
 --- a/dist/lean4/worker.js
 +++ b/dist/lean4/worker.js
 @@ -34,6 +34,7 @@ const unsupported = new Set([
@@ -248,7 +248,7 @@ index ecf242e..e17e894 100644
      active = { ...document };
      const token = ++generation;
 -    const process = startProcess(['-j4', '--worker', document.uri], 64, (message) => {
-+    const process = startProcess(['-j4', '--worker', document.uri], 16, (message) => {
++    const process = startProcess(['-j4', '-DmaxRecDepth=544', '--worker', document.uri], 16, (message) => {
          if (token === generation)
              fileOutput(message);
      }, (code) => {

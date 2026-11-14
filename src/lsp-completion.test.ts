@@ -90,5 +90,40 @@ describe('toMonacoCompletions', () => {
   it('空结果返回空列表', () => {
     expect(toMonacoCompletions(null, fallback)).toEqual({ suggestions: [], incomplete: false });
     expect(toMonacoCompletions([], fallback)).toEqual({ suggestions: [], incomplete: false });
+    expect(toMonacoCompletions({}, fallback)).toEqual({ suggestions: [], incomplete: false });
+  });
+
+  it('兼容对象式 label、纯文本 documentation、缺失字段和未知 kind', () => {
+    const { suggestions, incomplete } = toMonacoCompletions(
+      {
+        items: [
+          {
+            label: { label: 'Nat.succ' },
+            kind: 999,
+            documentation: '后继函数',
+          },
+          {
+            label: 'exact',
+            kind: 14,
+            insertTextRules: undefined,
+          } as Parameters<typeof toMonacoCompletions>[0] extends Array<infer T> ? T : never,
+        ],
+      },
+      fallback,
+    );
+
+    expect(incomplete).toBe(false);
+    expect(suggestions[0]).toMatchObject({
+      label: 'Nat.succ',
+      kind: monaco.languages.CompletionItemKind.Text,
+      insertText: 'Nat.succ',
+      range: fallback,
+      documentation: '后继函数',
+      insertTextRules: undefined,
+    });
+    expect(suggestions[1]).toMatchObject({
+      label: 'exact',
+      kind: monaco.languages.CompletionItemKind.Keyword,
+    });
   });
 });

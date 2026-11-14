@@ -448,4 +448,51 @@ describe('LeanSession', () => {
       processingCount: 0,
     });
   });
+
+  it('whenReady 在就绪后立即返回 true，在启动失败后返回 false', async () => {
+    const ok = makeHarness();
+    await ok.session.start('initial');
+    await expect(ok.session.whenReady()).resolves.toBe(true);
+
+    const fail = makeHarness();
+    fail.connection.sendRequest.mockRejectedValueOnce(new Error('init boom'));
+    const starting = fail.session.start('bad');
+    const waiting = fail.session.whenReady();
+    await expect(starting).rejects.toThrow('init boom');
+    await expect(waiting).resolves.toBe(false);
+    await expect(fail.session.whenReady()).resolves.toBe(false);
+  });
+
+  it('未就绪时 change 被忽略，停止后再 request 返回 null', async () => {
+    const h = makeHarness();
+    h.session.change('ignored while idle');
+    expect(h.sent('textDocument/didChange')).toHaveLength(0);
+
+    await h.session.start('ready');
+    h.session.stop();
+    await expect(h.session.request('textDocument/hover', {})).resolves.toBeNull();
+  });
+
+  it('正确响应服务端发起的 workspace 与 progress 请求并转发日志', async () => {
+    const h = makeHarness();
+    await h.session.start('initial');
+
+    const reqCalls = h.connection.onRequest.mock.calls as unknown as Array<
+      [string, (params: unknown) => unknown]
+    >;
+    const notifCalls = h.connection.onNotification.mock.calls as unknown as Array<
+      [string, (params: unknown) => void]
+    >;
+    const reqHandler = (method: string) => reqCalls.find(([name]) => name === method)?.[1];
+    const notifHandler = (method: string) => notifCalls.find(([name]) => name === method)?.[1];
+
+    expect(reqHandler('workspace/configuration')?.({ items: [{}, {}] })).toEqual([null, null]);
+    expect(reqHandler('workspace/configuration')?.({})).toEqual([]);
+    expect(reqHandler('workspace/workspaceFolders')?.(undefined)).toEqual([
+      { uri: 'file:///workspace', name: 'workspace' },
+    ]);
+    expect(reqHandler('window/workDoneProgress/create')?.({})).toBeNull();
+    expect(reqHandler('client/registerCapability')?.({})).toBeNull();
+    expect(() => notifHandler('window/logMessage')?.({ message: 'lean log' })).not.toThrow();
+  });
 });

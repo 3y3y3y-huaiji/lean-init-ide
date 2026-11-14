@@ -111,4 +111,27 @@ def helper : Nat -> Nat
 
     expect(findDeclaration(lines, 2)?.signature).toBe('def helper : Nat -> Nat');
   });
+
+  it('识别 abbrev / lemma / structure / class / opaque 并在空行处截断签名', () => {
+    const cases: Array<[string, string]> = [
+      ['lemma helper (n : Nat) : n = n := by', 'lemma helper (n : Nat) : n = n'],
+      ['abbrev MyNat := Nat', 'abbrev MyNat'],
+      ['structure Point where', 'structure Point'],
+      ['class Monoid (α : Type) where', 'class Monoid (α : Type)'],
+      ['opaque secret : Nat := 0', 'opaque secret : Nat'],
+    ];
+
+    for (const [source, expected] of cases) {
+      expect(findDeclaration([source], 0)?.signature, source).toBe(expected);
+    }
+
+    const withBlank = linesOf(`
+theorem split_header
+  (n : Nat)
+
+  : n = n := by
+  rfl
+`);
+    expect(findDeclaration(withBlank, 4)?.signature).toBe('theorem split_header (n : Nat)');
+  });
 });

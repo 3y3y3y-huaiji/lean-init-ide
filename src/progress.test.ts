@@ -52,4 +52,33 @@ describe('progress', () => {
     expect(firstUncompletedLesson(slugs, new Set(['a', 'b', 'c']))).toBe('a');
     expect(firstUncompletedLesson([], new Set())).toBeUndefined();
   });
+
+  it('空 slug 与非数组 JSON 会被忽略，localStorage 抛出异常时降级为空集合', () => {
+    localStorage.clear();
+    markLessonVisited('');
+    markLessonCompleted('');
+    expect([...readProgress()]).toEqual([]);
+    expect([...readCompleted()]).toEqual([]);
+
+    localStorage.setItem('lean:progress', JSON.stringify({ unexpected: true }));
+    expect([...readProgress()]).toEqual([]);
+
+    const proto = Object.getPrototypeOf(localStorage) as Storage;
+    const origGet = proto.getItem;
+    const origSet = proto.setItem;
+    proto.getItem = () => {
+      throw new Error('storage blocked');
+    };
+    proto.setItem = () => {
+      throw new Error('quota exceeded');
+    };
+    try {
+      expect([...readProgress()]).toEqual([]);
+      expect(() => markLessonVisited('first-proof')).not.toThrow();
+      expect(() => markLessonCompleted('first-proof')).not.toThrow();
+    } finally {
+      proto.getItem = origGet;
+      proto.setItem = origSet;
+    }
+  });
 });

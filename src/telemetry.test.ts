@@ -182,4 +182,37 @@ describe('telemetry', () => {
     expect(event.fields.source).toBe('raw');
     expect(event.fields.message).toBe('plain failure');
   });
+
+  it('定时自动冲刷缓冲区、重复初始化幂等、并响应 window.doNotTrack', async () => {
+    const { initTelemetry, track } = await loadTelemetry();
+    initTelemetry({ sampleRate: 1 });
+    initTelemetry({ sampleRate: 0 });
+    track('boot', { page: 'home' });
+    expect(beacon).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(beacon).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(window, 'doNotTrack', { value: '1', configurable: true });
+    try {
+      const dnt = await loadTelemetry();
+      dnt.initTelemetry({ sampleRate: 1 });
+      dnt.track('boot', { page: 'home' });
+      dnt.flushTelemetry();
+      expect(beacon).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'doNotTrack', { value: undefined, configurable: true });
+    }
+  });
+
+  it('sendBeacon 不可用或 fetch 失败时静默退回且不抛错', async () => {
+    Object.defineProperty(navigator, 'sendBeacon', { value: undefined, configurable: true });
+    fetchMock.mockRejectedValueOnce(new Error('network error'));
+    const { initTelemetry, track, flushTelemetry } = await loadTelemetry();
+    initTelemetry({ sampleRate: 1 });
+    track('boot', { page: 'home' });
+    expect(() => flushTelemetry()).not.toThrow();
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -60,5 +60,18 @@ describe('首页渲染', () => {
     expect(primary?.textContent).toBe(messagesFor('zh').home.continueCta);
     const intro = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="intro"]');
     expect(intro?.getAttribute('href')).toBe('/zh/learn/first-proof');
+    const mathLessons = messagesFor('zh').lesson.lessons.filter(
+      (lesson) => lesson.track === 'math',
+    );
+    if (mathLessons.length >= 2) {
+      hydrateHome(document.body, 'zh', new Set(), new Set([mathLessons[0]!.slug]));
+      const math = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="math"]');
+      expect(math?.getAttribute('href')).toBe(`/zh/learn/${mathLessons[1]!.slug}`);
+    }
+  });
+
+  it('hydrateHome 在空容器中安全无操作', () => {
+    const empty = document.createElement('div');
+    expect(() => hydrateHome(empty, 'en')).not.toThrow();
   });
 });

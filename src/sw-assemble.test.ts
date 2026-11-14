@@ -136,4 +136,30 @@ describe('loadRangedAsset', () => {
     expect(onProgress).toHaveBeenNthCalledWith(1, 1, 3, { label: 'primary', url: '/cdn/asset' });
     expect(onProgress).toHaveBeenNthCalledWith(2, 3, 3, { label: 'primary', url: '/cdn/asset' });
   });
+
+  it('绝对外链源保留原 URL，全部远程源失败时回退到 fallbackFetch', async () => {
+    const options = createOptions({
+      sources: [
+        { label: 'mirror', url: 'https://mirror.example.test/asset.bin' },
+        { label: 'github', url: 'https://raw.example.test/asset.bin' },
+      ],
+      download: vi.fn().mockRejectedValue(new Error('offline')),
+    });
+
+    const response = await loadRangedAsset(options);
+
+    expect(await response.text()).toBe('fallback');
+    expect(options.download).toHaveBeenNthCalledWith(
+      1,
+      'https://mirror.example.test/asset.bin',
+      3,
+      options.request.signal,
+      expect.any(Function),
+    );
+    expect(options.fallbackFetch).toHaveBeenCalledWith(options.request);
+    expect(options.onFallback).toHaveBeenLastCalledWith(
+      'asset.bin',
+      'all remote sources failed, falling back to origin: offline',
+    );
+  });
 });

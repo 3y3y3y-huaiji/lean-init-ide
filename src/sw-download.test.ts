@@ -402,4 +402,73 @@ describe('downloadStream', () => {
     ).rejects.toThrow('returned more than 4 bytes');
     expect(cancel).toHaveBeenCalledTimes(1);
   });
+
+  it('chunkBytes 非正整数或外部已取消时立即拒绝', async () => {
+    const fetchImpl = vi.fn();
+    await expect(downloadRanges(base({ fetchImpl, chunkBytes: 0 }))).rejects.toThrow(
+      'chunkBytes must be a positive safe integer',
+    );
+    await expect(downloadRanges(base({ fetchImpl, chunkBytes: -4 }))).rejects.toThrow(
+      'chunkBytes must be a positive safe integer',
+    );
+
+    const controller = new AbortController();
+    controller.abort(new Error('cancelled early'));
+    await expect(
+      downloadStream({
+        url: 'https://modelscope.cn/aborted',
+        total: 4,
+        timeoutMs: 10_000,
+        retries: 0,
+        signal: controller.signal,
+        fetchImpl,
+      }),
+    ).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('downloadStream 遇到提前截断的流或非流式大小不匹配时会抛错', async () => {
+    await expect(
+      downloadStream({
+        url: 'https://modelscope.cn/short-stream',
+        total: 5,
+        timeoutMs: 10_000,
+        retries: 0,
+        signal: new AbortController().signal,
+        fetchImpl: vi.fn(
+          async () =>
+            ({
+              ok: true,
+              status: 200,
+              body: {
+                getReader: () => {
+                  let sent = false;
+                  return {
+                    read: async () => {
+                      if (!sent) {
+                        sent = true;
+                        return { done: false, value: new Uint8Array([1, 2]) };
+                      }
+                      return { done: true, value: undefined };
+                    },
+                    cancel: vi.fn(),
+                  };
+                },
+              },
+            }) as unknown as Response,
+        ),
+      }),
+    ).rejects.toThrow('returned 2 bytes');
+
+    await expect(
+      downloadStream({
+        url: 'https://modelscope.cn/short-buffer',
+        total: 5,
+        timeoutMs: 10_000,
+        retries: 0,
+        signal: new AbortController().signal,
+        fetchImpl: vi.fn(async () => new Response(new Uint8Array([1, 2]), { status: 200 })),
+      }),
+    ).rejects.toThrow('returned 2 bytes');
+  });
 });

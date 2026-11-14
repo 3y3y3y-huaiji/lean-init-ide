@@ -1,0 +1,100 @@
+name: Spike wasm64
+
+# 仅用于 spike/wasm64 分支：验证 Lean 4 能否以 wasm64（64 位指针）构建，
+# 以及能否直接加载官方 64 位 Init oleans。不要合并到 main。
+on:
+  push:
+    branches: [spike/wasm64]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install 6.0.0
+          ./emsdk activate 6.0.0
+          source emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 探测 memory64 + pthreads
+        run: |
+          source emsdk/emsdk_env.sh
+          cat > probe.c <<'EOF'
+          #include <pthread.h>
+          #include <stdio.h>
+          static void *worker(void *arg) { *(int *)arg = 42; return NULL; }
+          int main(void) {
+            printf("sizeof(void*)=%zu\n", sizeof(void *));
+            pthread_t t;
+            int value = 0;
+            if (pthread_create(&t, NULL, worker, &value) != 0) {
+              puts("pthread_create failed");
+              return 2;
+            }
+            pthread_join(t, NULL);
+            printf("value=%d\n", value);
+            return value == 42 ? 0 : 3;
+          }
+          EOF
+          emcc probe.c -m64 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
+          node probe.mjs || node --experimental-wasm-memory64 probe.mjs
+
+      - name: 准备 wasm-llvm 并切成 wasm64
+        run: |
+          git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
+          cd wasm-llvm
+          sed -i \
+            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m64 -DCMAKE_CXX_FLAGS=-m64 -DCMAKE_EXE_LINKER_FLAGS=-m64|' \
+            -e 's|emcc -c -O2|emcc -m64 -c -O2|g' \
+            -e 's|emcc -O2 -pthread|emcc -m64 -O2 -pthread|g' \
+            -e 's|-sMAXIMUM_MEMORY=4294967296|-sMAXIMUM_MEMORY=17179869184|' \
+            producer/lean-browser/scripts/build.sh
+          grep -n -- '-m64' producer/lean-browser/scripts/build.sh
+
+      - name: 构建 Lean wasm64 运行时（跳过 Init oleans）
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh fetch runtime cgen objects link
+
+      - name: 关键验证：用官方 64 位 Init oleans 启动 wasm64 Lean
+        run: |
+          source emsdk/emsdk_env.sh
+          BOOT="$GITHUB_WORKSPACE/work/lean-4.34.1-linux"
+          DIST="$GITHUB_WORKSPACE/work/dist"
+          mkdir -p "$GITHUB_WORKSPACE/probe"
+          cat > "$GITHUB_WORKSPACE/probe/Probe.lean" <<'EOF'
+          import Init
+          example : 1 + 1 = 2 := rfl
+          EOF
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            "$DIST/lean.mjs" "$GITHUB_WORKSPACE/probe" "$BOOT/lib/lean" -- \
+            -j1 -R /src -o /src/Probe.olean /src/Probe.lean
+
+      - name: 保存产物与日志
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-spike
+          path: |
+            work/dist/lean.mjs
+            work/dist/lean.wasm
+            work/*.log
+            work/*.olean-fail.log
+          if-no-files-found: warn

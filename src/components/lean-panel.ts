@@ -394,7 +394,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       return {
         suggestions: abbreviationSuggestions(query.query).map(({ name, symbol }, index) => ({
           // 用对象形式的 label：Monaco 才会把 description 显示在每一行，而不是只在选中行显示 detail。
-          label: { label: `\\${name}`, description: `${symbol} · ${t.abbreviationDetail}` },
+          label: {
+            label: `\\${name}`,
+            description: `${symbol}\u2003\u2003${t.abbreviationDetail}`,
+          },
           kind: monaco.languages.CompletionItemKind.Text,
           insertText: symbol,
           range,

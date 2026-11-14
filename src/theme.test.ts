@@ -49,4 +49,43 @@ describe('theme', () => {
     expect(theme.cycleThemePreference()).toBe('system');
     expect(theme.cycleThemePreference()).toBe('light');
   });
+
+  it('notifies subscribers on change, supports unsubscribe, and tracks OS theme in system mode', async () => {
+    let matches = false;
+    let changeHandler: (() => void) | undefined;
+    window.matchMedia = vi.fn((query: string) => ({
+      get matches() {
+        return matches;
+      },
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn((_event: string, cb: () => void) => {
+        changeHandler = cb;
+      }),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+
+    const theme = await import('./theme');
+    const seen: string[] = [];
+    const unsubscribe = theme.onResolvedThemeChange((resolved) => seen.push(resolved));
+
+    matches = true;
+    changeHandler?.();
+    expect(theme.getResolvedTheme()).toBe('light');
+    expect(seen).toEqual(['light']);
+
+    // Explicitly pinned theme ignores subsequent OS changes.
+    theme.setThemePreference('dark');
+    matches = false;
+    changeHandler?.();
+    expect(theme.getResolvedTheme()).toBe('dark');
+    expect(seen).toEqual(['light', 'dark']);
+
+    unsubscribe();
+    theme.setThemePreference('light');
+    expect(seen).toEqual(['light', 'dark']);
+  });
 });

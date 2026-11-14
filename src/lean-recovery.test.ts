@@ -5,7 +5,10 @@ import {
   computeDiagnosticsLatencyMs,
   decideCrashRecovery,
   isAssetRelatedError,
+  isStackOverflowError,
   nextAutoRestartDelayMs,
+  shouldPreserveDiagnosticsOnCrash,
+  shouldShowRunPassed,
 } from './lean-recovery';
 
 describe('isAssetRelatedError', () => {
@@ -67,6 +70,104 @@ describe('decideCrashRecovery', () => {
     expect(decideCrashRecovery({ variant: 'compact', now: 100_000, lastCrashAt: 0 })).toBe(
       'manual',
     );
+  });
+
+  it('栈溢出或 WASM unreachable 崩溃与未改动同份代码的重复崩溃均不自动重启', () => {
+    expect(
+      isStackOverflowError(
+        'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
+      ),
+    ).toBe(true);
+    expect(isStackOverflowError('RuntimeError: unreachable')).toBe(true);
+    expect(isStackOverflowError('Lean worker exited unexpectedly (code 1)')).toBe(false);
+
+    expect(
+      decideCrashRecovery({
+        variant: 'full',
+        now: 100_000,
+        lastCrashAt: 0,
+        message: 'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
+      }),
+    ).toBe('manual');
+
+    expect(
+      decideCrashRecovery({
+        variant: 'full',
+        now: 100_000,
+        lastCrashAt: 0,
+        message: 'RuntimeError: unreachable',
+      }),
+    ).toBe('manual');
+
+    expect(
+      decideCrashRecovery({
+        variant: 'full',
+        now: 100_000,
+        lastCrashAt: 10_000,
+        message: 'Lean worker exited unexpectedly (code 1)',
+        sameCodeAsLastCrash: true,
+      }),
+    ).toBe('manual');
+  });
+});
+
+describe('shouldShowRunPassed', () => {
+  it('仅完整面板在屏障通过、文件已空闲且无 Error 时显示运行通过', () => {
+    expect(
+      shouldShowRunPassed({
+        variant: 'full',
+        barrierOk: true,
+        fileProcessing: false,
+        diagnostics: [{ severity: 2 }, { severity: 3 }],
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowRunPassed({
+        variant: 'full',
+        barrierOk: false,
+        fileProcessing: false,
+        diagnostics: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowRunPassed({
+        variant: 'full',
+        barrierOk: true,
+        fileProcessing: true,
+        diagnostics: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowRunPassed({
+        variant: 'compact',
+        barrierOk: true,
+        fileProcessing: false,
+        diagnostics: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowRunPassed({
+        variant: 'full',
+        barrierOk: true,
+        fileProcessing: false,
+        diagnostics: [{ severity: 1 }],
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowRunPassed({
+        variant: 'full',
+        barrierOk: true,
+        fileProcessing: false,
+        diagnostics: [{}],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('shouldPreserveDiagnosticsOnCrash', () => {
+  it('崩溃前已有诊断时保留，无诊断时才展示空态占位', () => {
+    expect(shouldPreserveDiagnosticsOnCrash([{ severity: 1, message: 'err' }])).toBe(true);
+    expect(shouldPreserveDiagnosticsOnCrash([])).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { downloadRanges, type DownloadOptions } from './sw-download';
+import { downloadRanges, downloadStream, type DownloadOptions } from './sw-download';
 
 const bytes = (length: number) => Uint8Array.from({ length }, (_, index) => index % 251);
 
@@ -307,5 +307,99 @@ describe('downloadRanges', () => {
 
     expect(new Uint8Array(parts[0]!)).toEqual(body);
     expect(seen).toEqual([4]);
+  });
+});
+
+describe('downloadStream', () => {
+  it('使用不带 Range 的简单 GET 流式读取并单调汇报进度', async () => {
+    const body = bytes(10);
+    let tick = 0;
+    const progress: number[] = [];
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.headers).toBeUndefined();
+      return {
+        ok: true,
+        status: 200,
+        body: {
+          getReader() {
+            let step = 0;
+            return {
+              read: async () => {
+                tick += 200;
+                if (step === 0) {
+                  step += 1;
+                  return { done: false, value: body.slice(0, 4) };
+                }
+                if (step === 1) {
+                  step += 1;
+                  return { done: false, value: body.slice(4) };
+                }
+                return { done: true, value: undefined };
+              },
+              cancel: vi.fn(),
+            };
+          },
+        },
+      } as unknown as Response;
+    });
+
+    const parts = await downloadStream({
+      url: 'https://modelscope.cn/datasets/example/lean4-assets/resolve/master/wasm-lean4/lean.mjs',
+      total: 10,
+      timeoutMs: 10_000,
+      retries: 1,
+      signal: new AbortController().signal,
+      fetchImpl,
+      now: () => tick,
+      onProgress: ({ loaded }) => progress.push(loaded),
+    });
+
+    expect(new Uint8Array(parts[0]!)).toEqual(body);
+    expect(progress).toEqual([4, 10]);
+  });
+
+  it('瞬时 HTTP 异常后会重试，超限则取消流并抛错', async () => {
+    const body = bytes(4);
+    let calls = 0;
+    const parts = await downloadStream({
+      url: 'https://modelscope.cn/asset',
+      total: 4,
+      timeoutMs: 10_000,
+      retries: 1,
+      signal: new AbortController().signal,
+      sleep: async () => undefined,
+      fetchImpl: vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) return new Response(null, { status: 502 });
+        return new Response(body, { status: 200 });
+      }),
+    });
+    expect(calls).toBe(2);
+    expect(new Uint8Array(parts[0]!)).toEqual(body);
+
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      downloadStream({
+        url: 'https://modelscope.cn/bad',
+        total: 4,
+        timeoutMs: 10_000,
+        retries: 0,
+        signal: new AbortController().signal,
+        fetchImpl: vi.fn(
+          async () =>
+            ({
+              ok: true,
+              status: 200,
+              body: {
+                getReader: () => ({
+                  read: async () => ({ done: false, value: new Uint8Array([1, 2, 3, 4, 5]) }),
+                  cancel,
+                }),
+              },
+            }) as unknown as Response,
+        ),
+      }),
+    ).rejects.toThrow('returned more than 4 bytes');
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 });

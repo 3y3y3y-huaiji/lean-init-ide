@@ -1314,7 +1314,7 @@ export const en: Messages = {
       `The current code may have triggered deep recursion or a stack overflow inside Lean. Your code is preserved; edit it and restart manually. Error: ${message}`,
     crashRestartFailed:
       'Automatic restart failed. Check your network or cache, then retry manually.',
-    crashDiagnostics: 'Lean crashed; old diagnostics were cleared',
+    crashDiagnostics: 'Lean crashed before producing diagnostics',
     restartLean: 'Restart Lean',
     copyError: 'Copy error',
     copyErrorDone: 'Copied',
@@ -1331,8 +1331,12 @@ export const en: Messages = {
     assetFallbackLabel: (name, message) => `Last fallback: ${name}: ${message}`,
     statusLspReady: 'LSP ready',
     statusWaitingDiagnostics: 'Waiting for diagnostics…',
+    statusChecking: 'Checking file…',
+    statusRunUnconfirmed: 'File check unconfirmed',
     statusReady: (count, ms) => `Ready · diagnostics #${count} ${ms} ms`,
     statusNoDiagnostics: (ms) => `No diagnostics · ${ms} ms`,
+    diagnosticsUnconfirmed:
+      'Could not confirm file check completed (Lean may still be busy or timed out)',
     logSwReady: 'Service worker ready; Lean assets stream in parallel chunks',
     logSwFailed: (message) =>
       `Service worker registration failed, falling back to Pages: ${message}`,
@@ -1345,7 +1349,7 @@ export const en: Messages = {
     logRecovered: 'Lean restarted; editor contents preserved',
     logSourceSwitched: (label) => `Switched asset source to ${label}; retrying…`,
     logSourceAuto: 'Restored automatic asset source selection',
-    logRunBarrierFallback: 'Could not confirm file processing; settled from current diagnostics',
+    logRunBarrierFallback: 'Could not confirm file processing finished; holding pass banner',
     logInitialize: (seconds) => `initialize finished in ${seconds}s`,
     logStartFailed: (message) => `Startup failed: ${message}`,
     logStopped: 'Lean engine stopped, worker and memory released',

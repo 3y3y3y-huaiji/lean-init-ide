@@ -194,8 +194,11 @@ export type Messages = {
     assetFallbackLabel: (name: string, message: string) => string;
     statusLspReady: string;
     statusWaitingDiagnostics: string;
+    statusChecking: string;
+    statusRunUnconfirmed: string;
     statusReady: (count: number, ms: number) => string;
     statusNoDiagnostics: (ms: number) => string;
+    diagnosticsUnconfirmed: string;
     logSwReady: string;
     logSwFailed: (message: string) => string;
     logCacheCleared: string;

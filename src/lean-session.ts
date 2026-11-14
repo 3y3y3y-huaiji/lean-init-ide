@@ -14,12 +14,18 @@ export type LspDiagnostic = {
   source?: string;
 };
 
+export type FileProgressNotification = {
+  uri: string;
+  processingCount: number;
+};
+
 export type LeanSessionOptions = {
   createServer: () => Promise<LeanSessionServer>;
   createConnection: (server: LeanSessionServer) => MessageConnection;
   uri?: string;
   languageId?: string;
   onDiagnostics?: (params: { uri: string; diagnostics: LspDiagnostic[] }) => void;
+  onFileProgress?: (params: FileProgressNotification) => void;
   onLog?: (message: string) => void;
   onStateChange?: (state: LeanSessionState) => void;
   readyTimeoutMs?: number;
@@ -51,6 +57,14 @@ type PublishDiagnostics = {
   uri: string;
   version?: number;
   diagnostics: LspDiagnostic[];
+};
+
+type RawFileProgress = {
+  textDocument?: {
+    uri?: string;
+    version?: number;
+  };
+  processing?: unknown[];
 };
 
 /** 提取 import 行做比较：只有 import 变化才需要让 Lean 重建文档进程。 */
@@ -196,6 +210,14 @@ export class LeanSession {
           run.lastPublishAt = Date.now();
         }
         this.options.onDiagnostics?.(params);
+      });
+      connection.onNotification('$/lean/fileProgress', (params: RawFileProgress) => {
+        const uri = params?.textDocument?.uri;
+        if (!uri) return;
+        this.options.onFileProgress?.({
+          uri,
+          processingCount: Array.isArray(params.processing) ? params.processing.length : 0,
+        });
       });
       connection.onNotification('window/logMessage', (params: { message: string }) =>
         this.options.onLog?.(`server: ${params.message}`),

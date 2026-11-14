@@ -19,13 +19,18 @@ const diagnostic = (message: string): LspDiagnostic => ({
 
 const makeHarness = (overrides: Partial<LeanSessionOptions> = {}) => {
   let publishDiagnostics: ((params: DiagnosticParams) => void) | undefined;
+  let fileProgress: ((params: unknown) => void) | undefined;
   const notifications: Array<{ method: string; params: unknown }> = [];
   const documentSymbolResolvers: Array<() => void> = [];
   const handlers: string[] = [];
   const connection = {
-    onNotification: vi.fn((method: string, handler: (params: DiagnosticParams) => void) => {
+    onNotification: vi.fn((method: string, handler: (params: never) => void) => {
       handlers.push(method);
-      if (method === 'textDocument/publishDiagnostics') publishDiagnostics = handler;
+      if (method === 'textDocument/publishDiagnostics') {
+        publishDiagnostics = handler as (params: DiagnosticParams) => void;
+      } else if (method === '$/lean/fileProgress') {
+        fileProgress = handler as (params: unknown) => void;
+      }
       return { dispose: vi.fn() };
     }),
     onRequest: vi.fn((method: string) => {
@@ -76,6 +81,7 @@ const makeHarness = (overrides: Partial<LeanSessionOptions> = {}) => {
     states,
     handlers,
     publish: (params: DiagnosticParams) => publishDiagnostics?.(params),
+    emitFileProgress: (params: unknown) => fileProgress?.(params),
     completeRun: () => documentSymbolResolvers.shift()?.(),
     sent: (method: string) =>
       connection.sendNotification.mock.calls.filter(([name]) => name === method),
@@ -421,5 +427,25 @@ describe('LeanSession', () => {
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(h.sent('textDocument/didOpen')).toHaveLength(1);
+  });
+
+  it('转发 $/lean/fileProgress 的处理中与空闲计数，并忽略缺少 uri 的通知', async () => {
+    const onFileProgress = vi.fn();
+    const h = makeHarness({ onFileProgress });
+    await h.session.start('initial');
+
+    h.emitFileProgress({ textDocument: { uri: 'file:///workspace/Main.lean' }, processing: [{}] });
+    h.emitFileProgress({ textDocument: { uri: 'file:///workspace/Main.lean' }, processing: [] });
+    h.emitFileProgress({});
+
+    expect(onFileProgress).toHaveBeenCalledTimes(2);
+    expect(onFileProgress).toHaveBeenNthCalledWith(1, {
+      uri: 'file:///workspace/Main.lean',
+      processingCount: 1,
+    });
+    expect(onFileProgress).toHaveBeenNthCalledWith(2, {
+      uri: 'file:///workspace/Main.lean',
+      processingCount: 0,
+    });
   });
 });

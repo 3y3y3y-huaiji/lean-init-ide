@@ -7,6 +7,7 @@ import {
   pageDescription,
   pageTitle,
   renderNotFound,
+  renderStaticApp,
 } from './prerender';
 
 const BASE_TEMPLATE = `<!doctype html>
@@ -36,6 +37,8 @@ describe('SSG 预渲染', () => {
     expect(outputRelPath({ page: 'lesson', locale: 'zh', slug: 'what-is-lean' })).toBe(
       'zh/learn/what-is-lean.html',
     );
+    expect(outputRelPath({ page: 'reference', locale: 'en' })).toBe('en/reference.html');
+    expect(outputRelPath({ page: 'privacy', locale: 'zh' })).toBe('zh/privacy.html');
     expect(outputRelPath({ page: 'notFound', locale: 'zh' })).toBe('index.html');
   });
 
@@ -82,5 +85,8 @@ describe('SSG 预渲染', () => {
     const withDollar = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'reference', locale: 'zh' });
     expect(withDollar).toContain('</html>');
     expect(withDollar).toContain('<script type="module" crossorigin src="/assets/index-test.js">');
+
+    expect(renderStaticApp({ page: 'notFound', locale: 'en' })).toContain('/en/');
+    expect(renderStaticApp({ page: 'privacy', locale: 'en' })).toContain('/en/');
   });
 });

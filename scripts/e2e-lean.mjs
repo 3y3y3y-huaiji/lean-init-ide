@@ -287,21 +287,24 @@ const main = async () => {
     if (!hiddenAfterLateError) throw new Error('晚到的错误没有收起运行通过');
     console.log(`[${stamp()}] 成功提示只在诊断结算后显示`);
 
-    // 屏障不可用（documentSymbol 失败/超时）时不能永远不亮：退化结算后仍要显示运行通过。
+    // 屏障不可用（documentSymbol 失败/超时）时绝不误报通过，应明确提示检查尚未确认完成。
     await page.evaluate(() => globalThis.__skipRunBarrier());
     await page.evaluate(() => globalThis.__editor.setValue('example : 3 + 3 = 6 := rfl'));
     const fallbackDeadline = Date.now() + 30_000;
-    let fallbackText = '';
+    let fallbackLogged = false;
     while (Date.now() < fallbackDeadline) {
       await page.waitForTimeout(500);
       const snapshot = await read();
-      if (snapshot.runOk.visible && snapshot.runOk.text.includes('运行通过')) {
-        fallbackText = snapshot.runOk.text;
+      if (snapshot.runOk.visible) {
+        throw new Error(`屏障不可用时误亮了运行通过提示: ${snapshot.runOk.text}`);
+      }
+      if (snapshot.log.includes('无法确认文件处理完成')) {
+        fallbackLogged = true;
         break;
       }
     }
-    if (!fallbackText) throw new Error('屏障不可用时运行通过提示没有出现');
-    console.log(`[${stamp()}] 屏障不可用时的退化提示: ${fallbackText}`);
+    if (!fallbackLogged) throw new Error('屏障不可用时没有记录未确认日志');
+    console.log(`[${stamp()}] 屏障不可用时未误亮通过提示，已记录未确认日志`);
 
     // 第七阶段：资产下载失败时给出可换源的恢复入口。
     await page.evaluate(() =>
@@ -357,11 +360,9 @@ const main = async () => {
     if (!completionOk) throw new Error('练习通过后没有写入完成进度');
     console.log(`[${stamp()}] 完成进度已写入 math-parity`);
 
-    // 第九阶段：模拟 worker 崩溃，确认自动重启且编辑内容不丢。
+    // 第九阶段：普通 worker 崩溃自动重启并保留内容；栈溢出崩溃直接转手动避免循环崩溃。
     await page.evaluate(() => {
-      globalThis.__leanCrash(
-        'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
-      );
+      globalThis.__leanCrash('Lean worker exited unexpectedly (code 1)');
     });
     const crashVisible = await page.evaluate(() => {
       const el = globalThis.document.querySelector('[data-role="crash"]');
@@ -374,6 +375,26 @@ const main = async () => {
     );
     if (!preserved) throw new Error('崩溃重启后编辑内容丢失');
     console.log(`[${stamp()}] 崩溃自动重启完成，编辑内容保留`);
+
+    await page.evaluate(() => {
+      globalThis.__leanCrash(
+        'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
+      );
+    });
+    await page.waitForTimeout(1_000);
+    const manualCrashState = await page.evaluate(() => {
+      const card = globalThis.document.querySelector('[data-role="crash"]');
+      const btn = globalThis.document.querySelector('[data-role="crash-restart"]');
+      return {
+        visible: !!card && !card.hidden,
+        disabled: btn?.disabled ?? true,
+        text: card?.textContent ?? '',
+      };
+    });
+    if (!manualCrashState.visible || manualCrashState.disabled) {
+      throw new Error(`栈溢出崩溃未直接转入可手动重启状态: ${JSON.stringify(manualCrashState)}`);
+    }
+    console.log(`[${stamp()}] 栈溢出崩溃已拦截自动循环并允许手动重启`);
 
     // 第十阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
     await page.goto(`${origin}/zh/reference`, { waitUntil: 'domcontentloaded' });

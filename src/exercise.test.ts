@@ -59,4 +59,11 @@ describe('isExerciseSolved', () => {
       isExerciseSolved(STARTER, SOLVED.replace('theorem zero_add ', 'theorem zero_add_rw '), []),
     ).toBe(false);
   });
+
+  it('注释中的 sorry 不影响通关，且未标注 severity 默认按错误处理', () => {
+    const withComments = `${SOLVED}\n-- TODO sorry\n/- sorry inside block comment -/\n`;
+    expect(isExerciseSolved(STARTER, withComments, [])).toBe(true);
+    expect(isExerciseSolved(STARTER, withComments, [{}])).toBe(false);
+    expect(isExerciseSolved('example : True := rfl', 'example : True := rfl', [])).toBe(false);
+  });
 });

@@ -133,6 +133,16 @@ describe('骨架交互绑定', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(panel.hidden).toBe(true);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    expect(panel.hidden).toBe(false);
+    panel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(panel.hidden).toBe(false);
+    document.body
+      .querySelector<HTMLElement>('#probe')!
+      .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(panel.hidden).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('自动启动开关回显已保存的偏好', () => {
@@ -169,6 +179,20 @@ describe('骨架交互绑定', () => {
     expect(status.textContent).toBe(messagesFor('zh').settings.clearCacheDone);
     expect(button.disabled).toBe(false);
     expect(button.textContent).toContain(messagesFor('zh').settings.clearCache);
+  });
+
+  it('清理缓存失败时提示失败并恢复按钮可点状态', async () => {
+    clearRuntimeCache.mockRejectedValueOnce(new Error('storage blocked'));
+    mount('en');
+    const button = document.body.querySelector<HTMLButtonElement>('#clear-cache')!;
+    const status = document.body.querySelector<HTMLElement>('#clear-cache-status')!;
+
+    button.click();
+    await vi.waitFor(() => expect(status.hidden).toBe(false));
+
+    expect(status.textContent).toBe(messagesFor('en').settings.clearCacheFailed);
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toContain(messagesFor('en').settings.clearCache);
   });
 
   it('点击语言切换记住目标语言但不触发导航', () => {

@@ -25,7 +25,7 @@ import {
   type RuntimeManifest,
   type SourceMode,
 } from './asset-sources.mjs';
-import { downloadRanges } from './sw-download';
+import { downloadRanges, downloadStream } from './sw-download';
 import { loadRangedAsset } from './sw-assemble';
 import { createAssetNotifyGate, createProgressTracker } from './sw-progress';
 
@@ -141,8 +141,19 @@ sw.addEventListener('fetch', (event) => {
         bytes: asset.bytes,
         sources,
         origin: sw.location.origin,
-        download: (url, total, signal, onProgress) =>
-          downloadRanges({
+        download: (url, total, signal, onProgress) => {
+          const sameOrigin = new URL(url, sw.location.origin).origin === sw.location.origin;
+          if (!sameOrigin) {
+            return downloadStream({
+              url,
+              total,
+              timeoutMs: Math.max(CHUNK_TIMEOUT_MS * 4, 120_000),
+              retries: RETRIES,
+              signal,
+              onProgress: ({ loaded }) => onProgress(loaded, total),
+            });
+          }
+          return downloadRanges({
             url,
             total,
             chunkBytes: CHUNK_BYTES,
@@ -153,7 +164,8 @@ sw.addEventListener('fetch', (event) => {
             maxSplitDepth: MAX_SPLIT_DEPTH,
             signal,
             onProgress: ({ loaded }) => onProgress(loaded, total),
-          }),
+          });
+        },
         onProgress: (loaded, total, source) => void notify(name, loaded, total, source.label),
         onFallback: notifyFallback,
         fallbackFetch: (request) => fetch(request),

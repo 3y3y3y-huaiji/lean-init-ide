@@ -33,10 +33,64 @@ export type DownloadOptions = {
   sleep?: (ms: number) => Promise<void>;
 };
 
+export type StreamDownloadOptions = {
+  url: string;
+  total: number;
+  /** 整文件流式下载的时间预算（含重试）。 */
+  timeoutMs: number;
+  retries: number;
+  signal: AbortSignal;
+  onProgress?: (progress: DownloadProgress) => void;
+  fetchImpl?: typeof fetch;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+};
+
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const errorOf = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
+
+const readExactResponseBytes = async (
+  response: Response,
+  expected: number,
+  label: string,
+  onChunk: (received: number) => void,
+  onAbort: () => void,
+): Promise<ArrayBuffer> => {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength !== expected) {
+      throw new Error(`${label} returned ${bytes.byteLength} bytes`);
+    }
+    return bytes;
+  }
+
+  const bytes = new Uint8Array(expected);
+  let received = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (received + value.byteLength > expected) {
+        throw new Error(`${label} returned more than ${expected} bytes`);
+      }
+      bytes.set(value, received);
+      received += value.byteLength;
+      onChunk(received);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => {});
+    onAbort();
+    throw error;
+  }
+  if (received !== expected) {
+    onAbort();
+    throw new Error(`${label} returned ${received} bytes`);
+  }
+  return bytes.buffer;
+};
 
 export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuffer[]> => {
   const {
@@ -95,46 +149,23 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
       throw new Error(`unexpected HTTP ${response.status}`);
     }
     const expected = end - start + 1;
-    const reader = response.body?.getReader();
-    if (!reader) {
-      const bytes = await response.arrayBuffer();
-      if (bytes.byteLength !== expected) {
-        throw new Error(`range ${start}-${end} returned ${bytes.byteLength} bytes`);
-      }
-      committed += bytes.byteLength;
-      report(true);
-      return bytes;
-    }
-
-    const bytes = new Uint8Array(expected);
-    let received = 0;
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (received + value.byteLength > expected) {
-          throw new Error(`range ${start}-${end} returned more than ${expected} bytes`);
-        }
-        bytes.set(value, received);
-        received += value.byteLength;
+    const buffer = await readExactResponseBytes(
+      response,
+      expected,
+      `range ${start}-${end}`,
+      (received) => {
         inflight.set(key, received);
         report();
-      }
-    } catch (error) {
-      await reader.cancel().catch(() => {});
-      inflight.delete(key);
-      report(true);
-      throw error;
-    }
-    if (received !== expected) {
-      inflight.delete(key);
-      report(true);
-      throw new Error(`range ${start}-${end} returned ${received} bytes`);
-    }
-    committed += received;
+      },
+      () => {
+        inflight.delete(key);
+        report(true);
+      },
+    );
+    committed += expected;
     inflight.delete(key);
     report(true);
-    return bytes.buffer;
+    return buffer;
   };
 
   const fetchRange = async (start: number, end: number, depth: number): Promise<ArrayBuffer> => {
@@ -184,4 +215,69 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
     Array.from({ length: Math.min(Math.max(1, parallel), ranges.length) }, () => worker()),
   );
   return parts;
+};
+
+/**
+ * 跨域简单 GET 流式下载：不附带 Range 等非简单请求头，避免魔搭 LFS（cdn-lfs）
+ * 与 GitHub Raw 在 OPTIONS 预检返回 403 导致浏览器整段失败并回退慢速通道。
+ */
+export const downloadStream = async (options: StreamDownloadOptions): Promise<ArrayBuffer[]> => {
+  const {
+    url,
+    total,
+    timeoutMs,
+    retries,
+    signal,
+    onProgress,
+    fetchImpl = fetch,
+    now = Date.now,
+    sleep = defaultSleep,
+  } = options;
+
+  if (signal.aborted) throw signal.reason ?? new Error('Download aborted.');
+  let maxReported = 0;
+  let lastReportAt = 0;
+  const emit = (loaded: number, force = false) => {
+    if (!onProgress) return;
+    const at = now();
+    if (!force && at - lastReportAt < 120) return;
+    const next = Math.max(maxReported, Math.min(total, loaded));
+    if (next === maxReported && maxReported > 0) return;
+    lastReportAt = at;
+    maxReported = next;
+    onProgress({ loaded: maxReported, total });
+  };
+
+  let lastError: Error | undefined;
+  const deadline = now() + timeoutMs;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    if (signal.aborted) throw signal.reason ?? new Error('Download aborted.');
+    const remaining = deadline - now();
+    if (remaining <= 0) break;
+    try {
+      const response = await fetchImpl(url, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, remaining))]),
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`unexpected HTTP ${response.status}`);
+      }
+      const buffer = await readExactResponseBytes(
+        response,
+        total,
+        `stream ${url}`,
+        (received) => emit(received),
+        () => emit(maxReported, true),
+      );
+      emit(total, true);
+      return [buffer];
+    } catch (error) {
+      lastError = errorOf(error);
+      if (signal.aborted) throw lastError;
+      if (attempt < retries) await sleep(300 * (attempt + 1));
+    }
+  }
+
+  throw lastError ?? new Error(`stream ${url} failed`);
 };

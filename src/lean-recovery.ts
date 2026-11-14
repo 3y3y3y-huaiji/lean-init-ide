@@ -8,23 +8,50 @@ const AUTO_RESTART_DELAYS_MS = [800, 1600] as const;
 const ASSET_ERROR_RE =
   /asset|fetch|network|timeout|aborted|runtime|http\s*\d{3}|status\s*\d{3}|range|csp|content security policy|worker|wasm|zstd|cache|decode|chunk/i;
 
+const STACK_OVERFLOW_RE =
+  /maximum call stack|call stack size exceeded|stack overflow|runtimeerror:\s*unreachable/i;
+
 export type CrashRecoveryDecision = 'ignore' | 'auto' | 'manual';
 
 export const isAssetRelatedError = (message: string): boolean => ASSET_ERROR_RE.test(message);
+
+export const isStackOverflowError = (message: string): boolean => STACK_OVERFLOW_RE.test(message);
+
+export const shouldPreserveDiagnosticsOnCrash = (diagnostics: ReadonlyArray<unknown>): boolean =>
+  diagnostics.length > 0;
 
 export const decideCrashRecovery = (options: {
   variant: LeanPanelVariant;
   now: number;
   lastCrashAt: number;
+  message?: string;
+  sameCodeAsLastCrash?: boolean;
 }): CrashRecoveryDecision => {
-  const { variant, now, lastCrashAt } = options;
+  const { variant, now, lastCrashAt, message, sameCodeAsLastCrash = false } = options;
   if (lastCrashAt > 0 && now - lastCrashAt < CRASH_DEDUP_MS) {
     return 'ignore';
   }
-  if (variant === 'full' && (lastCrashAt === 0 || now - lastCrashAt > AUTO_RESTART_COOLDOWN_MS)) {
+  if (variant !== 'full') {
+    return 'manual';
+  }
+  if (sameCodeAsLastCrash || (message ? isStackOverflowError(message) : false)) {
+    return 'manual';
+  }
+  if (lastCrashAt === 0 || now - lastCrashAt > AUTO_RESTART_COOLDOWN_MS) {
     return 'auto';
   }
   return 'manual';
+};
+
+export const shouldShowRunPassed = (options: {
+  variant: LeanPanelVariant;
+  barrierOk: boolean;
+  fileProcessing: boolean;
+  diagnostics: ReadonlyArray<{ severity?: number }>;
+}): boolean => {
+  const { variant, barrierOk, fileProcessing, diagnostics } = options;
+  if (variant !== 'full' || !barrierOk || fileProcessing) return false;
+  return !diagnostics.some((item) => item.severity === 1 || item.severity === undefined);
 };
 
 export const nextAutoRestartDelayMs = (attempt: number): number | null =>

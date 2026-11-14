@@ -25,6 +25,8 @@ import {
   decideCrashRecovery,
   isAssetRelatedError,
   nextAutoRestartDelayMs,
+  shouldPreserveDiagnosticsOnCrash,
+  shouldShowRunPassed,
 } from '../lean-recovery';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
@@ -487,9 +489,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let successTimer: number | undefined;
   let settleTimer: number | undefined;
   let successSeq = 0;
-  // 屏障不可用（请求失败、返回 null 或超时）时退化为更长的静默窗口，不能让提示永远不出现。
+  // 屏障不可用（请求失败、返回 null 或超时）时绝不误亮通过，只记录一次日志。
   let barrierFallbackLogged = false;
   let runBarrierDisabled = false;
+  let fileProcessing = false;
 
   let progressLabel = t.statusIdle;
   let progressKind: LeanPanelProgressKind = 'idle';
@@ -520,6 +523,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     autoStartTimer = undefined;
   };
   let lastCrashMessage = '';
+  let lastCrashedCode: string | null = null;
   let lastStartError: string | null = null;
   let lastAssetFallback: { name: string; message: string } | null = null;
   let freshHandled = false;
@@ -645,12 +649,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   /**
    * 诊断是分批到达的：第一批没有错误不代表整个文件通过。
-   * 用 documentSymbol 作为处理屏障，再等 150ms 静默，确认没有更新的诊断后才亮成功提示。
-   * 屏障本身失败（返回 null、报错或超时）时不能一直不亮：退化为 600ms 静默窗口，
-   * 期间只要有新诊断就会被 resetRunOk 撤销。
+   * 必须结合 $/lean/fileProgress 空闲与 documentSymbol 屏障，再等 150ms 静默才亮成功提示；
+   * 屏障失败、超时或文件仍在处理中时，绝不能假显示“运行通过”。
    */
   const confirmRunSettled = async (seq: number, warningCount: number, latencyMs: number) => {
-    if (variant !== 'full' || seq !== successSeq || !session.isReady) return;
+    if (variant !== 'full' || seq !== successSeq || !session.isReady || fileProcessing) return;
     let barrierOk = !runBarrierDisabled;
     if (barrierOk) {
       try {
@@ -663,26 +666,51 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         barrierOk = false;
       }
     }
-    if (seq !== successSeq || !session.isReady) return;
-    if (!barrierOk && !barrierFallbackLogged) {
-      barrierFallbackLogged = true;
-      log(t.logRunBarrierFallback);
+    if (seq !== successSeq || !session.isReady || fileProcessing) return;
+    if (!barrierOk) {
+      if (!barrierFallbackLogged) {
+        barrierFallbackLogged = true;
+        log(t.logRunBarrierFallback);
+      }
+      if (lastDiagnostics.length === 0) {
+        setStatus(t.statusRunUnconfirmed, 'ready');
+        const item = document.createElement('li');
+        item.className = mutedItemClass;
+        item.textContent = t.diagnosticsUnconfirmed;
+        diagnosticsEl.replaceChildren(item);
+      }
+      return;
     }
     window.clearTimeout(settleTimer);
-    settleTimer = window.setTimeout(
-      () => {
-        settleTimer = undefined;
-        if (seq !== successSeq || !session.isReady) return;
-        if (!runOkEl || !runOkTitleEl || !runOkDetailEl) return;
-        if (lastDiagnostics.some((item) => item.severity === 1 || item.severity === undefined)) {
-          return;
-        }
-        runOkTitleEl.textContent = t.runPassed;
-        runOkDetailEl.textContent = t.runPassedDetail(warningCount, latencyMs);
-        runOkEl.hidden = false;
-      },
-      barrierOk ? 150 : 600,
-    );
+    settleTimer = window.setTimeout(() => {
+      settleTimer = undefined;
+      if (seq !== successSeq || !session.isReady) return;
+      if (!runOkEl || !runOkTitleEl || !runOkDetailEl) return;
+      if (
+        !shouldShowRunPassed({
+          variant,
+          barrierOk,
+          fileProcessing,
+          diagnostics: lastDiagnostics,
+        })
+      ) {
+        return;
+      }
+      lastCrashedCode = null;
+      runOkTitleEl.textContent = t.runPassed;
+      runOkDetailEl.textContent = t.runPassedDetail(warningCount, latencyMs);
+      runOkEl.hidden = false;
+    }, 150);
+  };
+
+  const scheduleRunPassedCheck = (warningCount: number, latencyMs: number, delayMs = 200) => {
+    if (variant !== 'full' || fileProcessing) return;
+    const seq = successSeq;
+    window.clearTimeout(successTimer);
+    successTimer = window.setTimeout(() => {
+      successTimer = undefined;
+      void confirmRunSettled(seq, warningCount, latencyMs);
+    }, delayMs);
   };
 
   const hideLoadFailure = () => {
@@ -714,7 +742,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       });
     }
     diagnosticSeq += 1;
-    setStatus(t.statusReady(diagnosticSeq, latency), 'ready');
+    setStatus(fileProcessing ? t.statusChecking : t.statusReady(diagnosticSeq, latency), 'ready');
 
     monaco.editor.setModelMarkers(
       model,
@@ -742,11 +770,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       (diagnostic) => diagnostic.severity === 2,
     ).length;
     if (variant === 'full' && errorCount === 0) {
-      const seq = successSeq;
-      successTimer = window.setTimeout(() => {
-        successTimer = undefined;
-        void confirmRunSettled(seq, warningCount, latency);
-      }, 200);
+      scheduleRunPassedCheck(warningCount, latency, 200);
     }
 
     diagnosticsEl.replaceChildren();
@@ -845,6 +869,33 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     createConnection: (server) =>
       createMessageConnection(server.transport.reader, server.transport.writer),
     onDiagnostics: renderDiagnostics,
+    onFileProgress: (params) => {
+      if (params.uri.toLowerCase() !== uri.toLowerCase()) return;
+      const wasProcessing = fileProcessing;
+      fileProcessing = params.processingCount > 0;
+      if (fileProcessing) {
+        resetRunOk();
+        if (session.isReady && diagnosticSeq > 0) {
+          setStatus(t.statusChecking, 'ready');
+        }
+        return;
+      }
+      if (wasProcessing && session.isReady) {
+        const errorCount = lastDiagnostics.filter(
+          (diagnostic) => diagnostic.severity === 1 || diagnostic.severity === undefined,
+        ).length;
+        const warningCount = lastDiagnostics.filter(
+          (diagnostic) => diagnostic.severity === 2,
+        ).length;
+        const latency = computeDiagnosticsLatencyMs(lastEditAt, performance.now());
+        if (diagnosticSeq > 0) {
+          setStatus(t.statusReady(diagnosticSeq, latency), 'ready');
+        }
+        if (errorCount === 0 && runOkEl?.hidden) {
+          scheduleRunPassedCheck(warningCount, latency, 150);
+        }
+      }
+    },
     onLog: log,
     // #check 的信息可能比 documentSymbol 晚几十毫秒，留一个静默窗口避免丢输出。
     diagnosticSettleMs: 300,
@@ -977,6 +1028,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   updateStatement();
 
   model.onDidChangeContent(() => {
+    lastCrashedCode = null;
     updateStatement();
     scheduleDraftSave();
     disarmReset();
@@ -1069,6 +1121,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     session.stop();
     engineEverReady = false;
     recoveryPending = false;
+    fileProcessing = false;
+    lastCrashedCode = null;
     lastStartError = null;
     lastAssetFallback = null;
     if (crashEl) crashEl.hidden = true;
@@ -1097,6 +1151,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     setStatus(t.statusLoading, 'loading');
     setProgress(0);
     hasAssetProgress = false;
+    fileProcessing = false;
     barrierFallbackLogged = false;
     resetRunOk();
     const startedAt = performance.now();
@@ -1183,12 +1238,23 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
    */
   function handleRuntimeCrash(message: string) {
     const now = Date.now();
+    const currentCode = model.getValue();
+    const sameCodeAsLastCrash = lastCrashedCode !== null && currentCode === lastCrashedCode;
     // 同一次崩溃可能同时触发 onStatus 与 run 失败，2 秒内只处理第一条。
-    const decision = decideCrashRecovery({ variant, now, lastCrashAt });
+    // 栈溢出或同一份代码重复崩溃时不自动重启，避免陷入「通过 → 爆栈 → 重启」循环。
+    const decision = decideCrashRecovery({
+      variant,
+      now,
+      lastCrashAt,
+      message,
+      sameCodeAsLastCrash,
+    });
     if (decision === 'ignore') return;
     const canAutoRestart = decision === 'auto';
     lastCrashAt = now;
     lastCrashMessage = message;
+    lastCrashedCode = currentCode;
+    fileProcessing = false;
 
     cancelAutoRecover();
     session.stop();
@@ -1210,13 +1276,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     resetRunOk();
     goalEl.textContent = t.goalPlaceholder;
     statementEl.hidden = true;
-    diagnosticsEl.replaceChildren();
-    const item = document.createElement('li');
-    item.className = mutedItemClass;
-    item.textContent = t.crashDiagnostics;
-    diagnosticsEl.append(item);
-    diagCountEl.textContent = '0';
-    lastDiagnostics = [];
+    // 崩溃或爆栈前已经诊断出来的错误/警告应保留展示，方便用户直接定位问题代码。
+    if (!shouldPreserveDiagnosticsOnCrash(lastDiagnostics)) {
+      diagnosticsEl.replaceChildren();
+      const item = document.createElement('li');
+      item.className = mutedItemClass;
+      item.textContent = t.crashDiagnostics;
+      diagnosticsEl.append(item);
+      diagCountEl.textContent = '0';
+      lastDiagnostics = [];
+    }
 
     if (crashEl && crashTitleEl && crashDetailEl) {
       crashEl.hidden = false;

@@ -10,12 +10,13 @@ on:
 permissions:
   contents: read
 
+# 长构建不能被随手一推杀掉；新提交排队等待。
 concurrency:
   group: spike-wasm64
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  probe-and-build:
+  prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -121,13 +122,80 @@ jobs:
           export EMSDK="$GITHUB_WORKSPACE/emsdk"
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
-          bash producer/lean-browser/scripts/build.sh emsdk cgen
+          bash producer/lean-browser/scripts/build.sh cgen
+
+  finish:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+
+      - name: 缓存 Emscripten 6.0.0
+        uses: actions/cache@v6
+        with:
+          path: emsdk
+          key: wasm64-emsdk-6.0.0-v1
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          if [ ! -x emsdk/upstream/emscripten/emcc ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
+          fi
+          source emsdk/emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 准备 wasm-llvm 并切成 wasm64 + O1
+        run: |
+          git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
+          cd wasm-llvm
+          sed -i \
+            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m64 -DCMAKE_CXX_FLAGS=-m64 -DCMAKE_EXE_LINKER_FLAGS=-m64|' \
+            -e 's|emcc -c -O2|emcc -m64 -c -O1|g' \
+            -e 's|emcc -O2 -pthread|emcc -m64 -O1 -pthread|g' \
+            -e 's|-sMAXIMUM_MEMORY=4294967296|-sMAXIMUM_MEMORY=17179869184|' \
+            producer/lean-browser/scripts/build.sh
+
+      - name: 恢复 Lean 源码与引导包
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/lean4
+            work/lean-4.34.1-linux
+          key: wasm64-src-v1
+
+      - name: 恢复 runtime 产物
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/build-wasm
+            work/emcache
+          key: wasm64-runtime-v1
+
+      - name: 恢复 cgen
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm64-cgen-v1
 
       - name: 缓存 objects
         uses: actions/cache@v6
         with:
           path: work/obj
           key: wasm64-obj-v1
+
+      - name: 写入 emsdk 路径（后续阶段不再重复检查）
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh emsdk
 
       - name: objects
         run: |
@@ -136,7 +204,7 @@ jobs:
           export EMSDK="$GITHUB_WORKSPACE/emsdk"
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
-          bash producer/lean-browser/scripts/build.sh emsdk objects
+          bash producer/lean-browser/scripts/build.sh objects
 
       - name: link
         run: |
@@ -145,7 +213,7 @@ jobs:
           export EMSDK="$GITHUB_WORKSPACE/emsdk"
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
-          bash producer/lean-browser/scripts/build.sh emsdk link
+          bash producer/lean-browser/scripts/build.sh link
 
       - name: 关键验证：用官方 64 位 Init oleans 启动 wasm64 Lean
         run: |

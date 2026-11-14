@@ -7,6 +7,10 @@ on:
         description: 只校验远端 Range/CORS，不重新上传
         type: boolean
         default: false
+      prune:
+        description: 上传前清理仓库根目录下的旧版本目录（如 14ea5ec/）
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,8 +48,10 @@ jobs:
           MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
           MODELSCOPE_REPO: HQZMSu/lean4-assets
         run: |
+          args=""
+          if [ "${{ inputs.prune }}" = "true" ]; then args="--prune"; fi
           if [ "${{ inputs.verify_only }}" = "true" ]; then
             pnpm run upload:modelscope -- --verify-only
           else
-            pnpm run upload:modelscope
+            pnpm run upload:modelscope -- $args
           fi

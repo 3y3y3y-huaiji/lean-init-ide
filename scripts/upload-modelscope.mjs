@@ -11,6 +11,7 @@
  *   --root=<dir>          仓库内目录，默认用 manifest.mirror.prefix，否则用 cacheKey
  *   --dry-run             只校验本地文件并打印目标 URL
  *   --verify-only         跳过上传，只校验远端 Range/CORS
+ *   --prune               上传前删掉仓库根目录下旧版本目录（如 14ea5ec/）
  *   --keep                保留下载的临时仓库目录
  *
  * 仓库需先在 modelscope.cn 创建为公开仓库；token 在「个人中心 → 访问令牌」生成。
@@ -23,6 +24,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -48,6 +50,7 @@ const username = process.env.MODELSCOPE_USERNAME ?? '';
 const token = process.env.MODELSCOPE_TOKEN ?? '';
 const dryRun = args.has('dry-run');
 const verifyOnly = args.has('verify-only');
+const prune = args.has('prune');
 const keep = args.has('keep');
 
 const assetDir = join(root, 'public', 'wasm-lean4');
@@ -125,7 +128,11 @@ const upload = () => {
   try {
     console.log(`modelscope: 克隆 ${repoPrefix}/${repo} 到临时目录`);
     try {
-      execFileSync('git', ['clone', '--depth', '1', cloneUrl(true), work], { stdio: 'pipe' });
+      execFileSync('git', ['clone', '--depth', '1', cloneUrl(true), work], {
+        stdio: 'pipe',
+        // 仓库里的 LFS 文件不会被改写，跳过 smudge 以免每次上传都重新下载 100MB。
+        env: { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' },
+      });
     } catch {
       // 空仓库 clone 可能失败，退化为 init + remote。
       mkdirSync(work, { recursive: true });
@@ -137,6 +144,19 @@ const upload = () => {
       execFileSync('git', ['checkout', '-b', 'master'], { cwd: work, stdio: 'pipe' });
     }
     execFileSync('git', ['lfs', 'install', '--local'], { cwd: work, stdio: 'pipe' });
+
+    if (prune) {
+      let removed = 0;
+      for (const entry of readdirSync(work, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name === '.git' || entry.name === rootDir) continue;
+        // 只清理旧 revision / cacheKey 目录（十六进制名），不碰 README 等仓库内容。
+        if (!/^[0-9a-f]{7,40}$/i.test(entry.name)) continue;
+        rmSync(join(work, entry.name), { recursive: true, force: true });
+        removed += 1;
+        console.log(`modelscope: 清理旧目录 ${entry.name}/`);
+      }
+      if (removed === 0) console.log('modelscope: 没有需要清理的旧目录');
+    }
 
     const attributes = join(work, '.gitattributes');
     const existing = existsSync(attributes) ? readFileSync(attributes, 'utf8') : '';
@@ -154,7 +174,7 @@ const upload = () => {
       copyFileSync(join(assetDir, asset.name), join(target, asset.name));
     }
 
-    execFileSync('git', ['add', '.'], { cwd: work, stdio: 'pipe' });
+    execFileSync('git', ['add', '-A'], { cwd: work, stdio: 'pipe' });
     try {
       execFileSync('git', ['commit', '-m', `assets: ${rootDir}`], { cwd: work, stdio: 'pipe' });
     } catch {

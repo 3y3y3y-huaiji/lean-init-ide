@@ -93,6 +93,9 @@ if (!(await exists(headersPath))) {
     'Cross-Origin-Opener-Policy: same-origin',
     'Cross-Origin-Embedder-Policy: require-corp',
     "connect-src 'self' data:",
+    // 镜像与 GitHub 回退都在页面 / Service Worker 里跨源 fetch；漏放行会静默退回慢源。
+    'https://*.modelscope.cn',
+    'https://raw.githubusercontent.com',
   ]) {
     if (!headers.includes(requirement)) fail(`_headers 缺少 "${requirement}"`);
   }

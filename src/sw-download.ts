@@ -64,8 +64,24 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
   const parts = new Array<ArrayBuffer>(ranges.length);
   let loaded = 0;
   let next = 0;
+  // 正在下载的分片按 key 记录已收到的字节：4MB 分片在慢网络下要几十秒，
+  // 只在分片完成时汇报会让进度条长时间停在原地，看起来像“没了”。
+  const inflight = new Map<number, number>();
+  let nextKey = 0;
+  let lastReportAt = 0;
+
+  const report = (force = false) => {
+    if (!onProgress) return;
+    const at = now();
+    if (!force && at - lastReportAt < 120) return;
+    lastReportAt = at;
+    let partial = 0;
+    for (const bytes of inflight.values()) partial += bytes;
+    onProgress({ loaded: loaded + partial, total });
+  };
 
   const fetchOnce = async (start: number, end: number, budgetMs: number): Promise<ArrayBuffer> => {
+    const key = nextKey++;
     const response = await fetchImpl(url, {
       headers: { Range: `bytes=${start}-${end}` },
       signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, budgetMs))]),
@@ -74,12 +90,40 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
     if (response.status !== 206) {
       throw new Error(`unexpected HTTP ${response.status}`);
     }
-    const bytes = await response.arrayBuffer();
     const expected = end - start + 1;
-    if (bytes.byteLength !== expected) {
-      throw new Error(`range ${start}-${end} returned ${bytes.byteLength} bytes`);
+    const reader = response.body?.getReader();
+    if (!reader) {
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength !== expected) {
+        throw new Error(`range ${start}-${end} returned ${bytes.byteLength} bytes`);
+      }
+      return bytes;
     }
-    return bytes;
+
+    const bytes = new Uint8Array(expected);
+    let received = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (received + value.byteLength > expected) {
+          throw new Error(`range ${start}-${end} returned more than ${expected} bytes`);
+        }
+        bytes.set(value, received);
+        received += value.byteLength;
+        inflight.set(key, received);
+        report();
+      }
+    } catch (error) {
+      inflight.delete(key);
+      report(true);
+      throw error;
+    }
+    inflight.delete(key);
+    if (received !== expected) {
+      throw new Error(`range ${start}-${end} returned ${received} bytes`);
+    }
+    return bytes.buffer;
   };
 
   const fetchRange = async (start: number, end: number, depth: number): Promise<ArrayBuffer> => {
@@ -124,7 +168,7 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
       const part = await fetchRange(start, end, 0);
       parts[index] = part;
       loaded += part.byteLength;
-      onProgress?.({ loaded, total });
+      report(true);
     }
   };
 

@@ -96,6 +96,9 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 
 - `Content-Security-Policy`：默认只允许同源；脚本额外放行 Cloudflare Web Analytics 的
   `static.cloudflareinsights.com`，并保留 `'wasm-unsafe-eval'`（WebAssembly 编译需要）。
+  `connect-src` 还要放行魔搭镜像（`modelscope.cn` 及其 `*.modelscope.cn` 重定向域名）和
+  `raw.githubusercontent.com`，否则 Service Worker 的跨源分片请求会被 CSP 拦掉，
+  表现为镜像与 GitHub 回退全部失败、只剩同源 R2 慢速下载。
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`：关闭摄像头、麦克风、定位、支付与 USB。
 

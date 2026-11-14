@@ -1013,10 +1013,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         onStatus: (status) => {
           if (status.state === 'loading') {
             // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。
-            if (!hasAssetProgress) {
-              setProgress(null);
-              setStatus(t.statusStarting, 'loading');
-            }
+            // 首块分片可能几十秒才完成，这里保留 start() 的“加载运行时…”文案，
+            // 不要提前写成“启动 LSP…”让人误以为下载已经结束。
+            if (!hasAssetProgress) setProgress(null);
           } else if (status.state === 'ready') {
             engineEverReady = true;
             setProgress(1);
@@ -1266,6 +1265,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     runStartedAt = 0;
     firstDiagnosticsReported = false;
     barrierFallbackLogged = false;
+    hasAssetProgress = false;
     resetRunOk();
     setStatus(memoryTier === 'low' ? t.statusLowMemory : t.statusIdle, 'idle');
     setProgress(0);
@@ -1285,6 +1285,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     void navigator.storage?.persist?.().catch(() => {});
     setStatus(t.statusLoading, 'loading');
     setProgress(0);
+    hasAssetProgress = false;
     barrierFallbackLogged = false;
     resetRunOk();
     const startedAt = performance.now();
@@ -1385,6 +1386,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       canAutoRestart ? 'loading' : 'error',
     );
     setProgress(0);
+    hasAssetProgress = false;
     resetRunOk();
     goalEl.textContent = t.goalPlaceholder;
     statementEl.hidden = true;

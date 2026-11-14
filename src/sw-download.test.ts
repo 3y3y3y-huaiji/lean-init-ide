@@ -49,6 +49,51 @@ describe('downloadRanges', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it('大分片下载途中就汇报进度，而不是等整片完成', async () => {
+    const body = bytes(8);
+    let tick = 0;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const [start, end] = rangeOf(init);
+      const slice = body.slice(start, end + 1);
+      const stream = {
+        getReader() {
+          let step = 0;
+          return {
+            read: async () => {
+              if (step === 0) {
+                step += 1;
+                return { done: false, value: slice.slice(0, 4) };
+              }
+              if (step === 1) {
+                step += 1;
+                return { done: false, value: slice.slice(4) };
+              }
+              return { done: true, value: undefined };
+            },
+          };
+        },
+      };
+      return { status: 206, body: stream } as unknown as Response;
+    });
+    const progress: number[] = [];
+
+    const parts = await downloadRanges(
+      base({
+        fetchImpl,
+        total: 8,
+        chunkBytes: 8,
+        parallel: 1,
+        timeoutMs: 10_000,
+        now: () => (tick += 200),
+        onProgress: ({ loaded }) => progress.push(loaded),
+      }),
+    );
+
+    expect(new Uint8Array(parts[0]!)).toEqual(body);
+    expect(progress).toContain(4);
+    expect(progress.at(-1)).toBe(8);
+  });
+
   it('单个分片瞬时失败后重试成功，不重下已完成的分片', async () => {
     const body = bytes(10);
     let failed = false;

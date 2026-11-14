@@ -151,8 +151,17 @@ sw.addEventListener('fetch', (event) => {
   );
 });
 
+let lastNotifyAt = 0;
+
 async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
   const overall = progressTracker.record(name, loaded);
+
+  // 分片内进度按流式上报，多个资产同时下载时会很密；页面 10Hz 已经足够。
+  // 完成消息必须放行，否则进度条可能停在 99%。
+  const done = loaded >= total;
+  const now = Date.now();
+  if (!done && now - lastNotifyAt < 100) return;
+  lastNotifyAt = now;
 
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {

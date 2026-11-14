@@ -1,7 +1,7 @@
 import './index.css';
 import { applySourcePreference } from './asset-source';
 import { buttonClass } from './components/ui';
-import { detectLocale, messagesFor, type Locale } from './i18n';
+import { detectLocale, loadLocale, messagesFor, type Locale } from './i18n';
 import { applyPageMeta } from './meta';
 import { readCompleted, readProgress } from './progress';
 import { resolveRoute, type Route } from './router';
@@ -48,6 +48,7 @@ const pageTitle = (route: Route): string => {
 };
 
 const boot = async (route: Route, root: HTMLElement) => {
+  await loadLocale(route.locale);
   document.title = pageTitle(route);
   applyPageMeta(document, {
     locale: route.locale,

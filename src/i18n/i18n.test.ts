@@ -57,4 +57,17 @@ describe('detectLocale', () => {
     const { detectLocale } = await import('./index');
     expect(detectLocale()).toBe('en');
   });
+
+  it('按需加载语言包并复用并发与已缓存结果', async () => {
+    const { loadLocale, messagesFor } = await import('./index');
+    expect(() => messagesFor('zh')).toThrow();
+
+    const [first, second] = await Promise.all([loadLocale('zh'), loadLocale('zh')]);
+    expect(first).toBe(second);
+    expect(messagesFor('zh')).toBe(first);
+    expect(await loadLocale('zh')).toBe(first);
+
+    const enMessages = await loadLocale('en');
+    expect(messagesFor('en')).toBe(enMessages);
+  });
 });

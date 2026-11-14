@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import manifest from '../../config/lean4-runtime.json';
 import { onRequest } from './[[path]]';
@@ -71,15 +72,43 @@ describe('同源 /cdn 网关', () => {
     expect(response.headers.get('Content-Range')).toBeNull();
   });
 
-  it('HEAD 返回同样的头但不带 body', async () => {
-    const response = await call(
-      createEnv(() => hit(sample.bytes)),
-      { method: 'HEAD' },
-    );
+  it('HEAD 返回同样的头但不带 body，且优先走 R2 head 避免开流', async () => {
+    const get = vi.fn(() => hit(sample.bytes));
+    const head = vi.fn(async () => ({ size: sample.bytes, etag: 'head-etag' }));
+    const env = { LEAN_ASSETS: { get, head } } as unknown as Ctx['env'];
+
+    const response = await call(env, { method: 'HEAD' });
 
     expect(response.status).toBe(200);
     expect(response.body).toBeNull();
     expect(response.headers.get('Content-Length')).toBe(String(sample.bytes));
+    expect(response.headers.get('ETag')).toBe('"head-etag"');
+    expect(response.headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(head).toHaveBeenCalledWith(sample.key);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('R2 head 返回 null 时同样 404', async () => {
+    const env = {
+      LEAN_ASSETS: { get: vi.fn(), head: vi.fn(async () => null) },
+    } as unknown as Ctx['env'];
+
+    const response = await call(env, { method: 'HEAD' });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('带 Range 的 HEAD 会取消未使用的流', async () => {
+    const stream = bodyStream(16);
+    const cancel = vi.spyOn(stream, 'cancel');
+    const get = vi.fn(() => ({ size: 16, body: stream }));
+
+    const response = await call(createEnv(get), { method: 'HEAD', range: 'bytes=0-15' });
+
+    expect(response.status).toBe(206);
+    expect(response.body).toBeNull();
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('合法 Range 返回 206 与正确的 Content-Range', async () => {
@@ -211,18 +240,31 @@ describe('边缘缓存', () => {
     expect(new Set(keys).size).toBe(2);
   });
 
-  it('HEAD 请求既不查缓存也不写缓存', async () => {
-    const cache = { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+  it('HEAD 请求命中缓存时直接返回空 body，未命中时不写缓存', async () => {
+    const cache = {
+      match: vi
+        .fn<() => Promise<Response | undefined>>()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce(new Response('payload', { status: 200 })),
+      put: vi.fn(async () => undefined),
+    };
     vi.stubGlobal('caches', { default: cache });
 
-    const response = await call(
+    const miss = await call(
       createEnv(() => hit(sample.bytes)),
       { method: 'HEAD' },
     );
-
-    expect(response.status).toBe(200);
-    expect(cache.match).not.toHaveBeenCalled();
+    expect(miss.status).toBe(200);
+    expect(miss.headers.get('X-Cdn-Cache')).toBe('MISS');
     expect(cache.put).not.toHaveBeenCalled();
+
+    const hitResponse = await call(
+      createEnv(() => hit(sample.bytes)),
+      { method: 'HEAD' },
+    );
+    expect(hitResponse.status).toBe(200);
+    expect(hitResponse.body).toBeNull();
+    expect(hitResponse.headers.get('X-Cdn-Cache')).toBe('HIT');
   });
 
   it('没有 Cache API 时退化为直读，不影响响应', async () => {
@@ -248,5 +290,23 @@ describe('边缘缓存', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Length')).toBe(String(sample.bytes));
+  });
+
+  it('提供 waitUntil 时把写缓存放到后台等待', async () => {
+    const cache = { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+    vi.stubGlobal('caches', { default: cache });
+    const waitUntil = vi.fn();
+
+    const response = await onRequest({
+      request: new Request('https://example.test/cdn/asset'),
+      env: createEnv(() => hit(sample.bytes)),
+      params: { path: sample.key },
+      waitUntil,
+    });
+
+    expect(response.status).toBe(200);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await waitUntil.mock.calls[0]?.[0];
+    expect(cache.put).toHaveBeenCalledTimes(1);
   });
 });

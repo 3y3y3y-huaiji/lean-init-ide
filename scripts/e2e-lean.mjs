@@ -34,122 +34,124 @@ const badLogPattern =
 const main = async () => {
   await waitForGateway();
   const browser = await chromium.launch({ channel, executablePath, headless: true });
-  // 固定英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文环境优先命中外部镜像。
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 1000 },
-    locale: 'en-US',
-    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
-  });
-  const page = await context.newPage();
-  const startedAt = Date.now();
-  const stamp = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
+  try {
+    // 固定英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文环境优先命中外部镜像。
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      locale: 'en-US',
+      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+    });
+    const page = await context.newPage();
+    const startedAt = Date.now();
+    const stamp = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
 
-  await page.goto(`${origin}/zh/playground?debug`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${origin}/zh/playground?debug`, { waitUntil: 'domcontentloaded' });
 
-  // 慢 runner 上 Service Worker 的注册与激活可能超过 1s；等 ready 再断言，避免固定等待造成偶发失败。
-  const env = await page.evaluate(async () => {
-    const registration =
-      'serviceWorker' in navigator
-        ? await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((resolve) => setTimeout(() => resolve(null), 30_000)),
-          ])
-        : null;
-    const worker = registration?.active ?? null;
-    // ready 之后 active worker 可能还停在 activating，再等一次状态切换。
-    if (worker && worker.state !== 'activated') {
-      await Promise.race([
-        new Promise((resolve) => {
-          worker.addEventListener('statechange', () => {
-            if (worker.state === 'activated') resolve(null);
-          });
-        }),
-        new Promise((resolve) => setTimeout(resolve, 10_000)),
-      ]);
-    }
-    return {
-      crossOriginIsolated: globalThis.crossOriginIsolated,
-      worker: worker?.state ?? null,
-      controlled: Boolean(navigator.serviceWorker.controller),
-    };
-  });
-  if (!env.crossOriginIsolated) throw new Error('page is not cross-origin isolated');
-  if (env.worker !== 'activated') throw new Error(`service worker state: ${env.worker}`);
-
-  // 首次加载时 active 可能已 activated，但页面还没被 controller 接管；
-  // 这时 /wasm-lean4/* 会绕过 SW 直接落到静态资源/SPA 回退，导致假失败。
-  if (!env.controlled) {
-    const controlled = await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          if (navigator.serviceWorker.controller) return resolve(true);
-          const timer = setTimeout(() => resolve(false), 10_000);
-          navigator.serviceWorker.addEventListener(
-            'controllerchange',
-            () => {
-              clearTimeout(timer);
-              resolve(true);
-            },
-            { once: true },
-          );
-        }),
-    );
-    if (!controlled) throw new Error('page is not controlled by the service worker');
-  }
-
-  await page.click('[data-role="start"]');
-  console.log(`[${stamp()}] 启动 Lean（默认示例）`);
-
-  const read = () =>
-    page.evaluate(() => {
-      const runOk = globalThis.document.querySelector('[data-role="run-ok"]');
+    // 慢 runner 上 Service Worker 的注册与激活可能超过 1s；等 ready 再断言，避免固定等待造成偶发失败。
+    const env = await page.evaluate(async () => {
+      const registration =
+        'serviceWorker' in navigator
+          ? await Promise.race([
+              navigator.serviceWorker.ready,
+              new Promise((resolve) => setTimeout(() => resolve(null), 30_000)),
+            ])
+          : null;
+      const worker = registration?.active ?? null;
+      // ready 之后 active worker 可能还停在 activating，再等一次状态切换。
+      if (worker && worker.state !== 'activated') {
+        await Promise.race([
+          new Promise((resolve) => {
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'activated') resolve(null);
+            });
+          }),
+          new Promise((resolve) => setTimeout(resolve, 10_000)),
+        ]);
+      }
       return {
-        state: globalThis.document.querySelector('[data-role="status"]')?.dataset.state,
-        status: globalThis.document.querySelector('[data-role="status"]')?.textContent ?? '',
-        log: globalThis.document.querySelector('[data-role="log"]')?.textContent ?? '',
-        runOk: {
-          visible: Boolean(runOk) && !runOk.hidden,
-          text: (runOk?.textContent ?? '').replace(/\s+/g, ' ').trim(),
-        },
-        diagnostics: [...globalThis.document.querySelectorAll('[data-role="diagnostics"] li')].map(
-          (node) => (node.textContent ?? '').trim(),
-        ),
+        crossOriginIsolated: globalThis.crossOriginIsolated,
+        worker: worker?.state ?? null,
+        controlled: Boolean(navigator.serviceWorker.controller),
       };
     });
+    if (!env.crossOriginIsolated) throw new Error('page is not cross-origin isolated');
+    if (env.worker !== 'activated') throw new Error(`service worker state: ${env.worker}`);
 
-  const deadline = Date.now() + timeoutMs;
-  let result;
-  while (Date.now() < deadline) {
-    await page.waitForTimeout(2000);
-    const snapshot = await read();
-    if (badLogPattern.test(snapshot.log)) {
-      result = { ok: false, reason: '日志出现资产回退或运行时错误', snapshot };
-      break;
+    // 首次加载时 active 可能已 activated，但页面还没被 controller 接管；
+    // 这时 /wasm-lean4/* 会绕过 SW 直接落到静态资源/SPA 回退，导致假失败。
+    if (!env.controlled) {
+      const controlled = await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            if (navigator.serviceWorker.controller) return resolve(true);
+            const timer = setTimeout(() => resolve(false), 10_000);
+            navigator.serviceWorker.addEventListener(
+              'controllerchange',
+              () => {
+                clearTimeout(timer);
+                resolve(true);
+              },
+              { once: true },
+            );
+          }),
+      );
+      if (!controlled) throw new Error('page is not controlled by the service worker');
     }
-    const initializeLine = snapshot.log
-      .split('\n')
-      .find((line) => line.includes('initialize 完成'));
-    const hasTypeError = snapshot.diagnostics.some((item) => item.includes('Type mismatch'));
-    const hasCheck = snapshot.diagnostics.some((item) => item.includes('Nat.add'));
-    if (snapshot.state === 'ready' && initializeLine && hasTypeError && hasCheck) {
-      result = { ok: true, snapshot, initializeLine };
-      break;
+
+    await page.click('[data-role="start"]');
+    console.log(`[${stamp()}] 启动 Lean（默认示例）`);
+
+    const read = () =>
+      page.evaluate(() => {
+        const runOk = globalThis.document.querySelector('[data-role="run-ok"]');
+        return {
+          state: globalThis.document.querySelector('[data-role="status"]')?.dataset.state,
+          status: globalThis.document.querySelector('[data-role="status"]')?.textContent ?? '',
+          log: globalThis.document.querySelector('[data-role="log"]')?.textContent ?? '',
+          runOk: {
+            visible: Boolean(runOk) && !runOk.hidden,
+            text: (runOk?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+          },
+          diagnostics: [
+            ...globalThis.document.querySelectorAll('[data-role="diagnostics"] li'),
+          ].map((node) => (node.textContent ?? '').trim()),
+        };
+      });
+
+    const deadline = Date.now() + timeoutMs;
+    let result;
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(2000);
+      const snapshot = await read();
+      if (badLogPattern.test(snapshot.log)) {
+        result = { ok: false, reason: '日志出现资产回退或运行时错误', snapshot };
+        break;
+      }
+      const initializeLine = snapshot.log
+        .split('\n')
+        .find((line) => line.includes('initialize 完成'));
+      const hasTypeError = snapshot.diagnostics.some((item) => item.includes('Type mismatch'));
+      const hasCheck = snapshot.diagnostics.some((item) => item.includes('Nat.add'));
+      if (snapshot.state === 'ready' && initializeLine && hasTypeError && hasCheck) {
+        result = { ok: true, snapshot, initializeLine };
+        break;
+      }
     }
-  }
 
-  const final = await read();
-  console.log(`[${stamp()}] 状态: ${final.status} (${final.state})`);
-  console.log('诊断:', JSON.stringify(final.diagnostics));
-  console.log('日志:\n' + final.log);
+    const final = await read();
+    console.log(`[${stamp()}] 状态: ${final.status} (${final.state})`);
+    console.log('诊断:', JSON.stringify(final.diagnostics));
+    console.log('日志:\n' + final.log);
 
-  // 第二阶段：换成无错误代码，确认界面上出现「运行通过」提示框，而不是只在日志里。
-  let successText = '';
-  if (result?.ok && final.runOk.visible) {
-    console.error('E2E FAIL: 有错误的示例不应显示运行通过');
-    await browser.close();
-    process.exit(1);
-  }
-  if (result?.ok) {
+    if (!result?.ok) {
+      throw new Error(result?.reason ?? '等待诊断超时');
+    }
+    if (final.runOk.visible) {
+      throw new Error('有错误的示例不应显示运行通过');
+    }
+
+    // 第二阶段：换成无错误代码，确认界面上出现「运行通过」提示框，而不是只在日志里。
+    let successText = '';
     await page.evaluate(() => {
       const editor = globalThis.__editor;
       if (!editor) throw new Error('debug editor handle missing');
@@ -165,13 +167,10 @@ const main = async () => {
       }
       if (badLogPattern.test(snapshot.log)) break;
     }
-    if (successText) console.log(`[${stamp()}] 成功提示框: ${successText}`);
-    else console.error('E2E FAIL: 无错误代码没有显示运行通过提示框');
-  }
+    if (!successText) throw new Error('无错误代码没有显示运行通过提示框');
+    console.log(`[${stamp()}] 成功提示框: ${successText}`);
 
-  // 第三阶段：左右分栏可拖拽，日志面板可从「面板显示」里隐藏。
-  let splitWidth = 0;
-  if (result?.ok && successText) {
+    // 第三阶段：左右分栏可拖拽，日志面板可从「面板显示」里隐藏。
     const aside = page.locator('[data-role="aside"]');
     const before = await aside.evaluate((node) => node.getBoundingClientRect().width);
     const box = await page.locator('[data-role="split"]').boundingBox();
@@ -182,7 +181,7 @@ const main = async () => {
     await page.mouse.up();
     const after = await aside.evaluate((node) => node.getBoundingClientRect().width);
     if (after < before + 60) throw new Error(`分栏拖拽无效: ${before} -> ${after}`);
-    splitWidth = Math.round(after);
+    const splitWidth = Math.round(after);
     console.log(`[${stamp()}] 分栏宽度: ${Math.round(before)} -> ${splitWidth}`);
 
     await page.click('[data-role="panels"] summary');
@@ -192,11 +191,9 @@ const main = async () => {
     );
     if (!logHidden) throw new Error('取消勾选后日志面板没有隐藏');
     console.log(`[${stamp()}] 日志面板已隐藏`);
-  }
 
-  // 第四阶段：Goal 面板不能把 plainGoal 返回的 ```lean 围栏当成正文显示。
-  let goalText = '';
-  if (result?.ok && successText) {
+    // 第四阶段：Goal 面板不能把 plainGoal 返回的 ```lean 围栏当成正文显示。
+    let goalText = '';
     await page.evaluate(() => {
       const editor = globalThis.__editor;
       editor.setValue('theorem goal_demo (a : Nat) : a + 0 = a := by\n  sorry');
@@ -212,18 +209,14 @@ const main = async () => {
       if (goalText.includes('⊢') && goalText.includes('a + 0 = a')) break;
     }
     if (goalText.includes('```')) {
-      console.error(`E2E FAIL: Goal 面板显示了 Markdown 围栏: ${goalText}`);
-      process.exit(1);
+      throw new Error(`Goal 面板显示了 Markdown 围栏: ${goalText}`);
     }
     if (!goalText.includes('⊢')) {
-      console.error(`E2E FAIL: Goal 面板没有显示目标: ${goalText}`);
-      process.exit(1);
+      throw new Error(`Goal 面板没有显示目标: ${goalText}`);
     }
     console.log(`[${stamp()}] Goal: ${goalText.replace(/\s+/g, ' ').trim()}`);
-  }
 
-  // 第五阶段：反斜杠缩写候选的每一行都要标出对应的 Unicode 符号，而不是只有选中行。
-  if (result?.ok && successText) {
+    // 第五阶段：反斜杠缩写候选的每一行都要标出对应的 Unicode 符号，而不是只有选中行。
     await page.evaluate(() => {
       const editor = globalThis.__editor;
       editor.setValue('');
@@ -239,15 +232,11 @@ const main = async () => {
     );
     const unannotated = rows.filter((row) => !row.includes('Unicode 缩写'));
     if (rows.length === 0 || unannotated.length > 0) {
-      console.error(`E2E FAIL: 缩写候选缺少 Unicode 标注: ${JSON.stringify(rows)}`);
-      process.exit(1);
+      throw new Error(`缩写候选缺少 Unicode 标注: ${JSON.stringify(rows)}`);
     }
     console.log(`[${stamp()}] 缩写候选: ${JSON.stringify(rows.slice(0, 3))}`);
-  }
 
-  // 第六阶段：练习通过后写入完成进度，而不只是显示一次徽章。
-  let completionOk = false;
-  if (result?.ok && successText) {
+    // 第六阶段：练习通过后写入完成进度，而不只是显示一次徽章。
     await page.goto(`${origin}/zh/playground?lesson=math-parity&debug`, {
       waitUntil: 'domcontentloaded',
     });
@@ -258,6 +247,7 @@ const main = async () => {
         'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  rcases h with ⟨k, rfl⟩\n  exact ⟨k * b, by rw [Nat.mul_assoc]⟩\n',
       );
     });
+    let completionOk = false;
     const completionDeadline = Date.now() + 30_000;
     while (Date.now() < completionDeadline) {
       await page.waitForTimeout(500);
@@ -272,15 +262,10 @@ const main = async () => {
       });
       if (completionOk) break;
     }
-    if (!completionOk) {
-      console.error('E2E FAIL: 练习通过后没有写入完成进度');
-      process.exit(1);
-    }
+    if (!completionOk) throw new Error('练习通过后没有写入完成进度');
     console.log(`[${stamp()}] 完成进度已写入 math-parity`);
-  }
 
-  // 第七阶段：速查表路由必须能直接打开。
-  if (result?.ok) {
+    // 第七阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
     await page.goto(`${origin}/zh/reference`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h1');
     const referenceOk = await page.evaluate(() => {
@@ -288,31 +273,33 @@ const main = async () => {
       const text = globalThis.document.body.textContent ?? '';
       return title.includes('速查') && text.includes('grind') && text.includes('type mismatch');
     });
-    if (!referenceOk) {
-      console.error('E2E FAIL: 速查表页面没有正确渲染');
-      process.exit(1);
+    if (!referenceOk) throw new Error('速查表页面没有正确渲染');
+
+    await page.goto(`${origin}/en/reference`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('h1');
+    const enOk = await page.evaluate(() => {
+      const title = globalThis.document.querySelector('h1')?.textContent ?? '';
+      const text = globalThis.document.body.textContent ?? '';
+      return title.includes('Tactics') && text.includes('grind') && text.includes('type mismatch');
+    });
+    if (!enOk) throw new Error('英文速查表页面没有正确渲染');
+
+    const telemetryStatus = await page.evaluate(async () => {
+      const res = await fetch('/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ v: 1, events: [{ name: 'boot', ts: Date.now() }] }),
+      });
+      return res.status;
+    });
+    if (telemetryStatus !== 204) {
+      throw new Error(`/api/telemetry 期望 204，实际 ${telemetryStatus}`);
     }
-    console.log(`[${stamp()}] 速查表页面正常`);
+    console.log(`[${stamp()}] 速查表 / 英文路由 / 遥测端点正常`);
+    console.log(`E2E PASS: ${result.initializeLine?.trim()}`);
+  } finally {
+    await browser.close();
   }
-
-  await browser.close();
-
-  if (!result?.ok) {
-    console.error(`E2E FAIL: ${result?.reason ?? '等待诊断超时'}`);
-    process.exit(1);
-  }
-  if (!successText) {
-    process.exit(1);
-  }
-  if (!splitWidth) {
-    console.error('E2E FAIL: 没有验证左右分栏拖拽');
-    process.exit(1);
-  }
-  if (!goalText) {
-    console.error('E2E FAIL: 没有读到 Goal 文本');
-    process.exit(1);
-  }
-  console.log(`E2E PASS: ${result.initializeLine?.trim()}`);
 };
 
 main().catch((error) => {

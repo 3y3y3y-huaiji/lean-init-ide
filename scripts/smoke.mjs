@@ -31,13 +31,14 @@ const probe = manifest.assets[0];
 const tailAsset = manifest.assets.find((asset) => asset.name === 'lean-init-05.pack.gz.bin');
 const workerAsset = manifest.assets.find((asset) => asset.name === 'runner-worker.js');
 
-const request = async (url, { method = 'GET', headers = {} } = {}) => {
+const request = async (url, { method = 'GET', headers = {}, body: payload } = {}) => {
   const dir = await mkdtemp(join(tmpdir(), 'lean-smoke-'));
   const headPath = join(dir, 'headers.txt');
   const bodyPath = join(dir, 'body.bin');
   try {
     const args = ['-sS', '--max-time', '25', '-o', bodyPath, '-D', headPath, '-X', method];
     for (const [name, value] of Object.entries(headers)) args.push('-H', `${name}: ${value}`);
+    if (payload !== undefined) args.push('--data-raw', payload);
     args.push(url);
 
     await run('curl', args, { maxBuffer: 4 * 1024 * 1024 });
@@ -186,6 +187,22 @@ await check('worker 资产与清单一致', async () => {
   const sha256 = createHash('sha256').update(response.body).digest('hex');
   assert(sha256 === workerAsset.sha256, `sha256=${sha256}，期望 ${workerAsset.sha256}`);
   return `200，${response.body.length} B，sha256 一致`;
+});
+
+await check('/api/telemetry 路由已接管', async () => {
+  const getResp = await request(`${origin}/api/telemetry`);
+  assert(getResp.status === 405, `GET 期望 405，实际 ${getResp.status}（疑似回落到 SPA）`);
+  assert(
+    (getResp.headers.get('allow') ?? '').includes('POST'),
+    `Allow=${getResp.headers.get('allow') ?? '(缺失)'}`,
+  );
+  const postResp = await request(`${origin}/api/telemetry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  assert(postResp.status === 400, `空负载 POST 期望 400，实际 ${postResp.status}`);
+  return 'GET 405 / 空负载 POST 400（Functions 正常接管）';
 });
 
 // 魔搭是第三方镜像，波动不应阻断发布：记录结果但不计入失败。

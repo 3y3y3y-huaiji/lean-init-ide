@@ -127,6 +127,12 @@ describe('骨架交互绑定', () => {
     toggle.click();
     expect(panel.hidden).toBe(true);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    expect(panel.hidden).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(panel.hidden).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('自动启动开关回显已保存的偏好', () => {

@@ -5,6 +5,7 @@ import {
   isSourceMode,
   prefersDomesticMirror,
   rangedAssets,
+  resolveSourceGroup,
   withCacheKey,
 } from './asset-sources.mjs';
 import type { RuntimeManifest } from './asset-sources.mjs';
@@ -181,6 +182,14 @@ describe('assetSources', () => {
       expect(isSourceMode('')).toBe(false);
       expect(isSourceMode(null)).toBe(false);
       expect(isSourceMode('MIRROR')).toBe(false);
+    });
+
+    it('resolveSourceGroup 在强制源与 Accept-Language 间正确路由', () => {
+      expect(resolveSourceGroup('mirror', 'en-US')).toBe('domestic');
+      expect(resolveSourceGroup('cdn', 'zh-CN')).toBe('overseas');
+      expect(resolveSourceGroup('github', 'zh-CN')).toBe('github');
+      expect(resolveSourceGroup(null, 'zh-CN')).toBe('domestic');
+      expect(resolveSourceGroup(null, 'en-US')).toBe('overseas');
     });
   });
 });

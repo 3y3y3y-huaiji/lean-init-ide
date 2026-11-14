@@ -1019,11 +1019,17 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     },
   });
 
-  // 面板第一行：光标所在声明的签名。与光标列位置无关，只在跨声明或改代码时变化。
+  // 面板第一行：光标所在声明的签名。与光标列位置无关，只在跨行或改代码时变化。
+  let lastDeclVersion = -1;
+  let lastDeclLine = -1;
   const updateStatement = () => {
     const position = editor.getPosition();
     if (!position) return;
-    const declaration = findDeclaration(model.getValue().split('\n'), position.lineNumber - 1);
+    const version = model.getVersionId();
+    if (version === lastDeclVersion && position.lineNumber === lastDeclLine) return;
+    lastDeclVersion = version;
+    lastDeclLine = position.lineNumber;
+    const declaration = findDeclaration(model.getLinesContent(), position.lineNumber - 1);
     const text = declaration?.signature ?? '';
     if (statementEl.textContent !== text) {
       statementEl.textContent = text;
@@ -1083,7 +1089,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         return;
       }
       // 光标停在声明行时 Lean 还没有目标；如果证明体仍是 sorry，别显示成轻松的“没有 Goal”。
-      const declaration = findDeclaration(model.getValue().split('\n'), position.lineNumber - 1);
+      const declaration = findDeclaration(model.getLinesContent(), position.lineNumber - 1);
       const atDeclarationHeader = declaration?.startLine === position.lineNumber - 1;
       goalEl.textContent =
         atDeclarationHeader && /\bsorry\b/.test(model.getValue()) ? t.goalHint : t.goalEmpty;
@@ -1182,6 +1188,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   }
 
   window.addEventListener('pagehide', () => {
+    window.clearTimeout(draftTimer);
+    window.clearTimeout(debounceTimer);
+    window.clearTimeout(goalTimer);
+    navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage);
     saveDraftNow();
     session.stop();
     stopThemeSync();

@@ -219,6 +219,13 @@ export const bindLayout = (root: HTMLElement, locale: Locale) => {
     settingsToggle?.setAttribute('aria-expanded', 'false');
   });
 
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !settingsPanel || settingsPanel.hidden) return;
+    settingsPanel.hidden = true;
+    settingsToggle?.setAttribute('aria-expanded', 'false');
+    settingsToggle?.focus();
+  });
+
   document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
   paintThemeButton();
 };

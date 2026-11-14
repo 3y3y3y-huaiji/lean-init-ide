@@ -61,3 +61,7 @@ export declare function isSourceMode(value: string | null | undefined): value is
 /** 页面与 Service Worker 共享强制源配置的 CacheStorage 名与键。 */
 export declare const SOURCE_PREFERENCE_CACHE: string;
 export declare const SOURCE_PREFERENCE_KEY: string;
+export declare function resolveSourceGroup(
+  mode: SourceMode | null | undefined,
+  acceptLanguage: string | null | undefined,
+): 'domestic' | 'overseas' | 'github';

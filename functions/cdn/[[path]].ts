@@ -2,17 +2,20 @@ import manifest from '../../config/lean4-runtime.json';
 import { parseRangeHeader, type ByteRange } from '../../src/cdn-range';
 
 type RuntimeAsset = { key: string; bytes: number; contentType: string };
-type R2ObjectBody = {
+type R2ObjectMeta = {
   size: number;
-  body: ReadableStream;
   etag?: string;
   httpEtag?: string;
+};
+type R2ObjectBody = R2ObjectMeta & {
+  body: ReadableStream;
 };
 type R2Bucket = {
   get(
     key: string,
     options?: { range?: { offset: number; length: number } },
   ): Promise<R2ObjectBody | null>;
+  head?(key: string): Promise<R2ObjectMeta | null>;
 };
 type Env = { LEAN_ASSETS: R2Bucket };
 type Context = {
@@ -49,8 +52,10 @@ const buildCacheKey = (request: Request, range: ByteRange | null): Request => {
   return new Request(url.toString(), { method: 'GET' });
 };
 
-const withCacheStatus = (response: Response): Response => {
-  const copy = new Response(response.body, response);
+const ignore = () => undefined;
+
+const withCacheStatus = (response: Response, head: boolean): Response => {
+  const copy = new Response(head ? null : response.body, response);
   copy.headers.set(CACHE_STATUS_HEADER, 'HIT');
   return copy;
 };
@@ -66,7 +71,8 @@ export const onRequest = async ({
   params,
   waitUntil,
 }: Context): Promise<Response> => {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
+  const isHead = request.method === 'HEAD';
+  if (request.method !== 'GET' && !isHead) {
     return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   }
 
@@ -84,20 +90,35 @@ export const onRequest = async ({
     });
   }
 
-  // HEAD 不写缓存：它的 body 为空，存进去会污染后续 GET。
-  const cache = request.method === 'GET' ? getEdgeCache() : null;
+  // HEAD 可以命中已有的 GET 缓存，但绝不写入缓存（空 body 会污染后续 GET）。
+  const cache = getEdgeCache();
   const cacheKey = cache ? buildCacheKey(request, range) : null;
 
   if (cache && cacheKey) {
     const cached = await cache.match(cacheKey);
-    if (cached) return withCacheStatus(cached);
+    if (cached) return withCacheStatus(cached, isHead);
   }
 
-  const object = range
-    ? await env.LEAN_ASSETS.get(asset.key, {
-        range: { offset: range.start, length: range.end - range.start + 1 },
-      })
-    : await env.LEAN_ASSETS.get(asset.key);
+  let object: R2ObjectMeta | null;
+  let body: ReadableStream | null = null;
+  if (isHead && !range && typeof env.LEAN_ASSETS.head === 'function') {
+    object = await env.LEAN_ASSETS.head(asset.key);
+  } else {
+    const fetched = range
+      ? await env.LEAN_ASSETS.get(asset.key, {
+          range: { offset: range.start, length: range.end - range.start + 1 },
+        })
+      : await env.LEAN_ASSETS.get(asset.key);
+    object = fetched;
+    if (fetched) {
+      if (isHead) {
+        // HEAD 不下发响应体：显式释放底层流，避免 Workers 运行时挂起流句柄。
+        void fetched.body.cancel().catch(ignore);
+      } else {
+        body = fetched.body;
+      }
+    }
+  }
   if (!object) return new Response('Runtime asset missing', { status: 404 });
 
   const length = range ? range.end - range.start + 1 : asset.bytes;
@@ -107,6 +128,8 @@ export const onRequest = async ({
     'Accept-Ranges': 'bytes',
     'Cache-Control': CACHE_CONTROL,
     'Access-Control-Allow-Origin': '*',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'X-Content-Type-Options': 'nosniff',
   });
   if (range) {
     headers.set('Content-Range', `bytes ${range.start}-${range.end}/${asset.bytes}`);
@@ -116,14 +139,14 @@ export const onRequest = async ({
   if (etag) headers.set('ETag', etag);
   headers.set(CACHE_STATUS_HEADER, 'MISS');
 
-  const response = new Response(request.method === 'HEAD' ? null : object.body, {
+  const response = new Response(body, {
     status: range ? 206 : 200,
     headers,
   });
 
-  if (cache && cacheKey) {
+  if (!isHead && cache && cacheKey) {
     // 写缓存失败不影响响应：R2 已经读到了，最坏情况只是下次再回源。
-    const pending = cache.put(cacheKey, response.clone()).catch(() => undefined);
+    const pending = cache.put(cacheKey, response.clone()).catch(ignore);
     if (waitUntil) waitUntil(pending);
     else await pending;
   }

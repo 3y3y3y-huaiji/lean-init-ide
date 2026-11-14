@@ -14,6 +14,7 @@ const MAX_BODY_BYTES = 8192;
 const MAX_EVENTS = 16;
 const MAX_FIELDS = 12;
 const MAX_STRING = 120;
+const encoder = new TextEncoder();
 
 // Cloudflare 免费计划的 WAF 自定义/限流规则额度有限，端点自己兜一层：
 // 单 IP 每分钟 30 次、单 isolate 每分钟 600 次。跨 isolate 不共享，属于尽力而为。
@@ -136,7 +137,9 @@ export const onRequest = async ({ request, env }: Context): Promise<Response> =>
   } catch {
     return badRequest('Unreadable body');
   }
-  if (text.length > MAX_BODY_BYTES) return new Response('Payload too large', { status: 413 });
+  if (text.length > MAX_BODY_BYTES || encoder.encode(text).byteLength > MAX_BODY_BYTES) {
+    return new Response('Payload too large', { status: 413 });
+  }
 
   let payload: unknown;
   try {

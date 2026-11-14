@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import sitemapXml from '../../public/sitemap.xml?raw';
+import e2eLessonsSource from '../../scripts/e2e-lessons.mjs?raw';
 import { en } from './en';
 import { zh } from './zh';
 
@@ -71,6 +73,25 @@ describe('i18n 字典结构对齐', () => {
     ] as const) {
       const slugs = messages.lesson.lessons.map((lesson) => lesson.slug);
       expect(new Set(slugs).size, name).toBe(slugs.length);
+    }
+  });
+
+  it('e2e-lessons 脚本与 sitemap.xml 包含全部课程 slug', () => {
+    const expectedSlugs = zh.lesson.lessons.map((lesson) => lesson.slug);
+
+    const match = /const SLUGS = \[([\s\S]*?)\];/.exec(e2eLessonsSource);
+    expect(match).not.toBeNull();
+    const e2eSlugs = Array.from(match![1]!.matchAll(/'([^']+)'/g), (m) => m[1]!);
+    expect(e2eSlugs).toEqual(expectedSlugs);
+
+    for (const locale of ['zh', 'en']) {
+      expect(sitemapXml).toContain(`/${locale}/</loc>`);
+      for (const page of ['playground', 'reference', 'privacy']) {
+        expect(sitemapXml).toContain(`/${locale}/${page}</loc>`);
+      }
+      for (const slug of expectedSlugs) {
+        expect(sitemapXml).toContain(`/${locale}/learn/${slug}</loc>`);
+      }
     }
   });
 });

@@ -62,6 +62,17 @@ describe('POST /api/telemetry', () => {
     expect(response.status).toBe(413);
   });
 
+  it('多字节 UTF-8 body 按实际字节数限制 413', async () => {
+    // 4000 个汉字字符数 < 8192，但 UTF-8 占 12000 字节。
+    const utf8Body = {
+      method: 'POST',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      text: () => Promise.resolve('测'.repeat(4000)),
+    } as unknown as Request;
+    const response = await call(utf8Body);
+    expect(response.status).toBe(413);
+  });
+
   it('Content-Length 不是数字时按实际 body 判断', async () => {
     const response = await call(post(withEvents([]), { 'Content-Length': 'abc' }));
     expect(response.status).toBe(400);

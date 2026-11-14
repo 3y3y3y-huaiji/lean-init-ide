@@ -103,3 +103,14 @@ export const isSourceMode = (value) => value === 'mirror' || value === 'cdn' || 
 export const SOURCE_PREFERENCE_CACHE = 'lean-source';
 
 export const SOURCE_PREFERENCE_KEY = '/__lean/source-preference';
+
+/**
+ * 结合强制源开关与 Accept-Language，决定本次下载使用的源顺序档位。
+ * 抽成纯函数便于单测，避免把分支留给被覆盖率排除的 sw.ts。
+ */
+export const resolveSourceGroup = (mode, acceptLanguage) => {
+  if (mode === 'mirror') return 'domestic';
+  if (mode === 'cdn') return 'overseas';
+  if (mode === 'github') return 'github';
+  return prefersDomesticMirror(acceptLanguage) ? 'domestic' : 'overseas';
+};

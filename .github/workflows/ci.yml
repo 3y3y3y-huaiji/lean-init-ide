@@ -113,6 +113,8 @@ jobs:
       # 必须补回静态副本，否则会落到网关的 SPA 回退。
       - name: 补齐静态兜底资产
         run: mkdir -p dist/wasm-lean4 && cp -r public/wasm-lean4/. dist/wasm-lean4/
+      - name: 复核含资产的构建产物契约
+        run: pnpm run verify:build
       - name: 启动本地等价网关
         run: |
           node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &
@@ -133,6 +135,14 @@ jobs:
           LEAN_E2E_CHANNEL: chrome
           LEAN_E2E_WORKERS: 3
         run: node scripts/e2e-lessons.mjs
+      - name: 失败时保留网关日志
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-gateway-log
+          path: /tmp/gateway.log
+          retention-days: 3
+          if-no-files-found: ignore
 
   audit:
     name: 依赖审计

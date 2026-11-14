@@ -56,8 +56,8 @@ pnpm exec vitest run src/lsp-patches.test.ts
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
 
-`.github/workflows/ci.yml` 拆成四个并行 job：静态检查、单元测试、构建产物、依赖审计（只审生产依赖）。
-建议在 GitHub 分支保护里要求这四个 check 全绿才允许合入 `main`。
+`.github/workflows/ci.yml` 包含五个前置门禁 job：静态检查（`static`）、单元测试（`test`）、构建产物（`build`）、浏览器端到端（`e2e`，依赖 `build`）、依赖审计（`audit`，只审生产依赖），全部通过才触发部署（`deploy`）。
+建议在 GitHub 分支保护里要求这五个 check 全绿才允许合入 `main`。
 
 ## 贡献约定
 

@@ -169,11 +169,61 @@ const serveStatic = (request, response) => {
   createReadStream(file).pipe(response);
 };
 
+const serveTelemetry = (request, response) => {
+  if (request.method !== 'POST') {
+    response.writeHead(405, { ...baseHeaders, Allow: 'POST', 'Content-Type': 'text/plain' });
+    response.end('Method not allowed');
+    return;
+  }
+  const contentType = request.headers['content-type'] ?? '';
+  if (!String(contentType).includes('application/json')) {
+    response.writeHead(415, { ...baseHeaders, 'Content-Type': 'text/plain' });
+    response.end('Unsupported media type');
+    return;
+  }
+  const chunks = [];
+  let total = 0;
+  let aborted = false;
+  request.on('data', (chunk) => {
+    if (aborted) return;
+    total += chunk.length;
+    if (total > 8192) {
+      aborted = true;
+      response.writeHead(413, { ...baseHeaders, 'Content-Type': 'text/plain' });
+      response.end('Payload too large');
+      request.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  request.on('end', () => {
+    if (aborted) return;
+    try {
+      const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (!Array.isArray(payload?.events) || payload.events.length === 0) {
+        response.writeHead(400, { ...baseHeaders, 'Content-Type': 'text/plain' });
+        response.end('No valid events');
+        return;
+      }
+      if (verbose) console.log(`[telemetry] ${payload.events.length} events`);
+      response.writeHead(204, { ...baseHeaders, 'Cache-Control': 'no-store' });
+      response.end();
+    } catch {
+      response.writeHead(400, { ...baseHeaders, 'Content-Type': 'text/plain' });
+      response.end('Invalid JSON');
+    }
+  });
+};
+
 const server = http.createServer((request, response) => {
   const { pathname } = new URL(request.url, 'http://localhost');
   if (pathname === '/__health') {
     response.writeHead(200, { ...baseHeaders, 'Content-Type': 'text/plain' });
     response.end('ok');
+    return;
+  }
+  if (pathname === '/api/telemetry') {
+    serveTelemetry(request, response);
     return;
   }
   if (pathname.startsWith('/cdn/')) {

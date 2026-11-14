@@ -16,8 +16,8 @@ import manifestJson from '../config/lean4-runtime.json';
 import {
   assetSources,
   isSourceMode,
-  prefersDomesticMirror,
   rangedAssets,
+  resolveSourceGroup,
   SOURCE_PREFERENCE_CACHE,
   SOURCE_PREFERENCE_KEY,
   type AssetSource,
@@ -116,23 +116,13 @@ sw.addEventListener('fetch', (event) => {
   const asset = RANGE_ASSETS.get(name);
   if (!asset) return;
 
-  // 每个请求单独判断：同一 SW 可能同时服务不同语言的页面。
-  const defaultSources = prefersDomesticMirror(request.headers.get('accept-language'))
-    ? asset.domestic
-    : asset.overseas;
+  const acceptLanguage = request.headers.get('accept-language');
 
   // respondWith 必须在事件同步阶段调用；强制源要读 CacheStorage，放到 promise 里再解析。
   event.respondWith(
     (async () => {
       const mode = await readForcedMode();
-      const sources =
-        mode === 'mirror'
-          ? asset.domestic
-          : mode === 'cdn'
-            ? asset.overseas
-            : mode === 'github'
-              ? asset.github
-              : defaultSources;
+      const sources = asset[resolveSourceGroup(mode, acceptLanguage)];
 
       return loadRangedAsset({
         request,

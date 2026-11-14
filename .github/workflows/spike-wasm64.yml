@@ -34,9 +34,7 @@ jobs:
         run: |
           if [ ! -x emsdk/upstream/emscripten/emcc ]; then
             git clone --depth 1 https://github.com/emscripten-core/emsdk.git
-            cd emsdk
-            ./emsdk install 6.0.0
-            ./emsdk activate 6.0.0
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
           fi
           source emsdk/emsdk_env.sh
           emcc --version | head -n 2

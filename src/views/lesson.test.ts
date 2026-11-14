@@ -19,6 +19,7 @@ const makePanel = () => ({
   focus: vi.fn(),
   run: vi.fn(async (): Promise<LspDiagnostic[]> => []),
   getProgress: vi.fn(() => ({ label: '加载运行时…', kind: 'loading' as const, ratio: null })),
+  restart: vi.fn(async () => true),
 });
 
 const lessonsOf = (locale: 'zh' | 'en') => messagesFor(locale).lesson.lessons;
@@ -295,6 +296,27 @@ describe('课程页交互绑定', () => {
     expect(output.querySelector('[data-role="run-progress"]')).toBeNull();
     expect(output.textContent).toContain(messagesFor('zh').lesson.noOutput);
     expect(button.disabled).toBe(false);
+  });
+
+  it('代码块运行失败时显示重启按钮，点击后调用 panel.restart', async () => {
+    const panel = makePanel();
+    panel.run.mockRejectedValue(new Error('Lean pthread failed'));
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const output = document.body.querySelector<HTMLElement>('[data-output="0"]');
+    expect(output?.textContent).toContain(messagesFor('zh').lesson.runCrashed);
+    const restart = output?.querySelector<HTMLButtonElement>('[data-role="restart-lean"]');
+    expect(restart).not.toBeNull();
+
+    restart!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(panel.restart).toHaveBeenCalledTimes(1);
+    expect(restart!.textContent).toContain(messagesFor('zh').lesson.restartDone);
   });
 
   it('缺少挂载点时安全退出', () => {

@@ -65,6 +65,8 @@ export type LeanPanel = {
   run: (code: string) => Promise<LspDiagnostic[]>;
   /** 读取当前进度快照，课程页点击运行时先回显已有状态。 */
   getProgress: () => LeanPanelProgress;
+  /** 崩溃或手动关闭后重启引擎，编辑器内容保留。 */
+  restart: () => Promise<boolean>;
 };
 
 export type { LspDiagnostic };
@@ -164,6 +166,19 @@ const renderWorkspace = (t: ReturnType<typeof messagesFor>['playground'], compac
       </section>
       <section data-panel="diagnostics" class="${panelClass(compact)} min-h-0 flex-1">
         <h2 class="${panelHeadingClass}">${t.diagnosticsTitle} <span data-role="count" class="min-w-6 rounded-full bg-panel-soft px-[7px] py-px text-center text-xs text-fg">0</span></h2>
+        <div
+          data-role="crash"
+          hidden
+          role="alert"
+          class="mx-2 mt-2 rounded-lg border border-err/45 bg-err/10 px-2.5 py-2 text-[12.5px] leading-normal"
+        >
+          <p data-role="crash-title" class="m-0 font-[650] text-err"></p>
+          <p data-role="crash-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
+          <div class="flex flex-wrap gap-2">
+            <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="crash-restart">${t.restartLean}</button>
+            <button class="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:text-fg" type="button" data-role="crash-copy">${t.copyError}</button>
+          </div>
+        </div>
         <div
           data-role="run-ok"
           hidden
@@ -301,6 +316,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const runOkEl = host.querySelector<HTMLElement>('[data-role="run-ok"]');
   const runOkTitleEl = host.querySelector<HTMLElement>('[data-role="run-ok-title"]');
   const runOkDetailEl = host.querySelector<HTMLElement>('[data-role="run-ok-detail"]');
+  const crashEl = host.querySelector<HTMLElement>('[data-role="crash"]');
+  const crashTitleEl = host.querySelector<HTMLElement>('[data-role="crash-title"]');
+  const crashDetailEl = host.querySelector<HTMLElement>('[data-role="crash-detail"]');
+  const crashRestartEl = host.querySelector<HTMLButtonElement>('[data-role="crash-restart"]');
+  const crashCopyEl = host.querySelector<HTMLButtonElement>('[data-role="crash-copy"]');
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
   const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
   const resetEl = host.querySelector<HTMLButtonElement>('[data-role="reset"]');
@@ -662,6 +682,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let firstDiagnosticsReported = false;
   const assetTelemetry = { started: false, completed: false, startedAt: 0 };
 
+  // 崩溃恢复：只自动重启一次；60 秒内再次崩溃就交给用户处理，避免崩溃循环。
+  let engineEverReady = false;
+  let recoveryPending = false;
+  let recoveryAttempt = 0;
+  let lastCrashAt = 0;
+  let lastCrashMessage = '';
+  let freshHandled = false;
+
   const emitProgress = () =>
     onProgress?.({ label: progressLabel, kind: progressKind, ratio: progressRatio });
 
@@ -894,14 +922,19 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
               setStatus(t.statusStarting, 'loading');
             }
           } else if (status.state === 'ready') {
+            engineEverReady = true;
             setProgress(1);
             setStatus(t.statusLspReady, 'ready');
             log(t.logRuntimeReady);
             track('lsp_ready', { ms: runStartedAt ? performance.now() - runStartedAt : 0 });
           } else if (status.state === 'error') {
-            setStatus(t.statusError(status.message), 'error');
             log(t.logRuntimeError(status.message));
             reportError('runtime', status.message);
+            if (engineEverReady) {
+              handleRuntimeCrash(status.message);
+            } else {
+              setStatus(t.statusError(status.message), 'error');
+            }
           }
         },
       });
@@ -1064,13 +1097,26 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let suppressSync = false;
 
   /** 会话层等待启动、串行重开文档并收集诊断；这里只同步 Monaco 的内容。 */
-  const run = (code: string) =>
-    session.run(code, () => {
-      if (runStartedAt === 0) runStartedAt = performance.now();
-      suppressSync = true;
-      model.setValue(code);
-      suppressSync = false;
-    });
+  const run = (code: string) => {
+    // 崩溃后会话已释放，run 会立刻返回空数组；这里改成显式失败，课程页才能显示恢复按钮。
+    if (recoveryPending) {
+      return Promise.reject(new Error(lastCrashMessage || 'Lean process crashed'));
+    }
+    const crashAt = lastCrashAt;
+    return session
+      .run(code, () => {
+        if (runStartedAt === 0) runStartedAt = performance.now();
+        suppressSync = true;
+        model.setValue(code);
+        suppressSync = false;
+      })
+      .then((list) => {
+        if (lastCrashAt !== crashAt) {
+          throw new Error(lastCrashMessage || 'Lean process crashed');
+        }
+        return list;
+      });
+  };
 
   const requestGoal = async () => {
     if (!session.isReady || !goalSupported) return;
@@ -1109,6 +1155,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   /** 关闭引擎：终止 worker 并释放它占的内存，编辑器内容保留。 */
   const stop = () => {
     session.stop();
+    engineEverReady = false;
+    recoveryPending = false;
+    if (crashEl) crashEl.hidden = true;
     goalSupported = true;
     runStartedAt = 0;
     firstDiagnosticsReported = false;
@@ -1121,8 +1170,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     log(t.logStopped);
   };
 
-  const start = async () => {
-    if (startEl.disabled) return;
+  const start = async (): Promise<boolean> => {
+    if (startEl.disabled) return false;
     startEl.disabled = true;
     // 首次下载约 102 MB；在用户手势中申请持久存储，避免浏览器清理已校验的缓存。
     void navigator.storage?.persist?.().catch(() => {});
@@ -1142,7 +1191,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       ]);
     }
 
-    if (new URLSearchParams(location.search).has('fresh')) {
+    // ?fresh 只在本次页面生命周期里清一次；自动重启时不能再清缓存重新下载 102MB。
+    if (!freshHandled && new URLSearchParams(location.search).has('fresh')) {
+      freshHandled = true;
       await clearRuntimeCache();
       log(t.logCacheCleared);
     }
@@ -1152,16 +1203,36 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       // 启动期间用户可能已经改过代码；didOpen 用的是启动那一刻的内容，这里补一次同步。
       flushChange();
       startEl.textContent = t.stop;
+      engineEverReady = true;
       lastEditAt = performance.now();
       setStatus(t.statusWaitingDiagnostics, 'ready');
       log(t.logInitialize(((performance.now() - startedAt) / 1000).toFixed(2)));
+      if (recoveryPending) {
+        recoveryPending = false;
+        recoveryAttempt = 0;
+        if (crashEl) crashEl.hidden = true;
+        if (crashRestartEl) crashRestartEl.disabled = false;
+        log(t.logRecovered);
+      }
       window.setTimeout(requestGoal, 800);
+      return true;
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      setStatus(t.statusFailure(message), 'error');
+      // 自动重启第一次失败很常见：旧连接的 pending 请求刚被 reject。保留恢复状态并重试一次，
+      // 不要立刻把“自动重启失败”推给用户。
+      if (!recoveryPending || recoveryAttempt >= 1) {
+        setStatus(t.statusFailure(message), 'error');
+      }
       log(t.logStartFailed(message));
       console.error(error);
       reportError('start', error);
+      if (recoveryPending && recoveryAttempt >= 1 && crashEl && crashTitleEl && crashDetailEl) {
+        crashTitleEl.textContent = t.crashRestartFailed;
+        crashDetailEl.textContent = t.crashAutoDetail(message);
+        crashEl.hidden = false;
+        if (crashRestartEl) crashRestartEl.disabled = false;
+      }
+      return false;
     } finally {
       startEl.disabled = false;
     }
@@ -1172,11 +1243,108 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     else void start();
   });
 
+  /**
+   * Lean worker 崩溃：释放旧会话、清掉过期诊断，并在 60 秒内首次崩溃时自动重启。
+   * 连续崩溃不自动循环，避免把用户困在「崩溃—重启—再崩溃」里。
+   */
+  function handleRuntimeCrash(message: string) {
+    const now = Date.now();
+    // 同一次崩溃可能同时触发 onStatus 与 run 失败，2 秒内只处理第一条。
+    if (now - lastCrashAt < 2000) return;
+    // 课程内联面板不自动重启：它没有可见的崩溃横幅，交给代码块输出里的按钮显式恢复。
+    const canAutoRestart = variant === 'full' && now - lastCrashAt > 60_000;
+    lastCrashAt = now;
+    lastCrashMessage = message;
+
+    session.stop();
+    engineEverReady = false;
+    recoveryPending = true;
+    recoveryAttempt = 0;
+    runStartedAt = 0;
+    firstDiagnosticsReported = false;
+    startEl.textContent = t.start;
+    setStatus(
+      canAutoRestart ? t.statusRecovering : t.statusCrash,
+      canAutoRestart ? 'loading' : 'error',
+    );
+    setProgress(0);
+    if (runOkEl) runOkEl.hidden = true;
+    goalEl.textContent = t.goalPlaceholder;
+    statementEl.hidden = true;
+    diagnosticsEl.replaceChildren();
+    const item = document.createElement('li');
+    item.className = mutedItemClass;
+    item.textContent = t.crashDiagnostics;
+    diagnosticsEl.append(item);
+    diagCountEl.textContent = '0';
+    lastDiagnostics = [];
+
+    if (crashEl && crashTitleEl && crashDetailEl) {
+      crashEl.hidden = false;
+      crashTitleEl.textContent = canAutoRestart ? t.crashAutoTitle : t.crashLoopTitle;
+      crashDetailEl.textContent = canAutoRestart
+        ? t.crashAutoDetail(message)
+        : t.crashLoopDetail(message);
+    }
+    if (crashRestartEl) crashRestartEl.disabled = canAutoRestart;
+    if (crashCopyEl) crashCopyEl.textContent = t.copyError;
+
+    log(t.logRuntimeCrash(message));
+    reportError('runtime-crash', message);
+
+    if (canAutoRestart) {
+      log(t.logAutoRestart);
+      const autoRecover = (attempt: number) => {
+        // 第一次等旧连接的 pending 请求结算后再启动；失败则再试一次，避免把瞬时竞态丢给用户。
+        window.setTimeout(
+          () => {
+            void start().then((ok) => {
+              if (ok || !recoveryPending) return;
+              if (attempt === 0) {
+                recoveryAttempt = 1;
+                log(t.logAutoRestart);
+                autoRecover(1);
+              }
+            });
+          },
+          attempt === 0 ? 800 : 1600,
+        );
+      };
+      autoRecover(0);
+    }
+  }
+
+  crashRestartEl?.addEventListener('click', () => {
+    crashRestartEl.disabled = true;
+    recoveryPending = true;
+    recoveryAttempt = 1;
+    setStatus(t.statusRecovering, 'loading');
+    void start().finally(() => {
+      if (recoveryPending && crashRestartEl) crashRestartEl.disabled = false;
+    });
+  });
+
+  crashCopyEl?.addEventListener('click', () => {
+    void navigator.clipboard
+      ?.writeText(lastCrashMessage)
+      .then(() => {
+        crashCopyEl.textContent = t.copyErrorDone;
+        window.setTimeout(() => {
+          crashCopyEl.textContent = t.copyError;
+        }, 1600);
+      })
+      .catch(() => {
+        // 剪贴板被浏览器拦截时保持原文案，用户仍可从日志复制。
+      });
+  });
+
   // 开发环境与 ?debug 下暴露编辑器实例，方便控制台调试和自动化检查。
   if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
     Object.assign(window as unknown as Record<string, unknown>, {
       __monaco: monaco,
       __editor: editor,
+      // 仅用于自动化验证崩溃恢复路径，不对普通用户暴露。
+      __leanCrash: handleRuntimeCrash,
     });
   }
 
@@ -1211,5 +1379,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     focus: () => editor.focus(),
     run,
     getProgress: () => ({ label: progressLabel, kind: progressKind, ratio: progressRatio }),
+    restart: async () => {
+      session.stop();
+      engineEverReady = false;
+      recoveryPending = false;
+      if (crashEl) crashEl.hidden = true;
+      return start();
+    },
   };
 };

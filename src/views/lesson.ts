@@ -1,5 +1,6 @@
 import {
   createLeanPanel,
+  type LeanPanel,
   type LeanPanelProgress,
   type LspDiagnostic,
 } from '../components/lean-panel';
@@ -269,6 +270,51 @@ export const dropSpuriousRedeclarations = (list: LspDiagnostic[], code: string):
     return occurrences > 1;
   });
 
+/** 课程代码块运行失败：给出错误和就地重启按钮，不要求用户刷新整页。 */
+const renderRunFailure = (
+  output: HTMLElement,
+  message: string,
+  panel: LeanPanel,
+  t: ReturnType<typeof messagesFor>['lesson'],
+) => {
+  output.hidden = false;
+  output.replaceChildren();
+
+  const card = document.createElement('div');
+  card.className = 'rounded-lg border border-err/45 bg-err/10 px-3 py-2.5';
+
+  const title = document.createElement('p');
+  title.className = 'm-0 text-sm font-[650] text-err';
+  title.textContent = t.runCrashed;
+
+  const detail = document.createElement('p');
+  detail.className = 'mb-2 mt-1 break-words font-mono text-[11px] leading-normal text-muted';
+  detail.textContent = message;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.dataset.role = 'restart-lean';
+  button.className =
+    'cursor-pointer rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg transition hover:border-line-strong disabled:cursor-progress disabled:opacity-55';
+  button.textContent = t.restartLean;
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    button.textContent = t.restarting;
+    void panel.restart().then((ok) => {
+      if (ok) {
+        button.textContent = t.restartDone;
+        return;
+      }
+      button.disabled = false;
+      button.textContent = t.restartLean;
+      detail.textContent = t.restartFailed;
+    });
+  });
+
+  card.append(title, detail, button);
+  output.append(card);
+};
+
 export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
   const { page } = pickLesson(t.lessons, slug);
@@ -359,6 +405,11 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
             dropSpuriousRedeclarations(list, code),
             looksLikeProof(code) ? t.proofAccepted : t.noOutput,
           );
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+          renderRunFailure(output, message, panel, t);
         })
         .finally(() => {
           window.clearInterval(timer);

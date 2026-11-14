@@ -265,7 +265,25 @@ const main = async () => {
     if (!completionOk) throw new Error('练习通过后没有写入完成进度');
     console.log(`[${stamp()}] 完成进度已写入 math-parity`);
 
-    // 第七阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
+    // 第七阶段：模拟 worker 崩溃，确认自动重启且编辑内容不丢。
+    await page.evaluate(() => {
+      globalThis.__leanCrash(
+        'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
+      );
+    });
+    const crashVisible = await page.evaluate(() => {
+      const el = globalThis.document.querySelector('[data-role="crash"]');
+      return !!el && !el.hidden;
+    });
+    if (!crashVisible) throw new Error('崩溃恢复提示没有出现');
+    await page.waitForSelector('[data-role="crash"]', { state: 'hidden', timeout: 240_000 });
+    const preserved = await page.evaluate(() =>
+      globalThis.__editor.getValue().includes('theorem even_mul'),
+    );
+    if (!preserved) throw new Error('崩溃重启后编辑内容丢失');
+    console.log(`[${stamp()}] 崩溃自动重启完成，编辑内容保留`);
+
+    // 第八阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
     await page.goto(`${origin}/zh/reference`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h1');
     const referenceOk = await page.evaluate(() => {

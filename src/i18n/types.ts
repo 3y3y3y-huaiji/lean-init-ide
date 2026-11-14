@@ -91,6 +91,12 @@ export type Messages = {
     goalLabel: string;
     /** 练习折叠提示的标题。 */
     hintLabel: string;
+    /** 课程代码块运行失败时的恢复文案。 */
+    runCrashed: string;
+    restartLean: string;
+    restarting: string;
+    restartDone: string;
+    restartFailed: string;
     /** 目录里已完成课时的标记说明。 */
     completedLabel: string;
     /** 练习区的完成条件说明。 */
@@ -160,6 +166,18 @@ export type Messages = {
     statusChunkFallback: (name: string, message: string) => string;
     statusError: (message: string) => string;
     statusFailure: (message: string) => string;
+    /** Lean 进程崩溃后的状态与恢复动作。 */
+    statusCrash: string;
+    statusRecovering: string;
+    crashAutoTitle: string;
+    crashLoopTitle: string;
+    crashAutoDetail: (message: string) => string;
+    crashLoopDetail: (message: string) => string;
+    crashRestartFailed: string;
+    crashDiagnostics: string;
+    restartLean: string;
+    copyError: string;
+    copyErrorDone: string;
     statusLspReady: string;
     statusWaitingDiagnostics: string;
     statusReady: (count: number, ms: number) => string;
@@ -170,6 +188,9 @@ export type Messages = {
     logDraftRestored: string;
     logRuntimeReady: string;
     logRuntimeError: (message: string) => string;
+    logRuntimeCrash: (message: string) => string;
+    logAutoRestart: string;
+    logRecovered: string;
     logInitialize: (seconds: string) => string;
     logStartFailed: (message: string) => string;
     logStopped: string;

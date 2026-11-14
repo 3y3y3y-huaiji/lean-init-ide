@@ -71,7 +71,7 @@ jobs:
           export EMSDK="$GITHUB_WORKSPACE/emsdk"
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
-          bash producer/lean-browser/scripts/build.sh fetch runtime cgen objects link
+          bash producer/lean-browser/scripts/build.sh fetch emsdk runtime cgen objects link
 
       - name: 关键验证：用官方 64 位 Init oleans 启动 wasm64 Lean
         run: |

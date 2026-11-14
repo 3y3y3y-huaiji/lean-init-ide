@@ -1342,6 +1342,7 @@ export const en: Messages = {
     logRecovered: 'Lean restarted; editor contents preserved',
     logSourceSwitched: (label) => `Switched asset source to ${label}; retrying…`,
     logSourceAuto: 'Restored automatic asset source selection',
+    logRunBarrierFallback: 'Could not confirm file processing; settled from current diagnostics',
     logInitialize: (seconds) => `initialize finished in ${seconds}s`,
     logStartFailed: (message) => `Startup failed: ${message}`,
     logStopped: 'Lean engine stopped, worker and memory released',

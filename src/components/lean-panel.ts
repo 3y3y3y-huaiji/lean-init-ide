@@ -698,6 +698,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   // 成功提示必须等 documentSymbol 屏障和诊断静默窗口结束后再显示，避免先亮后灭。
   let successTimer: number | undefined;
   let successSeq = 0;
+  // 屏障不可用（请求失败、返回 null 或超时）时退化为更长的静默窗口，不能让提示永远不出现。
+  let barrierFallbackLogged = false;
+  let runBarrierDisabled = false;
 
   let progressLabel = t.statusIdle;
   let progressKind: LeanPanelProgressKind = 'idle';
@@ -838,28 +841,41 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   /**
    * 诊断是分批到达的：第一批没有错误不代表整个文件通过。
    * 用 documentSymbol 作为处理屏障，再等 150ms 静默，确认没有更新的诊断后才亮成功提示。
+   * 屏障本身失败（返回 null、报错或超时）时不能一直不亮：退化为 600ms 静默窗口，
+   * 期间只要有新诊断就会被 resetRunOk 撤销。
    */
   const confirmRunSettled = async (seq: number, warningCount: number) => {
     if (variant !== 'full' || seq !== successSeq || !session.isReady) return;
-    try {
-      const result = await session.request('textDocument/documentSymbol', {
-        textDocument: { uri },
-      });
-      if (result === null) return;
-    } catch {
-      return;
-    }
-    window.setTimeout(() => {
-      if (seq !== successSeq || !session.isReady) return;
-      if (!runOkEl || !runOkTitleEl || !runOkDetailEl) return;
-      if (lastDiagnostics.some((item) => item.severity === 1 || item.severity === undefined)) {
-        return;
+    let barrierOk = !runBarrierDisabled;
+    if (barrierOk) {
+      try {
+        const result = await Promise.race([
+          session.request('textDocument/documentSymbol', { textDocument: { uri } }),
+          new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 3000)),
+        ]);
+        if (result === null) barrierOk = false;
+      } catch {
+        barrierOk = false;
       }
-      const latency = lastEditAt ? performance.now() - lastEditAt : 0;
-      runOkTitleEl.textContent = t.runPassed;
-      runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
-      runOkEl.hidden = false;
-    }, 150);
+    }
+    if (!barrierOk && !barrierFallbackLogged) {
+      barrierFallbackLogged = true;
+      log(t.logRunBarrierFallback);
+    }
+    window.setTimeout(
+      () => {
+        if (seq !== successSeq || !session.isReady) return;
+        if (!runOkEl || !runOkTitleEl || !runOkDetailEl) return;
+        if (lastDiagnostics.some((item) => item.severity === 1 || item.severity === undefined)) {
+          return;
+        }
+        const latency = lastEditAt ? performance.now() - lastEditAt : 0;
+        runOkTitleEl.textContent = t.runPassed;
+        runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
+        runOkEl.hidden = false;
+      },
+      barrierOk ? 150 : 600,
+    );
   };
 
   const hideLoadFailure = () => {
@@ -1249,6 +1265,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     goalSupported = true;
     runStartedAt = 0;
     firstDiagnosticsReported = false;
+    barrierFallbackLogged = false;
     resetRunOk();
     setStatus(memoryTier === 'low' ? t.statusLowMemory : t.statusIdle, 'idle');
     setProgress(0);
@@ -1268,6 +1285,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     void navigator.storage?.persist?.().catch(() => {});
     setStatus(t.statusLoading, 'loading');
     setProgress(0);
+    barrierFallbackLogged = false;
     resetRunOk();
     const startedAt = performance.now();
     runStartedAt = startedAt;
@@ -1478,6 +1496,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       __renderDiagnostics: renderDiagnostics,
       __showLoadFailure: showLoadFailure,
       __hideLoadFailure: hideLoadFailure,
+      __skipRunBarrier: () => {
+        runBarrierDisabled = true;
+      },
     });
   }
 

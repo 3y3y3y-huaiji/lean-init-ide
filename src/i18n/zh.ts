@@ -1336,6 +1336,7 @@ export const zh: Messages = {
     logRecovered: 'Lean 已重新启动，编辑器内容已保留',
     logSourceSwitched: (label) => `已切换资产源：${label}，正在重试…`,
     logSourceAuto: '已恢复自动选择资产源',
+    logRunBarrierFallback: '无法确认文件处理完成，已按当前诊断结果结算',
     logInitialize: (seconds) => `initialize 完成，总耗时 ${seconds}s`,
     logStartFailed: (message) => `启动失败：${message}`,
     logStopped: '已关闭 Lean 引擎，worker 与内存已释放',

@@ -204,6 +204,8 @@ export type Messages = {
     logRecovered: string;
     logSourceSwitched: (label: string) => string;
     logSourceAuto: string;
+    /** documentSymbol 屏障不可用时的退化结算。 */
+    logRunBarrierFallback: string;
     logInitialize: (seconds: string) => string;
     logStartFailed: (message: string) => string;
     logStopped: string;

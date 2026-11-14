@@ -268,6 +268,22 @@ const main = async () => {
     if (!hiddenAfterLateError) throw new Error('晚到的错误没有收起运行通过');
     console.log(`[${stamp()}] 成功提示只在诊断结算后显示`);
 
+    // 屏障不可用（documentSymbol 失败/超时）时不能永远不亮：退化结算后仍要显示运行通过。
+    await page.evaluate(() => globalThis.__skipRunBarrier());
+    await page.evaluate(() => globalThis.__editor.setValue('example : 3 + 3 = 6 := rfl'));
+    const fallbackDeadline = Date.now() + 30_000;
+    let fallbackText = '';
+    while (Date.now() < fallbackDeadline) {
+      await page.waitForTimeout(500);
+      const snapshot = await read();
+      if (snapshot.runOk.visible && snapshot.runOk.text.includes('运行通过')) {
+        fallbackText = snapshot.runOk.text;
+        break;
+      }
+    }
+    if (!fallbackText) throw new Error('屏障不可用时运行通过提示没有出现');
+    console.log(`[${stamp()}] 屏障不可用时的退化提示: ${fallbackText}`);
+
     // 第七阶段：资产下载失败时给出可换源的恢复入口。
     await page.evaluate(() =>
       globalThis.__showLoadFailure('Failed to load runtime asset lean-init-00.pack.gz.bin'),

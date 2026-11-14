@@ -236,7 +236,39 @@ const main = async () => {
     }
     console.log(`[${stamp()}] 缩写候选: ${JSON.stringify(rows.slice(0, 3))}`);
 
-    // 第六阶段：练习通过后写入完成进度，而不只是显示一次徽章。
+    // 第六阶段：成功提示必须等整个文件处理完；早到的空诊断不能先亮，晚到的错误要立即收起。
+    await page.evaluate(() => {
+      globalThis.__editor.setValue('example : 2 + 2 = 4 := rfl');
+    });
+    await page.waitForSelector('[data-role="run-ok"]:not([hidden])', { timeout: 60_000 });
+    await page.evaluate(() =>
+      globalThis.__renderDiagnostics({ uri: 'file:///workspace/Main.lean', diagnostics: [] }),
+    );
+    const hiddenAfterEarly = await page.evaluate(
+      () => globalThis.document.querySelector('[data-role="run-ok"]')?.hidden ?? false,
+    );
+    if (!hiddenAfterEarly) throw new Error('早到的空诊断直接显示了运行通过');
+    await page.waitForSelector('[data-role="run-ok"]:not([hidden])', { timeout: 30_000 });
+    await page.evaluate(() =>
+      globalThis.__renderDiagnostics({
+        uri: 'file:///workspace/Main.lean',
+        diagnostics: [
+          {
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+            severity: 1,
+            message: 'late error',
+          },
+        ],
+      }),
+    );
+    await page.waitForTimeout(600);
+    const hiddenAfterLateError = await page.evaluate(
+      () => globalThis.document.querySelector('[data-role="run-ok"]')?.hidden ?? false,
+    );
+    if (!hiddenAfterLateError) throw new Error('晚到的错误没有收起运行通过');
+    console.log(`[${stamp()}] 成功提示只在诊断结算后显示`);
+
+    // 第七阶段：练习通过后写入完成进度，而不只是显示一次徽章。
     await page.goto(`${origin}/zh/playground?lesson=math-parity&debug`, {
       waitUntil: 'domcontentloaded',
     });
@@ -265,7 +297,7 @@ const main = async () => {
     if (!completionOk) throw new Error('练习通过后没有写入完成进度');
     console.log(`[${stamp()}] 完成进度已写入 math-parity`);
 
-    // 第七阶段：模拟 worker 崩溃，确认自动重启且编辑内容不丢。
+    // 第八阶段：模拟 worker 崩溃，确认自动重启且编辑内容不丢。
     await page.evaluate(() => {
       globalThis.__leanCrash(
         'Lean pthread failed: Uncaught RangeError: Maximum call stack size exceeded',
@@ -283,7 +315,7 @@ const main = async () => {
     if (!preserved) throw new Error('崩溃重启后编辑内容丢失');
     console.log(`[${stamp()}] 崩溃自动重启完成，编辑内容保留`);
 
-    // 第八阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
+    // 第九阶段：速查表与英文路由可正常按需加载语言包并渲染，遥测端点返回 204。
     await page.goto(`${origin}/zh/reference`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h1');
     const referenceOk = await page.evaluate(() => {

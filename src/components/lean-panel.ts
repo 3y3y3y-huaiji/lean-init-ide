@@ -671,6 +671,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let changePending = false;
   let diagnosticSeq = 0;
   let debounceTimer: number | undefined;
+  // 成功提示必须等 documentSymbol 屏障和诊断静默窗口结束后再显示，避免先亮后灭。
+  let successTimer: number | undefined;
+  let successSeq = 0;
 
   let progressLabel = t.statusIdle;
   let progressKind: LeanPanelProgressKind = 'idle';
@@ -799,6 +802,39 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
   };
 
+  const resetRunOk = () => {
+    successSeq += 1;
+    window.clearTimeout(successTimer);
+    if (runOkEl) runOkEl.hidden = true;
+  };
+
+  /**
+   * 诊断是分批到达的：第一批没有错误不代表整个文件通过。
+   * 用 documentSymbol 作为处理屏障，再等 150ms 静默，确认没有更新的诊断后才亮成功提示。
+   */
+  const confirmRunSettled = async (seq: number, warningCount: number) => {
+    if (variant !== 'full' || seq !== successSeq || !session.isReady) return;
+    try {
+      const result = await session.request('textDocument/documentSymbol', {
+        textDocument: { uri },
+      });
+      if (result === null) return;
+    } catch {
+      return;
+    }
+    window.setTimeout(() => {
+      if (seq !== successSeq || !session.isReady) return;
+      if (!runOkEl || !runOkTitleEl || !runOkDetailEl) return;
+      if (lastDiagnostics.some((item) => item.severity === 1 || item.severity === undefined)) {
+        return;
+      }
+      const latency = lastEditAt ? performance.now() - lastEditAt : 0;
+      runOkTitleEl.textContent = t.runPassed;
+      runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
+      runOkEl.hidden = false;
+    }, 150);
+  };
+
   const renderDiagnostics = (params: { uri: string; diagnostics: LspDiagnostic[] }) => {
     if (params.uri.toLowerCase() !== uri.toLowerCase()) return;
 
@@ -830,19 +866,19 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     updatePassedBadge(params.diagnostics);
     lastDiagnostics = params.diagnostics;
 
-    // 没有错误时给一个显眼的成功提示框；日志里那行 initialize 太容易被忽略。
+    // 每批新诊断先收起旧的“运行通过”，等文件处理完再决定是否重新显示。
+    resetRunOk();
     const errorCount = params.diagnostics.filter(
       (diagnostic) => diagnostic.severity === 1 || diagnostic.severity === undefined,
     ).length;
     const warningCount = params.diagnostics.filter(
       (diagnostic) => diagnostic.severity === 2,
     ).length;
-    if (runOkEl && runOkTitleEl && runOkDetailEl) {
-      runOkEl.hidden = errorCount > 0;
-      if (errorCount === 0) {
-        runOkTitleEl.textContent = t.runPassed;
-        runOkDetailEl.textContent = t.runPassedDetail(warningCount, Math.round(latency));
-      }
+    if (errorCount === 0) {
+      const seq = successSeq;
+      successTimer = window.setTimeout(() => {
+        void confirmRunSettled(seq, warningCount);
+      }, 200);
     }
 
     diagnosticsEl.replaceChildren();
@@ -1077,6 +1113,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     updateStatement();
     scheduleDraftSave();
     disarmReset();
+    // 代码一改就收起旧的“运行通过”；等新诊断真正处理完再重新显示。
+    resetRunOk();
     // 改回 sorry 或删掉目标定理时立即收起徽章，不用等下一轮诊断。
     if (passedEl && exerciseStarter && !isExerciseSolved(code, model.getValue(), lastDiagnostics)) {
       passedEl.hidden = true;
@@ -1161,7 +1199,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     goalSupported = true;
     runStartedAt = 0;
     firstDiagnosticsReported = false;
-    if (runOkEl) runOkEl.hidden = true;
+    resetRunOk();
     setStatus(memoryTier === 'low' ? t.statusLowMemory : t.statusIdle, 'idle');
     setProgress(0);
     goalEl.textContent = t.goalPlaceholder;
@@ -1177,7 +1215,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     void navigator.storage?.persist?.().catch(() => {});
     setStatus(t.statusLoading, 'loading');
     setProgress(0);
-    if (runOkEl) runOkEl.hidden = true;
+    resetRunOk();
     const startedAt = performance.now();
     runStartedAt = startedAt;
     firstDiagnosticsReported = false;
@@ -1268,7 +1306,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       canAutoRestart ? 'loading' : 'error',
     );
     setProgress(0);
-    if (runOkEl) runOkEl.hidden = true;
+    resetRunOk();
     goalEl.textContent = t.goalPlaceholder;
     statementEl.hidden = true;
     diagnosticsEl.replaceChildren();
@@ -1343,8 +1381,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     Object.assign(window as unknown as Record<string, unknown>, {
       __monaco: monaco,
       __editor: editor,
-      // 仅用于自动化验证崩溃恢复路径，不对普通用户暴露。
+      // 仅用于自动化验证崩溃恢复与成功提示时序，不对普通用户暴露。
       __leanCrash: handleRuntimeCrash,
+      __renderDiagnostics: renderDiagnostics,
     });
   }
 

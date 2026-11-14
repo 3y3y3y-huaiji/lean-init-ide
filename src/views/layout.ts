@@ -1,3 +1,8 @@
+import {
+  readSourcePreference,
+  setSourcePreference,
+  type AssetSourcePreference,
+} from '../asset-source';
 import { ghostButtonClass } from '../components/ui';
 import { localeLabel, messagesFor, otherLocale, rememberLocale, type Locale } from '../i18n';
 import { FIRST_LESSON_SLUG } from '../router';
@@ -105,6 +110,19 @@ export const renderLayout = (locale: Locale, active: ActivePage, content: string
                   <small class="mt-1 block text-xs leading-normal text-muted">${t.settings.autoStartHint}</small>
                 </span>
               </label>
+              <label class="mt-4 block border-t border-line pt-3">
+                <span class="block text-[13px] font-semibold">${t.settings.assetSource}</span>
+                <select
+                  id="asset-source"
+                  class="mt-2 w-full cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1.5 text-[13px] text-fg"
+                >
+                  <option value="auto">${t.playground.sourceAuto}</option>
+                  <option value="cdn">${t.playground.sourceCdn}</option>
+                  <option value="mirror">${t.playground.sourceMirror}</option>
+                  <option value="github">${t.playground.sourceGithub}</option>
+                </select>
+                <small class="mt-2 block text-xs leading-normal text-muted">${t.settings.assetSourceHint}</small>
+              </label>
               <div class="mt-4 border-t border-line pt-3">
                 <button
                   id="clear-cache"
@@ -174,6 +192,19 @@ export const bindLayout = (root: HTMLElement, locale: Locale) => {
   if (autoStart) autoStart.checked = getAutoStart();
   autoStart?.addEventListener('change', () => setAutoStart(autoStart.checked));
 
+  // 下载源与失败卡片共用同一份 CacheStorage 配置：设置里改完，下次启动 Lean 生效。
+  const sourceSelect = root.querySelector<HTMLSelectElement>('#asset-source');
+  const syncSourceSelect = async () => {
+    if (!sourceSelect) return;
+    sourceSelect.value = (await readSourcePreference()) ?? 'auto';
+  };
+  void syncSourceSelect();
+
+  sourceSelect?.addEventListener('change', () => {
+    const value = sourceSelect.value;
+    void setSourcePreference(value === 'auto' ? null : (value as AssetSourcePreference));
+  });
+
   const clearCache = root.querySelector<HTMLButtonElement>('#clear-cache');
   const clearCacheStatus = root.querySelector<HTMLElement>('#clear-cache-status');
   clearCache?.addEventListener('click', async () => {
@@ -209,6 +240,8 @@ export const bindLayout = (root: HTMLElement, locale: Locale) => {
     event.stopPropagation();
     settingsPanel.hidden = !settingsPanel.hidden;
     settingsToggle.setAttribute('aria-expanded', String(!settingsPanel.hidden));
+    // 失败卡片里的换源按钮也会改这份配置，展开时重新回显一次。
+    if (!settingsPanel.hidden) void syncSourceSelect();
   });
 
   document.addEventListener('click', (event) => {

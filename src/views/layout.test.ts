@@ -194,3 +194,65 @@ describe('骨架交互绑定', () => {
     expect(document.documentElement.lang).toBe('zh-CN');
   });
 });
+
+describe('下载源设置', () => {
+  const put = vi.fn<(key: string, response: Response) => Promise<void>>(() => Promise.resolve());
+  const remove = vi.fn<(key: string) => Promise<void>>(() => Promise.resolve());
+  const postMessage = vi.fn();
+
+  const stubCaches = (mode: string | null) => {
+    const cache = {
+      match: vi.fn(async () => (mode ? { text: async () => mode } : undefined)),
+      put,
+      delete: remove,
+    };
+    vi.stubGlobal('caches', { open: vi.fn(async () => cache) });
+  };
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { controller: { postMessage } },
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    put.mockClear();
+    remove.mockClear();
+    postMessage.mockClear();
+  });
+
+  it('回显已保存的下载源', async () => {
+    stubCaches('mirror');
+    mount('zh');
+    const select = document.body.querySelector<HTMLSelectElement>('#asset-source')!;
+
+    await vi.waitFor(() => expect(select.value).toBe('mirror'));
+  });
+
+  it('选择具体源会写入并通知 Service Worker', async () => {
+    stubCaches(null);
+    mount('zh');
+    const select = document.body.querySelector<HTMLSelectElement>('#asset-source')!;
+
+    select.value = 'cdn';
+    select.dispatchEvent(new Event('change'));
+
+    await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0]?.[0]).toBe('/__lean/source-preference');
+    expect(postMessage).toHaveBeenCalledWith({ type: 'lean-source-mode', mode: 'cdn' });
+  });
+
+  it('选择自动会清除强制源', async () => {
+    stubCaches('mirror');
+    mount('zh');
+    const select = document.body.querySelector<HTMLSelectElement>('#asset-source')!;
+
+    select.value = 'auto';
+    select.dispatchEvent(new Event('change'));
+
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledWith('/__lean/source-preference'));
+    expect(postMessage).toHaveBeenCalledWith({ type: 'lean-source-mode', mode: null });
+  });
+});

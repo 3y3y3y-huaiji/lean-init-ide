@@ -22,6 +22,9 @@ export const zh: Messages = {
     title: '偏好设置',
     autoStart: '打开编辑器页时自动下载 Lean',
     autoStartHint: '关闭后需要手动点「启动 Lean」。首次下载约 102MB，只在你的浏览器里缓存。',
+    assetSource: 'Lean 运行时下载源',
+    assetSourceHint:
+      '自动会按浏览器语言选择：中文优先国内镜像，其他优先站点同源。修改后下次启动 Lean 生效。',
     clearCache: '清理运行时缓存',
     clearCacheHint: '删除已下载的 Lean 运行时（约 102MB），下次启动会重新下载。',
     clearCacheBusy: '清理中…',

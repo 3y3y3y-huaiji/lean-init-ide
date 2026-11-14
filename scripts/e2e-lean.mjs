@@ -98,6 +98,24 @@ const main = async () => {
       if (!controlled) throw new Error('page is not controlled by the service worker');
     }
 
+    // 设置面板里可以直接选下载源，四个选项都要在，且默认回显「自动」。
+    await page.click('#settings-toggle');
+    const sourceSetting = await page.evaluate(() => {
+      const select = globalThis.document.querySelector('#asset-source');
+      return {
+        value: select?.value ?? null,
+        options: select ? [...select.options].map((option) => option.value) : [],
+      };
+    });
+    if (
+      sourceSetting.value !== 'auto' ||
+      ['auto', 'cdn', 'mirror', 'github'].some((mode) => !sourceSetting.options.includes(mode))
+    ) {
+      throw new Error(`设置里的下载源不完整: ${JSON.stringify(sourceSetting)}`);
+    }
+    await page.click('#settings-toggle');
+    console.log(`[${stamp()}] 设置里的下载源正常`);
+
     await page.click('[data-role="start"]');
     console.log(`[${stamp()}] 启动 Lean（默认示例）`);
 

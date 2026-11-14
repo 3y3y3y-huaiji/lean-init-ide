@@ -32,3 +32,15 @@ export const applySourcePreference = async (search: string): Promise<void> => {
   if (raw === null) return;
   await setSourcePreference(isSourceMode(raw) ? (raw as AssetSourcePreference) : null);
 };
+
+/** 读取设置面板要回显的下载源；未设置或存储不可用时返回 null（自动选择）。 */
+export const readSourcePreference = async (): Promise<AssetSourcePreference> => {
+  try {
+    const cache = await caches.open(SOURCE_PREFERENCE_CACHE);
+    const hit = await cache.match(SOURCE_PREFERENCE_KEY);
+    const value = hit ? (await hit.text()).trim() : '';
+    return isSourceMode(value) ? (value as AssetSourcePreference) : null;
+  } catch {
+    return null;
+  }
+};

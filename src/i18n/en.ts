@@ -23,6 +23,9 @@ export const en: Messages = {
     autoStart: 'Download Lean automatically when the editor opens',
     autoStartHint:
       'When off you start Lean yourself. The first download is about 102 MB and stays cached in this browser.',
+    assetSource: 'Lean runtime download source',
+    assetSourceHint:
+      'Auto picks by browser language: China mirror for Chinese, same-origin otherwise. Takes effect the next time Lean starts.',
     clearCache: 'Clear runtime cache',
     clearCacheHint:
       'Deletes the downloaded Lean runtime (about 102 MB). The next start downloads it again.',

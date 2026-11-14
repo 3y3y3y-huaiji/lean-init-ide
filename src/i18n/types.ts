@@ -53,6 +53,9 @@ export type Messages = {
     title: string;
     autoStart: string;
     autoStartHint: string;
+    /** 运行时资产下载源。 */
+    assetSource: string;
+    assetSourceHint: string;
     clearCache: string;
     clearCacheHint: string;
     clearCacheBusy: string;

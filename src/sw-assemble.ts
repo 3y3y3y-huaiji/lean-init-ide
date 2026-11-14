@@ -77,10 +77,13 @@ export const loadRangedAsset = async (options: AssembleOptions): Promise<Respons
     } catch (error) {
       if (options.request.signal.aborted) throw error;
       lastError = error;
-      options.onFallback(options.name, `${source.label} 不可用：${errorMessage(error)}`);
+      options.onFallback(options.name, `${source.label} unavailable: ${errorMessage(error)}`);
     }
   }
 
-  options.onFallback(options.name, `远端源均失败，回退同源：${errorMessage(lastError)}`);
+  options.onFallback(
+    options.name,
+    `all remote sources failed, falling back to origin: ${errorMessage(lastError)}`,
+  );
   return options.fallbackFetch(options.request);
 };

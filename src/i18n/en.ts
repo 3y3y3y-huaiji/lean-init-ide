@@ -25,7 +25,7 @@ export const en: Messages = {
       'When off you start Lean yourself. The first download is about 102 MB and stays cached in this browser.',
     assetSource: 'Lean runtime download source',
     assetSourceHint:
-      'Auto picks by browser language: China mirror for Chinese, same-origin otherwise. Takes effect the next time Lean starts.',
+      'Auto picks the nearest source from browser language and timezone: China mirror for Chinese or Mainland China, Site CDN otherwise. Takes effect the next time Lean starts.',
     clearCache: 'Clear runtime cache',
     clearCacheHint:
       'Deletes the downloaded Lean runtime (about 102 MB). The next start downloads it again.',
@@ -52,7 +52,7 @@ export const en: Messages = {
       },
       {
         title: 'Download once, cached for good',
-        body: 'The 102 MB runtime arrives in parallel 4 MB ranges from a same-origin Cloudflare R2 gateway, is verified with SHA-256, falls back to the mirror or the same-origin static copy, then persists in the browser.',
+        body: 'The 102 MB runtime streams in parallel 4 MB ranges, is verified with SHA-256, automatically falls back across mirrors or the same-origin static copy, and persists in the browser.',
       },
       {
         title: 'Dual open-source license',
@@ -1323,7 +1323,7 @@ export const en: Messages = {
     loadFailureDetail:
       'The Lean runtime did not download completely. Retry, or switch to another source. If a VPN is on, turn it off and try again.',
     retryLoad: 'Retry',
-    sourceCdn: 'Same-origin R2',
+    sourceCdn: 'Site CDN',
     sourceMirror: 'China mirror',
     sourceGithub: 'GitHub',
     sourceAuto: 'Auto',
@@ -1333,7 +1333,7 @@ export const en: Messages = {
     statusWaitingDiagnostics: 'Waiting for diagnostics…',
     statusReady: (count, ms) => `Ready · diagnostics #${count} ${ms} ms`,
     statusNoDiagnostics: (ms) => `No diagnostics · ${ms} ms`,
-    logSwReady: 'Service worker ready, Lean assets stream from the same-origin R2 gateway',
+    logSwReady: 'Service worker ready; Lean assets stream in parallel chunks',
     logSwFailed: (message) =>
       `Service worker registration failed, falling back to Pages: ${message}`,
     logCacheCleared: 'Cleared the Lean asset cache (fresh=1)',

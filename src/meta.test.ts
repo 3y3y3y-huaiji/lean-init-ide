@@ -10,24 +10,38 @@ describe('swapLocalePath', () => {
 });
 
 describe('applyPageMeta', () => {
-  it('写入 canonical、og 与 hreflang，且重复调用不产生重复标签', () => {
+  it('写入 lang、description、canonical、og 与 hreflang，且重复调用不产生重复标签', () => {
     document.head.innerHTML = '';
-    applyPageMeta(document, { locale: 'zh', pathname: '/zh/learn/simp', title: '让 simp 收尾' });
-    applyPageMeta(document, { locale: 'zh', pathname: '/zh/learn/simp', title: '让 simp 收尾' });
+    applyPageMeta(document, {
+      locale: 'en',
+      pathname: '/en/learn/simp',
+      title: 'Finishing with simp',
+      description: 'Learn how simp rewrites goals.',
+    });
+    applyPageMeta(document, {
+      locale: 'en',
+      pathname: '/en/learn/simp',
+      title: 'Finishing with simp',
+      description: 'Learn how simp rewrites goals.',
+    });
 
+    expect(document.documentElement.lang).toBe('en');
     expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1);
     expect(document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href).toBe(
-      'https://criticalthinking.de5.net/zh/learn/simp',
+      'https://criticalthinking.de5.net/en/learn/simp',
     );
     expect(document.head.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content).toBe(
-      'https://criticalthinking.de5.net/zh/learn/simp',
+      'https://criticalthinking.de5.net/en/learn/simp',
     );
     expect(document.head.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content).toBe(
-      '让 simp 收尾',
+      'Finishing with simp',
+    );
+    expect(document.head.querySelector<HTMLMetaElement>('meta[name="description"]')?.content).toBe(
+      'Learn how simp rewrites goals.',
     );
     expect(
       document.head.querySelector<HTMLMetaElement>('meta[property="og:locale"]')?.content,
-    ).toBe('zh_CN');
+    ).toBe('en_US');
 
     const zh = document.head.querySelector<HTMLLinkElement>('link[rel="alternate"][hreflang="zh"]');
     const en = document.head.querySelector<HTMLLinkElement>('link[rel="alternate"][hreflang="en"]');

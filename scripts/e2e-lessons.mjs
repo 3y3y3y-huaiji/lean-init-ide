@@ -62,10 +62,11 @@ const waitForGateway = async () => {
 const main = async () => {
   await waitForGateway();
   const browser = await chromium.launch({ channel, executablePath, headless: true });
-  // 固定英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文环境优先命中外部镜像。
+  // 固定海外英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文/中国时区优先命中外部镜像。
   const context = await browser.newContext({
     viewport: { width: 1280, height: 900 },
     locale: 'en-US',
+    timezoneId: 'UTC',
     extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
   });
   const pages = await Promise.all(Array.from({ length: workers }, () => context.newPage()));

@@ -11,6 +11,7 @@ type MetaOptions = {
   /** location.pathname，形如 /zh/learn/first-proof。 */
   pathname: string;
   title: string;
+  description?: string;
 };
 
 const ensureLink = (doc: Document, rel: string, hreflang?: string): HTMLLinkElement => {
@@ -46,12 +47,19 @@ export const swapLocalePath = (pathname: string, locale: 'zh' | 'en'): string =>
 };
 
 export const applyPageMeta = (doc: Document, options: MetaOptions): void => {
+  doc.documentElement.lang = options.locale === 'zh' ? 'zh-CN' : 'en';
   const canonical = `${SITE_ORIGIN}${options.pathname}`;
   ensureLink(doc, 'canonical').href = canonical;
 
   ensureMeta(doc, 'property', 'og:url').content = canonical;
   ensureMeta(doc, 'property', 'og:title').content = options.title;
   ensureMeta(doc, 'property', 'og:locale').content = options.locale === 'zh' ? 'zh_CN' : 'en_US';
+  if (options.description) {
+    ensureMeta(doc, 'name', 'description').content = options.description;
+    ensureMeta(doc, 'property', 'og:description').content = options.description;
+    ensureMeta(doc, 'name', 'twitter:title').content = options.title;
+    ensureMeta(doc, 'name', 'twitter:description').content = options.description;
+  }
 
   for (const locale of ['zh', 'en'] as const) {
     const link = ensureLink(doc, 'alternate', locale);

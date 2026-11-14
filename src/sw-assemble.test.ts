@@ -53,7 +53,10 @@ describe('loadRangedAsset', () => {
     const response = await loadRangedAsset(options);
 
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([0, 1, 2]));
-    expect(options.onFallback).toHaveBeenCalledWith('asset.bin', 'primary 不可用：network down');
+    expect(options.onFallback).toHaveBeenCalledWith(
+      'asset.bin',
+      'primary unavailable: network down',
+    );
     expect(download).toHaveBeenLastCalledWith(
       'https://mirror.test/asset',
       3,
@@ -76,7 +79,7 @@ describe('loadRangedAsset', () => {
     expect(options.onFallback).toHaveBeenCalledTimes(2);
     expect(options.onFallback).toHaveBeenLastCalledWith(
       'asset.bin',
-      '远端源均失败，回退同源：boom',
+      'all remote sources failed, falling back to origin: boom',
     );
   });
 
@@ -98,7 +101,7 @@ describe('loadRangedAsset', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([0, 1, 2]));
     expect(options.onFallback).toHaveBeenCalledWith(
       'asset.bin',
-      'primary 不可用：assembled 2 bytes, expected 3',
+      'primary unavailable: assembled 2 bytes, expected 3',
     );
   });
 

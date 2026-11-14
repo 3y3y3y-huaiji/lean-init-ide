@@ -3,6 +3,7 @@ import manifestJson from '../config/lean4-runtime.json';
 import {
   assetSources,
   isSourceMode,
+  pickClientLanguages,
   prefersDomesticMirror,
   rangedAssets,
   resolveSourceGroup,
@@ -184,25 +185,40 @@ describe('assetSources', () => {
       expect(isSourceMode('MIRROR')).toBe(false);
     });
 
-    it('resolveSourceGroup 在强制源与 Accept-Language 间正确路由', () => {
-      expect(resolveSourceGroup('mirror', 'en-US')).toBe('domestic');
-      expect(resolveSourceGroup('cdn', 'zh-CN')).toBe('overseas');
-      expect(resolveSourceGroup('github', 'zh-CN')).toBe('github');
+    it('resolveSourceGroup 在强制源、语言与时区间正确路由', () => {
+      expect(resolveSourceGroup('mirror', 'en-US', 'UTC')).toBe('domestic');
+      expect(resolveSourceGroup('cdn', 'zh-CN', 'Asia/Shanghai')).toBe('overseas');
+      expect(resolveSourceGroup('github', 'zh-CN', 'Asia/Shanghai')).toBe('github');
       expect(resolveSourceGroup(null, 'zh-CN')).toBe('domestic');
-      expect(resolveSourceGroup(null, 'en-US')).toBe('overseas');
+      expect(resolveSourceGroup(null, 'en-US', 'UTC')).toBe('overseas');
+      expect(resolveSourceGroup(null, null, 'Asia/Shanghai')).toBe('domestic');
     });
   });
 });
 
+describe('pickClientLanguages', () => {
+  it('请求头缺失 Accept-Language 时回退到 Service Worker 的 navigator.languages', () => {
+    expect(pickClientLanguages(null, ['zh-CN', 'zh', 'en'], 'en-US')).toBe('zh-CN,zh,en');
+    expect(pickClientLanguages('', [], 'zh-CN')).toBe('zh-CN');
+    expect(pickClientLanguages('en-US,en', ['zh-CN'], 'zh-CN')).toBe('en-US,en');
+    expect(pickClientLanguages(null, undefined, undefined)).toBeNull();
+  });
+});
+
 describe('prefersDomesticMirror', () => {
-  it('treats a Chinese first choice as domestic', () => {
+  it('treats Chinese languages or Mainland China timezones as domestic', () => {
     expect(prefersDomesticMirror('zh-CN,zh;q=0.9,en;q=0.8')).toBe(true);
     expect(prefersDomesticMirror('zh-Hant-TW,zh;q=0.9')).toBe(true);
+    expect(prefersDomesticMirror('en-US,en;q=0.9,zh-CN;q=0.8')).toBe(true);
     expect(prefersDomesticMirror('zh')).toBe(true);
+    expect(prefersDomesticMirror('en-US', 'Asia/Shanghai')).toBe(true);
+    expect(prefersDomesticMirror(null, 'Asia/Urumqi')).toBe(true);
   });
 
-  it('keeps other languages and missing headers on the overseas order', () => {
+  it('keeps other languages and non-mainland timezones on the overseas order', () => {
     expect(prefersDomesticMirror('en-US,en;q=0.9')).toBe(false);
+    expect(prefersDomesticMirror('en-US,en;q=0.9,zh-CN;q=0')).toBe(false);
+    expect(prefersDomesticMirror('en-US', 'America/New_York')).toBe(false);
     expect(prefersDomesticMirror('ja-JP,ja;q=0.9,en;q=0.5')).toBe(false);
     expect(prefersDomesticMirror('*')).toBe(false);
     expect(prefersDomesticMirror('')).toBe(false);

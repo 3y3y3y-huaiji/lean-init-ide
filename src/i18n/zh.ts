@@ -24,7 +24,7 @@ export const zh: Messages = {
     autoStartHint: '关闭后需要手动点「启动 Lean」。首次下载约 102MB，只在你的浏览器里缓存。',
     assetSource: 'Lean 运行时下载源',
     assetSourceHint:
-      '自动会按浏览器语言选择：中文优先国内镜像，其他优先站点同源。修改后下次启动 Lean 生效。',
+      '自动会按浏览器语言与时区就近选择：中文或国内环境优先国内镜像，其他优先站点 CDN。修改后下次启动 Lean 生效。',
     clearCache: '清理运行时缓存',
     clearCacheHint: '删除已下载的 Lean 运行时（约 102MB），下次启动会重新下载。',
     clearCacheBusy: '清理中…',
@@ -50,7 +50,7 @@ export const zh: Messages = {
       },
       {
         title: '一次下载，长期可用',
-        body: '约 102MB 运行时由站点同源网关从 Cloudflare R2 按 4MB 分片并行下发并做 SHA-256 校验，网关故障时回退镜像或同源静态副本，之后走持久缓存。',
+        body: '约 102MB 运行时按 4MB 分片并行下发并做 SHA-256 校验，优先就近节点并在故障时自动回退其他源或同源静态副本，之后走持久缓存。',
       },
       {
         title: '开源双协议',
@@ -1318,7 +1318,7 @@ export const zh: Messages = {
     loadFailureDetail:
       'Lean 运行时没有下载完整。可以重试，或换一个下载源；如果开着 VPN，先关掉 VPN 再试。',
     retryLoad: '重试',
-    sourceCdn: '同源 R2',
+    sourceCdn: '站点 CDN',
     sourceMirror: '国内镜像',
     sourceGithub: 'GitHub',
     sourceAuto: '自动选择',
@@ -1328,7 +1328,7 @@ export const zh: Messages = {
     statusWaitingDiagnostics: '等待诊断…',
     statusReady: (count, ms) => `就绪 · 诊断 #${count} ${ms}ms`,
     statusNoDiagnostics: (ms) => `无诊断 · ${ms}ms`,
-    logSwReady: 'Service Worker 就绪，Lean 资产由站点同源 R2 网关分片下发',
+    logSwReady: 'Service Worker 就绪，Lean 运行时将按当前源策略分片下发',
     logSwFailed: (message) => `Service Worker 注册失败，回退 Pages：${message}`,
     logCacheCleared: '已清空 Lean 资产缓存（fresh=1）',
     logDraftRestored: '已恢复上次未提交的本地草稿',

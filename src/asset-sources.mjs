@@ -80,13 +80,57 @@ export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
 /** 只有大文件走 Range 分片；小文件由构建脚本直接下载/复制。 */
 export const rangedAssets = (manifest) => manifest.assets.filter((asset) => asset.ranged === true);
 
+const MAINLAND_CHINA_TIMEZONES = new Set([
+  'Asia/Shanghai',
+  'Asia/Chongqing',
+  'Asia/Harbin',
+  'Asia/Urumqi',
+  'Asia/Kashgar',
+]);
+
 /**
- * 按 Accept-Language 的首选语言判断是否优先走国内镜像。
+ * 合并 HTTP Accept-Language 头（若存在）与 Service Worker 侧的 navigator.languages / language。
+ * 浏览器发起的子资源 fetch() 在进入 SW 时通常不带 Accept-Language 头，只读头会恒为 null。
+ */
+export const pickClientLanguages = (headerValue, navigatorLanguages, navigatorLanguage) => {
+  const fromHeader = typeof headerValue === 'string' ? headerValue.trim() : '';
+  if (fromHeader) return fromHeader;
+  if (Array.isArray(navigatorLanguages) && navigatorLanguages.length > 0) {
+    const joined = navigatorLanguages.filter(Boolean).join(',').trim();
+    if (joined) return joined;
+  }
+  const single = typeof navigatorLanguage === 'string' ? navigatorLanguage.trim() : '';
+  return single || null;
+};
+
+/**
+ * 判断自动选源时是否应优先走国内镜像：
+ * - 浏览器语言列表包含非禁用的中文条目（含中英双语设置），或
+ * - 所在时区属于中国大陆（英文系统/英文界面下的国内用户同样走快源）。
  * 只调整源顺序，不做硬路由：两个方向都保留完整回退。
  */
-export const prefersDomesticMirror = (acceptLanguage) => {
-  const preferred = (acceptLanguage ?? '').split(',')[0]?.split(';')[0]?.trim().toLowerCase() ?? '';
-  return preferred === 'zh' || preferred.startsWith('zh-');
+export const prefersDomesticMirror = (acceptLanguage, timeZone) => {
+  if (typeof timeZone === 'string' && MAINLAND_CHINA_TIMEZONES.has(timeZone.trim())) {
+    return true;
+  }
+  const entries = (acceptLanguage ?? '').split(',');
+  for (const rawEntry of entries) {
+    const [rawTag, ...params] = rawEntry.split(';');
+    const tag = (rawTag ?? '').trim().toLowerCase();
+    if (!tag) continue;
+    const disabled = params.some((part) => {
+      const normalized = part.replace(/\s+/g, '').toLowerCase();
+      return (
+        normalized === 'q=0' ||
+        normalized === 'q=0.0' ||
+        normalized === 'q=0.00' ||
+        normalized === 'q=0.000'
+      );
+    });
+    if (disabled) continue;
+    if (tag === 'zh' || tag.startsWith('zh-')) return true;
+  }
+  return false;
 };
 
 /* ---------------------------------------------------------------------------
@@ -105,12 +149,12 @@ export const SOURCE_PREFERENCE_CACHE = 'lean-source';
 export const SOURCE_PREFERENCE_KEY = '/__lean/source-preference';
 
 /**
- * 结合强制源开关与 Accept-Language，决定本次下载使用的源顺序档位。
+ * 结合强制源开关、客户端语言与时区，决定本次下载使用的源顺序档位。
  * 抽成纯函数便于单测，避免把分支留给被覆盖率排除的 sw.ts。
  */
-export const resolveSourceGroup = (mode, acceptLanguage) => {
+export const resolveSourceGroup = (mode, acceptLanguage, timeZone) => {
   if (mode === 'mirror') return 'domestic';
   if (mode === 'cdn') return 'overseas';
   if (mode === 'github') return 'github';
-  return prefersDomesticMirror(acceptLanguage) ? 'domestic' : 'overseas';
+  return prefersDomesticMirror(acceptLanguage, timeZone) ? 'domestic' : 'overseas';
 };

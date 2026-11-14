@@ -2,7 +2,7 @@ import './index.css';
 import { applySourcePreference } from './asset-source';
 import { detectLocale, loadLocale, otherLocale } from './i18n';
 import { applyPageMeta } from './meta';
-import { pageTitle, renderNotFound } from './page-meta';
+import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { readCompleted, readProgress } from './progress';
 import { canonicalRoutePath, resolveRoute, type Route } from './router';
 import { initTelemetry, track } from './telemetry';
@@ -22,6 +22,7 @@ const boot = async (route: Route, root: HTMLElement) => {
     locale: route.locale,
     pathname: location.pathname,
     title: document.title,
+    description: pageDescription(route),
   });
   document.body.dataset.page = route.page === 'playground' ? 'playground' : 'content';
   track('boot', { page: route.page, locale: route.locale });

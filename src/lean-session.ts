@@ -263,7 +263,7 @@ export class LeanSession {
 
     // 同一份代码直接复用上次诊断：课程里重复点“运行”不应再走一次 Lean。
     if (code === this.lastRunCode && this.lastRunDiagnostics) {
-      this.options.onLog?.('[run] 复用上次诊断');
+      this.options.onLog?.('[run] reused cached diagnostics');
       syncEditor();
       return this.lastRunDiagnostics;
     }
@@ -271,7 +271,7 @@ export class LeanSession {
     const imports = importLines(code);
     const reopen = imports !== this.lastRunImports;
     this.options.onLog?.(
-      `[run] 开始，长度 ${code.length}${reopen ? '（import 变化，重开文档）' : '（复用文档进程）'}`,
+      `[run] start (length ${code.length}, ${reopen ? 'reopen document' : 'reuse session'})`,
     );
 
     return new Promise<LspDiagnostic[]>((resolve) => {
@@ -302,7 +302,7 @@ export class LeanSession {
             () => this.settleAfterQuiet(active),
             (error: unknown) => {
               this.options.onLog?.(
-                `[run] documentSymbol 失败：${error instanceof Error ? error.message : String(error)}`,
+                `[run] documentSymbol failed: ${error instanceof Error ? error.message : String(error)}`,
               );
               // 屏障失败时诊断可能不完整，不写入同文复用缓存。
               this.settleRun(active.diagnostics, active, false);

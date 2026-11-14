@@ -51,8 +51,17 @@ export declare function assetSources(
   options?: AssetSourceOptions,
 ): AssetSource[];
 export declare function rangedAssets(manifest: RuntimeManifest): RuntimeAsset[];
-/** 按 Accept-Language 首选语言判断是否优先走国内镜像（只影响源顺序）。 */
-export declare function prefersDomesticMirror(acceptLanguage: string | null | undefined): boolean;
+/** 从请求头或 Service Worker navigator 提取客户端语言列表。 */
+export declare function pickClientLanguages(
+  headerValue: string | null | undefined,
+  navigatorLanguages?: readonly string[] | null,
+  navigatorLanguage?: string | null,
+): string | null;
+/** 按语言与时区判断是否优先走国内镜像（只影响源顺序）。 */
+export declare function prefersDomesticMirror(
+  acceptLanguage: string | null | undefined,
+  timeZone?: string | null,
+): boolean;
 
 /* 诊断用的强制源开关：?source=mirror|cdn|github */
 export type SourceMode = 'mirror' | 'cdn' | 'github';
@@ -64,4 +73,5 @@ export declare const SOURCE_PREFERENCE_KEY: string;
 export declare function resolveSourceGroup(
   mode: SourceMode | null | undefined,
   acceptLanguage: string | null | undefined,
+  timeZone?: string | null,
 ): 'domestic' | 'overseas' | 'github';

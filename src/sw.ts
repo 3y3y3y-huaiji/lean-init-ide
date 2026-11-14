@@ -16,6 +16,7 @@ import manifestJson from '../config/lean4-runtime.json';
 import {
   assetSources,
   isSourceMode,
+  pickClientLanguages,
   rangedAssets,
   resolveSourceGroup,
   SOURCE_PREFERENCE_CACHE,
@@ -116,13 +117,23 @@ sw.addEventListener('fetch', (event) => {
   const asset = RANGE_ASSETS.get(name);
   if (!asset) return;
 
-  const acceptLanguage = request.headers.get('accept-language');
+  const acceptLanguage = pickClientLanguages(
+    request.headers.get('accept-language'),
+    sw.navigator?.languages,
+    sw.navigator?.language,
+  );
+  let timeZone: string | null = null;
+  try {
+    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+  } catch {
+    timeZone = null;
+  }
 
   // respondWith 必须在事件同步阶段调用；强制源要读 CacheStorage，放到 promise 里再解析。
   event.respondWith(
     (async () => {
       const mode = await readForcedMode();
-      const sources = asset[resolveSourceGroup(mode, acceptLanguage)];
+      const sources = asset[resolveSourceGroup(mode, acceptLanguage, timeZone)];
 
       return loadRangedAsset({
         request,

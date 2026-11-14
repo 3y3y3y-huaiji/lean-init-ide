@@ -35,10 +35,11 @@ const main = async () => {
   await waitForGateway();
   const browser = await chromium.launch({ channel, executablePath, headless: true });
   try {
-    // 固定英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文环境优先命中外部镜像。
+    // 固定海外英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文/中国时区优先命中外部镜像。
     const context = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
       locale: 'en-US',
+      timezoneId: 'UTC',
       extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
     });
     const page = await context.newPage();
@@ -414,10 +415,16 @@ const main = async () => {
         }
       }).observe({ type: 'layout-shift', buffered: true });
     });
-    for (const checkPath of ['/zh/learn/what-is-lean', '/zh/playground']) {
+    for (const checkPath of [
+      '/zh/learn/what-is-lean',
+      '/zh/playground',
+      '/en/learn/what-is-lean',
+      '/en/playground',
+    ]) {
       await page.goto(`${origin}${checkPath}`, { waitUntil: 'load' });
       await page.waitForTimeout(400);
       const perf = await page.evaluate(() => ({
+        lang: globalThis.document.documentElement.lang,
         ssg:
           globalThis.document.head
             .querySelector('meta[name="lean-ssg"]')
@@ -425,6 +432,10 @@ const main = async () => {
         h1: globalThis.document.querySelector('h1')?.textContent?.trim() ?? '',
         cls: globalThis.__e2eCls ?? 0,
       }));
+      const expectedLang = checkPath.startsWith('/en/') ? 'en' : 'zh-CN';
+      if (perf.lang !== expectedLang) {
+        throw new Error(`${checkPath} <html lang> 期望 ${expectedLang}，实际为 "${perf.lang}"`);
+      }
       if (perf.ssg !== checkPath) {
         throw new Error(`${checkPath} 缺少匹配的 SSG 标记，实际为 "${perf.ssg}"`);
       }

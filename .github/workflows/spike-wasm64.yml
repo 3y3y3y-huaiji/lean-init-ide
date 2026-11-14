@@ -60,7 +60,7 @@ jobs:
             return value == 42 ? 0 : 3;
           }
           EOF
-          emcc probe.c -m64 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
+          emcc probe.c -sMEMORY64=2 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
           node probe.mjs || node --experimental-wasm-memory64 probe.mjs
 
       - name: 准备 wasm-llvm 并切成 wasm64 + O1
@@ -68,12 +68,11 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           cd wasm-llvm
           sed -i \
-            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m64 -DCMAKE_CXX_FLAGS=-m64 -DCMAKE_EXE_LINKER_FLAGS=-m64|' \
-            -e 's|emcc -c -O2|emcc -m64 -c -O1|g' \
-            -e 's|emcc -O2 -pthread|emcc -m64 -O1 -pthread|g' \
-            -e 's|-sMAXIMUM_MEMORY=4294967296|-sMAXIMUM_MEMORY=17179869184|' \
+            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=2 -DCMAKE_CXX_FLAGS=-sMEMORY64=2 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=2|' \
+            -e 's|emcc -c -O2|emcc -sMEMORY64=2 -c -O1|g' \
+            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=2 -O1 -pthread|g' \
             producer/lean-browser/scripts/build.sh
-          grep -n -- '-m64' producer/lean-browser/scripts/build.sh
+          grep -n -- 'MEMORY64' producer/lean-browser/scripts/build.sh
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
@@ -97,8 +96,8 @@ jobs:
           fi
           bash producer/lean-browser/scripts/build.sh fetch
           # LibUV 的 ExternalProject 只接收 EMSCRIPTEN_SETTINGS 作为 CMAKE_C_FLAGS，
-          # 不带上 -m64 会编出 wasm32 的 libuv.a，链接时报 "wasm32 object file can't be linked in wasm64 mode"。
-          sed -i 's|set(EMSCRIPTEN_SETTINGS "-s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|set(EMSCRIPTEN_SETTINGS "-m64 -s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|' \
+          # 不带上 64 位指针选项会编出 wasm32 的 libuv.a，链接时报 "wasm32 object file can't be linked in wasm64 mode"。
+          sed -i 's|set(EMSCRIPTEN_SETTINGS "-s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|set(EMSCRIPTEN_SETTINGS "-sMEMORY64=2 -s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|' \
             "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt"
           grep -n 'EMSCRIPTEN_SETTINGS' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt" | head -n 3
 
@@ -108,7 +107,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v2
+          key: wasm64-runtime-v3
 
       - name: runtime
         run: |
@@ -164,10 +163,9 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           cd wasm-llvm
           sed -i \
-            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m64 -DCMAKE_CXX_FLAGS=-m64 -DCMAKE_EXE_LINKER_FLAGS=-m64|' \
-            -e 's|emcc -c -O2|emcc -m64 -c -O1|g' \
-            -e 's|emcc -O2 -pthread|emcc -m64 -O1 -pthread|g' \
-            -e 's|-sMAXIMUM_MEMORY=4294967296|-sMAXIMUM_MEMORY=17179869184|' \
+            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=2 -DCMAKE_CXX_FLAGS=-sMEMORY64=2 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=2|' \
+            -e 's|emcc -c -O2|emcc -sMEMORY64=2 -c -O1|g' \
+            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=2 -O1 -pthread|g' \
             producer/lean-browser/scripts/build.sh
 
       - name: 恢复 Lean 源码与引导包
@@ -184,7 +182,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v2
+          key: wasm64-runtime-v3
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -196,7 +194,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v1
+          key: wasm64-obj-v2
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |

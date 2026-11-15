@@ -4,6 +4,17 @@ name: Build wasm32 Lean runtime
 # 产物只作为 artifact 上传，不自动替换线上资产；先本地验证再接入。
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: production (O3 clean) or experimental (kernel patch)
+        required: false
+        default: production
+        type: choice
+        options:
+          - production
+          - experimental
+  push:
+    branches: [spike/wasm32-runtime-ci]
 
 permissions:
   contents: read
@@ -13,6 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  BUILD_PROFILE: ${{ inputs.profile || 'production' }}
   # 与 config/lean4-runtime.json 的 upstream revision 保持一致，确保 Init olean 可复用。
   WASM_LLVM_REV: 14ea5ecbc514b0c87338aebf8f2b567020be5750
   EMSDK_VERSION: 6.0.0
@@ -53,12 +65,14 @@ jobs:
           git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
           git -C wasm-llvm checkout -q FETCH_HEAD
           cd wasm-llvm
+          PROFILING_FLAG=""
+          if [ "$BUILD_PROFILE" = "experimental" ]; then PROFILING_FLAG="--profiling-funcs"; fi
           sed -i \
             -e 's|emcc -c -O2|emcc -c -O3|g' \
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
             -e "s|-sSTACK_SIZE=16777216|-sSTACK_SIZE=$MAIN_STACK_BYTES|" \
             -e "s|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=$PTHREAD_STACK_BYTES|" \
-            -e 's|-sMODULARIZE=1|--profiling-funcs -sMODULARIZE=1|' \
+            -e "s|-sMODULARIZE=1|$PROFILING_FLAG -sMODULARIZE=1|" \
             producer/lean-browser/scripts/build.sh
           grep -n -- '-O3\|STACK_SIZE' producer/lean-browser/scripts/build.sh
 
@@ -80,12 +94,14 @@ jobs:
           bash producer/lean-browser/scripts/build.sh fetch
 
       - name: 应用 replace_fn 堆栈化补丁
+        if: env.BUILD_PROFILE == 'experimental'
         run: |
           cd "$GITHUB_WORKSPACE/work/lean4"
           git apply "$GITHUB_WORKSPACE/scripts/patches/lean-replace-fn-iterative.patch"
           grep -n 'wasm32 的浏览器 worker' src/kernel/replace_fn.cpp
 
       - name: 提高 Lean 自身线程栈（wasm32）
+        if: env.BUILD_PROFILE == 'experimental'
         run: |
           THREAD="$GITHUB_WORKSPACE/work/lean4/src/runtime/thread.cpp"
           python3 - <<'PY'
@@ -112,7 +128,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-${{ hashFiles('scripts/patches/lean-replace-fn-iterative.patch') }}
+          key: wasm32-runtime-${{ env.BUILD_PROFILE }}-${{ hashFiles('scripts/patches/lean-replace-fn-iterative.patch') }}
 
       - name: runtime
         run: |
@@ -171,12 +187,14 @@ jobs:
           git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
           git -C wasm-llvm checkout -q FETCH_HEAD
           cd wasm-llvm
+          PROFILING_FLAG=""
+          if [ "$BUILD_PROFILE" = "experimental" ]; then PROFILING_FLAG="--profiling-funcs"; fi
           sed -i \
             -e 's|emcc -c -O2|emcc -c -O3|g' \
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
             -e "s|-sSTACK_SIZE=16777216|-sSTACK_SIZE=$MAIN_STACK_BYTES|" \
             -e "s|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=$PTHREAD_STACK_BYTES|" \
-            -e 's|-sMODULARIZE=1|--profiling-funcs -sMODULARIZE=1|' \
+            -e "s|-sMODULARIZE=1|$PROFILING_FLAG -sMODULARIZE=1|" \
             producer/lean-browser/scripts/build.sh
           grep -n -- '-O3\|STACK_SIZE' producer/lean-browser/scripts/build.sh
 
@@ -194,7 +212,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-${{ hashFiles('scripts/patches/lean-replace-fn-iterative.patch') }}
+          key: wasm32-runtime-${{ env.BUILD_PROFILE }}-${{ hashFiles('scripts/patches/lean-replace-fn-iterative.patch') }}
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -289,10 +307,38 @@ jobs:
           test -s work/mini/Mini.olean || { echo '最小文件没有产出 olean'; exit 1; }
           echo 'runtime 冒烟通过'
 
+      - name: 打包生产资产（gzip / zstd / sha256）
+        if: env.BUILD_PROFILE == 'production'
+        run: |
+          cd work/dist
+          gzip -9 -c lean.wasm > lean.wasm.gz
+          zstd -19 -q -f lean.wasm -o lean.wasm.gz.bin
+          sha256sum lean.mjs lean.wasm lean.wasm.gz lean.wasm.gz.bin > SHA256SUMS
+          node - <<'JS'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+          const size = (p) => fs.statSync(p).size;
+          const summary = {
+            profile: 'production',
+            'lean.mjs': { bytes: size('lean.mjs'), sha256: hash('lean.mjs') },
+            'lean.wasm.gz.bin': {
+              bytes: size('lean.wasm.gz.bin'),
+              sha256: hash('lean.wasm.gz.bin'),
+              uncompressedBytes: size('lean.wasm'),
+              uncompressedSha256: hash('lean.wasm'),
+            },
+            'lean.wasm.gz': { bytes: size('lean.wasm.gz'), sha256: hash('lean.wasm.gz') },
+          };
+          fs.writeFileSync('runtime-summary.json', JSON.stringify(summary, null, 2) + '\n');
+          JS
+          cat runtime-summary.json
+
       - name: 记录构建参数
         if: always()
         run: |
           {
+            echo "profile=$BUILD_PROFILE"
             echo "wasm-llvm-rev=$WASM_LLVM_REV"
             echo "emsdk=$EMSDK_VERSION"
             echo "optimization=-O3"
@@ -305,10 +351,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: wasm32-runtime-o3-stack32
+          name: wasm32-runtime-${{ env.BUILD_PROFILE }}
           path: |
             work/dist/lean.mjs
             work/dist/lean.wasm
+            work/dist/lean.wasm.gz
+            work/dist/lean.wasm.gz.bin
+            work/dist/runtime-summary.json
+            work/dist/SHA256SUMS
             work/mini/Mini.olean
             work/mini.log
             work/version.log

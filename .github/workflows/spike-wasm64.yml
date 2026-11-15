@@ -71,8 +71,10 @@ jobs:
             -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
             -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O1|g' \
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O1 -pthread|g' \
+            -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 -sMODULARIZE=1|' \
+            -e 's|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS,getExceptionMessage|' \
             producer/lean-browser/scripts/build.sh
-          grep -n -- 'MEMORY64' producer/lean-browser/scripts/build.sh
+          grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
@@ -166,8 +168,10 @@ jobs:
             -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
             -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O1|g' \
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O1 -pthread|g' \
+            -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 -sMODULARIZE=1|' \
+            -e 's|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS,getExceptionMessage|' \
             producer/lean-browser/scripts/build.sh
-          grep -n -- 'MEMORY64' producer/lean-browser/scripts/build.sh
+          grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
       - name: 恢复 Lean 源码与引导包
         uses: actions/cache@v6
@@ -207,6 +211,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh emsdk
 
       - name: objects
+        id: objects
         run: |
           source emsdk/emsdk_env.sh
           cd wasm-llvm
@@ -214,6 +219,16 @@ jobs:
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh objects
+
+      # 浏览器验证失败会让 Job 失败，actions/cache 的 Post 阶段就不会保存 objects，
+      # 于是每次迭代都要重编 649 个模块。这里在 objects 成功后立刻显式保存。
+      - name: 立即保存 objects 缓存
+        if: always() && steps.objects.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: work/obj
+          key: wasm64-obj-v3
 
       - name: link
         run: |

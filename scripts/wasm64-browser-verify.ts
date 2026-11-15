@@ -51,6 +51,10 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     send(res, 200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' }, PAGE);
     return;
   }
+  if (url.pathname === '/favicon.ico') {
+    send(res, 204, headers);
+    return;
+  }
   const filePath = resolve(distDir, `.${decodeURIComponent(url.pathname)}`);
   if (filePath !== distDir && !filePath.startsWith(distDir + sep)) {
     send(res, 403, headers);
@@ -61,6 +65,8 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     const type = MIME_TYPES[extname(filePath)] ?? 'application/octet-stream';
     send(res, 200, { ...headers, 'Content-Type': type }, body);
   } catch {
+    // 404 的路径要打出来：pthread worker 或旁路资源缺失会直接表现为启动异常。
+    console.log(`[404] ${url.pathname}`);
     send(res, 404, headers);
   }
 });

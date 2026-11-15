@@ -7,6 +7,7 @@
  */
 interface LeanInstance {
   callMain(args: string[]): number;
+  getExceptionMessage?: (error: unknown) => unknown;
 }
 
 type LeanFactory = (options: Record<string, unknown>) => Promise<LeanInstance>;
@@ -45,7 +46,7 @@ const probeMemory = (descriptor: Record<string, unknown>): string => {
   }
 };
 
-const describe = (error: unknown): Record<string, unknown> => {
+const describe = (error: unknown, instance?: LeanInstance): Record<string, unknown> => {
   const candidate = error as { name?: string; message?: string; stack?: string; constructor?: { name?: string } };
   const info: Record<string, unknown> = {
     ctor: candidate?.constructor?.name,
@@ -59,6 +60,14 @@ const describe = (error: unknown): Record<string, unknown> => {
       info.arg0 = error.getArg(error.tag, 0);
     } catch {
       // tag 未导出时无法解码，忽略。
+    }
+    // EXCEPTION_STACK_TRACES=1 时 Emscripten 能解出 C++ 异常类型、消息与调用栈。
+    if (typeof instance?.getExceptionMessage === 'function') {
+      try {
+        info.decoded = instance.getExceptionMessage(error);
+      } catch (decodeError) {
+        info.decodeFailure = String(decodeError);
+      }
     }
   }
   return info;
@@ -80,6 +89,7 @@ const finish = (value: ProbeReport): void => {
 const run = async (): Promise<void> => {
   const environment = readEnvironment();
   log.push(`env ${JSON.stringify(environment)}`);
+  let lean: LeanInstance | undefined;
   try {
     // 用变量持有 URL，避免打包阶段把 /lean.mjs 解析成模块依赖。
     const leanModuleUrl = '/lean.mjs';
@@ -89,17 +99,19 @@ const run = async (): Promise<void> => {
     };
     const createLean = module.default ?? module.createLean;
     if (typeof createLean !== 'function') throw new Error('lean.mjs 未导出 createLean');
-    const lean = await createLean({
+    lean = await createLean({
       noInitialRun: true,
       print: (line: string) => log.push(`OUT ${line}`),
       printErr: (line: string) => log.push(`ERR ${line}`),
+      onAbort: (what: string) => log.push(`ABORT ${what}`),
+      onExit: (code: number) => log.push(`EXIT ${code}`),
     });
     log.push('createLean ok');
     const code = lean.callMain(['--version']);
     log.push(`callMain code=${code}`);
     finish({ ok: code === 0, stage: 'callMain', code, environment, log });
   } catch (error) {
-    finish({ ok: false, stage: 'exception', error: describe(error), environment, log });
+    finish({ ok: false, stage: 'exception', error: describe(error, lean), environment, log });
   }
 };
 

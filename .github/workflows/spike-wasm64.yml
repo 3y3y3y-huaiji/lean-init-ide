@@ -102,6 +102,14 @@ jobs:
           sed -i 's|set(EMSCRIPTEN_SETTINGS "-s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|set(EMSCRIPTEN_SETTINGS "-sMEMORY64=1 -s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|' \
             "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt"
           grep -n 'EMSCRIPTEN_SETTINGS' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt" | head -n 3
+          # 诊断：Lean 的初始化错误通过 Except 返回，异常栈里看不到是哪一级失败的。
+          # 直接给 Init / Std / Lean 三个顶层初始化打点，失败时 stderr 的最后一行就是坏掉的那一级。
+          INIT="$WASM_LLVM_LEAN_WORK_DIR/lean4/src/initialize/init.cpp"
+          sed -i '1i #include <cstdio>' "$INIT"
+          sed -i 's|^\( *\)consume_io_result(initialize_Init(builtin));|\1fprintf(stderr, "INIT Init\\n"); fflush(stderr);\n\1consume_io_result(initialize_Init(builtin));|' "$INIT"
+          sed -i 's|^\( *\)consume_io_result(initialize_Std(builtin));|\1fprintf(stderr, "INIT Std\\n"); fflush(stderr);\n\1consume_io_result(initialize_Std(builtin));|' "$INIT"
+          sed -i 's|^\( *\)consume_io_result(initialize_Lean(builtin));|\1fprintf(stderr, "INIT Lean\\n"); fflush(stderr);\n\1consume_io_result(initialize_Lean(builtin));|' "$INIT"
+          grep -n 'INIT Init\|INIT Std\|INIT Lean' "$INIT"
 
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
@@ -109,7 +117,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v4
+          key: wasm64-runtime-v5
 
       - name: runtime
         run: |
@@ -187,7 +195,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v4
+          key: wasm64-runtime-v5
 
       - name: 恢复 cgen
         uses: actions/cache@v6

@@ -213,14 +213,25 @@ jobs:
           level = pathlib.Path("work/cgen/Lean/Parser/Level.c")
           if level.exists():
               src = level.read_text()
-              # 先看 Level 自己的初始化序列：category 注册与 builtin parser 注册的先后顺序
-              match = re.search(r"^LEAN_EXPORT lean_object\* initialize_Lean_Parser_Level\(uint8_t builtin\) \{", src, re.M)
-              if match:
-                  body = src[match.start():match.start() + 4000]
-                  print("---- initialize_Lean_Parser_Level ----")
-                  for line in body.splitlines():
-                      if "registerBuiltinParserAttribute" in line or "addBuiltin" in line or "initialize_" in line or "return" in line:
-                          print(line.strip()[:300])
+              # 打印 Level.c 里所有 initialize_* 函数的完整语句体，看 category 注册与 parser 注册的真实顺序
+              for header in re.finditer(r"^LEAN_EXPORT lean_object\* (initialize_\w+)\(uint8_t builtin\)", src, re.M):
+                  name = header.group(1)
+                  start = src.find("{", header.end())
+                  depth = 0
+                  end = start
+                  for idx in range(start, min(len(src), start + 200000)):
+                      if src[idx] == "{":
+                          depth += 1
+                      elif src[idx] == "}":
+                          depth -= 1
+                          if depth == 0:
+                              end = idx
+                              break
+                  body = src[start:end]
+                  calls = [line.strip()[:220] for line in body.splitlines() if "l_Lean" in line or "initialize_" in line or "Builtin" in line]
+                  print(f"---- {name}: {len(body)} bytes, {len(calls)} call lines ----")
+                  for line in calls[:120]:
+                      print(line)
                   print("---- end ----")
 
           targets = ["work/cgen/Lean.c", "work/cgen/Lean/Parser.c", "work/cgen/Lean/Parser/Level.c"]

@@ -146,6 +146,20 @@ jobs:
               print("environment.cpp already patched")
           else:
               print("environment.cpp anchor missing (非致命)")
+
+          # thread.cpp 把 Emscripten 的默认线程栈写死成 8MB（按 32 位帧大小估算），
+          # wasm64 帧更大，Init.Prelude 的 getHeadInfo? 深递归会栈溢出。
+          thread_cpp = src / "src/runtime/thread.cpp"
+          text = thread_cpp.read_text()
+          old = "#define LEAN_DEFAULT_THREAD_STACK_SIZE 8*1024*1024 // 8MB for 32-bit"
+          new = "#define LEAN_DEFAULT_THREAD_STACK_SIZE 64*1024*1024 // 64MB for wasm64"
+          if old in text:
+              thread_cpp.write_text(text.replace(old, new))
+              print("patched thread.cpp")
+          elif new in text:
+              print("thread.cpp already patched")
+          else:
+              print("thread.cpp anchor missing (非致命)")
           PY
 
       - name: 缓存 runtime 产物
@@ -154,7 +168,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v8
+          key: wasm64-runtime-v9
 
       - name: runtime
         run: |
@@ -264,7 +278,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v8
+          key: wasm64-runtime-v9
 
       - name: 恢复 cgen
         uses: actions/cache@v6

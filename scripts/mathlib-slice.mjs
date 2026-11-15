@@ -72,9 +72,10 @@ const readImports = (file) => {
       if (!trimmed.includes('-/')) inBlock = true;
       continue;
     }
-    // import 行可能带行尾注释，先剥掉再匹配。
-    const code = trimmed.replace(/\s--.*$/, '');
-    const match = /^(?:public\s+)?import\s+(?:all\s+)?([\w.«»']+)$/.exec(code);
+    // import 行可能带行尾注释，剥掉后要去除残留空格，否则下面的锚定匹配会失败。
+    const code = trimmed.replace(/\s--.*$/, '').trim();
+    // 修饰符可以叠加，Qq 用的是 `public meta import`。
+    const match = /^(?:(?:public|meta|private|nonrec)\s+)*import\s+(?:all\s+)?([\w.«»']+)$/.exec(code);
     if (!match) break;
     imports.push(match[1]);
   }

@@ -290,11 +290,12 @@ const runWorkerMode = async () => {
     const uri = `file:///workspace/${name}`;
     const session = createSession(['-j2', '--worker', uri], { [`/workspace/${name}`]: documents[name] });
     try {
-      const init = session.waitFor((message) => message.id === 1, `${name} initialize 响应`, 180_000);
+      // 按 SDK 的顺序：initialize 与 didOpen 连着发，不等待 initialize 响应。
       await session.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams });
-      await init;
       await openDocument(session, name, uri);
-      const diagnostics = await awaitDiagnostics(session, uri, () => true, name, 300_000);
+      // Bad 必须等到非空诊断；Good 允许第一条就是空数组。
+      const accept = name === 'Bad.lean' ? (list) => list.length > 0 : () => true;
+      const diagnostics = await awaitDiagnostics(session, uri, accept, name, 300_000);
       if (name === 'Bad.lean') assertBad(name, diagnostics);
       else assertGood(name, diagnostics);
     } finally {

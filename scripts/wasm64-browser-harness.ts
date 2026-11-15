@@ -96,10 +96,14 @@ const finish = (value: ProbeReport): void => {
 const PROBE_SOURCE = 'import Init\nexample : 1 + 1 = 2 := rfl\n';
 
 /**
- * 把官方 64 位 Init oleans 读进 MEMFS 的 /lean/lib/lean。
+ * 把自建的 64 位 Init oleans 读进 MEMFS 的 /lean/lib/lean。
  * 清单由 CI 生成；没有清单时返回空数组，退化为 --version 冒烟。
  */
 const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
+  // Lean 启动时会解析 libdir，即使不导入任何模块也要有 /lean/lib/lean。
+  lean.FS.mkdirTree('/lean/bin');
+  lean.FS.mkdirTree('/lean/lib/lean');
+  lean.FS.mkdirTree('/src');
   const manifestResponse = await fetch('/olean-manifest.json');
   if (!manifestResponse.ok) {
     log.push('olean manifest 缺失，跳过 olean 阶段');

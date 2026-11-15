@@ -384,6 +384,12 @@ jobs:
           print("patched", path, len(src), "bytes")
           PY
 
+      - name: 缓存 64 位 oleans
+        uses: actions/cache@v6
+        with:
+          path: work/olean32
+          key: wasm64-oleans-v1
+
       - name: 缓存 objects
         uses: actions/cache@v6
         with:
@@ -428,9 +434,26 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
-      - name: 生成官方 Init olean 清单
+      # 官方 olean 是 GMP 编码（flags=1），我们的 wasm64 运行时是 USE_GMP=OFF，
+      # 头校验过不了。改为用这个 wasm64 Lean 自己重编 Init，得到 flags=0 的 64 位 oleans。
+      - name: 自生成 64 位 Init oleans
+        timeout-minutes: 300
         run: |
-          BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          BOOT="$(ls -d "$WASM_LLVM_LEAN_WORK_DIR"/lean-*-linux | head -n 1)"
+          # modules.txt 由 cgen 阶段生成；cgen 命中缓存时不会重跑，这里补一次。
+          (cd "$BOOT/lib/lean" && find Init Std Lean -name '*.olean' | sed 's/\.olean$//'; printf '%s\n' Init Std Lean) \
+            | LC_ALL=C sort > "$WASM_LLVM_LEAN_WORK_DIR/modules.txt"
+          bash producer/lean-browser/scripts/build.sh oleans
+          find "$WASM_LLVM_LEAN_WORK_DIR/olean32" -name '*.olean' | wc -l
+
+      - name: 生成自建 Init olean 清单
+        run: |
+          OLEANS="$GITHUB_WORKSPACE/work/olean32"
           node -e '
           const { readdirSync, writeFileSync } = require("node:fs");
           const { join, relative } = require("node:path");
@@ -448,8 +471,8 @@ jobs:
           out.sort();
           writeFileSync("work/dist/olean-manifest.json", JSON.stringify(out));
           console.log("olean files:", out.length);
-          ' "$BOOT/lib/lean"
-          du -sh "$BOOT/lib/lean/Init"
+          ' "$OLEANS"
+          du -sh "$OLEANS/Init"
 
       - name: 准备浏览器驱动（pnpm + runner 自带 Chrome，不下载浏览器）
         run: |
@@ -463,12 +486,11 @@ jobs:
           cp ../../scripts/wasm64-browser-verify.ts .
           pnpm exec esbuild ../../scripts/wasm64-browser-harness.ts --bundle --format=esm --outfile=../../work/dist/harness.mjs
 
-      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里加载官方 64 位 Init oleans
+      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里用自建 64 位 oleans 编译
         timeout-minutes: 30
         run: |
           cd work/browser
-          BOOT="$(ls -d ../../work/lean-*-linux | head -n 1)"
-          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist "$BOOT/lib/lean"
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32
 
       - name: 保存产物与日志
         if: always()

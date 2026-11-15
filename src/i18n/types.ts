@@ -151,6 +151,13 @@ export type Messages = {
     resizeHint: string;
     /** 左右栏分隔条的拖拽提示。 */
     splitHint: string;
+    /** 手机端编辑器工具栏：触屏没有 Ctrl+A/C/V，用按钮补齐。 */
+    selectAll: string;
+    copySelection: string;
+    paste: string;
+    copied: string;
+    pasted: string;
+    clipboardFailed: string;
     logCompletion: (line: number, column: number, count: number) => string;
     logHover: (line: number, column: number, found: boolean) => string;
     logRequestFailed: (method: string, message: string) => string;

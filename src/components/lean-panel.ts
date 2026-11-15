@@ -29,6 +29,7 @@ import {
   shouldShowRunPassed,
 } from '../lean-recovery';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
+import { parseLeanStderr } from '../lean-log';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
@@ -841,7 +842,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         },
         // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
         lean4: { maxMemoryBytes: 1024 ** 3 },
-        createWorker: () => new LeanWorker(),
+        // Lean 运行时的 stderr 由 worker 以 { leanStderr } 信封透传，这里统一消费。
+        createWorker: () => {
+          const worker = new LeanWorker();
+          worker.addEventListener('message', (event: MessageEvent) => {
+            const text = (event.data as { leanStderr?: unknown } | null)?.leanStderr;
+            if (typeof text !== 'string') return;
+            for (const line of parseLeanStderr(text)) {
+              if (line.level === 'debug') continue;
+              log(line.message);
+              if (line.level === 'error') track('lean_stderr', { level: line.level });
+            }
+          });
+          return worker;
+        },
         onStatus: (status) => {
           if (status.state === 'loading') {
             // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。

@@ -232,7 +232,7 @@ index cd8db8b..d7dffb0 100644
  		lean.FS.chdir('/workspace');
  		self.postMessage({ ready: true });
 diff --git a/dist/lean4/worker.js b/dist/lean4/worker.js
-index ecf242e..e17e894 100644
+index ecf242e..ad093d5 100644
 --- a/dist/lean4/worker.js
 +++ b/dist/lean4/worker.js
 @@ -34,6 +34,7 @@ const unsupported = new Set([
@@ -243,7 +243,21 @@ index ecf242e..e17e894 100644
  let library;
  let wasmModule;
  let glueText = '';
-@@ -190,7 +191,7 @@ async function openDocument(document) {
+@@ -120,8 +121,11 @@ function startProcess(args, pool, output, exit) {
+                 failProcess(data.error);
+             else if (typeof data.exit === 'number')
+                 exit(data.exit);
+-            else if (data.stderr)
+-                console.warn('Lean 4:', String(data.stderr).slice(0, 4096));
++            else if (data.stderr) {
++                const text = String(data.stderr);
++                scope.postMessage({ leanStderr: text });
++                console.warn('Lean 4:', text.slice(0, 4096));
++            }
+         }
+         catch (cause) {
+             failProcess(String(cause));
+@@ -190,7 +194,7 @@ async function openDocument(document) {
      serverRequests.clear();
      active = { ...document };
      const token = ++generation;
@@ -252,7 +266,7 @@ index ecf242e..e17e894 100644
          if (token === generation)
              fileOutput(message);
      }, (code) => {
-@@ -376,16 +377,29 @@ async function init(data) {
+@@ -376,16 +380,29 @@ async function init(data) {
          assetTimeoutMs: data.options.assetTimeoutMs ?? 120000,
          maxAssetBytes: data.options.maxAssetBytes ?? 128 * 1024 ** 2
      });
@@ -285,7 +299,7 @@ index ecf242e..e17e894 100644
              const stream = new Blob([new Uint8Array(delivered)])
                  .stream()
                  .pipeThrough(new DecompressionStream('gzip'));
-@@ -418,6 +432,7 @@ async function init(data) {
+@@ -418,6 +435,7 @@ async function init(data) {
              shared.set(bytes);
              library[logicalName] = shared;
          }

@@ -32,6 +32,7 @@ const EVENT_NAMES = new Set([
   'lsp_ready',
   'first_diagnostics',
   'runtime_error',
+  'lean_stderr',
 ]);
 
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,23}$/;

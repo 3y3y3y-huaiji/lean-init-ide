@@ -161,3 +161,21 @@ writeFileSync(
 console.log(
   `lsp patch: profile assets synced; workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`,
 );
+
+/**
+ * 7. 把 Lean 运行时的 stderr 透传到页面宿主。runtime-worker 已经用
+ *    `{ stderr: text }` 上报，这里除了 console.warn，还用一个独立信封
+ *    `{ leanStderr: string }` 转发给 LeanWorker 的宿主，供 UI 统一消费。
+ *    用独立字段而不是 type，避免影响既有的 type 协议消息。
+ */
+applyPatch(
+  leanWorker,
+  `            else if (data.stderr)
+                console.warn('Lean 4:', String(data.stderr).slice(0, 4096));`,
+  `            else if (data.stderr) {
+                const text = String(data.stderr);
+                scope.postMessage({ leanStderr: text });
+                console.warn('Lean 4:', text.slice(0, 4096));
+            }`,
+  'forward lean stderr to host',
+);

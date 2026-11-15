@@ -160,6 +160,59 @@ jobs:
               print("thread.cpp already patched")
           else:
               print("thread.cpp anchor missing (非致命)")
+
+          # 内核侧日志：在 stderr 上统一输出 `level: [category] message`，供宿主 lean-log 解析。
+          # consume_io_result 是所有 Except.error 转 C++ 异常的汇聚点，最值得插桩。
+          io_h = src / "src/util/io.h"
+          text = io_h.read_text()
+          if "lean_log_write" not in text:
+              if "#include <cstdio>" not in text:
+                  text = text.replace("#pragma once", "#pragma once\n#include <cstdio>", 1)
+              helper = '''
+              namespace lean {
+              inline void lean_log_write(unsigned level, char const * category, char const * message) {
+                  static char const * const names[] = {"error", "warning", "info", "debug"};
+                  std::fprintf(stderr, "%s: [%s] %s\n", names[level < 4 ? level : 0], category ? category : "lean", message ? message : "");
+                  std::fflush(stderr);
+              }
+              }
+              '''
+              text = text.replace("namespace lean {", "namespace lean {" + helper, 1)
+              old = "        throw exception(error.to_std_string());"
+              new = '        std::string msg = error.to_std_string();\n        lean_log_write(0, "io", msg.c_str());\n        throw exception(msg);'
+              if old not in text:
+                  print("util/io.h consume_io_result anchor missing (非致命)")
+              else:
+                  text = text.replace(old, new, 1)
+              io_h.write_text(text)
+              print("patched util/io.h")
+          else:
+              print("util/io.h already patched")
+
+          # olean 头校验失败时输出具体版本与 flags，之前只能看到一句 incompatible header。
+          module_cpp = src / "src/library/module.cpp"
+          text = module_cpp.read_text()
+          if "lean_log_write" not in text:
+              if '#include "util/io.h"' not in text:
+                  text = text.replace('#include "runtime/io.h"', '#include "runtime/io.h"\n#include "util/io.h"', 1)
+              invalid_old = '''            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', invalid header").str());'''
+              invalid_new = '''            {
+                auto msg = (sstream() << "failed to read file '" << olean_fn << "', invalid header").str();
+                lean_log_write(0, "olean", msg.c_str());
+                return io_result_mk_error(msg);
+            }'''
+              incompatible_old = '''            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', incompatible header").str());'''
+              incompatible_new = '''            {
+                auto msg = (sstream() << "failed to read file '" << olean_fn << "', incompatible header (version=" << int(header.version) << ", flags=" << int(header.flags) << ")").str();
+                lean_log_write(0, "olean", msg.c_str());
+                return io_result_mk_error(msg);
+            }'''
+              text = text.replace(invalid_old, invalid_new, 1)
+              text = text.replace(incompatible_old, incompatible_new, 1)
+              module_cpp.write_text(text)
+              print("patched module.cpp")
+          else:
+              print("module.cpp already patched")
           PY
 
       - name: 缓存 runtime 产物
@@ -168,7 +221,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v10
+          key: wasm64-runtime-v11
 
       - name: runtime
         run: |
@@ -278,7 +331,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v10
+          key: wasm64-runtime-v11
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -496,6 +549,16 @@ jobs:
             work/dist/lean.mjs work/probe work/olean32 -- \
             -j1 -R /src -o /src/Probe.olean /src/Probe.lean
           ls -l work/probe/Probe.olean
+
+      - name: 负向验证：官方 GMP olean 触发标准化错误日志
+        run: |
+          set +e
+          BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/probe "$BOOT/lib/lean" -- \
+            -j1 -R /src -o /src/Probe2.olean /src/Probe.lean 2>&1 \
+            | grep -E 'error: \[olean\]|incompatible header' | head -n 5
+          echo "official olean probe done"
 
       - name: 生成自建 Init olean 清单
         run: |

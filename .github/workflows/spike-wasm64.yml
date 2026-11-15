@@ -76,40 +76,6 @@ jobs:
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
-      - name: 改用 nightly Lean（含 wasm64 哈希修复）
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NIGHTLY_TAG: nightly-2026-11-14
-        run: |
-          set -euo pipefail
-          mkdir -p work
-          gh api "repos/leanprover/lean4-nightly/releases/tags/$NIGHTLY_TAG" > work/nightly.json
-          python3 - <<'PY'
-          import json, os, pathlib, subprocess
-
-          tag = os.environ["NIGHTLY_TAG"]
-          rel = json.load(open("work/nightly.json"))
-          asset = next(a for a in rel["assets"] if a["name"].endswith("-linux.tar.zst"))
-          version = asset["name"][len("lean-"):-len("-linux.tar.zst")]
-          boot = pathlib.Path(f"work/lean-{version}-linux")
-          if not (boot / "bin/lean").exists():
-              subprocess.check_call(["curl", "-fL", "--retry", "3", "-o", "work/boot.tar.zst", asset["browser_download_url"]])
-              subprocess.check_call("zstd -dc work/boot.tar.zst | tar -x -C work", shell=True)
-              pathlib.Path("work/boot.tar.zst").unlink()
-          commit = subprocess.check_output([str(boot / "bin/lean"), "--githash"], text=True).strip()
-
-          manifest_path = pathlib.Path("wasm-llvm/producer/lean-browser/manifest.json")
-          manifest = json.loads(manifest_path.read_text())
-          manifest["sources"]["lean4"]["version"] = version
-          manifest["sources"]["lean4"]["tag"] = tag
-          manifest["sources"]["lean4"]["commit"] = commit
-          manifest["bootstrap"]["url"] = asset["browser_download_url"]
-          manifest["bootstrap"]["bytes"] = asset["size"]
-          manifest["bootstrap"]["sha256"] = asset["digest"].split(":")[-1]
-          manifest_path.write_text(json.dumps(manifest, indent="\t") + "\n")
-          print("lean version:", version, "commit:", commit)
-          PY
-
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
         with:
@@ -145,13 +111,49 @@ jobs:
           sed -i 's|^\( *\)consume_io_result(initialize_Lean(builtin));|\1fprintf(stderr, "INIT Lean\\n"); fflush(stderr);\n\1consume_io_result(initialize_Lean(builtin));|' "$INIT"
           grep -n 'INIT Init\|INIT Std\|INIT Lean' "$INIT"
 
+      - name: backport 上游 wasm64 修复
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          src = pathlib.Path("work/lean4")
+
+          # 上游 #15814 / PR #15816：静态构造对象的标量字段按 8 字节写入，
+          # LEAN_SCALAR_PTR_LITERAL 必须按指针宽度选择 4/8 字节形式。
+          # v4.34.1 用 LEAN_EMSCRIPTEN 判断，wasm64 下会走 4 字节形式，导致 Name 哈希被截断。
+          lean_h = src / "src/include/lean/lean.h"
+          text = lean_h.read_text()
+          old = "#ifdef LEAN_EMSCRIPTEN\n#define LEAN_SCALAR_PTR_LITERAL"
+          new = "#if UINTPTR_MAX == UINT32_MAX\n#define LEAN_SCALAR_PTR_LITERAL"
+          if old in text:
+              lean_h.write_text(text.replace(old, new, 1))
+              print("patched lean.h")
+          elif new in text:
+              print("lean.h already patched")
+          else:
+              raise SystemExit("lean.h anchor not found")
+
+          # 上游 #14886：C++ 侧声明返回 uint8*，Lean 导出的是 Bool（uint8）。
+          env = src / "src/kernel/environment.cpp"
+          text = env.read_text()
+          old = 'extern "C" uint8* lean_kernel_diag_is_enabled(object*);'
+          new = 'extern "C" uint8 lean_kernel_diag_is_enabled(object*);'
+          if old in text:
+              env.write_text(text.replace(old, new))
+              print("patched environment.cpp")
+          elif new in text:
+              print("environment.cpp already patched")
+          else:
+              print("environment.cpp anchor missing (非致命)")
+          PY
+
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
         with:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v7
+          key: wasm64-runtime-v8
 
       - name: runtime
         run: |
@@ -221,23 +223,37 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v2
+          key: wasm64-src-v3
 
-      - name: 对齐 nightly manifest（恢复缓存后）
+      - name: backport 上游 wasm64 修复
         run: |
-          set -euo pipefail
-          BOOT=$(ls -d work/lean-*-linux | head -n 1)
-          VERSION=$(basename "$BOOT" | sed -e 's/^lean-//' -e 's/-linux$//')
-          COMMIT=$("$BOOT/bin/lean" --githash)
-          python3 - "$VERSION" "$COMMIT" <<'PY'
-          import json, pathlib, sys
-          version, commit = sys.argv[1], sys.argv[2]
-          path = pathlib.Path("wasm-llvm/producer/lean-browser/manifest.json")
-          manifest = json.loads(path.read_text())
-          manifest["sources"]["lean4"]["version"] = version
-          manifest["sources"]["lean4"]["commit"] = commit
-          path.write_text(json.dumps(manifest, indent="\t") + "\n")
-          print("aligned", version, commit)
+          python3 - <<'PY'
+          import pathlib
+
+          src = pathlib.Path("work/lean4")
+          lean_h = src / "src/include/lean/lean.h"
+          text = lean_h.read_text()
+          old = "#ifdef LEAN_EMSCRIPTEN\n#define LEAN_SCALAR_PTR_LITERAL"
+          new = "#if UINTPTR_MAX == UINT32_MAX\n#define LEAN_SCALAR_PTR_LITERAL"
+          if old in text:
+              lean_h.write_text(text.replace(old, new, 1))
+              print("patched lean.h")
+          elif new in text:
+              print("lean.h already patched")
+          else:
+              raise SystemExit("lean.h anchor not found")
+
+          env = src / "src/kernel/environment.cpp"
+          text = env.read_text()
+          old = 'extern "C" uint8* lean_kernel_diag_is_enabled(object*);'
+          new = 'extern "C" uint8 lean_kernel_diag_is_enabled(object*);'
+          if old in text:
+              env.write_text(text.replace(old, new))
+              print("patched environment.cpp")
+          elif new in text:
+              print("environment.cpp already patched")
+          else:
+              print("environment.cpp anchor missing (非致命)")
           PY
 
       - name: 恢复 runtime 产物
@@ -246,7 +262,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v7
+          key: wasm64-runtime-v8
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -372,7 +388,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v5
+          key: wasm64-obj-v6
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -401,7 +417,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v5
+          key: wasm64-obj-v6
 
       - name: link
         run: |

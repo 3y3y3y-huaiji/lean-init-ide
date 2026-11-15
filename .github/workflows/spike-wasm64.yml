@@ -80,6 +80,8 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
+          node scripts/pin-lean.mjs "$GITHUB_WORKSPACE"
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
@@ -87,7 +89,7 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v5
+          key: wasm64-src-v6
 
       - name: fetch
         run: |
@@ -343,6 +345,8 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
+          node scripts/pin-lean.mjs "$GITHUB_WORKSPACE"
 
       - name: 恢复 Lean 源码与引导包
         uses: actions/cache@v6
@@ -350,7 +354,7 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v5
+          key: wasm64-src-v6
 
       - name: backport 上游 wasm64 修复
         run: |

@@ -303,7 +303,7 @@ const runServerMode = async () => {
 const runWorkerMode = async () => {
   for (const name of ['Bad.lean', 'Good.lean']) {
     const uri = `file:///workspace/${name}`;
-    const session = createSession(['-j2', '--worker', uri], { [`/workspace/${name}`]: documents[name] });
+    const session = createSession(['-j4', '--worker', uri], { [`/workspace/${name}`]: documents[name] });
     try {
       // 按 SDK 的顺序：initialize 与 didOpen 连着发，不等待 initialize 响应。
       await session.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams });

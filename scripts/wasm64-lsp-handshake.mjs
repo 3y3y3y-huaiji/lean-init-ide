@@ -18,18 +18,14 @@ const request = JSON.stringify({
 });
 const framed = Buffer.from(`Content-Length: ${Buffer.byteLength(request)}\r\n\r\n${request}`, 'utf8');
 
-let sent = false;
-const nextChunk = () => {
-  if (sent) return null;
-  sent = true;
-  return framed;
-};
+let pos = 0;
+// Emscripten 的 stdin 钩子逐字节返回字符码，EOF 返回 null。
+const nextByte = () => (pos < framed.length ? framed[pos++] : null);
 
 let captured = Buffer.alloc(0);
 const lean = await createLean({
   noInitialRun: true,
-  stdin: nextChunk,
-  lspStdin: nextChunk,
+  stdin: nextByte,
   print: (line) => {
     captured = Buffer.concat([captured, Buffer.from(`${line}\n`, 'utf8')]);
   },

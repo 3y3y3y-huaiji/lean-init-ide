@@ -333,6 +333,63 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   });
   editor.layout();
 
+  // 手机端没有 Ctrl+A/C/V：用编辑器顶部的触控工具栏补齐全选、复制、粘贴。
+  // 桌面端由 CSS 隐藏，剪贴板仍走系统快捷键。异步读取剪贴板可能被浏览器拒绝，
+  // 此时提示用户长按编辑区使用系统菜单，而不是静默失败。
+  const mobileActions = host.querySelector<HTMLElement>('[data-role="mobile-actions"]');
+  if (mobileActions) {
+    const selectAllEl = mobileActions.querySelector<HTMLButtonElement>('[data-role="select-all"]');
+    const copyEl = mobileActions.querySelector<HTMLButtonElement>('[data-role="copy-selection"]');
+    const pasteEl = mobileActions.querySelector<HTMLButtonElement>('[data-role="paste"]');
+    const hintEl = mobileActions.querySelector<HTMLElement>('[data-role="clip-hint"]');
+    let hintTimer = 0;
+
+    const showHint = (text: string) => {
+      if (!hintEl) return;
+      hintEl.textContent = text;
+      window.clearTimeout(hintTimer);
+      hintTimer = window.setTimeout(() => {
+        hintEl.textContent = '';
+      }, 2400);
+    };
+
+    const syncCopyState = () => {
+      const selection = editor.getSelection();
+      if (copyEl) copyEl.disabled = selection === null || selection.isEmpty();
+    };
+    syncCopyState();
+    editor.onDidChangeCursorSelection(syncCopyState);
+
+    selectAllEl?.addEventListener('click', () => {
+      editor.setSelection(model.getFullModelRange());
+      editor.focus();
+    });
+
+    copyEl?.addEventListener('click', async () => {
+      const selection = editor.getSelection();
+      if (!selection || selection.isEmpty()) return;
+      try {
+        await navigator.clipboard.writeText(model.getValueInRange(selection));
+        showHint(t.copied);
+      } catch {
+        showHint(t.clipboardFailed);
+      }
+    });
+
+    pasteEl?.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text) return;
+        const selection = editor.getSelection() ?? new monaco.Selection(1, 1, 1, 1);
+        editor.executeEdits('mobile-paste', [{ range: selection, text, forceMoveMarkers: true }]);
+        editor.focus();
+        showHint(t.pasted);
+      } catch {
+        showHint(t.clipboardFailed);
+      }
+    });
+  }
+
   const stopThemeSync = onResolvedThemeChange((theme) => {
     monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
   });

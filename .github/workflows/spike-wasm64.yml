@@ -258,13 +258,13 @@ jobs:
           lines = src.splitlines(keepends=True)
           target = None
           for i, line in enumerate(lines):
-              if "_Level_paren___regBuiltin" in line and "(void)" not in line and "=" in line:
+              if re.match(r"\s*res\s*=\s*[^\n]*_Level_paren___regBuiltin[^\n]*\(\);\s*$", line):
                   target = i
                   break
           if target is None:
               print("probe B: call line missing")
           else:
-              print("probe B context:", repr("".join(lines[max(0, target - 2):target + 1])))
+              print("probe B context:", repr("".join(lines[max(0, target - 1):target + 1])))
               lines.insert(target, probe_category + "\n")
               src = "".join(lines)
               print("probe B injected before paren regBuiltin call")

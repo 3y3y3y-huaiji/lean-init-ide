@@ -1,18 +1,10 @@
 name: Build wasm32 Lean runtime
 
-# 实验完成，保留手动触发；结论见 docs/WASM32-STACK-SPIKE.md。
-# 产物只作为 artifact 上传，不自动替换线上资产；先本地验证再接入。
+# 只做一件事：用 -O3 重编 wasm32 Lean 运行时，并把可托管资产打包成 artifact。
+# 栈大小、线程栈、maxRecDepth 全部保持上游默认；不应用任何内核补丁。
+# 触发器保留 workflow_dispatch 和 PR 分支 push，方便在 GitHub 上重跑。
 on:
   workflow_dispatch:
-    inputs:
-      profile:
-        description: production (O3 clean) or experimental (kernel patch)
-        required: false
-        default: production
-        type: choice
-        options:
-          - production
-          - experimental
   push:
     branches: [spike/wasm32-runtime-ci]
 
@@ -24,13 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUILD_PROFILE: ${{ inputs.profile || 'production' }}
   # 与 config/lean4-runtime.json 的 upstream revision 保持一致，确保 Init olean 可复用。
   WASM_LLVM_REV: 14ea5ecbc514b0c87338aebf8f2b567020be5750
   EMSDK_VERSION: 6.0.0
-  MAIN_STACK_BYTES: 67108864
-  PTHREAD_STACK_BYTES: 33554432
-  LEAN_THREAD_STACK_BYTES: 33554432
 
 jobs:
   prepare:
@@ -58,23 +46,18 @@ jobs:
           source emsdk/emsdk_env.sh
           emcc --version | head -n 2
 
-      - name: 拉取 wasm-llvm 并改成 O3 + 大线程栈
+      - name: 拉取 wasm-llvm 并只把 O2 改成 O3
         run: |
           git init -q wasm-llvm
           git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
           git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
           git -C wasm-llvm checkout -q FETCH_HEAD
           cd wasm-llvm
-          PROFILING_FLAG=""
-          if [ "$BUILD_PROFILE" = "experimental" ]; then PROFILING_FLAG="--profiling-funcs"; fi
           sed -i \
             -e 's|emcc -c -O2|emcc -c -O3|g' \
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
-            -e "s|-sSTACK_SIZE=16777216|-sSTACK_SIZE=$MAIN_STACK_BYTES|" \
-            -e "s|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=$PTHREAD_STACK_BYTES|" \
-            -e "s|-sMODULARIZE=1|$PROFILING_FLAG -sMODULARIZE=1|" \
             producer/lean-browser/scripts/build.sh
-          grep -n -- '-O3\|STACK_SIZE' producer/lean-browser/scripts/build.sh
+          grep -n -- '-O3\|STACK_SIZE\|PTHREAD_STACK_SIZE' producer/lean-browser/scripts/build.sh
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
@@ -93,42 +76,13 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh fetch
 
-      - name: 应用 replace_fn 堆栈化补丁
-        if: env.BUILD_PROFILE == 'experimental'
-        run: |
-          cd "$GITHUB_WORKSPACE/work/lean4"
-          git apply "$GITHUB_WORKSPACE/scripts/patches/lean-replace-fn-iterative.patch"
-          grep -n 'wasm32 的浏览器 worker' src/kernel/replace_fn.cpp
-
-      - name: 提高 Lean 自身线程栈（wasm32）
-        if: env.BUILD_PROFILE == 'experimental'
-        run: |
-          THREAD="$GITHUB_WORKSPACE/work/lean4/src/runtime/thread.cpp"
-          python3 - <<'PY'
-          import os
-          import pathlib
-
-          path = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "work/lean4/src/runtime/thread.cpp"
-          text = path.read_text()
-          old = "#define LEAN_DEFAULT_THREAD_STACK_SIZE 8*1024*1024 // 8MB for 32-bit"
-          new = f"#define LEAN_DEFAULT_THREAD_STACK_SIZE {os.environ['LEAN_THREAD_STACK_BYTES']} // wasm32 heap-backed stacks"
-          if old in text:
-              path.write_text(text.replace(old, new, 1))
-              print("patched thread.cpp")
-          elif new in text:
-              print("thread.cpp already patched")
-          else:
-              raise SystemExit("thread.cpp stack anchor not found")
-          PY
-          grep -n 'LEAN_DEFAULT_THREAD_STACK_SIZE' "$THREAD"
-
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
         with:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-${{ env.BUILD_PROFILE }}-${{ hashFiles('scripts/patches/lean-replace-fn-iterative.patch') }}
+          key: wasm32-runtime-o3-v1
 
       - name: runtime
         run: |
@@ -155,7 +109,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh cgen
 
   finish:
-    name: 编译对象并链接
+    name: 编译对象、链接并打包
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -180,23 +134,18 @@ jobs:
           source emsdk/emsdk_env.sh
           emcc --version | head -n 2
 
-      - name: 拉取 wasm-llvm 并改成 O3 + 大线程栈
+      - name: 拉取 wasm-llvm 并只把 O2 改成 O3
         run: |
           git init -q wasm-llvm
           git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
           git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
           git -C wasm-llvm checkout -q FETCH_HEAD
           cd wasm-llvm
-          PROFILING_FLAG=""
-          if [ "$BUILD_PROFILE" = "experimental" ]; then PROFILING_FLAG="--profiling-funcs"; fi
           sed -i \
             -e 's|emcc -c -O2|emcc -c -O3|g' \
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
-            -e "s|-sSTACK_SIZE=16777216|-sSTACK_SIZE=$MAIN_STACK_BYTES|" \
-            -e "s|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=$PTHREAD_STACK_BYTES|" \
-            -e "s|-sMODULARIZE=1|$PROFILING_FLAG -sMODULARIZE=1|" \
             producer/lean-browser/scripts/build.sh
-          grep -n -- '-O3\|STACK_SIZE' producer/lean-browser/scripts/build.sh
+          grep -n -- '-O3\|STACK_SIZE\|PTHREAD_STACK_SIZE' producer/lean-browser/scripts/build.sh
 
       - name: 恢复 Lean 源码与引导包
         uses: actions/cache@v6
@@ -212,7 +161,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-${{ env.BUILD_PROFILE }}-${{ hashFiles('scripts/patches/lean-replace-fn-iterative.patch') }}
+          key: wasm32-runtime-o3-v1
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -229,7 +178,7 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh emsdk
 
-      - name: 缓存 objects（O3 专属）
+      - name: 缓存 objects（O3）
         uses: actions/cache@v6
         with:
           path: work/obj
@@ -245,7 +194,7 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh objects
 
-      # 浏览器验证或后续步骤失败时也要保住 objects，避免重编 649 个模块。
+      # 后续步骤失败时也要保住 objects，避免重编 649 个模块。
       - name: 立即保存 objects 缓存
         if: always() && steps.objects.outcome == 'success'
         continue-on-error: true
@@ -307,8 +256,7 @@ jobs:
           test -s work/mini/Mini.olean || { echo '最小文件没有产出 olean'; exit 1; }
           echo 'runtime 冒烟通过'
 
-      - name: 打包生产资产（gzip / zstd / sha256）
-        if: env.BUILD_PROFILE == 'production'
+      - name: 打包 O3 资产（gzip / zstd / sha256）
         run: |
           cd work/dist
           gzip -9 -c lean.wasm > lean.wasm.gz
@@ -330,7 +278,6 @@ jobs:
           const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
           const size = (p) => fs.statSync(p).size;
           const summary = {
-            profile: 'production',
             'lean.mjs': { bytes: size('lean.mjs'), sha256: hash('lean.mjs') },
             'lean.wasm.gz.bin': {
               bytes: size('lean.wasm.gz.bin'),
@@ -348,12 +295,9 @@ jobs:
         if: always()
         run: |
           {
-            echo "profile=$BUILD_PROFILE"
             echo "wasm-llvm-rev=$WASM_LLVM_REV"
             echo "emsdk=$EMSDK_VERSION"
             echo "optimization=-O3"
-            echo "main-stack-bytes=$MAIN_STACK_BYTES"
-            echo "pthread-stack-bytes=$PTHREAD_STACK_BYTES"
             echo "lean-version=$([[ -x work/lean-4.34.1-linux/bin/lean ]] && work/lean-4.34.1-linux/bin/lean --version || echo unknown)"
           } | tee work/build-flags.txt
 
@@ -361,7 +305,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: wasm32-runtime-${{ env.BUILD_PROFILE }}
+          name: wasm32-runtime-o3
           path: |
             work/dist/lean.mjs
             work/dist/lean.wasm

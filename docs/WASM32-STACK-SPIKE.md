@@ -16,6 +16,20 @@
 默认 `maxRecDepth = 1000` 已经接近浏览器安全上限，继续抬会把可恢复的
 `maximum recursion depth has been reached` 变成进程崩溃。
 
+## 生产决策
+
+正式运行时只保留 **`-O3`**，其余全部保持上游默认：
+
+- `STACK_SIZE`：保持 `16777216`（16MB），不占额外的 32 位线性内存。
+- `DEFAULT_PTHREAD_STACK_SIZE` / `LEAN_DEFAULT_THREAD_STACK_SIZE`：保持默认 8MB。
+- `maxRecDepth`：保持 1000，不把验证用的 8000 带进正式配置。
+- `replace_fn` / `replace_rec_fn`：保持上游原实现，不应用堆栈化补丁。
+- CI 额外做 zstd（Node level 19）与 gzip 打包，产出可直接托管的
+  `lean.mjs` / `lean.wasm.gz.bin`。
+
+这样做的依据：大栈和内核补丁都没有提高浏览器可用深度，却会增加内存占用或引入
+未验证的表达式遍历语义变化；O3 的启动/编译收益则已在 Node 和 22 节课程里验证。
+
 ## 实测数据
 
 ### 递归深度（真实 playground + 本地网关）
@@ -62,7 +76,7 @@ example : f N = 0 := by simp [f]
 
 ### replace_fn 堆栈化实验
 
-`scripts/patches/lean-replace-fn-iterative.patch` 把：
+`perf/wasm32-runtime` 分支上的 `scripts/patches/lean-replace-fn-iterative.patch` 把：
 
 - `src/kernel/replace_fn.cpp` 的 `replace_fn::apply`
 - `replace_rec_fn::apply`
@@ -84,15 +98,19 @@ Lean 上游 2026-07-07 的变更提到：kernel 的深递归失败改为由 `max
 
 ## 实验资产
 
-- `perf/wasm32-runtime` 分支的全部提交
-- `.github/workflows/runtime-wasm32.yml`：可手动触发（`workflow_dispatch`）的 wasm32 重编流水线
-- `scripts/patches/lean-replace-fn-iterative.patch`：堆栈化补丁
-- CI 产物：`wasm32-runtime-o3-stack32`（`lean.mjs` + `lean.wasm`）
+- `perf/wasm32-runtime` 分支：完整实验记录，包含 `scripts/patches/lean-replace-fn-iterative.patch`
+  和 32MB 栈 / profiling 构建参数。
+- `spike/wasm32-runtime-ci`（本 PR）：只保留生产用的 `-O3` 构建流水线、zstd 打包和本文档；
+  不应用任何内核补丁。
+- CI 产物：`wasm32-runtime-o3`（`lean.mjs` / `lean.wasm` / `lean.wasm.gz` /
+  `lean.wasm.gz.bin` / `runtime-summary.json` / `SHA256SUMS`）。
 
-## 后续可选方向
+## 生产接入步骤
 
-1. **只上 O3 运行时**：保留 `maxRecDepth=1000`，换取启动/编译性能；需要新建运行时 release、
-   更新资产清单、上传 R2/魔搭并跑全量门禁。
-2. **继续攻递归深度**：为 `Lean.Meta.reduceRec` / WHNF 设计堆工作栈，或升级到包含
-   deep-recursion 改进的上游版本；周期长、风险高。
-3. **维持现状**：主线继续使用现有运行时，等上游 Lean 的改动落地。
+1. 把 `lean.mjs` 和 `lean.wasm.gz.bin` 上传到 R2 / 魔搭的新版本目录（例如 `zo3v1/`），
+   不要覆盖线上旧对象。
+2. 更新 `config/lean4-runtime.json` 的 `cacheKey`、`key`、`bytes`、`sha256`，
+   以及 `producer-receipt.json` 的资产哈希。
+3. 跑 `pnpm run fetch:assets`、`verify:manifest`、完整 CI 和浏览器 e2e；
+   确认新缓存键下的分片、解压和 LSP 诊断都正常。
+4. 合并后再删除旧版本对象；保留回退能力。

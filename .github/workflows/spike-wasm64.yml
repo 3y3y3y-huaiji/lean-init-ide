@@ -205,51 +205,31 @@ jobs:
 
       # 诊断：initialize_Lean 逐个调用依赖模块的 initializer，错误通过返回值上抛，栈里看不出来。
       # 给生成的 C 里每个 initialize_X(builtin) 调用插入打印，最后一条 DEP 就是返回错误的那一块。
-      - name: 给 initialize_Lean / initialize_Lean_Parser 的依赖调用打点
+      - name: 给全部生成的 initializer 调用打点
         run: |
           python3 - <<'PY'
           import pathlib, re
 
-          level = pathlib.Path("work/cgen/Lean/Parser/Level.c")
-          if level.exists():
-              src = level.read_text()
-              # 打印 Level.c 里所有 initialize_* / runtime_initialize_* / meta_initialize_* 的语句体，
-              # 真正的 builtin parser 注册在 runtime_/meta_ 两个 phase 函数里。
-              for header in re.finditer(r"^LEAN_EXPORT lean_object\* ((?:runtime_|meta_)?initialize_\w+)\(uint8_t builtin\)", src, re.M):
-                  name = header.group(1)
-                  start = src.find("{", header.end())
-                  depth = 0
-                  end = start
-                  for idx in range(start, min(len(src), start + 200000)):
-                      if src[idx] == "{":
-                          depth += 1
-                      elif src[idx] == "}":
-                          depth -= 1
-                          if depth == 0:
-                              end = idx
-                              break
-                  body = src[start:end]
-                  calls = [line.strip()[:220] for line in body.splitlines() if "l_Lean" in line or "initialize_" in line or "Builtin" in line]
-                  print(f"---- {name}: {len(body)} bytes, {len(calls)} call lines ----")
-                  for line in calls[:120]:
-                      print(line)
-                  print("---- end ----")
-
-          targets = ["work/cgen/Lean.c", "work/cgen/Lean/Parser.c", "work/cgen/Lean/Parser/Level.c"]
-          for name in targets:
-              path = pathlib.Path(name)
-              if not path.exists():
-                  print("missing:", name)
-                  continue
+          # 失败已经追到 Lean.Parser.Extra 的 runtime phase。逐层加文件太慢，
+          # 直接对 work/cgen 下所有生成 C 插桩，拿到从 Init 到失败点的完整嵌套调用链。
+          count_files = 0
+          count_calls = 0
+          def repl(match):
+              callee = match.group(1)
+              return f'(fprintf(stderr, "DEP {callee}\\n"), {callee}(builtin))'
+          for path in sorted(pathlib.Path("work/cgen").rglob("*.c")):
               src = path.read_text()
-              if "#include <stdio.h>" not in src:
-                  src = "#include <stdio.h>\n" + src
-              def repl(match):
-                  callee = match.group(1)
-                  return f'(fprintf(stderr, "DEP {callee}\\n"), {callee}(builtin))'
+              if "builtin)" not in src:
+                  continue
               patched = re.sub(r"\b((?:runtime_|meta_)?initialize_[A-Za-z0-9_]+)\(builtin\)", repl, src)
+              if patched == src:
+                  continue
+              if "#include <stdio.h>" not in patched:
+                  patched = "#include <stdio.h>\n" + patched
               path.write_text(patched)
-              print(f"patched {name}: {len(re.findall(r'DEP ', patched))} prints")
+              count_files += 1
+              count_calls += len(re.findall(r"DEP ", patched))
+          print("patched files:", count_files, "calls:", count_calls)
           PY
 
       - name: 缓存 objects

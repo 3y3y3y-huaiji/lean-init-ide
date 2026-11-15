@@ -95,7 +95,7 @@ jobs:
           export EMSDK="$GITHUB_WORKSPACE/emsdk"
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
-          bash producer/lean-browser/scripts/build.sh runtime
+          bash producer/lean-browser/scripts/build.sh emsdk runtime
 
       - name: 缓存 cgen
         uses: actions/cache@v6

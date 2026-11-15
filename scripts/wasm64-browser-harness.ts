@@ -122,6 +122,21 @@ const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
   lean.FS.mkdirTree('/lean/bin');
   lean.FS.mkdirTree('/src');
   lean.FS.writeFile('/src/Probe.lean', new TextEncoder().encode(PROBE_SOURCE));
+  // 自检：确认关键文件确实落在 MEMFS 的预期路径上。
+  const fsAny = lean.FS as unknown as {
+    analyzePath(path: string): { exists: boolean; object?: { contents?: Uint8Array } };
+    readFile(path: string): Uint8Array;
+  };
+  for (const probe of ['/lean/lib/lean/Init.olean', '/lean/lib/lean/Init.olean.server']) {
+    try {
+      const info = fsAny.analyzePath(probe);
+      const size = info.object?.contents?.length ?? -1;
+      log.push(`fs check ${probe} exists=${info.exists} size=${size}`);
+      if (info.exists) log.push(`fs read ${probe} bytes=${fsAny.readFile(probe).length}`);
+    } catch (error) {
+      log.push(`fs check ${probe} threw ${String(error)}`);
+    }
+  }
   return files;
 };
 

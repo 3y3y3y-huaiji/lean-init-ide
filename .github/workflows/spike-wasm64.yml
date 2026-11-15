@@ -482,7 +482,7 @@ jobs:
 
       - name: 保存 64 位 oleans
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: work/olean32
           key: wasm64-oleans-v2

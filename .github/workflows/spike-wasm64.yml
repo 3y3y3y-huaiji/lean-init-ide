@@ -501,7 +501,7 @@ jobs:
         run: |
           OLEANS="$GITHUB_WORKSPACE/work/olean32"
           node -e '
-          const { readdirSync, writeFileSync } = require("node:fs");
+          const { existsSync, readdirSync, writeFileSync } = require("node:fs");
           const { join, relative } = require("node:path");
           const root = process.argv[1];
           const out = [];
@@ -513,7 +513,10 @@ jobs:
             }
           };
           walk(join(root, "Init"));
-          out.push("Init.olean");
+          // 根目录下的 Init.olean 及其附属文件不在 Init/ 子目录里，需要单独补。
+          for (const name of ["Init.olean", "Init.olean.server", "Init.olean.private", "Init.ilean"]) {
+            if (existsSync(join(root, name))) out.push(name);
+          }
           out.sort();
           writeFileSync("work/dist/olean-manifest.json", JSON.stringify(out));
           console.log("olean files:", out.length);

@@ -611,6 +611,11 @@ jobs:
           echo "official olean probe done"
           echo -n "wasm contains LEAN_WASM_ERR: "; grep -c 'LEAN_WASM_ERR' work/dist/lean.wasm
 
+      - name: LSP 握手（--server）
+        run: |
+          echo -n "glue lspStdin refs: "; grep -c 'lspStdin' work/dist/lean.mjs || true
+          node scripts/wasm64-lsp-handshake.mjs work/dist/lean.mjs work/olean32
+
       - name: 生成自建 Init olean 清单
         run: |
           OLEANS="$GITHUB_WORKSPACE/work/olean32"

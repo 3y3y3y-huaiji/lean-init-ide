@@ -9,6 +9,7 @@ DEST="${1:?usage: build-wasm64-gmp.sh <installDir>}"
 VERSION=6.3.0
 SHA256=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
 BASE="$(dirname "$DEST")"
+mkdir -p "$BASE"
 SRC="$BASE/gmp-$VERSION"
 TARBALL="$BASE/gmp-$VERSION.tar.xz"
 # gmplib.org 在 GitHub runner 上连不上（curl 28），用 GNU 官方镜像。

@@ -106,11 +106,11 @@ jobs:
           # 诊断：Lean 的初始化错误通过 Except 返回，异常栈里看不到是哪一级失败的。
           # 直接给 Init / Std / Lean 三个顶层初始化打点，失败时 stderr 的最后一行就是坏掉的那一级。
           INIT="$WASM_LLVM_LEAN_WORK_DIR/lean4/src/initialize/init.cpp"
-          sed -i '1i #include <cstdio>' "$INIT"
-          sed -i 's|^\( *\)consume_io_result(initialize_Init(builtin));|\1fprintf(stderr, "INIT Init\\n"); fflush(stderr);\n\1consume_io_result(initialize_Init(builtin));|' "$INIT"
-          sed -i 's|^\( *\)consume_io_result(initialize_Std(builtin));|\1fprintf(stderr, "INIT Std\\n"); fflush(stderr);\n\1consume_io_result(initialize_Std(builtin));|' "$INIT"
-          sed -i 's|^\( *\)consume_io_result(initialize_Lean(builtin));|\1fprintf(stderr, "INIT Lean\\n"); fflush(stderr);\n\1consume_io_result(initialize_Lean(builtin));|' "$INIT"
-          grep -n 'INIT Init\|INIT Std\|INIT Lean' "$INIT"
+          sed -i '1i #include <cstdio>\n#include <cstdlib>' "$INIT"
+          for stage in Init Std Lean; do
+            sed -i "s|^\( *\)consume_io_result(initialize_${stage}(builtin));|\1if (std::getenv(\"LEAN_WASM_TRACE\")) { fprintf(stderr, \"info: [init] ${stage} start\\\\n\"); fflush(stderr); }\n\1consume_io_result(initialize_${stage}(builtin));|" "$INIT"
+          done
+          grep -n 'LEAN_WASM_TRACE' "$INIT"
 
       - name: backport 上游 wasm64 修复
         run: |
@@ -168,18 +168,26 @@ jobs:
           if "lean_log_write" not in text:
               if "#include <cstdio>" not in text:
                   text = text.replace("#pragma once", "#pragma once\n#include <cstdio>", 1)
-              helper = '''
+              helper = r'''
               namespace lean {
               inline void lean_log_write(unsigned level, char const * category, char const * message) {
                   static char const * const names[] = {"error", "warning", "info", "debug"};
                   std::fprintf(stderr, "%s: [%s] %s\n", names[level < 4 ? level : 0], category ? category : "lean", message ? message : "");
                   std::fflush(stderr);
               }
+              inline bool lean_wasm_trace_enabled() {
+                  static int cached = -1;
+                  if (cached < 0) cached = std::getenv("LEAN_WASM_TRACE") ? 1 : 0;
+                  return cached == 1;
+              }
+              inline void lean_trace_write(char const * category, char const * message) {
+                  if (lean_wasm_trace_enabled()) lean_log_write(2, category, message);
+              }
               }
               '''
               text = text.replace("namespace lean {", "namespace lean {" + helper, 1)
               old = "        throw exception(error.to_std_string());"
-              new = '        std::string msg = error.to_std_string();\n        lean_log_write(0, "io", msg.c_str());\n        throw exception(msg);'
+              new = '        std::string msg = error.to_std_string();\n        lean_trace_write("io", msg.c_str());\n        throw exception(msg);'
               if old not in text:
                   print("util/io.h consume_io_result anchor missing (非致命)")
               else:
@@ -196,15 +204,15 @@ jobs:
               if '#include "util/io.h"' not in text:
                   text = text.replace('#include "runtime/io.h"', '#include "runtime/io.h"\n#include "util/io.h"', 1)
               invalid_old = '''            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', invalid header").str());'''
-              invalid_new = '''            {
+              invalid_new = r'''            {
                 auto msg = (sstream() << "failed to read file '" << olean_fn << "', invalid header").str();
-                lean_log_write(0, "olean", msg.c_str());
+                lean_trace_write("olean", msg.c_str());
                 return io_result_mk_error(msg);
             }'''
               incompatible_old = '''            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', incompatible header").str());'''
-              incompatible_new = '''            {
-                auto msg = (sstream() << "failed to read file '" << olean_fn << "', incompatible header (version=" << int(header.version) << ", flags=" << int(header.flags) << ")").str();
-                lean_log_write(0, "olean", msg.c_str());
+              incompatible_new = r'''            {
+                auto msg = (sstream() << "failed to read file '" << olean_fn << "', incompatible header (version=" << int(header.version) << ", flags=" << int(header.flags) << ", githash=" << std::string(header.githash, strnlen(header.githash, sizeof(header.githash))).c_str() << ")").str();
+                lean_trace_write("olean", msg.c_str());
                 return io_result_mk_error(msg);
             }'''
               text = text.replace(invalid_old, invalid_new, 1)
@@ -213,6 +221,50 @@ jobs:
               print("patched module.cpp")
           else:
               print("module.cpp already patched")
+
+          # 外层兜底：在异常离开 wasm 之前用 C++ 接住，固定前缀写 stderr 并返回非零。
+          # JS 侧不再需要处理 WebAssembly.Exception / getExceptionMessage。
+          shell_cpp = src / "src/util/shell.cpp"
+          text = shell_cpp.read_text()
+          if "LEAN_WASM_ERR" not in text:
+              if "#include <cstdio>" not in text:
+                  text = text.replace('#include "githash.h"', '#include <cstdio>\n#include "githash.h"', 1)
+              helper = r'''
+              static void lean_wasm_report_exception(char const * type, char const * msg) {
+                  std::fprintf(stderr, "[LEAN_WASM_ERR] {\"type\":\"%s\",\"msg\":\"", type);
+                  for (char const * p = msg; p && *p; ++p) {
+                      unsigned char c = (unsigned char)*p;
+                      std::fputc((c == '"' || c == '\\' || c < 0x20) ? '\'' : (char)c, stderr);
+                  }
+                  std::fprintf(stderr, "\"}\n");
+                  std::fflush(stderr);
+              }
+              '''
+              text = text.replace(
+                  'extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {',
+                  helper + '\nextern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {\n    try {',
+                  1)
+              tail_old = '    });\n    return shell_rc;\n}'
+              tail_new = ('    });\n    return shell_rc;\n'
+                          '    } catch (lean::throwable & ex) {\n'
+                          '        lean_wasm_report_exception("lean::exception", ex.what());\n'
+                          '        return 1;\n'
+                          '    } catch (std::exception & ex) {\n'
+                          '        lean_wasm_report_exception("std::exception", ex.what());\n'
+                          '        return 1;\n'
+                          '    } catch (...) {\n'
+                          '        lean_wasm_report_exception("unknown", "non-standard exception");\n'
+                          '        return 1;\n'
+                          '    }\n'
+                          '}')
+              if tail_old not in text:
+                  print("shell.cpp tail anchor missing (非致命)")
+              else:
+                  text = text.replace(tail_old, tail_new, 1)
+              shell_cpp.write_text(text)
+              print("patched shell.cpp")
+          else:
+              print("shell.cpp already patched")
           PY
 
       - name: 缓存 runtime 产物
@@ -554,11 +606,12 @@ jobs:
         run: |
           set +e
           BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
-          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+          LEAN_WASM_TRACE=1 node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
             work/dist/lean.mjs work/probe "$BOOT/lib/lean" -- \
             -j1 -R /src -o /src/Probe2.olean /src/Probe.lean 2>&1 \
-            | grep -E 'error: \[olean\]|incompatible header' | head -n 5
+            | grep -E 'incompatible header|error: \[olean\]' | head -n 5
           echo "official olean probe done"
+          echo -n "wasm contains LEAN_WASM_ERR: "; grep -c 'LEAN_WASM_ERR' work/dist/lean.wasm
 
       - name: 生成自建 Init olean 清单
         run: |

@@ -54,6 +54,7 @@ jobs:
           git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
           git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
           git -C wasm-llvm checkout -q FETCH_HEAD
+          cd wasm-llvm
           sed -i \
             -e 's|emcc -c -O2|emcc -c -O3|g' \
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
@@ -143,6 +144,7 @@ jobs:
           git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
           git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
           git -C wasm-llvm checkout -q FETCH_HEAD
+          cd wasm-llvm
           sed -i \
             -e 's|emcc -c -O2|emcc -c -O3|g' \
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \

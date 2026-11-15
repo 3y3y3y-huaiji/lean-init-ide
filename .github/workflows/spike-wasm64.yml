@@ -60,17 +60,17 @@ jobs:
             return value == 42 ? 0 : 3;
           }
           EOF
-          emcc probe.c -sMEMORY64=2 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
-          node probe.mjs || node --experimental-wasm-memory64 probe.mjs
+          emcc probe.c -sMEMORY64=1 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
+          node --experimental-wasm-memory64 probe.mjs
 
       - name: 准备 wasm-llvm 并切成 wasm64 + O1
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           cd wasm-llvm
           sed -i \
-            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=2 -DCMAKE_CXX_FLAGS=-sMEMORY64=2 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=2|' \
-            -e 's|emcc -c -O2|emcc -sMEMORY64=2 -c -O1|g' \
-            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=2 -O1 -pthread|g' \
+            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
+            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O1|g' \
+            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O1 -pthread|g' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64' producer/lean-browser/scripts/build.sh
 
@@ -97,7 +97,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh fetch
           # LibUV 的 ExternalProject 只接收 EMSCRIPTEN_SETTINGS 作为 CMAKE_C_FLAGS，
           # 不带上 64 位指针选项会编出 wasm32 的 libuv.a，链接时报 "wasm32 object file can't be linked in wasm64 mode"。
-          sed -i 's|set(EMSCRIPTEN_SETTINGS "-s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|set(EMSCRIPTEN_SETTINGS "-sMEMORY64=2 -s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|' \
+          sed -i 's|set(EMSCRIPTEN_SETTINGS "-s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|set(EMSCRIPTEN_SETTINGS "-sMEMORY64=1 -s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|' \
             "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt"
           grep -n 'EMSCRIPTEN_SETTINGS' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt" | head -n 3
 
@@ -107,7 +107,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v3
+          key: wasm64-runtime-v4
 
       - name: runtime
         run: |
@@ -182,7 +182,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v3
+          key: wasm64-runtime-v4
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -194,7 +194,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v2
+          key: wasm64-obj-v3
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -223,19 +223,15 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
-      - name: 关键验证：用官方 64 位 Init oleans 启动 wasm64 Lean
+      - name: 安装无头 Chromium（Playwright）
         run: |
-          source emsdk/emsdk_env.sh
-          BOOT="$GITHUB_WORKSPACE/work/lean-4.34.1-linux"
-          DIST="$GITHUB_WORKSPACE/work/dist"
-          mkdir -p "$GITHUB_WORKSPACE/probe"
-          cat > "$GITHUB_WORKSPACE/probe/Probe.lean" <<'EOF'
-          import Init
-          example : 1 + 1 = 2 := rfl
-          EOF
-          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-            "$DIST/lean.mjs" "$GITHUB_WORKSPACE/probe" "$BOOT/lib/lean" -- \
-            -j1 -R /src -o /src/Probe.olean /src/Probe.lean
+          npm install --no-save --no-package-lock playwright tsx
+          npx playwright install --with-deps chromium
+
+      - name: 关键验证：在无头 Chromium（Memory64 原生支持）里启动 wasm64 Lean
+        timeout-minutes: 20
+        run: |
+          npx tsx scripts/wasm64-browser-verify.ts work/dist
 
       - name: 保存产物与日志
         if: always()
@@ -243,8 +239,7 @@ jobs:
         with:
           name: wasm64-spike
           path: |
-            work/dist/lean.mjs
-            work/dist/lean.wasm
+            work/dist/**
             work/*.log
             work/*.olean-fail.log
           if-no-files-found: warn

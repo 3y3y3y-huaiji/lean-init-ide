@@ -63,19 +63,23 @@ jobs:
           emcc probe.c -sMEMORY64=1 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
           node probe.mjs
 
-      - name: 准备 wasm-llvm 并切成 wasm64 + O1
+      - name: 缓存 GMP（wasm64）
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/gmp-install
+            work/gmp-6.3.0.tar.xz
+          key: wasm64-gmp-v1
+
+      - name: 构建 GMP（USE_GMP=ON 所需）
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/build-wasm64-gmp.sh "$GITHUB_WORKSPACE/work/gmp-install"
+
+      - name: 准备 wasm-llvm 并切成 wasm64 + GMP
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
-          cd wasm-llvm
-          sed -i \
-            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
-            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O2|g' \
-            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O2 -pthread|g' \
-            -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
-            -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
-            -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
-            producer/lean-browser/scripts/build.sh
-          grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
+          bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
@@ -271,7 +275,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v12
+          key: wasm64-runtime-v13
 
       - name: runtime
         run: |
@@ -322,19 +326,23 @@ jobs:
           source emsdk/emsdk_env.sh
           emcc --version | head -n 2
 
-      - name: 准备 wasm-llvm 并切成 wasm64 + O1
+      - name: 缓存 GMP（wasm64）
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/gmp-install
+            work/gmp-6.3.0.tar.xz
+          key: wasm64-gmp-v1
+
+      - name: 构建 GMP（USE_GMP=ON 所需）
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/build-wasm64-gmp.sh "$GITHUB_WORKSPACE/work/gmp-install"
+
+      - name: 准备 wasm-llvm 并切成 wasm64 + GMP
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
-          cd wasm-llvm
-          sed -i \
-            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
-            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O2|g' \
-            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O2 -pthread|g' \
-            -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
-            -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
-            -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
-            producer/lean-browser/scripts/build.sh
-          grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
+          bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
 
       - name: 恢复 Lean 源码与引导包
         uses: actions/cache@v6
@@ -381,7 +389,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v12
+          key: wasm64-runtime-v13
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -503,17 +511,11 @@ jobs:
           print("patched", path, len(src), "bytes")
           PY
 
-      - name: 缓存 64 位 oleans
-        uses: actions/cache@v6
-        with:
-          path: work/olean32
-          key: wasm64-oleans-v2
-
       - name: 缓存 objects
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v7
+          key: wasm64-obj-v8
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -542,7 +544,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v7
+          key: wasm64-obj-v8
 
       - name: link
         run: |
@@ -558,57 +560,37 @@ jobs:
       - name: 最小文件探针（不 import Init）
         run: |
           set +e
-          mkdir -p work/mini
+          mkdir -p work/mini work/olean32
           printf 'def one : Nat := 1\n' > work/mini/Mini.lean
           node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
             work/dist/lean.mjs work/mini work/olean32 -- \
-            -j1 -o /lean/lib/lean/Mini.olean /src/Mini.lean
+            -j1 -o /src/Mini.olean /src/Mini.lean
           echo "mini exit=$?"
 
-      # 官方 olean 是 GMP 编码（flags=1），我们的 wasm64 运行时是 USE_GMP=OFF，
-      # 头校验过不了。改为用这个 wasm64 Lean 自己重编 Init，得到 flags=0 的 64 位 oleans。
-      - name: 自生成 64 位 Init oleans
-        timeout-minutes: 300
+      # USE_GMP=ON 之后 flags 与 githash 都与官方一致，官方 64 位 oleans 可以直接用，
+      # 不再需要用这个 wasm64 Lean 重编 Init。
+      - name: 使用官方 64 位 oleans（GMP 编码）
         run: |
-          source emsdk/emsdk_env.sh
-          cd wasm-llvm
-          export EMSDK="$GITHUB_WORKSPACE/emsdk"
-          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
-          export WASM_LLVM_LEAN_JOBS=1
-          BOOT="$(ls -d "$WASM_LLVM_LEAN_WORK_DIR"/lean-*-linux | head -n 1)"
-          # modules.txt 由 cgen 阶段生成；cgen 命中缓存时不会重跑，这里补一次。
-          (cd "$BOOT/lib/lean" && find Init Std Lean -name '*.olean' | sed 's/\.olean$//'; printf '%s\n' Init Std Lean) \
-            | LC_ALL=C sort > "$WASM_LLVM_LEAN_WORK_DIR/modules.txt"
-          bash producer/lean-browser/scripts/build.sh oleans
-          find "$WASM_LLVM_LEAN_WORK_DIR/olean32" -name '*.olean' | wc -l
-          echo "server parts: $(find "$WASM_LLVM_LEAN_WORK_DIR/olean32" -name '*.olean.server' | wc -l)"
+          BOOT="$(ls -d work/lean-*-linux | head -n 1)"
+          rm -rf work/olean32
+          cp -a "$BOOT/lib/lean" work/olean32
+          echo "oleans: $(find work/olean32 -name '*.olean' | wc -l)"
+          echo "server parts: $(find work/olean32 -name '*.olean.server' | wc -l)"
+          ls -l work/olean32/Init.olean work/olean32/Lean.olean
 
-      - name: 保存 64 位 oleans
-        continue-on-error: true
-        uses: actions/cache/save@v6
-        with:
-          path: work/olean32
-          key: wasm64-oleans-v2
-
-      # 主链验证：用自建的 64 位 oleans 编译 import Init 的文件（Node 里的 wasm64 Lean）。
-      - name: 用自建 oleans 编译 import Init（Node）
+      # 主链验证 + GMP 验证：大整数运算必须走真正的 GMP，否则 2^100 的结果会对不上。
+      - name: 用官方 oleans 编译 import Init + 大整数（Node）
         run: |
           mkdir -p work/probe
-          printf 'import Init\nexample : 1 + 1 = 2 := rfl\n' > work/probe/Probe.lean
+          cat > work/probe/Probe.lean <<'EOF'
+          import Init
+          #eval (2 ^ 100 : Nat)
+          example : 2 ^ 100 = 1267650600228229401496703205376 := rfl
+          EOF
           node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
             work/dist/lean.mjs work/probe work/olean32 -- \
             -j1 -R /src -o /src/Probe.olean /src/Probe.lean
           ls -l work/probe/Probe.olean
-
-      - name: 负向验证：官方 GMP olean 触发标准化错误日志
-        run: |
-          set +e
-          BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
-          LEAN_WASM_TRACE=1 node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-            work/dist/lean.mjs work/probe "$BOOT/lib/lean" -- \
-            -j1 -R /src -o /src/Probe2.olean /src/Probe.lean 2>&1 \
-            | grep -E 'incompatible header|error: \[olean\]' | head -n 5
-          echo "official olean probe done"
           echo -n "wasm contains LEAN_WASM_ERR: "; grep -c 'LEAN_WASM_ERR' work/dist/lean.wasm
 
       - name: LSP 握手（--server）

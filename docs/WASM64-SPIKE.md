@@ -65,6 +65,8 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 
 因此放弃复用官方 olean，改为用这个 wasm64 Lean 自己编译 Init（producer 自带的 `oleans` 阶段），得到 flags=0 的 64 位 oleans。
 
+**后续（USE_GMP=ON）**：只编 Init 无法支撑 Mathlib（`Qq.Typ` 就 `import Lean.Meta.Check`，而 Lean/Std 也被跳过了）。现在改成用 emcc 编一个 wasm64 静态 GMP（`scripts/build-wasm64-gmp.sh`），构建脚本用 `-DUSE_GMP=ON -DGMP_INSTALL_PREFIX=...` 重新配置，flags 与 githash 都与官方一致，Init/Std/Lean 的官方 olean 直接复用，不再自建。首个验证是 `#eval (2 ^ 100 : Nat)` 与 `2 ^ 100 = 1267650600228229401496703205376 := rfl`。
+
 ### 4. 浏览器侧的三个加载细节
 
 - `Init.olean.server` 必须一起提供：Lean 默认 `inServer=true`，会加载 `.olean.server`；清单生成原来只遍历 `Init/` 子目录，漏了根目录的 `Init.olean.server`
@@ -136,6 +138,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 
 - glue 的 `TTY.stream_ops.read` 会一直 `get_char` 到读满 `length` 字节。阻塞式 stdin 钩子拿到半帧后就卡在循环里，帧永远到不了 Lean。worker 里把 fd 0 换成「只在第一个字节上阻塞，之后有多少给多少」的 read。
 - `-j2 --server` 进的是 `Watchdog`：`watchdogMain` 解析 `/etc/localtime`，手写的极简 TZif 被判成 `empty transitions`，catch 后直接 `forceExit 1`（表现为 initialize 成功后进程无声退出）。必须塞宿主的真实 TZif。
+- `didOpen` 会让 watchdog `Process.spawn` 一个 `lean` 子进程（`Watchdog.lean`），上游 wasm 构建没有进程能力，报 `unsupported operation (error code: 52)` 后同样 `forceExit 1`。要在 wasm 里拿到 `publishDiagnostics`，需要 SDK 那层「浏览器 Worker 替代子进程」的补丁。
 
 ## 当前产物与缓存
 
@@ -143,14 +146,15 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 | --- | --- |
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
 | Lean 源码与引导包 | `wasm64-src-v5` |
-| runtime（-O2） | `wasm64-runtime-v12` |
+| runtime（-O2 + GMP） | `wasm64-runtime-v13` |
 | cgen | `wasm64-cgen-v1` |
-| objects（-O2） | `wasm64-obj-v7` |
-| 64 位 oleans | `wasm64-oleans-v2`（约 117MB） |
-| Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v1` |
+| objects（-O2 + GMP） | `wasm64-obj-v8` |
+| GMP（wasm64 静态库） | `wasm64-gmp-v1` |
+| 官方 64 位 oleans | 不缓存，直接从引导包 `work/lean-*-linux/lib/lean` 复制到 `work/olean32` |
+| Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v2` |
 | Mathlib 裁切编译产物 | `wasm64-mathlib-lib-<run_number>`，`restore-keys: wasm64-mathlib-lib-` 取最新，逐轮增量 |
 
-`work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是 1947 个 64 位 olean/server/ilean 文件。
+`work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ilean 文件。
 
 ## 尚未验证
 

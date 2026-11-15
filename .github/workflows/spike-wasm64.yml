@@ -72,7 +72,7 @@ jobs:
             -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O0|g' \
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
-            -e 's#git -C "$SRC" apply "$PATCH"#git -C "$SRC" apply "$PATCH" || git -C "$SRC" apply --3way "$PATCH"#' \
+            -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
@@ -213,7 +213,7 @@ jobs:
             -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O0|g' \
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
-            -e 's#git -C "$SRC" apply "$PATCH"#git -C "$SRC" apply "$PATCH" || git -C "$SRC" apply --3way "$PATCH"#' \
+            -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
@@ -443,7 +443,7 @@ jobs:
           cd wasm-llvm
           export EMSDK="$GITHUB_WORKSPACE/emsdk"
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
-          export WASM_LLVM_LEAN_JOBS=3
+          export WASM_LLVM_LEAN_JOBS=1
           BOOT="$(ls -d "$WASM_LLVM_LEAN_WORK_DIR"/lean-*-linux | head -n 1)"
           # modules.txt 由 cgen 阶段生成；cgen 命中缓存时不会重跑，这里补一次。
           (cd "$BOOT/lib/lean" && find Init Std Lean -name '*.olean' | sed 's/\.olean$//'; printf '%s\n' Init Std Lean) \

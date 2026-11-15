@@ -71,13 +71,43 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `-sEXIT_RUNTIME=1` 下 `callMain` 用 `ExitStatus` 异常退出，harness 需要捕获并把 `status` 当作退出码
 - Lean 启动会解析 appPath/libdir，即使 `--version` 也要先建好 `/lean/bin`、`/lean/lib/lean`
 
+## 诊断日志（内核侧）
+
+约定：**所有诊断只走 stderr**，stdout 留给 LSP 的 JSON-RPC，避免协议帧被冲坏。
+
+1. **外层兜底**：`src/util/shell.cpp` 的 `lean_main` 用 C++ `try/catch` 接住 `lean::throwable`、`std::exception` 和 `...`，按固定前缀输出并返回非零：
+
+   ```
+   [LEAN_WASM_ERR] {"type":"lean::exception","msg":"..."}
+   ```
+
+   异常在被 JS 看到之前就已经解包，宿主不再需要处理 `WebAssembly.Exception` / `getExceptionMessage`；只有 wasm 硬 trap（越界、爆栈）才需要宿主的 `onAbort` / Worker `onerror` 兜底。
+
+2. **`LEAN_WASM_TRACE` 门控**：`src/util/io.h` 提供 `lean_log_write` / `lean_trace_write`，默认零输出；在 `Module.ENV` 里设置 `LEAN_WASM_TRACE=1` 后输出：
+
+   ```
+   info: [init] Init start
+   info: [io] <io_result 错误文本>
+   info: [olean] failed to read file '...', incompatible header (version=2, flags=1, githash=...)
+   ```
+
+   插桩点：`consume_io_result`（所有 `Except.error` 转 C++ 异常的汇聚处）、`initialize_Init/Std/Lean` 入口、olean 头校验失败分支。
+
+3. **验证**：负向探针用官方 GMP olean 触发，得到
+
+   ```
+   error: failed to read file '/lean/lib/lean/Init.olean', incompatible header
+          (version=2, flags=1, githash=5045d005...)
+   wasm contains LEAN_WASM_ERR: 1
+   ```
+
 ## 当前产物与缓存
 
 | 名称 | key |
 | --- | --- |
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
-| Lean 源码与引导包 | `wasm64-src-v4` |
-| runtime（-O2） | `wasm64-runtime-v10` |
+| Lean 源码与引导包 | `wasm64-src-v5` |
+| runtime（-O2） | `wasm64-runtime-v12` |
 | cgen | `wasm64-cgen-v1` |
 | objects（-O2） | `wasm64-obj-v7` |
 | 64 位 oleans | `wasm64-oleans-v2`（约 117MB） |

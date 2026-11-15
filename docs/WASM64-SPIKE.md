@@ -126,7 +126,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
   `initialize` → `initialized` → `didOpen(Bad.lean)` → `didOpen(Good.lean)` → `shutdown` → `exit`。
   断言 Bad.lean 收到带 `mismatch` 的诊断、Good.lean 为空。Good.lean 干净同时说明 import 的 olean 真被加载成功。
 - `scripts/mathlib-slice.mjs`：不依赖 Lean 工具链，静态解析 `import` 得到候选目标的依赖闭包
-  （`Mathlib.Init` / `Mathlib.Data.Nat.Defs` / `Mathlib.Logic.Basic` / `Mathlib.Order.Basic` 里取最小的），
+  （`Mathlib.Order.Notation`（10 模块）/ `Mathlib.Tactic.Spread`（43）/ `Mathlib.Order.Basic`（94）里取最小的），
   按拓扑序把源文件摊平到 `work/mathlib-src`，再由 `run-lean.mjs` 逐个编译进 `work/mathlib-lib`（Init olean 的副本）。
   闭包超过 120 个模块时脚本以 3 退出，workflow 跳过编译、诊断链路降级为 Init。
 

@@ -61,6 +61,7 @@ jobs:
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
             -e "s|-sSTACK_SIZE=16777216|-sSTACK_SIZE=$MAIN_STACK_BYTES|" \
             -e "s|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=$PTHREAD_STACK_BYTES|" \
+            -e 's|-sMODULARIZE=1|--profiling-funcs -sMODULARIZE=1|' \
             producer/lean-browser/scripts/build.sh
           grep -n -- '-O3\|STACK_SIZE' producer/lean-browser/scripts/build.sh
 
@@ -172,6 +173,7 @@ jobs:
             -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
             -e "s|-sSTACK_SIZE=16777216|-sSTACK_SIZE=$MAIN_STACK_BYTES|" \
             -e "s|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=$PTHREAD_STACK_BYTES|" \
+            -e 's|-sMODULARIZE=1|--profiling-funcs -sMODULARIZE=1|' \
             producer/lean-browser/scripts/build.sh
           grep -n -- '-O3\|STACK_SIZE' producer/lean-browser/scripts/build.sh
 

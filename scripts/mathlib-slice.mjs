@@ -64,6 +64,8 @@ const readImports = (file) => {
       continue;
     }
     if (trimmed === '' || trimmed.startsWith('--')) continue;
+    // 新版 Lean 源码会在 import 之前写 module / prelude。
+    if (trimmed === 'module' || trimmed === 'prelude') continue;
     if (trimmed.startsWith('/-')) {
       if (!trimmed.includes('-/')) inBlock = true;
       continue;

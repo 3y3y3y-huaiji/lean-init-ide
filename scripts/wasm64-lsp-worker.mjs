@@ -22,7 +22,7 @@ const EOF = 2;
 const WAIT_LIMIT_MS = 600_000;
 
 const queue = [];
-const readByte = () => {
+const pullBlocking = () => {
   let waited = 0;
   for (;;) {
     if (queue.length) return queue.shift();
@@ -42,6 +42,7 @@ const readByte = () => {
     }
   }
 };
+const pullAvailable = () => (queue.length ? queue.shift() : undefined);
 
 const walk = (dir) => {
   const out = [];
@@ -57,7 +58,7 @@ const { default: createLean } = await import(pathToFileURL(leanMjs).href);
 
 const lean = await createLean({
   noInitialRun: true,
-  stdin: readByte,
+  stdin: pullBlocking,
   print: (text) => parentPort.postMessage({ stdout: new TextEncoder().encode(`${text}\n`) }),
   printErr: (text) => parentPort.postMessage({ stderr: `${text}\n` }),
 });
@@ -90,6 +91,25 @@ for (const [path, text] of Object.entries(files)) {
   lean.FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
   lean.FS.writeFile(path, new TextEncoder().encode(text));
 }
+
+// 上游 TTY.read 会一直调用 get_char 直到读满 length 字节。
+// 阻塞式钩子在拿到半帧后就卡在这个循环里，帧永远交给 Lean。
+// 这里换成「有多少给多少」：只在第一个字节上阻塞，剩下的取当前可用的部分就返回。
+const stdin = lean.FS.getStream(0);
+stdin.stream_ops = {
+  ...stdin.stream_ops,
+  read(_stream, buffer, offset, length) {
+    let count = 0;
+    while (count < length) {
+      const byte = count === 0 ? pullBlocking() : pullAvailable();
+      if (byte === null || byte === undefined) break;
+      buffer[offset + count] = byte;
+      count += 1;
+    }
+    debug('stdin read', count);
+    return count;
+  },
+};
 
 // fd 1 是 LSP 协议通道，必须原样交给父线程解析帧。
 const fd1 = lean.FS.getStream(1);

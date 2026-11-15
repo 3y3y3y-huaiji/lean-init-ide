@@ -666,15 +666,24 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/mathlib
-          key: wasm64-mathlib-src-v1
+          key: wasm64-mathlib-src-v2
 
       - name: 裁切 Mathlib 依赖闭包
         timeout-minutes: 30
         run: |
           set -uo pipefail
           if [ ! -d work/mathlib/mathlib4/.git ]; then
-            REQ="$(cat work/lean4/lean-toolchain)"
-            VER="${REQ##*:}"
+            # lean-toolchain 被引导流程改写成 build/release/stage1，版本要从引导包目录名取。
+            BOOT="$(ls -d work/lean-*-linux 2>/dev/null | head -n 1)"
+            VER=""
+            if [ -n "$BOOT" ]; then
+              VER="v$(basename "$BOOT" | sed -E 's/^lean-([^-]+)-linux$/\1/')"
+            fi
+            if [ -z "$VER" ]; then
+              REQ="$(cat work/lean4/lean-toolchain)"
+              VER="${REQ##*:}"
+            fi
+            echo "lean version: $VER"
             if git ls-remote --tags https://github.com/leanprover-community/mathlib4.git "refs/tags/$VER" | grep -q .; then
               TAG="$VER"
             else
@@ -746,7 +755,8 @@ jobs:
             log="work/mathlib-log/$rel.log"
             mkdir -p "$(dirname "$log")"
             if node "$RUN" work/dist/lean.mjs work/mathlib-src work/mathlib-lib -- \
-                 -j1 -o "/lean/lib/lean/$rel.olean" "/src/$rel.lean" > "$log" 2>&1; then
+                 -j1 -R /src -Dinterpreter.prefer_native=false -Dpp.rawOnError=true \
+                 -o "/lean/lib/lean/$rel.olean" "/src/$rel.lean" > "$log" 2>&1; then
               echo "ok $mod"
             else
               echo "FAIL $mod"
@@ -774,6 +784,8 @@ jobs:
       # 有 Mathlib 裁切结果时用真实的 import 依赖打开文档；否则退化为 Init。
       - name: LSP 完整诊断链路（didOpen → publishDiagnostics）
         timeout-minutes: 30
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
         run: |
           LIB=work/olean32
           MODULE=""

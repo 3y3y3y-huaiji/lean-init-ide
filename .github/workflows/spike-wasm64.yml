@@ -273,6 +273,27 @@ jobs:
               src = "".join(lines)
               print("probe B injected before paren regBuiltin call")
 
+          # 给 Level.c 里每一次 regBuiltin 调用加标记，并标出 runtime/meta 阶段入口，
+          # 定位到底是哪一次注册在报 unknown parser category。
+          marked = []
+          for line in src.splitlines(keepends=True):
+              ident = re.search(r"(l_\w+_regBuiltin\w*)\(\)", line)
+              if ident and line.lstrip().startswith("res"):
+                  marked.append(f'fprintf(stderr, "REG {ident.group(1)}\\n");\n')
+                  marked.append(line)
+              else:
+                  marked.append(line)
+          src = "".join(marked)
+
+          for phase in ("runtime_initialize_Lean_Parser_Level", "meta_initialize_Lean_Parser_Level"):
+              header = re.search(rf"{phase}\(uint8_t builtin\)\s*\{{", src)
+              if header:
+                  brace = header.end() - 1
+                  src = src[:brace + 1] + f'\nfprintf(stderr, "PHASE {phase}\\n");' + src[brace + 1:]
+                  print("phase marker added:", phase)
+              else:
+                  print("phase header missing:", phase)
+
           path.write_text(src)
           print("patched", path, len(src), "bytes")
           PY

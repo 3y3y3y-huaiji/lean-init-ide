@@ -124,12 +124,14 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 握手只证明 server 能启动。为了验证 `didOpen → publishDiagnostics`，新增两个脚本：
 
 - `scripts/wasm64-lsp-diagnostics.mjs`：把 wasm 放进 worker 线程，用 `SharedArrayBuffer` + `Atomics` 让 `Module.stdin`
-  在没数据时挂起（主线程阻塞会拿不到 stdout），父线程按响应逐帧喂：
-  `initialize` → `initialized` → `didOpen(Bad.lean)` → `didOpen(Good.lean)` → `shutdown` → `exit`。
+  在没数据时挂起（主线程阻塞会拿不到 stdout），父线程按响应逐帧喂。两种模式：
+  - `server`：`-j2 --server`，`initialize` → `initialized` → `didOpen`。只用于确认 watchdog 的行为。
+  - `worker`：`-j2 --worker <uri>`，直接起文件 worker 再发 `initialize` + `didOpen`——SDK 在浏览器里就是这么绕开
+    `Process.spawn` 的（`worker.js` 的 `startProcess(['-j4','--worker',document.uri])`）。这是真正验证 `publishDiagnostics` 的模式。
   断言 Bad.lean 收到带 `mismatch` 的诊断、Good.lean 为空。Good.lean 干净同时说明 import 的 olean 真被加载成功。
 - `scripts/mathlib-slice.mjs`：不依赖 Lean 工具链，静态解析 `import` 得到候选目标的依赖闭包
   （`Mathlib.Order.Notation`（10 模块）/ `Mathlib.Tactic.Spread`（43）/ `Mathlib.Order.Basic`（94）里取最小的），
-  按拓扑序把源文件摊平到 `work/mathlib-src`，再由 `run-lean.mjs` 逐个编译进 `work/mathlib-lib`（Init olean 的副本）。
+  按拓扑序把源文件摊平到 `work/mathlib-src`，再由 `run-lean.mjs` 逐个编译进 `work/mathlib-lib`（官方 olean 的副本）。
   闭包超过 120 个模块时脚本以 3 退出，workflow 跳过编译、诊断链路降级为 Init。
 
 客户端本身用一个假 glue 在本地验证过收发与断言（initialize、Bad/Good 诊断、shutdown、exit 全通），不占用 CI 轮次。
@@ -138,7 +140,8 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 
 - glue 的 `TTY.stream_ops.read` 会一直 `get_char` 到读满 `length` 字节。阻塞式 stdin 钩子拿到半帧后就卡在循环里，帧永远到不了 Lean。worker 里把 fd 0 换成「只在第一个字节上阻塞，之后有多少给多少」的 read。
 - `-j2 --server` 进的是 `Watchdog`：`watchdogMain` 解析 `/etc/localtime`，手写的极简 TZif 被判成 `empty transitions`，catch 后直接 `forceExit 1`（表现为 initialize 成功后进程无声退出）。必须塞宿主的真实 TZif。
-- `didOpen` 会让 watchdog `Process.spawn` 一个 `lean` 子进程（`Watchdog.lean`），上游 wasm 构建没有进程能力，报 `unsupported operation (error code: 52)` 后同样 `forceExit 1`。要在 wasm 里拿到 `publishDiagnostics`，需要 SDK 那层「浏览器 Worker 替代子进程」的补丁。
+- `didOpen` 会让 watchdog `Process.spawn` 一个 `lean` 子进程（`Watchdog.lean`），上游 wasm 构建没有进程能力，报 `unsupported operation (error code: 52)` 后同样 `forceExit 1`。所以 `server` 模式只能验证到 didOpen；`publishDiagnostics` 走 `worker` 模式。
+- `mathlib-lib` 如果从旧缓存恢复，会带着 flags=0 的自建 Init olean，所有 import 报 `incompatible header (flags=0)`。基座必须用官方 olean 覆盖，缓存前缀也要换。
 
 ## 当前产物与缓存
 

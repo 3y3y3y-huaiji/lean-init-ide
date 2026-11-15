@@ -17,9 +17,9 @@
 
 1. Lean 编译器生成的静态常量把 `Name` 哈希截断成 32 位（上游 #15814，已在 PR #15816 修复，未进入任何 rc/稳定版）
 2. 官方 64 位 olean 用 GMP 编码（`flags=1`），wasm 构建是 `USE_GMP=OFF`（`flags=0`），头校验直接拒绝
-3. 用 wasm64 Lean 自己重编 Init 时，`Init.Prelude` 在 `getHeadInfo` 递归 + `lean_alloc` 处崩溃（先是 `memory access out of bounds`，提高初始内存后变成 `Maximum call stack size exceeded`，提高线程栈到 64MB 无效）
+3. **wasm64 运行时只要执行编译就非法内存访问**：连不 import 任何模块的最小文件都会 `memory access out of bounds`，而 `lean --version` 可以通过；调整初始内存、Emscripten 池栈、Lean 自身线程栈默认值均无效
 
-第 3 点是决定性的：同样的源码在 wasm32 上正常，在 wasm64 上连解析/编译第一个模块都不成立，说明还有未暴露的 64 位假设。这不是构建参数能绕过的。
+第 3 点是决定性的：`-O0` 是保守构建、不是越界来源；GMP 编码也与该崩溃无关。问题在运行时本身的 64 位语义，不是构建参数或 olean 格式能绕过的。
 
 ## 已验证成立的部分
 
@@ -101,16 +101,36 @@ RuntimeError: memory access out of bounds
     0 个模块成功
 ```
 
-把 `-sINITIAL_MEMORY` 从 256MB 提到 2GB（避免共享内存增长）后，错误变成：
+排除栈大小因素：
+
+| 调整 | 结果 |
+| --- | --- |
+| `-sINITIAL_MEMORY` 256MB → 2GB（避免共享内存增长） | OOB 变成 `Maximum call stack size exceeded`（`getHeadInfo?` + `lean_alloc`） |
+| `-sDEFAULT_PTHREAD_STACK_SIZE` 8MB → 64MB | 不变 |
+| `runtime/thread.cpp` 的 `LEAN_DEFAULT_THREAD_STACK_SIZE` 8MB → 64MB（wasm64 仍走 `LEAN_EMSCRIPTEN` 的 8MB 分支） | 不变 |
+
+### 5. 最小文件探针：编译任意文件就崩
 
 ```
-RangeError: Maximum call stack size exceeded
-    at lean_alloc_small_object
-    at lean_alloc_ctor
-    at Lean.Syntax.getHeadInfo?
+def one : Nat := 1
 ```
 
-把 `-sDEFAULT_PTHREAD_STACK_SIZE` 从 8MB 提到 64MB 后仍然相同。同样的代码在 wasm32 下正常，说明不是栈容量问题，而是 wasm64 下运行时数据/指针语义仍有问题。
+不 import 任何模块，`run-lean.mjs` 下依然 `memory access out of bounds`，退出码 1。
+
+结论：不是 `Init.Prelude` 的递归深度问题，而是 **wasm64 运行时只要进入编译流程就出现非法内存访问**；`lean --version` 这类几乎不碰编译器/分配器的路径能通过。`-O0` 是保守构建，不是 OOB 的来源；GMP 也与该崩溃无关。
+
+顺带在 `LEAN_EMSCRIPTEN` 扫描中确认了同类位宽假设：
+
+```c
+// src/runtime/thread.cpp
+#ifdef LEAN_EMSCRIPTEN
+#define LEAN_DEFAULT_THREAD_STACK_SIZE 8*1024*1024 // 8MB for 32-bit
+#else
+#define LEAN_DEFAULT_THREAD_STACK_SIZE 1024*1024*1024 // 1GB for 64-bit
+#endif
+```
+
+以及 `lean_kernel_diag_is_enabled` 的 `uint8*`/`uint8` 声明不一致（上游 #14886，rc2 已含）。
 
 ## 上游状态
 

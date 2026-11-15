@@ -230,7 +230,7 @@ jobs:
           printf 'def one : Nat := 1\n' > work/mini/Mini.lean
           node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
             work/dist/lean.mjs work/mini work/empty-lib -- \
-            -j1 -o /src/Mini.olean /src/Mini.lean 2>&1 | tee work/mini.log
+            -j1 -R /src -o /src/Mini.olean /src/Mini.lean 2>&1 | tee work/mini.log
           test -s work/mini/Mini.olean || { echo '最小文件没有产出 olean'; exit 1; }
           echo 'runtime 冒烟通过'
 

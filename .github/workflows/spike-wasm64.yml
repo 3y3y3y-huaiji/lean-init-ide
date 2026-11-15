@@ -209,7 +209,21 @@ jobs:
         run: |
           python3 - <<'PY'
           import pathlib, re
-          targets = ["work/cgen/Lean.c", "work/cgen/Lean/Parser.c"]
+
+          level = pathlib.Path("work/cgen/Lean/Parser/Level.c")
+          if level.exists():
+              src = level.read_text()
+              # 先看 Level 自己的初始化序列：category 注册与 builtin parser 注册的先后顺序
+              match = re.search(r"^LEAN_EXPORT lean_object\* initialize_Lean_Parser_Level\(uint8_t builtin\) \{", src, re.M)
+              if match:
+                  body = src[match.start():match.start() + 4000]
+                  print("---- initialize_Lean_Parser_Level ----")
+                  for line in body.splitlines():
+                      if "registerBuiltinParserAttribute" in line or "addBuiltin" in line or "initialize_" in line or "return" in line:
+                          print(line.strip()[:300])
+                  print("---- end ----")
+
+          targets = ["work/cgen/Lean.c", "work/cgen/Lean/Parser.c", "work/cgen/Lean/Parser/Level.c"]
           for name in targets:
               path = pathlib.Path(name)
               if not path.exists():
@@ -218,7 +232,6 @@ jobs:
               src = path.read_text()
               if "#include <stdio.h>" not in src:
                   src = "#include <stdio.h>\n" + src
-              count = 0
               def repl(match):
                   callee = match.group(1)
                   return f'(fprintf(stderr, "DEP {callee}\\n"), {callee}(builtin))'

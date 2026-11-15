@@ -203,33 +203,65 @@ jobs:
           path: work/cgen
           key: wasm64-cgen-v1
 
-      # 诊断：initialize_Lean 逐个调用依赖模块的 initializer，错误通过返回值上抛，栈里看不出来。
-      # 给生成的 C 里每个 initialize_X(builtin) 调用插入打印，最后一条 DEP 就是返回错误的那一块。
-      - name: 给全部生成的 initializer 调用打点
+      # 诊断：确认 level category 注册后立刻查不到，是 Name 的 hash/eq 不一致，还是 map 本身丢了写入。
+      # 只改动 Level.c，复用 objects 缓存，几分钟一轮。
+      - name: 在 Level 初始化里插入 Name / 查表探针
         run: |
           python3 - <<'PY'
-          import pathlib, re
+          import pathlib
 
-          # 失败已经追到 Lean.Parser.Extra 的 runtime phase。逐层加文件太慢，
-          # 直接对 work/cgen 下所有生成 C 插桩，拿到从 Init 到失败点的完整嵌套调用链。
-          count_files = 0
-          count_calls = 0
-          def repl(match):
-              callee = match.group(1)
-              return f'(fprintf(stderr, "DEP {callee}\\n"), {callee}(builtin))'
-          for path in sorted(pathlib.Path("work/cgen").rglob("*.c")):
-              src = path.read_text()
-              if "builtin)" not in src:
-                  continue
-              patched = re.sub(r"\b((?:runtime_|meta_)?initialize_[A-Za-z0-9_]+)\(builtin\)", repl, src)
-              if patched == src:
-                  continue
-              if "#include <stdio.h>" not in patched:
-                  patched = "#include <stdio.h>\n" + patched
-              path.write_text(patched)
-              count_files += 1
-              count_calls += len(re.findall(r"DEP ", patched))
-          print("patched files:", count_files, "calls:", count_calls)
+          probe_names = r'''
+          {
+            lean_object* pa = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
+            lean_object* pb = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
+            fprintf(stderr, "PROBE name eq=%d h1=%llu h2=%llu\n",
+                    (int)lean_name_eq(pa, pb),
+                    (unsigned long long)lean_name_hash(pa),
+                    (unsigned long long)lean_name_hash(pb));
+          }
+          '''
+
+          probe_category = r'''
+          {
+            extern lean_object* l_Lean_Parser_addBuiltinLeadingParser(lean_object*, lean_object*, lean_object*, lean_object*);
+            lean_object* pc = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
+            lean_object* pd = lean_name_mk_string(lean_box(0), lean_mk_string("probeLevel"));
+            lean_object* pr = l_Lean_Parser_addBuiltinLeadingParser(pc, pd, l_Lean_Parser_Level_paren, lean_box(0));
+            fprintf(stderr, "PROBE addLeading is_error=%d\n", (int)lean_io_result_is_error(pr));
+            lean_dec_ref(pr);
+          }
+          '''
+
+          candidates = [p for p in pathlib.Path("work/cgen").rglob("*.c")
+                        if "runtime_initialize_Lean_Parser_Level" in p.read_text(errors="ignore")]
+          print("files with Level runtime init:", [str(p) for p in candidates])
+          if not candidates:
+              raise SystemExit("Level runtime init not found")
+
+          path = candidates[0]
+          src = path.read_text()
+          if "#include <stdio.h>" not in src:
+              src = "#include <stdio.h>\n" + src
+
+          anchor_a = "lean_initialize_runtime_module();"
+          idx = src.find(anchor_a)
+          if idx < 0:
+              print("probe A: anchor missing")
+          else:
+              src = src[:idx + len(anchor_a)] + "\n" + probe_names + src[idx + len(anchor_a):]
+              print("probe A injected at", path)
+
+          anchor_b = "___regBuiltin_Lean_Parser_Level_paren___1_()"
+          idx = src.find(anchor_b)
+          if idx < 0:
+              print("probe B: anchor missing")
+          else:
+              line_start = src.rfind("\n", 0, idx) + 1
+              src = src[:line_start] + probe_category + "\n" + src[line_start:]
+              print("probe B injected at", path)
+
+          path.write_text(src)
+          print("patched", path, len(src), "bytes")
           PY
 
       - name: 缓存 objects

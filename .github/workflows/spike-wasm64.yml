@@ -69,8 +69,8 @@ jobs:
           cd wasm-llvm
           sed -i \
             -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
-            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O0|g' \
-            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
+            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O2|g' \
+            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O2 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
             -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
             -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
@@ -168,7 +168,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v9
+          key: wasm64-runtime-v10
 
       - name: runtime
         run: |
@@ -225,8 +225,8 @@ jobs:
           cd wasm-llvm
           sed -i \
             -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
-            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O0|g' \
-            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
+            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O2|g' \
+            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O2 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
             -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
             -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
@@ -278,7 +278,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v9
+          key: wasm64-runtime-v10
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -410,7 +410,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v6
+          key: wasm64-obj-v7
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -439,7 +439,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v6
+          key: wasm64-obj-v7
 
       - name: link
         run: |

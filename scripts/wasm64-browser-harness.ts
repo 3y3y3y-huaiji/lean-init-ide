@@ -162,7 +162,11 @@ const run = async (): Promise<void> => {
       onExit: (code: number) => log.push(`EXIT ${code}`),
     });
     log.push('createLean ok');
-    // version 模式只验证启动；compile 模式挂官方 oleans 后编译。两个模式用独立页面加载，避免 EXIT_RUNTIME 影响。
+    // Lean 启动时会解析 appPath/libdir，两个模式都需要这些目录存在。
+    lean.FS.mkdirTree('/lean/bin');
+    lean.FS.mkdirTree('/lean/lib/lean');
+    lean.FS.mkdirTree('/src');
+    // version 模式只验证启动；compile 模式挂载自建 oleans 后编译。两个模式用独立页面加载，避免 EXIT_RUNTIME 影响。
     const oleans = mode === 'version' ? [] : await mountOleans(lean);
     log.push(`oleans=${oleans.length}`);
     // Emscripten 的 callMain 会自己补 argv[0]，这里只传真实参数；
@@ -173,8 +177,21 @@ const run = async (): Promise<void> => {
       : ['--version'];
     const stage = compile ? 'compile-init' : 'version';
     log.push(`stage=${stage} argv=${JSON.stringify(argv)}`);
-    const code = lean.callMain(argv);
+    // -sEXIT_RUNTIME=1 下 callMain 用 ExitStatus 异常退出，状态码即 Lean 的退出码。
+    let code = 0;
+    try {
+      code = lean.callMain(argv);
+    } catch (error) {
+      const exit = error as { name?: string; status?: number } | null;
+      if (exit?.name === 'ExitStatus' && typeof exit.status === 'number') code = exit.status;
+      else throw error;
+    }
     log.push(`callMain code=${code}`);
+    if (compile) {
+      const output = (lean.FS as unknown as { analyzePath(p: string): { exists: boolean; object?: { contents?: Uint8Array } } })
+        .analyzePath('/src/Probe.olean');
+      log.push(`probe.olean exists=${output.exists} size=${output.object?.contents?.length ?? -1}`);
+    }
     finish({ ok: code === 0, stage, code, oleanCount: oleans.length, environment, log });
   } catch (error) {
     finish({ ok: false, stage: 'exception', error: describe(error, lean), environment, log });

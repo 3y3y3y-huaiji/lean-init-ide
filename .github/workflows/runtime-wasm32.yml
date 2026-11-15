@@ -82,6 +82,12 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh fetch
 
+      - name: 应用 replace_fn 堆栈化补丁
+        run: |
+          cd "$GITHUB_WORKSPACE/work/lean4"
+          git apply "$GITHUB_WORKSPACE/scripts/patches/lean-replace-fn-iterative.patch"
+          grep -n 'wasm32 的浏览器 worker' src/kernel/replace_fn.cpp
+
       - name: 提高 Lean 自身线程栈（wasm32）
         run: |
           THREAD="$GITHUB_WORKSPACE/work/lean4/src/runtime/thread.cpp"
@@ -109,7 +115,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-v2
+          key: wasm32-runtime-v3
 
       - name: runtime
         run: |
@@ -191,7 +197,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-v2
+          key: wasm32-runtime-v3
 
       - name: 恢复 cgen
         uses: actions/cache@v6

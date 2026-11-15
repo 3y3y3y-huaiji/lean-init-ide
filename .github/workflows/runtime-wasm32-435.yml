@@ -1,0 +1,350 @@
+name: Build wasm32 Lean 4.35 runtime
+
+# 把 wasm-llvm 的 4.34.1 recipe forward-port 到 Lean 4.35.0：
+# - 只改 manifest 的 Lean pin / bootstrap / patch 哈希
+# - 用 scripts/patches/lean-435-emscripten.patch（删掉上游已吸收的 event_loop hunk）
+# - 其余仍是上游默认，只把 emcc O2 改成 O3
+# - 重新编译 Init oleans 并打包成 lean-init-*.pack
+on:
+  push:
+    branches: [spike/lean-4.35]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-wasm32-435
+  cancel-in-progress: false
+
+env:
+  WASM_LLVM_REV: 14ea5ecbc514b0c87338aebf8f2b567020be5750
+  EMSDK_VERSION: 6.0.0
+  LEAN_VERSION: 4.35.0
+  LEAN_TAG: v4.35.0
+  LEAN_COMMIT: eb6cafb7290e8bd5f2937522d8d804f58f02bafc
+  BOOTSTRAP_URL: https://github.com/leanprover/lean4/releases/download/v4.35.0/lean-4.35.0-linux.tar.zst
+  BOOTSTRAP_BYTES: 594481375
+  BOOTSTRAP_SHA256: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
+
+jobs:
+  prepare:
+    name: 准备 4.35 源码与 C 代码
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+
+      - name: 缓存 Emscripten 6.0.0
+        uses: actions/cache@v6
+        with:
+          path: emsdk
+          key: wasm32-emsdk-6.0.0-v1
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          if [ ! -x emsdk/upstream/emscripten/emcc ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
+          fi
+          source emsdk/emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 拉取 wasm-llvm 并 forward-port 到 4.35.0
+        run: |
+          git init -q wasm-llvm
+          git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
+          git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
+          git -C wasm-llvm checkout -q FETCH_HEAD
+          cp "$GITHUB_WORKSPACE/scripts/patches/lean-435-emscripten.patch" \
+            wasm-llvm/producer/lean-browser/patches/0001-lean-browser-emscripten.patch
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          root = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "wasm-llvm/producer/lean-browser"
+          patch = (root / "patches/0001-lean-browser-emscripten.patch").read_bytes()
+          manifest_path = root / "manifest.json"
+          manifest = json.loads(manifest_path.read_text())
+          manifest["sources"]["lean4"]["version"] = os.environ["LEAN_VERSION"]
+          manifest["sources"]["lean4"]["tag"] = os.environ["LEAN_TAG"]
+          manifest["sources"]["lean4"]["commit"] = os.environ["LEAN_COMMIT"]
+          manifest["bootstrap"] = {
+              "description": "official native Lean release used to emit C for Init, Std, and Lean and to compute Init module dependencies",
+              "url": os.environ["BOOTSTRAP_URL"],
+              "bytes": int(os.environ["BOOTSTRAP_BYTES"]),
+              "sha256": os.environ["BOOTSTRAP_SHA256"],
+          }
+          manifest["patches"][0]["sha256"] = hashlib.sha256(patch).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, indent="\t") + "\n")
+          print("lean", manifest["sources"]["lean4"]["version"], manifest["sources"]["lean4"]["commit"])
+          print("bootstrap", manifest["bootstrap"]["bytes"], manifest["bootstrap"]["sha256"])
+          print("patch", manifest["patches"][0]["sha256"])
+          PY
+          cd wasm-llvm
+          sed -i \
+            -e 's|emcc -c -O2|emcc -c -O3|g' \
+            -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
+            producer/lean-browser/scripts/build.sh
+          grep -n -- '-O3\|STACK_SIZE\|PTHREAD_STACK_SIZE' producer/lean-browser/scripts/build.sh
+
+      - name: 缓存 4.35 源码与引导包
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/lean4
+            work/lean-*-linux
+          key: wasm435-src-v1
+
+      - name: fetch 4.35
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          # 缓存里的源码可能带着上一次已应用的 patch；先恢复干净，让 fetch 重新应用。
+          if [ -d "$WASM_LLVM_LEAN_WORK_DIR/lean4/.git" ]; then
+            git -C "$WASM_LLVM_LEAN_WORK_DIR/lean4" reset --hard -q HEAD
+            git -C "$WASM_LLVM_LEAN_WORK_DIR/lean4" clean -fdq
+          fi
+          bash producer/lean-browser/scripts/build.sh fetch
+
+      - name: 缓存 runtime 产物
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/build-wasm
+            work/emcache
+          key: wasm435-runtime-v1
+
+      - name: runtime
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh emsdk runtime
+
+      - name: 缓存 cgen
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm435-cgen-v1
+
+      - name: cgen
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh cgen
+
+  finish:
+    name: 编译 4.35 objects、oleans 并打包
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+
+      - name: 缓存 Emscripten 6.0.0
+        uses: actions/cache@v6
+        with:
+          path: emsdk
+          key: wasm32-emsdk-6.0.0-v1
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          if [ ! -x emsdk/upstream/emscripten/emcc ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
+          fi
+          source emsdk/emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 拉取 wasm-llvm 并 forward-port 到 4.35.0
+        run: |
+          git init -q wasm-llvm
+          git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
+          git -C wasm-llvm fetch -q --depth 1 origin "$WASM_LLVM_REV"
+          git -C wasm-llvm checkout -q FETCH_HEAD
+          cp "$GITHUB_WORKSPACE/scripts/patches/lean-435-emscripten.patch" \
+            wasm-llvm/producer/lean-browser/patches/0001-lean-browser-emscripten.patch
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          root = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "wasm-llvm/producer/lean-browser"
+          patch = (root / "patches/0001-lean-browser-emscripten.patch").read_bytes()
+          manifest_path = root / "manifest.json"
+          manifest = json.loads(manifest_path.read_text())
+          manifest["sources"]["lean4"]["version"] = os.environ["LEAN_VERSION"]
+          manifest["sources"]["lean4"]["tag"] = os.environ["LEAN_TAG"]
+          manifest["sources"]["lean4"]["commit"] = os.environ["LEAN_COMMIT"]
+          manifest["bootstrap"] = {
+              "description": "official native Lean release used to emit C for Init, Std, and Lean and to compute Init module dependencies",
+              "url": os.environ["BOOTSTRAP_URL"],
+              "bytes": int(os.environ["BOOTSTRAP_BYTES"]),
+              "sha256": os.environ["BOOTSTRAP_SHA256"],
+          }
+          manifest["patches"][0]["sha256"] = hashlib.sha256(patch).hexdigest()
+          manifest_path.write_text(json.dumps(manifest, indent="\t") + "\n")
+          PY
+          cd wasm-llvm
+          sed -i \
+            -e 's|emcc -c -O2|emcc -c -O3|g' \
+            -e 's|emcc -O2 -pthread|emcc -O3 -pthread|g' \
+            producer/lean-browser/scripts/build.sh
+          grep -n -- '-O3\|STACK_SIZE\|PTHREAD_STACK_SIZE' producer/lean-browser/scripts/build.sh
+
+      - name: 恢复 4.35 源码与引导包
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/lean4
+            work/lean-*-linux
+          key: wasm435-src-v1
+
+      - name: 恢复 runtime 产物
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/build-wasm
+            work/emcache
+          key: wasm435-runtime-v1
+
+      - name: 恢复 cgen
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm435-cgen-v1
+
+      - name: 写入 emsdk 路径
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh emsdk
+
+      - name: 缓存 objects
+        uses: actions/cache@v6
+        with:
+          path: work/obj
+          key: wasm435-obj-o3-v1
+
+      - name: objects
+        id: objects
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh objects
+
+      - name: 立即保存 objects 缓存
+        if: always() && steps.objects.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: work/obj
+          key: wasm435-obj-o3-v1
+
+      - name: link
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh link
+
+      - name: 准备 modules.txt
+        run: |
+          BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
+          (cd "$BOOT/lib/lean" && find Init Std Lean -name '*.olean' | sed 's/\.olean$//'; printf '%s\n' Init Std Lean) \
+            | LC_ALL=C sort > "$GITHUB_WORKSPACE/work/modules.txt"
+          wc -l "$GITHUB_WORKSPACE/work/modules.txt"
+
+      - name: 缓存 4.35 Init oleans
+        uses: actions/cache@v6
+        with:
+          path: work/olean32
+          key: wasm435-olean32-v1
+
+      - name: 重新编译 4.35 Init oleans
+        timeout-minutes: 300
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh oleans
+          find "$GITHUB_WORKSPACE/work/olean32" -name '*.olean' | wc -l
+
+      - name: 冒烟：用 4.35 运行时编译 import Init
+        run: |
+          set -uo pipefail
+          mkdir -p work/mini
+          printf 'import Init\nexample : 1 + 1 = 2 := rfl\n' > work/mini/Mini.lean
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/mini work/olean32 -- \
+            -j1 -R /src -o /src/Mini.olean /src/Mini.lean 2>&1 | tee work/mini.log
+          test -s work/mini/Mini.olean || { echo '最小文件没有产出 olean'; exit 1; }
+          echo '4.35 runtime + Init oleans 冒烟通过'
+
+      - name: 打包 4.35 发布资产
+        run: |
+          node wasm-llvm/producer/lean-browser/scripts/package.mjs --work work --out work/artifact
+          ls -lh work/artifact
+          # 给 App 用的 zstd 资产，参数与 scripts/fetch-assets.mjs 一致。
+          node - <<'JS'
+          const fs = require('node:fs');
+          const zlib = require('node:zlib');
+          const wasm = fs.readFileSync('work/dist/lean.wasm');
+          const bin = zlib.zstdCompressSync(wasm, {
+            params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
+          });
+          fs.writeFileSync('work/artifact/lean.wasm.gz.bin', bin);
+          JS
+          cd work/artifact
+          sha256sum lean.mjs lean.wasm.gz lean.wasm.gz.bin > SHA256SUMS
+
+      - name: 记录构建参数
+        if: always()
+        run: |
+          {
+            echo "lean=$LEAN_VERSION"
+            echo "lean-commit=$LEAN_COMMIT"
+            echo "wasm-llvm-rev=$WASM_LLVM_REV"
+            echo "emsdk=$EMSDK_VERSION"
+            echo "optimization=-O3"
+          } | tee work/build-flags.txt
+
+      - name: 上传 4.35 运行时与 Init 资产
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm32-runtime-4.35.0
+          path: |
+            work/artifact/**
+            work/mini/Mini.olean
+            work/mini.log
+            work/build-flags.txt
+          if-no-files-found: warn

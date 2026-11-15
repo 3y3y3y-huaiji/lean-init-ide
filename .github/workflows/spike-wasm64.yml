@@ -213,8 +213,9 @@ jobs:
           level = pathlib.Path("work/cgen/Lean/Parser/Level.c")
           if level.exists():
               src = level.read_text()
-              # 打印 Level.c 里所有 initialize_* 函数的完整语句体，看 category 注册与 parser 注册的真实顺序
-              for header in re.finditer(r"^LEAN_EXPORT lean_object\* (initialize_\w+)\(uint8_t builtin\)", src, re.M):
+              # 打印 Level.c 里所有 initialize_* / runtime_initialize_* / meta_initialize_* 的语句体，
+              # 真正的 builtin parser 注册在 runtime_/meta_ 两个 phase 函数里。
+              for header in re.finditer(r"^LEAN_EXPORT lean_object\* ((?:runtime_|meta_)?initialize_\w+)\(uint8_t builtin\)", src, re.M):
                   name = header.group(1)
                   start = src.find("{", header.end())
                   depth = 0
@@ -246,7 +247,7 @@ jobs:
               def repl(match):
                   callee = match.group(1)
                   return f'(fprintf(stderr, "DEP {callee}\\n"), {callee}(builtin))'
-              patched = re.sub(r"\b(initialize_[A-Za-z0-9_]+)\(builtin\)", repl, src)
+              patched = re.sub(r"\b((?:runtime_|meta_)?initialize_[A-Za-z0-9_]+)\(builtin\)", repl, src)
               path.write_text(patched)
               print(f"patched {name}: {len(re.findall(r'DEP ', patched))} prints")
           PY

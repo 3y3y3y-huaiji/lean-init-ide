@@ -117,6 +117,21 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `Module.stdin` 必须**逐字节返回字符码**，EOF 返回 `null`；返回 `Buffer` 会被当成对象转成 `\x00`，服务端报 `Invalid header field`
 - LSP 协议帧只走 fd 1（stdout），所有内核诊断走 fd 2（stderr），与前述约定一致
 
+## 完整诊断链路与真实依赖
+
+握手只证明 server 能启动。为了验证 `didOpen → publishDiagnostics`，新增两个脚本：
+
+- `scripts/wasm64-lsp-diagnostics.mjs`：把 wasm 放进 worker 线程，用 `SharedArrayBuffer` + `Atomics` 让 `Module.stdin`
+  在没数据时挂起（主线程阻塞会拿不到 stdout），父线程按响应逐帧喂：
+  `initialize` → `initialized` → `didOpen(Bad.lean)` → `didOpen(Good.lean)` → `shutdown` → `exit`。
+  断言 Bad.lean 收到带 `mismatch` 的诊断、Good.lean 为空。Good.lean 干净同时说明 import 的 olean 真被加载成功。
+- `scripts/mathlib-slice.mjs`：不依赖 Lean 工具链，静态解析 `import` 得到候选目标的依赖闭包
+  （`Mathlib.Init` / `Mathlib.Data.Nat.Defs` / `Mathlib.Logic.Basic` / `Mathlib.Order.Basic` 里取最小的），
+  按拓扑序把源文件摊平到 `work/mathlib-src`，再由 `run-lean.mjs` 逐个编译进 `work/mathlib-lib`（Init olean 的副本）。
+  闭包超过 120 个模块时脚本以 3 退出，workflow 跳过编译、诊断链路降级为 Init。
+
+客户端本身用一个假 glue 在本地验证过收发与断言（initialize、Bad/Good 诊断、shutdown、exit 全通），不占用 CI 轮次。
+
 ## 当前产物与缓存
 
 | 名称 | key |
@@ -127,15 +142,16 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 | cgen | `wasm64-cgen-v1` |
 | objects（-O2） | `wasm64-obj-v7` |
 | 64 位 oleans | `wasm64-oleans-v2`（约 117MB） |
+| Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v1` |
+| Mathlib 裁切编译产物 | `wasm64-mathlib-lib-<run_number>`，`restore-keys: wasm64-mathlib-lib-` 取最新，逐轮增量 |
 
 `work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是 1947 个 64 位 olean/server/ilean 文件。
 
 ## 尚未验证
 
-- 浏览器 LSP：本次只验证了 CLI 编译，`--server`/LSP 路径还没在 wasm64 下跑
+- 浏览器内 LSP：浏览器侧只验证了 CLI 编译（`--mode=version|compile`），`--server` 目前只在 Node 里跑通
 - 内存占用与性能：`-O2` + memory64 + 1GB 上限下的实际峰值未测
-- `-O2` 下 649 个模块的编译时间与缓存策略（当前 oleans 阶段单进程）
-- 与 Mathlib 的兼容性（下一步更有价值的验证）
+- 与 Mathlib 的兼容性：裁切编译与诊断链路已接进 CI，等下一轮结果
 
 ## 复现
 

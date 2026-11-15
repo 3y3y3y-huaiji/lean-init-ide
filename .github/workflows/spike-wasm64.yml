@@ -555,6 +555,14 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
+      # 第二份产物：main 跑在 pthread 上，主线程空出来泵 pthread 消息。
+      # FileWorker 的 LSP 输出走 Std.Channel 的专用线程，默认构建下拿不到 publishDiagnostics。
+      - name: 链接 LSP 变体（PROXY_TO_PTHREAD）
+        timeout-minutes: 20
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
+
       # 判定探针：不 import 任何模块的最小文件能否编译。
       # 通过 → 崩溃与 Init.Prelude 的深递归/规模有关；失败 → 运行时 baseline 就坏了。
       - name: 最小文件探针（不 import Init）
@@ -802,7 +810,10 @@ jobs:
             fi
           fi
           echo "lib=$LIB module=${MODULE:-<Init>}"
-          node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean.mjs "$LIB" "$MODULE" worker
+          GLUE=work/dist/lean.mjs
+          if [ -f work/dist/lean-lsp.mjs ]; then GLUE=work/dist/lean-lsp.mjs; fi
+          echo "glue=$GLUE"
+          node scripts/wasm64-lsp-diagnostics.mjs "$GLUE" "$LIB" "$MODULE" worker
 
       - name: 保存产物与日志
         if: always()

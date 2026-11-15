@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const { leanMjs, libDir, files, args, control, payload, timezone } = workerData;
+const { leanMjs, libDir, files, args, control, payload, timezone, proxy } = workerData;
 const debug = (...items) => {
   if (process.env.LEAN_WASM_DIAG_DEBUG) parentPort.postMessage({ debug: items.join(' ') });
 };
@@ -125,4 +125,6 @@ try {
   if (error && error.name === 'ExitStatus' && typeof error.status === 'number') code = error.status;
   else parentPort.postMessage({ failure: String(error?.stack ?? error) });
 }
-parentPort.postMessage({ exit: code });
+// PROXY_TO_PTHREAD 下 callMain 只负责把 main 派发到 pthread，返回不代表进程结束。
+if (proxy) debug('main dispatched (proxy mode)', code);
+else parentPort.postMessage({ exit: code });

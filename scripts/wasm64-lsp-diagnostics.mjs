@@ -69,6 +69,8 @@ const initializeParams = {
  * wasm 跑在 worker 线程里：Module.stdin 会在没数据时用 Atomics 挂起，不能占住主线程。
  */
 const createSession = (args, files) => {
+  // lean-lsp.mjs 是 -sPROXY_TO_PTHREAD=1 的变体：callMain 只派发，不阻塞。
+  const proxy = /lean-lsp/.test(leanMjs);
   const control = new SharedArrayBuffer(8);
   const payload = new SharedArrayBuffer(PAYLOAD_BYTES);
   const ctrl = new Int32Array(control);
@@ -82,6 +84,7 @@ const createSession = (args, files) => {
       control,
       payload,
       timezone,
+      proxy,
     },
   });
 
@@ -190,7 +193,8 @@ const createSession = (args, files) => {
   };
 
   const dispose = async () => {
-    await closeStdin();
+    // proxy 模式下 main 在 pthread 上，送 EOF 没必要，直接收掉整个 worker。
+    if (!proxy) await closeStdin();
     if (exited) return;
     await new Promise((resolveExit) => {
       const timer = setTimeout(resolveExit, 10_000);

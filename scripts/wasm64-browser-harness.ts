@@ -123,7 +123,8 @@ const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
 
 const run = async (): Promise<void> => {
   const environment = readEnvironment();
-  log.push(`env ${JSON.stringify(environment)}`);
+  const mode = new URLSearchParams(location.search).get('mode') ?? 'auto';
+  log.push(`mode=${mode} env ${JSON.stringify(environment)}`);
   let lean: LeanInstance | undefined;
   try {
     // 用变量持有 URL，避免打包阶段把 /lean.mjs 解析成模块依赖。
@@ -142,12 +143,15 @@ const run = async (): Promise<void> => {
       onExit: (code: number) => log.push(`EXIT ${code}`),
     });
     log.push('createLean ok');
-    const oleans = await mountOleans(lean);
+    // version 模式只验证启动；compile 模式挂官方 oleans 后编译。两个模式用独立页面加载，避免 EXIT_RUNTIME 影响。
+    const oleans = mode === 'version' ? [] : await mountOleans(lean);
+    log.push(`oleans=${oleans.length}`);
     // callMain 不会补 argv[0]，必须自己塞一个程序名，否则 Lean 把第一个参数当 argv[0] 丢掉。
-    const argv = oleans.length > 0
+    const compile = mode === 'compile' || (mode === 'auto' && oleans.length > 0);
+    const argv = compile
       ? ['lean', '-j1', '-R', '/src', '-o', '/src/Probe.olean', '/src/Probe.lean']
       : ['lean', '--version'];
-    const stage = oleans.length > 0 ? 'compile-init' : 'version';
+    const stage = compile ? 'compile-init' : 'version';
     log.push(`stage=${stage} argv=${JSON.stringify(argv)}`);
     const code = lean.callMain(argv);
     log.push(`callMain code=${code}`);

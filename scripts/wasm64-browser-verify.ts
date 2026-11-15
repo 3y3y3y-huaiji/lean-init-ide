@@ -102,19 +102,26 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 
-try {
+// 每个模式都用新页面，拿到干净的模块实例：EXIT_RUNTIME 之后重复 callMain 不可靠。
+const runMode = async (mode: string): Promise<ProbeResult> => {
   const page = await browser.newPage();
-  page.on('console', (message) => console.log(`[page:${message.type()}] ${message.text()}`));
-  page.on('pageerror', (error) => console.log(`[pageerror] ${error.message}`));
-  await page.goto(origin, { waitUntil: 'load', timeout: 60_000 });
-
-  console.log(`chrome: ${browser.version()}`);
+  page.on('console', (message) => console.log(`[${mode}:${message.type()}] ${message.text()}`));
+  page.on('pageerror', (error) => console.log(`[${mode}:pageerror] ${error.message}`));
+  await page.goto(`${origin}/?mode=${mode}`, { waitUntil: 'load', timeout: 60_000 });
   // 用字符串表达式轮询与取值，避免把 TS 编译后的函数序列化进页面。
   await page.waitForFunction('window.__probeResult !== undefined', undefined, { timeout: 900_000 });
   const result = (await page.evaluate('window.__probeResult')) as ProbeResult;
+  await page.close();
+  return result;
+};
 
-  console.log(JSON.stringify(result, null, 2));
-  if (!result.ok) process.exitCode = 1;
+try {
+  console.log(`chrome: ${browser.version()}`);
+  const version = await runMode('version');
+  console.log(JSON.stringify(version, null, 2));
+  const compile = await runMode('compile');
+  console.log(JSON.stringify(compile, null, 2));
+  if (!version.ok || !compile.ok) process.exitCode = 1;
 } finally {
   await browser.close();
   await new Promise<void>((resolveClose) => server.close(() => resolveClose()));

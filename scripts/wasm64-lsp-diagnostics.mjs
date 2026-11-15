@@ -43,11 +43,9 @@ if (!timezone) {
   console.error('[diag] 没有系统 tzdata，使用内置 UTC TZif');
 }
 
-const EMPTY = 0;
-const READY = 1;
-const EOF = 2;
-const PAYLOAD_BYTES = 1 << 20;
 const HEADER_END = Buffer.from('\r\n\r\n');
+// 与 SDK 的 LeanStdin 一致：16 字节控制区 + 环形负载。
+const RING_BYTES = 8 * 1024 * 1024 + 8192;
 
 const importLine = moduleName ? `import ${moduleName}\n` : '';
 // import 行占掉第 0 行，示例在第 1 行；nudge 的 hover 位置要落在示例上。
@@ -66,25 +64,24 @@ const initializeParams = {
 
 /**
  * 一个 wasm 实例 + 一套 LSP 帧通道。
- * wasm 跑在 worker 线程里：Module.stdin 会在没数据时用 Atomics 挂起，不能占住主线程。
+ * stdin 走共享环形缓冲（glue 由 adapt-glue.mjs 打了 fd0 补丁），不再用 Module.stdin 钩子。
  */
 const createSession = (args, files) => {
-  // lean-lsp.mjs 是 -sPROXY_TO_PTHREAD=1 的变体：callMain 只派发，不阻塞。
-  const proxy = /lean-lsp/.test(leanMjs);
-  const control = new SharedArrayBuffer(8);
-  const payload = new SharedArrayBuffer(PAYLOAD_BYTES);
-  const ctrl = new Int32Array(control);
-  const shared = new Uint8Array(payload);
+  // adapted-proxy 是 -sPROXY_TO_PTHREAD=1 变体：callMain 只派发，不阻塞。
+  const proxy = /adapted-proxy/.test(leanMjs);
+  const ring = new SharedArrayBuffer(16 + RING_BYTES);
+  const ctrl = new Int32Array(ring, 0, 4);
+  const ringBytes = new Uint8Array(ring, 16);
+  const range = Math.floor(2 ** 32 / RING_BYTES) * RING_BYTES;
   const worker = new Worker(new URL('./wasm64-lsp-worker.mjs', import.meta.url), {
     workerData: {
       leanMjs: resolve(leanMjs),
       libDir: resolve(libDir),
       files,
       args,
-      control,
-      payload,
       timezone,
       proxy,
+      stdin: { buffer: ring, capacity: RING_BYTES },
     },
   });
 
@@ -156,39 +153,25 @@ const createSession = (args, files) => {
   });
   worker.on('error', (error) => console.error(`[worker] ${error.stack ?? error}`));
 
-  // 只有 worker 把上一帧消费掉（置回 EMPTY）才能覆盖共享缓冲。
-  const waitEmpty = (timeoutMs = 30_000) =>
-    new Promise((resolveEmpty, rejectEmpty) => {
-      const started = Date.now();
-      const poll = () => {
-        if (Atomics.load(ctrl, 0) === EMPTY) resolveEmpty();
-        else if (Date.now() - started > timeoutMs) rejectEmpty(new Error('stdin 缓冲一直没被消费'));
-        else setTimeout(poll, 5);
-      };
-      poll();
-    });
-
+  // 按 SDK 的 LeanStdin 语义写环形缓冲：ctrl[0]=write、ctrl[1]=read、ctrl[2]=closed。
   const sendFrame = async (message) => {
     const body = JSON.stringify(message);
-    // LSP 帧头与正文必须一起写进 stdin，少一个 Content-Length server 会一直等。
-    const framed = Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 'utf8');
-    if (framed.length > PAYLOAD_BYTES) throw new Error(`帧过大: ${framed.length}`);
-    await waitEmpty();
-    shared.set(framed);
-    Atomics.store(ctrl, 1, framed.length);
-    Atomics.store(ctrl, 0, READY);
+    const frame = Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 'utf8');
+    const write = Atomics.load(ctrl, 0) >>> 0;
+    const read = Atomics.load(ctrl, 1) >>> 0;
+    const used = (write - read + range) % range;
+    if (frame.length > RING_BYTES - used) throw new Error(`stdin 环形缓冲已满: ${frame.length}`);
+    const offset = write % RING_BYTES;
+    const first = Math.min(frame.length, RING_BYTES - offset);
+    ringBytes.set(frame.subarray(0, first), offset);
+    ringBytes.set(frame.subarray(first), 0);
+    Atomics.store(ctrl, 0, (write + frame.length) % range);
     Atomics.notify(ctrl, 0);
-    if (process.env.LEAN_WASM_DIAG_DEBUG) console.error(`[debug] sent ${framed.length} bytes`);
+    if (process.env.LEAN_WASM_DIAG_DEBUG) console.error(`[debug] sent ${frame.length} bytes`);
   };
 
-  // 进程退出后可能已经不再读 stdin，收尾失败不致命。
   const closeStdin = async () => {
-    try {
-      await waitEmpty(5_000);
-    } catch {
-      // 忽略。
-    }
-    Atomics.store(ctrl, 0, EOF);
+    Atomics.store(ctrl, 2, 1);
     Atomics.notify(ctrl, 0);
   };
 

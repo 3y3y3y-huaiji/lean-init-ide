@@ -2,14 +2,23 @@
 //
 // 依赖 NODEFS：libraryDir / workDir 都是宿主机目录，只在 Node 环境可用。
 // 浏览器里请自行构造 preRun，把 olean 文件写进 MEMFS 的 /lean/lib/lean。
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { zstdDecompressSync } from 'node:zlib';
 
 import createLean from './lean.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-export const wasmPath = join(HERE, 'lean.wasm');
+export const wasmPath = join(HERE, 'lean.wasm.zst');
+
+let cachedBinary = null;
+/** zstd 解压一次并缓存；直接以 wasmBinary 交给 Emscripten，不落临时文件。 */
+export function wasmBinary() {
+  cachedBinary ??= zstdDecompressSync(readFileSync(wasmPath));
+  return cachedBinary;
+}
 
 /**
  * @param {object} [options]
@@ -29,7 +38,12 @@ export async function createLeanRuntime({ libraryDir, workDir, moduleOptions = {
     },
     ...(moduleOptions.preRun ?? []),
   ];
-  const lean = await createLean({ noInitialRun: true, ...moduleOptions, preRun });
+  const lean = await createLean({
+    noInitialRun: true,
+    wasmBinary: wasmBinary(),
+    ...moduleOptions,
+    preRun,
+  });
   if (workDir) lean.FS.chdir('/src');
   return lean;
 }

@@ -563,6 +563,11 @@ jobs:
           source emsdk/emsdk_env.sh
           bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
 
+      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收）
+        run: |
+          node scripts/adapt-glue.mjs work/dist/lean.mjs work/dist/lean-adapted.mjs
+          node scripts/adapt-glue.mjs work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
+
       # 发布用产物：去掉 --profiling-funcs / EXCEPTION_STACK_TRACES，wasm 从 129MB 降到约 110MB。
       - name: 链接 release 变体（无调试符号）
         timeout-minutes: 20
@@ -817,10 +822,19 @@ jobs:
             fi
           fi
           echo "lib=$LIB module=${MODULE:-<Init>}"
-          GLUE=work/dist/lean.mjs
-          if [ -f work/dist/lean-lsp.mjs ]; then GLUE=work/dist/lean-lsp.mjs; fi
-          echo "glue=$GLUE"
-          node scripts/wasm64-lsp-diagnostics.mjs "$GLUE" "$LIB" "$MODULE" worker
+          set +e
+          if [ -f work/dist/lean-adapted.mjs ]; then
+            echo "glue=lean-adapted.mjs"
+            node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean-adapted.mjs "$LIB" "$MODULE" worker
+            plain=$?
+            if [ "$plain" -ne 0 ] && [ -f work/dist/lean-adapted-proxy.mjs ]; then
+              echo "retry with lean-adapted-proxy.mjs"
+              node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean-adapted-proxy.mjs "$LIB" "$MODULE" worker
+            fi
+          else
+            echo "glue=lean.mjs（未适配，只验证帧收发）"
+            node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean.mjs "$LIB" "$MODULE" worker
+          fi
 
       - name: 打包 npm（lean4-wasm64）
         run: |

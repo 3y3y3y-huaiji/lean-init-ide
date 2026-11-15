@@ -24,4 +24,7 @@ emcc -sMEMORY64=1 -O2 -pthread -fwasm-exceptions @"$OBJ/objs.rsp" "$OBJ/symtab.o
   -o "$DIST/lean.mjs"
 
 ls -l "$DIST/lean.mjs" "$DIST/lean.wasm"
-gzip -9 -c "$DIST/lean.wasm" | wc -c | awk '{printf "lean.wasm gzip: %.1f MB\n", $1/1048576}'
+# 发行用 zstd（整个仓库的资产都是 zstd）；比 gzip 小，解压也快。
+zstd -19 -T0 -f -q "$DIST/lean.wasm" -o "$DIST/lean.wasm.zst"
+ls -l "$DIST/lean.wasm.zst"
+echo "lean.wasm.zst: $(( $(stat -c%s "$DIST/lean.wasm.zst") / 1048576 )) MB"

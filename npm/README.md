@@ -25,9 +25,12 @@ console.log('exit', code);
 
 ## 体积
 
-| 文件 | 原始 | gzip |
+`lean.wasm` 以 zstd 发行（`lean.wasm.zst`），入口会解压一次并作为 `wasmBinary` 传给 Emscripten，
+不落临时文件。需要 Node ≥ 22.15（`node:zlib` 的 zstd 支持）。
+
+| 文件 | 原始 | zstd |
 | --- | --- | --- |
-| `lean.wasm`（release，无调试符号） | 见 npm 页面 | 约 12–13 MB |
+| `lean.wasm`（release，无调试符号） | 见 npm 页面 | 见 npm 页面 |
 
 oleans 不随包发布：官方 Init 有 400MB，请从 Lean release 或你自己的资产源获取。
 

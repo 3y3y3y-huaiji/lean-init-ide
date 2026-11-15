@@ -1,55 +1,25 @@
-// 在 worker 线程里跑 wasm64 Lean 的 --server，stdin 用共享内存挂起等待父线程喂帧。
+// 在 worker 线程里跑 wasm64 Lean，stdin 走共享环形缓冲（glue 已被 adapt-glue.mjs 打过补丁）。
 //
-// 为什么必须是 worker：Lean 的 server 是同步阻塞读 stdin 的，
-// 主线程如果在 stdin 钩子里阻塞，就没人去读 stdout、没法按响应决定下一句说什么；
-// 直接返回 null 会被当成 EOF，server 可能在 publishDiagnostics 之前就退出。
-// 这里用 Atomics.wait 把读取挂起，父线程收到响应后再写入下一帧。
+// 为什么不再用 Module.stdin 钩子：Emscripten 的 TTY 读循环会一直 get_char 到读满 length，
+// 阻塞式钩子拿到半帧就卡死；fd_read 还会把 pthread 的读代理回主线程。
+// 共享环形缓冲把 fd 0 直接接在 wasm 内部，主线程与 pthread 都能安全阻塞等待。
 import { parentPort, workerData } from 'node:worker_threads';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const { leanMjs, libDir, files, args, control, payload, timezone, proxy } = workerData;
+const { leanMjs, libDir, files, args, timezone, proxy, stdin } = workerData;
 const debug = (...items) => {
   if (process.env.LEAN_WASM_DIAG_DEBUG) parentPort.postMessage({ debug: items.join(' ') });
 };
 debug('worker start', leanMjs);
-const ctrl = new Int32Array(control);
-const shared = new Uint8Array(payload);
-const EMPTY = 0;
-const READY = 1;
-const EOF = 2;
-const WAIT_LIMIT_MS = 600_000;
-
-const queue = [];
-const pullBlocking = () => {
-  let waited = 0;
-  for (;;) {
-    if (queue.length) return queue.shift();
-    const state = Atomics.load(ctrl, 0);
-    if (state === READY) {
-      const length = Atomics.load(ctrl, 1);
-      debug('stdin chunk', length);
-      for (let i = 0; i < length; i += 1) queue.push(shared[i]);
-      Atomics.store(ctrl, 0, EMPTY);
-      Atomics.notify(ctrl, 0);
-      continue;
-    }
-    if (state === EOF) return null;
-    if (Atomics.wait(ctrl, 0, EMPTY, 1000) === 'timed-out') {
-      waited += 1000;
-      if (waited > WAIT_LIMIT_MS) throw new Error('stdin 等待超时');
-    }
-  }
-};
-const pullAvailable = () => (queue.length ? queue.shift() : undefined);
 
 const walk = (dir) => {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...walk(path));
-    else if (/[.](olean|olean[.]server|olean[.]private|ilean)$/.test(entry.name)) out.push(path);
+    else if (/[.](olean|olean[.]server|olean[.]private|ilean|ir|ir[.]sig)$/.test(entry.name)) out.push(path);
   }
   return out;
 };
@@ -58,7 +28,8 @@ const { default: createLean } = await import(pathToFileURL(leanMjs).href);
 
 const lean = await createLean({
   noInitialRun: true,
-  stdin: pullBlocking,
+  lspStdin: stdin,
+  lspProcessExit: (code) => parentPort.postMessage({ exit: code }),
   print: (text) => parentPort.postMessage({ stdout: new TextEncoder().encode(`${text}\n`) }),
   printErr: (text) => parentPort.postMessage({ stderr: `${text}\n` }),
 });
@@ -67,15 +38,13 @@ lean.FS.mkdirTree('/lean/bin');
 lean.FS.mkdirTree('/lean/lib/lean');
 lean.FS.mkdirTree('/workspace');
 lean.FS.mkdirTree('/etc');
-// Lean 的 watchdog 会解析 /etc/localtime；手写的极简 TZif 会被判成 empty transitions，
-// watchdogMain 捕获后直接 forceExit 1。必须放宿主的真实 TZif。
+// watchdogMain 解析 /etc/localtime，合成数据会被 forceExit，必须放真实 TZif。
 if (timezone) lean.FS.writeFile('/etc/localtime', new Uint8Array(timezone));
 
 for (const file of walk(libDir)) {
   const rel = file.slice(libDir.length + 1).split('\\').join('/');
   const target = `/lean/lib/lean/${rel}`;
-  const parent = target.slice(0, target.lastIndexOf('/'));
-  lean.FS.mkdirTree(parent);
+  lean.FS.mkdirTree(target.slice(0, target.lastIndexOf('/')));
   lean.FS.writeFile(target, readFileSync(file));
 }
 
@@ -84,26 +53,7 @@ for (const [path, text] of Object.entries(files)) {
   lean.FS.writeFile(path, new TextEncoder().encode(text));
 }
 
-// 上游 TTY.read 会一直调用 get_char 直到读满 length 字节。
-// 阻塞式钩子在拿到半帧后就卡在这个循环里，帧永远交给 Lean。
-// 这里换成「有多少给多少」：只在第一个字节上阻塞，剩下的取当前可用的部分就返回。
-const stdin = lean.FS.getStream(0);
-stdin.stream_ops = {
-  ...stdin.stream_ops,
-  read(_stream, buffer, offset, length) {
-    let count = 0;
-    while (count < length) {
-      const byte = count === 0 ? pullBlocking() : pullAvailable();
-      if (byte === null || byte === undefined) break;
-      buffer[offset + count] = byte;
-      count += 1;
-    }
-    debug('stdin read', count);
-    return count;
-  },
-};
-
-// fd 1 是 LSP 协议通道，必须原样交给父线程解析帧。
+// fd 1 是 LSP 协议通道，原样交给父线程解析帧。fd 0 由 glue 的环形缓冲补丁接管。
 const fd1 = lean.FS.getStream(1);
 fd1.stream_ops = {
   ...fd1.stream_ops,
@@ -125,6 +75,5 @@ try {
   if (error && error.name === 'ExitStatus' && typeof error.status === 'number') code = error.status;
   else parentPort.postMessage({ failure: String(error?.stack ?? error) });
 }
-// PROXY_TO_PTHREAD 下 callMain 只负责把 main 派发到 pthread，返回不代表进程结束。
-if (proxy) debug('main dispatched (proxy mode)', code);
-else parentPort.postMessage({ exit: code });
+// PROXY_TO_PTHREAD 下 callMain 只负责派发，返回不代表进程结束；退出码统一走 lspProcessExit。
+debug(proxy ? 'main dispatched (proxy mode)' : 'main returned', code);

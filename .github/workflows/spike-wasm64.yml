@@ -246,22 +246,20 @@ jobs:
           if "#include <stdio.h>" not in src:
               src = "#include <stdio.h>\n" + src
 
-          anchor_a = "lean_initialize_runtime_module();"
-          idx = src.find(anchor_a)
-          if idx < 0:
-              print("probe A: anchor missing")
+          header = re.search(r"runtime_initialize_Lean_Parser_Level\(uint8_t builtin\)\s*\{", src)
+          if not header:
+              print("probe A: function header missing")
           else:
-              src = src[:idx + len(anchor_a)] + "\n" + probe_names + src[idx + len(anchor_a):]
-              print("probe A injected at", path)
+              brace = src.find("{", header.start())
+              src = src[:brace + 1] + "\n" + probe_names + src[brace + 1:]
+              print("probe A injected at function entry")
 
-          anchor_b = "___regBuiltin_Lean_Parser_Level_paren___1_()"
-          idx = src.find(anchor_b)
-          if idx < 0:
+          anchor_b = re.search(r"\n[^\n]*_Level_paren___regBuiltin[^\n]*\n", src)
+          if not anchor_b:
               print("probe B: anchor missing")
           else:
-              line_start = src.rfind("\n", 0, idx) + 1
-              src = src[:line_start] + probe_category + "\n" + src[line_start:]
-              print("probe B injected at", path)
+              src = src[:anchor_b.start()] + "\n" + probe_category + anchor_b.group(0)
+              print("probe B injected before paren regBuiltin")
 
           path.write_text(src)
           print("patched", path, len(src), "bytes")

@@ -61,7 +61,7 @@ jobs:
           }
           EOF
           emcc probe.c -sMEMORY64=1 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
-          node --experimental-wasm-memory64 probe.mjs
+          node probe.mjs
 
       - name: 准备 wasm-llvm 并切成 wasm64 + O1
         run: |

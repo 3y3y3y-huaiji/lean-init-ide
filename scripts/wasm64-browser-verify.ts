@@ -72,8 +72,8 @@ console.log(`serving ${distDir} at ${origin}`);
 
 const browser = await chromium.launch({
   headless: true,
-  // 旧版 Chromium 需要显式打开 memory64；133+ 默认可用，留着也无副作用。
-  args: ['--no-sandbox', '--disable-dev-shm-usage', '--js-flags=--experimental-wasm-memory64'],
+  // memory64 在 Chrome 133+ 默认开启；不再传旧的 V8 实验开关（新版会当成非法参数）。
+  args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 
 try {

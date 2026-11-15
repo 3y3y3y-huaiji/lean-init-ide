@@ -250,16 +250,24 @@ jobs:
           if not header:
               print("probe A: function header missing")
           else:
-              brace = src.find("{", header.start())
+              brace = header.end() - 1
+              print("probe A context:", repr(src[max(0, brace - 120):brace + 60]))
               src = src[:brace + 1] + "\n" + probe_names + src[brace + 1:]
               print("probe A injected at function entry")
 
-          anchor_b = re.search(r"\n[^\n]*_Level_paren___regBuiltin[^\n]*\n", src)
-          if not anchor_b:
-              print("probe B: anchor missing")
+          lines = src.splitlines(keepends=True)
+          target = None
+          for i, line in enumerate(lines):
+              if "_Level_paren___regBuiltin" in line and "(void)" not in line and "=" in line:
+                  target = i
+                  break
+          if target is None:
+              print("probe B: call line missing")
           else:
-              src = src[:anchor_b.start()] + "\n" + probe_category + anchor_b.group(0)
-              print("probe B injected before paren regBuiltin")
+              print("probe B context:", repr("".join(lines[max(0, target - 2):target + 1])))
+              lines.insert(target, probe_category + "\n")
+              src = "".join(lines)
+              print("probe B injected before paren regBuiltin call")
 
           path.write_text(src)
           print("patched", path, len(src), "bytes")

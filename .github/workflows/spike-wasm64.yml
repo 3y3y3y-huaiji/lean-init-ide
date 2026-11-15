@@ -763,9 +763,9 @@ jobs:
           path: work/mathlib-lib
           key: wasm64-mathlib-lib2-${{ github.run_number }}-${{ github.run_attempt }}
 
-      # 完整诊断链路：initialize → initialized → didOpen → publishDiagnostics。
-      # 有 Mathlib 裁切结果时用真实的 import 依赖打开文档；否则退化为 Init。
-      - name: LSP 完整诊断链路（didOpen → publishDiagnostics）
+      # 完整诊断链路：initialize → didOpen → publishDiagnostics。
+      # watchdog 模式的 didOpen 会 Process.spawn（wasm 不支持），所以按 SDK 的做法直接起文件 worker。
+      - name: LSP 诊断链路（--worker，publishDiagnostics）
         timeout-minutes: 30
         env:
           LEAN_WASM_DIAG_DEBUG: '1'
@@ -783,7 +783,7 @@ jobs:
             fi
           fi
           echo "lib=$LIB module=${MODULE:-<Init>}"
-          node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean.mjs "$LIB" "$MODULE"
+          node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean.mjs "$LIB" "$MODULE" worker
 
       - name: 保存产物与日志
         if: always()

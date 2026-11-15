@@ -68,7 +68,7 @@ export const renderLayout = (
   const compactLocale = other === 'en' ? 'EN' : '中';
 
   return `
-    <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[900px]:static">
+    <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[900px]:relative">
       <div class="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-4 gap-y-2 gutter-x py-2.5 min-[901px]:py-3.5">
         <a class="inline-flex min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline" href="/${locale}/">
           <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-[17px] font-bold text-accent-contrast">λ</span>
@@ -110,7 +110,7 @@ export const renderLayout = (
             </button>
             <div
               id="settings-panel"
-              class="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(320px,calc(100vw-32px))] rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow)]"
+              class="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(320px,calc(100vw-32px))] rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow)] max-[900px]:max-h-[calc(100dvh-160px)] max-[900px]:overflow-y-auto max-[900px]:overscroll-contain"
               hidden
             >
               <h2 class="mt-0 mb-3 text-xs font-[650] uppercase tracking-[0.07em] text-muted">${t.settings.title}</h2>

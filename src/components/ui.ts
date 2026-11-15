@@ -9,3 +9,7 @@ export const ghostButtonClass =
   'inline-flex min-h-9 [font:inherit] cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border border-line bg-transparent px-3 py-[7px] text-[13px] text-muted no-underline transition hover:border-line-strong hover:text-fg';
 
 export const ghostButtonLgClass = `${ghostButtonClass} px-[18px] py-2.5 text-sm`;
+
+/** 手机端工具栏的小号按钮：触屏目标不低于 32px，禁用态也要看得出。 */
+export const toolbarButtonClass =
+  'inline-flex min-h-8 cursor-pointer items-center justify-center rounded-lg border border-line bg-transparent px-2.5 py-1 text-xs text-muted transition hover:border-line-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40';

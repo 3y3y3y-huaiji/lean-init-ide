@@ -7,17 +7,34 @@
 set -euo pipefail
 DEST="${1:?usage: build-wasm64-gmp.sh <installDir>}"
 VERSION=6.3.0
+SHA256=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
 BASE="$(dirname "$DEST")"
 SRC="$BASE/gmp-$VERSION"
 TARBALL="$BASE/gmp-$VERSION.tar.xz"
+# gmplib.org 在 GitHub runner 上连不上（curl 28），用 GNU 官方镜像。
+URLS=(
+  "https://ftp.gnu.org/gnu/gmp/gmp-$VERSION.tar.xz"
+  "https://ftpmirror.gnu.org/gmp/gmp-$VERSION.tar.xz"
+  "https://mirrors.kernel.org/gnu/gmp/gmp-$VERSION.tar.xz"
+)
 
 if [ -f "$DEST/lib/libgmp.a" ] && [ -f "$DEST/include/gmp.h" ]; then
   echo "gmp already built: $DEST"
   exit 0
 fi
 
+if [ ! -f "$TARBALL" ] || ! echo "$SHA256  $TARBALL" | sha256sum -c --quiet - 2> /dev/null; then
+  for url in "${URLS[@]}"; do
+    echo "download $url"
+    if curl -fL --retry 3 --connect-timeout 20 --max-time 600 -o "$TARBALL.part" "$url"; then
+      mv "$TARBALL.part" "$TARBALL"
+      break
+    fi
+  done
+  echo "$SHA256  $TARBALL" | sha256sum -c --quiet - || { echo "gmp tarball 校验失败" >&2; exit 1; }
+fi
+
 if [ ! -d "$SRC" ]; then
-  [ -f "$TARBALL" ] || curl -fL --retry 3 -o "$TARBALL" "https://gmplib.org/download/gmp/gmp-$VERSION.tar.xz"
   tar -xJf "$TARBALL" -C "$BASE"
 fi
 

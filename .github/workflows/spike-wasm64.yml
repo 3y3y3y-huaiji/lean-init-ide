@@ -563,6 +563,13 @@ jobs:
           source emsdk/emsdk_env.sh
           bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
 
+      # 发布用产物：去掉 --profiling-funcs / EXCEPTION_STACK_TRACES，wasm 从 129MB 降到约 110MB。
+      - name: 链接 release 变体（无调试符号）
+        timeout-minutes: 20
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/link-wasm64-release.sh "$GITHUB_WORKSPACE"
+
       # 判定探针：不 import 任何模块的最小文件能否编译。
       # 通过 → 崩溃与 Init.Prelude 的深递归/规模有关；失败 → 运行时 baseline 就坏了。
       - name: 最小文件探针（不 import Init）
@@ -815,6 +822,35 @@ jobs:
           echo "glue=$GLUE"
           node scripts/wasm64-lsp-diagnostics.mjs "$GLUE" "$LIB" "$MODULE" worker
 
+      - name: 打包 npm（lean4-wasm64）
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then VERSION="${GITHUB_REF_NAME#npm-v}"; fi
+          echo "NPM_VERSION=$VERSION" >> "$GITHUB_ENV"
+          node scripts/pack-npm.mjs --dist work/release --out work/npm --version "$VERSION"
+          cd work/npm
+          pnpm pack
+          ls -l ./*.tgz
+
+      - name: 检查 npm token
+        id: npm_token
+        env:
+          TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+
+      # 只在 npm-v* 标签上发布，分支推送只留 tarball。
+      - name: 发布到 npm
+        if: steps.npm_token.outputs.ready == 'true' && github.ref_type == 'tag' && startsWith(github.ref_name, 'npm-v')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd work/npm
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > .npmrc
+          pnpm publish --no-git-checks --access public --tag latest
+
       - name: 保存产物与日志
         if: always()
         uses: actions/upload-artifact@v7
@@ -822,6 +858,8 @@ jobs:
           name: wasm64-spike
           path: |
             work/dist/**
+            work/release/**
+            work/npm/*.tgz
             work/*.log
             work/*.olean-fail.log
             work/mathlib-slice.json

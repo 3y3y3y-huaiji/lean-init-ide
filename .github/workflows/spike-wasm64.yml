@@ -73,6 +73,7 @@ jobs:
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
             -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
+            -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
@@ -214,6 +215,7 @@ jobs:
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
             -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
+            -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 

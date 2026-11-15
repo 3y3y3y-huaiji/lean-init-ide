@@ -18,8 +18,19 @@ if (!leanMjs || !libDir || !['server', 'worker'].includes(mode)) {
 }
 
 // watchdogMain 解析 /etc/localtime，合成数据会被 forceExit，直接用宿主时区文件。
+// 没有 tzdata（比如本地 Windows）时退回 SDK 内置的 123 字节 UTC TZif。
+const FALLBACK_TZIF = [
+  84, 90, 105, 102, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 85, 84, 67, 0, 84, 90, 105, 102,
+  50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 85, 84, 67, 0, 10, 85, 84, 67, 48, 10,
+];
 let timezone = null;
-for (const candidate of ['/usr/share/zoneinfo/UTC', '/usr/share/zoneinfo/Etc/UTC']) {
+for (const candidate of [
+  process.env.LEAN_WASM_TZ,
+  '/usr/share/zoneinfo/UTC',
+  '/usr/share/zoneinfo/Etc/UTC',
+].filter(Boolean)) {
   try {
     timezone = readFileSync(candidate);
     break;
@@ -28,8 +39,8 @@ for (const candidate of ['/usr/share/zoneinfo/UTC', '/usr/share/zoneinfo/Etc/UTC
   }
 }
 if (!timezone) {
-  // 本地 Windows 没有 tzdata；只有真跑 wasm 时才会因为缺 /etc/localtime 失败。
-  console.error('[diag] 找不到 tzdata（/usr/share/zoneinfo/UTC），跳过 /etc/localtime');
+  timezone = Buffer.from(FALLBACK_TZIF);
+  console.error('[diag] 没有系统 tzdata，使用内置 UTC TZif');
 }
 
 const EMPTY = 0;
@@ -304,6 +315,14 @@ const runWorkerMode = async () => {
   }
 };
 
+// 兜底：worker 卡在 Atomics.wait 时 Node 不会自己退出，超时直接杀掉。
+const watchdogMs = Number(process.env.LEAN_WASM_DIAG_TIMEOUT_MS ?? 900_000);
+const watchdog = setTimeout(() => {
+  console.error(`[diag] 全局超时 ${watchdogMs}ms`);
+  process.exit(1);
+}, watchdogMs);
+watchdog.unref();
+
 try {
   if (mode === 'worker') await runWorkerMode();
   else await runServerMode();
@@ -312,4 +331,6 @@ try {
 } catch (error) {
   console.error(`[diag] failed: ${error.message}`);
   process.exitCode = 1;
+} finally {
+  clearTimeout(watchdog);
 }

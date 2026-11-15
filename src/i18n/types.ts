@@ -118,6 +118,8 @@ export type Messages = {
   playground: {
     title: string;
     hint: string;
+    /** playground 的默认示例：同一段 Lean，注释按语言本地化。 */
+    defaultCode: string;
     start: string;
     /** 运行时已就绪后，同一个按钮变成释放内存的动作。 */
     stop: string;

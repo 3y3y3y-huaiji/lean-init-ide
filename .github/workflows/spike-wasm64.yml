@@ -277,7 +277,7 @@ jobs:
           # 定位到底是哪一次注册在报 unknown parser category。
           marked = []
           for line in src.splitlines(keepends=True):
-              call = re.search(r"l_Lean_Parser_addBuiltin(?:Leading|Trailing)Parser\(([^,]+),", line)
+              call = re.search(r"l_Lean_Parser_addBuiltin(?:Leading|Trailing)Parser\(([^,]+),", line) if line.lstrip().startswith("res") else None
               if call:
                   cat = call.group(1).strip()
                   marked.append(f'fprintf(stderr, "CATHASH %llu\\n", (unsigned long long)lean_name_hash({cat}));\n')

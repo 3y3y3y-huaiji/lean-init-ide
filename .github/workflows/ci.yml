@@ -144,6 +144,25 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
+  host:
+    name: 主机参数
+    runs-on: ubuntu-latest
+    steps:
+      - name: 打印主机参数
+        run: |
+          echo "::group::系统"
+          uname -a
+          cat /etc/os-release
+          echo "::endgroup::"
+          echo "::group::CPU"
+          nproc
+          lscpu
+          echo "::endgroup::"
+          echo "::group::内存与磁盘"
+          free -h
+          df -h
+          echo "::endgroup::"
+
   audit:
     name: 依赖审计
     runs-on: ubuntu-latest

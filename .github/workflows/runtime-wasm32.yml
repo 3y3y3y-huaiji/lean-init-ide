@@ -240,18 +240,46 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
-      - name: 冒烟：--version 与无 import 的最小文件
+      - name: 准备 Init oleans（复用现有 32 位资产）
+        run: |
+          BASE="https://raw.githubusercontent.com/seo-rii/wasm-llvm/$WASM_LLVM_REV/artifacts/lean-browser"
+          mkdir -p work/init/packs work/init/lib
+          curl -fsSL "$BASE/lean-init.index.json" -o work/init/index.json
+          for i in 00 01 02 03 04 05; do
+            curl -fsSL "$BASE/lean-init-$i.pack.gz" -o "work/init/packs/$i.gz"
+          done
+          node - <<'JS'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const zlib = require('node:zlib');
+          const index = JSON.parse(fs.readFileSync('work/init/index.json', 'utf8'));
+          const stream = Buffer.allocUnsafe(index.totalBytes);
+          for (const chunk of index.chunks) {
+            const id = chunk.path.match(/lean-init-(\d+)/)[1];
+            const raw = zlib.gunzipSync(fs.readFileSync(`work/init/packs/${id}.gz`));
+            if (raw.length !== chunk.uncompressedBytes) throw new Error(`chunk size ${id}`);
+            raw.copy(stream, chunk.offset);
+          }
+          for (const file of index.files) {
+            const target = path.join('work/init/lib', file.path);
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, stream.subarray(file.offset, file.offset + file.bytes));
+          }
+          console.log(`init files=${index.files.length}`);
+          JS
+
+      - name: 冒烟：--version 与 import Init 的最小文件
         run: |
           set -uo pipefail
           ls -lh work/dist
-          mkdir -p work/probe work/mini work/empty-lib
+          mkdir -p work/probe work/mini
           set +e
           node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-            work/dist/lean.mjs work/probe work/empty-lib -- --version 2>&1 | tee work/version.log
+            work/dist/lean.mjs work/probe work/init/lib -- --version 2>&1 | tee work/version.log
           grep -q 'Lean (version 4.34.1' work/version.log || { echo 'version 冒烟失败'; exit 1; }
-          printf 'def one : Nat := 1\n' > work/mini/Mini.lean
+          printf 'import Init\nexample : 1 + 1 = 2 := rfl\n' > work/mini/Mini.lean
           node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-            work/dist/lean.mjs work/mini work/empty-lib -- \
+            work/dist/lean.mjs work/mini work/init/lib -- \
             -j1 -R /src -o /src/Mini.olean /src/Mini.lean 2>&1 | tee work/mini.log
           test -s work/mini/Mini.olean || { echo '最小文件没有产出 olean'; exit 1; }
           echo 'runtime 冒烟通过'

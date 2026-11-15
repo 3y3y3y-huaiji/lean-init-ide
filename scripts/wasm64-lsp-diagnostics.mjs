@@ -6,12 +6,28 @@
 // Good.lean 必须干净（空诊断）。Good.lean 干净同时证明 Mathlib olean 真的被加载并解析成功，
 // 否则 import 失败会在两个文件上都报错。
 import { Worker } from 'node:worker_threads';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const [leanMjs, libDir, moduleName = ''] = process.argv.slice(2);
 if (!leanMjs || !libDir) {
   console.error('usage: node wasm64-lsp-diagnostics.mjs <lean.mjs> <libDir> [importModule]');
   process.exit(2);
+}
+
+// watchdogMain 解析 /etc/localtime，合成数据会被 forceExit，直接用宿主时区文件。
+let timezone = null;
+for (const candidate of ['/usr/share/zoneinfo/UTC', '/usr/share/zoneinfo/Etc/UTC']) {
+  try {
+    timezone = readFileSync(candidate);
+    break;
+  } catch {
+    // 换下一个候选。
+  }
+}
+if (!timezone) {
+  // 本地 Windows 没有 tzdata；只有真跑 wasm 时才会因为缺 /etc/localtime 失败。
+  console.error('[diag] 找不到 tzdata（/usr/share/zoneinfo/UTC），跳过 /etc/localtime');
 }
 
 const EMPTY = 0;
@@ -40,6 +56,7 @@ const worker = new Worker(new URL('./wasm64-lsp-worker.mjs', import.meta.url), {
     args: ['-j2', '--server'],
     control,
     payload,
+    timezone,
   },
 });
 if (process.env.LEAN_WASM_DIAG_DEBUG) console.error('[debug] worker created');

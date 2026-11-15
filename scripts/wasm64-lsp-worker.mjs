@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const { leanMjs, libDir, files, args, control, payload } = workerData;
+const { leanMjs, libDir, files, args, control, payload, timezone } = workerData;
 const debug = (...items) => {
   if (process.env.LEAN_WASM_DIAG_DEBUG) parentPort.postMessage({ debug: items.join(' ') });
 };
@@ -67,17 +67,9 @@ lean.FS.mkdirTree('/lean/bin');
 lean.FS.mkdirTree('/lean/lib/lean');
 lean.FS.mkdirTree('/workspace');
 lean.FS.mkdirTree('/etc');
-// upstream IO 的时间处理要求 /etc/localtime 是真实 TZif 文件。
-lean.FS.writeFile(
-  '/etc/localtime',
-  Uint8Array.from([
-    84, 90, 105, 102, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 85, 84, 67, 0,
-    84, 90, 105, 102, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 85, 84, 67,
-    0, 10, 85, 84, 67, 48, 10,
-  ])
-);
+// Lean 的 watchdog 会解析 /etc/localtime；手写的极简 TZif 会被判成 empty transitions，
+// watchdogMain 捕获后直接 forceExit 1。必须放宿主的真实 TZif。
+if (timezone) lean.FS.writeFile('/etc/localtime', new Uint8Array(timezone));
 
 for (const file of walk(libDir)) {
   const rel = file.slice(libDir.length + 1).split('\\').join('/');

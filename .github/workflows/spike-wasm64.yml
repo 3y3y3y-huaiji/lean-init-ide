@@ -708,7 +708,7 @@ jobs:
           done < work/mathlib-deps.txt
           node scripts/mathlib-slice.mjs slice \
             --root work/mathlib \
-            --targets "Mathlib.Init,Mathlib.Data.Nat.Defs,Mathlib.Logic.Basic,Mathlib.Order.Basic" \
+            --targets "Mathlib.Order.Notation,Mathlib.Tactic.Spread,Mathlib.Order.Basic" \
             --max 120 \
             --out work/mathlib-src \
             --manifest work/mathlib-slice.json
@@ -754,7 +754,7 @@ jobs:
             mkdir -p "work/mathlib-lib/$(dirname "$rel")"
             log="work/mathlib-log/$rel.log"
             mkdir -p "$(dirname "$log")"
-            if node "$RUN" work/dist/lean.mjs work/mathlib-src work/mathlib-lib -- \
+            if timeout 20m node "$RUN" work/dist/lean.mjs work/mathlib-src work/mathlib-lib -- \
                  -j1 -R /src -Dinterpreter.prefer_native=false -Dpp.rawOnError=true \
                  -o "/lean/lib/lean/$rel.olean" "/src/$rel.lean" > "$log" 2>&1; then
               echo "ok $mod"

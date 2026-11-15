@@ -37,7 +37,9 @@ const indexSources = (root) => {
     if (!pkg.isDirectory() || pkg.name.startsWith('.')) continue;
     walk(join(root, pkg.name), (file) => {
       const rel = relative(join(root, pkg.name), file).split(sep).join('/');
-      if (!/^[A-Z][A-Za-z0-9_]*\//.test(rel)) return;
+      // 只收库目录（首字母大写的模块根），跳过 scripts/ 之类的辅助目录；
+      // 包根上的 `Qq.lean` 这类单文件模块也要索引，否则 import Qq 会被当成外部依赖。
+      if (!/^[A-Z][A-Za-z0-9_]*(\/|\.lean$)/.test(rel)) return;
       const module = rel.slice(0, -'.lean'.length).replaceAll('/', '.');
       if (!index.has(module)) index.set(module, file);
     });
@@ -64,13 +66,15 @@ const readImports = (file) => {
       continue;
     }
     if (trimmed === '' || trimmed.startsWith('--')) continue;
-    // 新版 Lean 源码会在 import 之前写 module / prelude。
-    if (trimmed === 'module' || trimmed === 'prelude') continue;
+    // 新版 Lean 源码会在 import 之前写 module / prelude，可能带行尾注释。
+    if (/^(module|prelude)(\s|$)/.test(trimmed)) continue;
     if (trimmed.startsWith('/-')) {
       if (!trimmed.includes('-/')) inBlock = true;
       continue;
     }
-    const match = /^(?:public\s+)?import\s+(?:all\s+)?([\w.«»']+)$/.exec(trimmed);
+    // import 行可能带行尾注释，先剥掉再匹配。
+    const code = trimmed.replace(/\s--.*$/, '');
+    const match = /^(?:public\s+)?import\s+(?:all\s+)?([\w.«»']+)$/.exec(code);
     if (!match) break;
     imports.push(match[1]);
   }

@@ -1,11 +1,8 @@
 name: Build wasm32 Lean runtime
 
-# 实验分支 push 自动触发；合并回 main 后只保留 workflow_dispatch。
-# 重建主线用的 wasm32 Lean 运行时（-O3 + 更大线程栈）。
+# 实验完成，保留手动触发；结论见 docs/WASM32-STACK-SPIKE.md。
 # 产物只作为 artifact 上传，不自动替换线上资产；先本地验证再接入。
 on:
-  push:
-    branches: [perf/wasm32-runtime]
   workflow_dispatch:
 
 permissions:

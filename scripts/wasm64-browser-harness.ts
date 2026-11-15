@@ -146,11 +146,12 @@ const run = async (): Promise<void> => {
     // version 模式只验证启动；compile 模式挂官方 oleans 后编译。两个模式用独立页面加载，避免 EXIT_RUNTIME 影响。
     const oleans = mode === 'version' ? [] : await mountOleans(lean);
     log.push(`oleans=${oleans.length}`);
-    // callMain 不会补 argv[0]，必须自己塞一个程序名，否则 Lean 把第一个参数当 argv[0] 丢掉。
+    // Emscripten 的 callMain 会自己补 argv[0]，这里只传真实参数；
+    // 再塞一个程序名会被 Lean 当成输入文件（"Expected exactly one file name"）。
     const compile = mode === 'compile' || (mode === 'auto' && oleans.length > 0);
     const argv = compile
-      ? ['lean', '-j1', '-R', '/src', '-o', '/src/Probe.olean', '/src/Probe.lean']
-      : ['lean', '--version'];
+      ? ['-j1', '-R', '/src', '-o', '/src/Probe.olean', '/src/Probe.lean']
+      : ['--version'];
     const stage = compile ? 'compile-init' : 'version';
     log.push(`stage=${stage} argv=${JSON.stringify(argv)}`);
     const code = lean.callMain(argv);

@@ -72,16 +72,50 @@ jobs:
             -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O0|g' \
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
-            -e 's|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS,getExceptionMessage|' \
+            -e 's#git -C "$SRC" apply "$PATCH"#git -C "$SRC" apply "$PATCH" || git -C "$SRC" apply --3way "$PATCH"#' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
+
+      - name: 改用 nightly Lean（含 wasm64 哈希修复）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NIGHTLY_TAG: nightly-2026-11-14
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          gh api "repos/leanprover/lean4-nightly/releases/tags/$NIGHTLY_TAG" > work/nightly.json
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+
+          tag = os.environ["NIGHTLY_TAG"]
+          rel = json.load(open("work/nightly.json"))
+          asset = next(a for a in rel["assets"] if a["name"].endswith("-linux.tar.zst"))
+          version = asset["name"][len("lean-"):-len("-linux.tar.zst")]
+          boot = pathlib.Path(f"work/lean-{version}-linux")
+          if not (boot / "bin/lean").exists():
+              subprocess.check_call(["curl", "-fL", "--retry", "3", "-o", "work/boot.tar.zst", asset["browser_download_url"]])
+              subprocess.check_call("zstd -dc work/boot.tar.zst | tar -x -C work", shell=True)
+              pathlib.Path("work/boot.tar.zst").unlink()
+          commit = subprocess.check_output([str(boot / "bin/lean"), "--githash"], text=True).strip()
+
+          manifest_path = pathlib.Path("wasm-llvm/producer/lean-browser/manifest.json")
+          manifest = json.loads(manifest_path.read_text())
+          manifest["sources"]["lean4"]["version"] = version
+          manifest["sources"]["lean4"]["tag"] = tag
+          manifest["sources"]["lean4"]["commit"] = commit
+          manifest["bootstrap"]["url"] = asset["browser_download_url"]
+          manifest["bootstrap"]["bytes"] = asset["size"]
+          manifest["bootstrap"]["sha256"] = asset["digest"].split(":")[-1]
+          manifest_path.write_text(json.dumps(manifest, indent="\t") + "\n")
+          print("lean version:", version, "commit:", commit)
+          PY
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
         with:
           path: |
             work/lean4
-            work/lean-4.34.1-linux
+            work/lean-*-linux
           key: wasm64-src-v1
 
       - name: fetch
@@ -117,7 +151,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v6
+          key: wasm64-runtime-v7
 
       - name: runtime
         run: |
@@ -132,7 +166,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v1
+          key: wasm64-cgen-v2
 
       - name: cgen
         run: |
@@ -177,7 +211,7 @@ jobs:
             -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O0|g' \
             -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O0 -pthread|g' \
             -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
-            -e 's|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS|-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV,NODEFS,getExceptionMessage|' \
+            -e 's#git -C "$SRC" apply "$PATCH"#git -C "$SRC" apply "$PATCH" || git -C "$SRC" apply --3way "$PATCH"#' \
             producer/lean-browser/scripts/build.sh
           grep -n -- 'MEMORY64\|EXCEPTION_STACK_TRACES' producer/lean-browser/scripts/build.sh
 
@@ -186,8 +220,25 @@ jobs:
         with:
           path: |
             work/lean4
-            work/lean-4.34.1-linux
-          key: wasm64-src-v1
+            work/lean-*-linux
+          key: wasm64-src-v2
+
+      - name: 对齐 nightly manifest（恢复缓存后）
+        run: |
+          set -euo pipefail
+          BOOT=$(ls -d work/lean-*-linux | head -n 1)
+          VERSION=$(basename "$BOOT" | sed -e 's/^lean-//' -e 's/-linux$//')
+          COMMIT=$("$BOOT/bin/lean" --githash)
+          python3 - "$VERSION" "$COMMIT" <<'PY'
+          import json, pathlib, sys
+          version, commit = sys.argv[1], sys.argv[2]
+          path = pathlib.Path("wasm-llvm/producer/lean-browser/manifest.json")
+          manifest = json.loads(path.read_text())
+          manifest["sources"]["lean4"]["version"] = version
+          manifest["sources"]["lean4"]["commit"] = commit
+          path.write_text(json.dumps(manifest, indent="\t") + "\n")
+          print("aligned", version, commit)
+          PY
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -195,13 +246,13 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v6
+          key: wasm64-runtime-v7
 
       - name: 恢复 cgen
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v1
+          key: wasm64-cgen-v2
 
       # 诊断：确认 level category 注册后立刻查不到，是 Name 的 hash/eq 不一致，还是 map 本身丢了写入。
       # 只改动 Level.c，复用 objects 缓存，几分钟一轮。
@@ -321,7 +372,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v4
+          key: wasm64-obj-v5
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -350,7 +401,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v4
+          key: wasm64-obj-v5
 
       - name: link
         run: |
@@ -363,7 +414,7 @@ jobs:
 
       - name: 生成官方 Init olean 清单
         run: |
-          BOOT="$GITHUB_WORKSPACE/work/lean-4.34.1-linux"
+          BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
           node -e '
           const { readdirSync, writeFileSync } = require("node:fs");
           const { join, relative } = require("node:path");
@@ -400,7 +451,8 @@ jobs:
         timeout-minutes: 30
         run: |
           cd work/browser
-          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/lean-4.34.1-linux/lib/lean
+          BOOT="$(ls -d ../../work/lean-*-linux | head -n 1)"
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist "$BOOT/lib/lean"
 
       - name: 保存产物与日志
         if: always()

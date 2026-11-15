@@ -13,6 +13,7 @@ import { extname, resolve, sep } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const distDir = resolve(process.argv[2] ?? 'work/dist');
+const libDir = process.argv[3] ? resolve(process.argv[3]) : null;
 
 const MIME_TYPES: Record<string, string> = {
   '.mjs': 'text/javascript; charset=utf-8',
@@ -53,6 +54,23 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
   }
   if (url.pathname === '/favicon.ico') {
     send(res, 204, headers);
+    return;
+  }
+  // 官方 64 位 Init oleans：按清单按需读取，避免复制整个 toolchain。
+  if (libDir && url.pathname.startsWith('/lean-lib/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/lean-lib/'.length));
+    const filePath = resolve(libDir, rel);
+    if (!filePath.startsWith(libDir + sep)) {
+      send(res, 403, headers);
+      return;
+    }
+    try {
+      const body = await readFile(filePath);
+      send(res, 200, { ...headers, 'Content-Type': 'application/octet-stream' }, body);
+    } catch {
+      console.log(`[404] ${url.pathname}`);
+      send(res, 404, headers);
+    }
     return;
   }
   const filePath = resolve(distDir, `.${decodeURIComponent(url.pathname)}`);

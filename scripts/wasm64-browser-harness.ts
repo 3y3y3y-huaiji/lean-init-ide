@@ -5,7 +5,13 @@
  * 否则 tsx/esbuild 注入的 __name helper 在页面里不存在。
  * 只调用 Emscripten 公开 API（callMain），不直接读写 wasm 指针。
  */
+interface EmscriptenFS {
+  mkdirTree(path: string): void;
+  writeFile(path: string, data: Uint8Array): void;
+}
+
 interface LeanInstance {
+  FS: EmscriptenFS;
   callMain(args: string[]): number;
   getExceptionMessage?: (error: unknown) => unknown;
 }
@@ -23,6 +29,7 @@ interface ProbeReport {
   ok: boolean;
   stage: string;
   code?: number;
+  oleanCount?: number;
   environment: EnvironmentReport;
   log: string[];
   error?: Record<string, unknown>;
@@ -86,6 +93,34 @@ const finish = (value: ProbeReport): void => {
   window.__probeResult = value;
 };
 
+const PROBE_SOURCE = 'import Init\nexample : 1 + 1 = 2 := rfl\n';
+
+/**
+ * 把官方 64 位 Init oleans 读进 MEMFS 的 /lean/lib/lean。
+ * 清单由 CI 生成；没有清单时返回空数组，退化为 --version 冒烟。
+ */
+const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
+  const manifestResponse = await fetch('/olean-manifest.json');
+  if (!manifestResponse.ok) {
+    log.push('olean manifest 缺失，跳过 olean 阶段');
+    return [];
+  }
+  const files = (await manifestResponse.json()) as string[];
+  for (const rel of files) {
+    const response = await fetch(`/lean-lib/${rel}`);
+    if (!response.ok) throw new Error(`olean 加载失败 ${rel}: ${response.status}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const target = `/lean/lib/lean/${rel}`;
+    const parent = target.slice(0, target.lastIndexOf('/'));
+    if (parent) lean.FS.mkdirTree(parent);
+    lean.FS.writeFile(target, bytes);
+  }
+  lean.FS.mkdirTree('/lean/bin');
+  lean.FS.mkdirTree('/src');
+  lean.FS.writeFile('/src/Probe.lean', new TextEncoder().encode(PROBE_SOURCE));
+  return files;
+};
+
 const run = async (): Promise<void> => {
   const environment = readEnvironment();
   log.push(`env ${JSON.stringify(environment)}`);
@@ -107,9 +142,16 @@ const run = async (): Promise<void> => {
       onExit: (code: number) => log.push(`EXIT ${code}`),
     });
     log.push('createLean ok');
-    const code = lean.callMain(['--version']);
+    const oleans = await mountOleans(lean);
+    // callMain 不会补 argv[0]，必须自己塞一个程序名，否则 Lean 把第一个参数当 argv[0] 丢掉。
+    const argv = oleans.length > 0
+      ? ['lean', '-j1', '-R', '/src', '-o', '/src/Probe.olean', '/src/Probe.lean']
+      : ['lean', '--version'];
+    const stage = oleans.length > 0 ? 'compile-init' : 'version';
+    log.push(`stage=${stage} argv=${JSON.stringify(argv)}`);
+    const code = lean.callMain(argv);
     log.push(`callMain code=${code}`);
-    finish({ ok: code === 0, stage: 'callMain', code, environment, log });
+    finish({ ok: code === 0, stage, code, oleanCount: oleans.length, environment, log });
   } catch (error) {
     finish({ ok: false, stage: 'exception', error: describe(error, lean), environment, log });
   }

@@ -239,6 +239,29 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
+      - name: 生成官方 Init olean 清单
+        run: |
+          BOOT="$GITHUB_WORKSPACE/work/lean-4.34.1-linux"
+          node -e '
+          const { readdirSync, writeFileSync } = require("node:fs");
+          const { join, relative } = require("node:path");
+          const root = process.argv[1];
+          const out = [];
+          const walk = (dir) => {
+            for (const entry of readdirSync(dir, { withFileTypes: true })) {
+              const p = join(dir, entry.name);
+              if (entry.isDirectory()) walk(p);
+              else if (/[.](olean|ilean)$/.test(entry.name)) out.push(relative(root, p));
+            }
+          };
+          walk(join(root, "Init"));
+          out.push("Init.olean");
+          out.sort();
+          writeFileSync("work/dist/olean-manifest.json", JSON.stringify(out));
+          console.log("olean files:", out.length);
+          ' "$BOOT/lib/lean"
+          du -sh "$BOOT/lib/lean/Init"
+
       - name: 准备浏览器驱动（pnpm + runner 自带 Chrome，不下载浏览器）
         run: |
           corepack enable
@@ -251,11 +274,11 @@ jobs:
           cp ../../scripts/wasm64-browser-verify.ts .
           pnpm exec esbuild ../../scripts/wasm64-browser-harness.ts --bundle --format=esm --outfile=../../work/dist/harness.mjs
 
-      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里启动 wasm64 Lean
-        timeout-minutes: 20
+      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里加载官方 64 位 Init oleans
+        timeout-minutes: 30
         run: |
           cd work/browser
-          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/lean-4.34.1-linux/lib/lean
 
       - name: 保存产物与日志
         if: always()

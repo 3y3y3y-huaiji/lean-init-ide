@@ -1,7 +1,7 @@
 name: Probe Lean 4.35 wasm32 recipe
 
-# 只做兼容性探针：把 wasm-llvm 4.34.1 的 Emscripten patch 套到 Lean 4.35.0 源码上，
-# 看哪些 hunk 需要 forward-port。真正构建在 probe 通过后再接。
+# 只做兼容性探针：把 forward-port 后的 4.35 Emscripten patch 套到 Lean 4.35.0 源码上。
+# 通过后再启动 runtime + Init oleans 的完整构建。
 on:
   push:
     branches: [spike/lean-4.35]
@@ -17,13 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: 获取 wasm-llvm 的 4.34.1 patch
-        run: |
-          git init -q wasm-llvm
-          git -C wasm-llvm remote add origin https://github.com/seo-rii/wasm-llvm.git
-          git -C wasm-llvm fetch -q --depth 1 origin 14ea5ecbc514b0c87338aebf8f2b567020be5750
-          git -C wasm-llvm checkout -q FETCH_HEAD
-          sha256sum wasm-llvm/producer/lean-browser/patches/0001-lean-browser-emscripten.patch
+      - name: 显示 4.35 patch 哈希
+        run: sha256sum scripts/patches/lean-435-emscripten.patch
 
       - name: 获取 Lean 4.35.0 源码
         run: |
@@ -32,18 +27,9 @@ jobs:
 
       - name: 检查 Emscripten patch
         run: |
-          set +e
           cd lean4
-          git apply --check ../wasm-llvm/producer/lean-browser/patches/0001-lean-browser-emscripten.patch
-          code=$?
-          if [ "$code" -eq 0 ]; then
-            echo "PATCH_OK Lean 4.35.0 可以直接套用 4.34.1 的 Emscripten patch"
-            exit 0
-          fi
-          echo "PATCH_CONFLICT 需要 forward-port，下面是失败的 hunk："
-          git apply --reject ../wasm-llvm/producer/lean-browser/patches/0001-lean-browser-emscripten.patch >/dev/null 2>&1 || true
-          find . -name '*.rej' -print -exec sh -c 'echo "----- $1"; cat "$1"' _ {} \;
-          exit 1
+          git apply --check ../scripts/patches/lean-435-emscripten.patch
+          echo "PATCH_OK Lean 4.35.0 可以应用 forward-port patch"
 
       - name: 记录 4.35.0 bootstrap 信息
         if: always()

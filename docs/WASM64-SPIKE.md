@@ -142,6 +142,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `-j2 --server` 进的是 `Watchdog`：`watchdogMain` 解析 `/etc/localtime`，手写的极简 TZif 被判成 `empty transitions`，catch 后直接 `forceExit 1`（表现为 initialize 成功后进程无声退出）。必须塞宿主的真实 TZif。
 - `didOpen` 会让 watchdog `Process.spawn` 一个 `lean` 子进程（`Watchdog.lean`），上游 wasm 构建没有进程能力，报 `unsupported operation (error code: 52)` 后同样 `forceExit 1`。所以 `server` 模式只能验证到 didOpen；`publishDiagnostics` 走 `worker` 模式。
 - `mathlib-lib` 如果从旧缓存恢复，会带着 flags=0 的自建 Init olean，所有 import 报 `incompatible header (flags=0)`。基座必须用官方 olean 覆盖，缓存前缀也要换。
+- `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
 
 ## 当前产物与缓存
 

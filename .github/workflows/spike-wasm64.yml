@@ -450,6 +450,18 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
+      # 判定探针：不 import 任何模块的最小文件能否编译。
+      # 通过 → 崩溃与 Init.Prelude 的深递归/规模有关；失败 → 运行时 baseline 就坏了。
+      - name: 最小文件探针（不 import Init）
+        run: |
+          set +e
+          mkdir -p work/mini
+          printf 'def one : Nat := 1\n' > work/mini/Mini.lean
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/mini work/olean32 -- \
+            -j1 -o /lean/lib/lean/Mini.olean /src/Mini.lean
+          echo "mini exit=$?"
+
       # 官方 olean 是 GMP 编码（flags=1），我们的 wasm64 运行时是 USE_GMP=OFF，
       # 头校验过不了。改为用这个 wasm64 Lean 自己重编 Init，得到 flags=0 的 64 位 oleans。
       - name: 自生成 64 位 Init oleans

@@ -83,7 +83,7 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v4
+          key: wasm64-src-v5
 
       - name: fetch
         run: |
@@ -169,7 +169,6 @@ jobs:
               if "#include <cstdio>" not in text:
                   text = text.replace("#pragma once", "#pragma once\n#include <cstdio>", 1)
               helper = r'''
-              namespace lean {
               inline void lean_log_write(unsigned level, char const * category, char const * message) {
                   static char const * const names[] = {"error", "warning", "info", "debug"};
                   std::fprintf(stderr, "%s: [%s] %s\n", names[level < 4 ? level : 0], category ? category : "lean", message ? message : "");
@@ -182,7 +181,6 @@ jobs:
               }
               inline void lean_trace_write(char const * category, char const * message) {
                   if (lean_wasm_trace_enabled()) lean_log_write(2, category, message);
-              }
               }
               '''
               text = text.replace("namespace lean {", "namespace lean {" + helper, 1)
@@ -273,7 +271,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v11
+          key: wasm64-runtime-v12
 
       - name: runtime
         run: |
@@ -344,7 +342,7 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v4
+          key: wasm64-src-v5
 
       - name: backport 上游 wasm64 修复
         run: |
@@ -383,7 +381,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v11
+          key: wasm64-runtime-v12
 
       - name: 恢复 cgen
         uses: actions/cache@v6

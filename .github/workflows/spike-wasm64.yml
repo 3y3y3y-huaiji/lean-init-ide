@@ -212,6 +212,8 @@ jobs:
 
           probe_names = r'''
           {
+            extern lean_object* lean_name_mk_string(lean_object*, lean_object*);
+            extern lean_object* lean_mk_string(char const*);
             lean_object* pa = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
             lean_object* pb = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
             fprintf(stderr, "PROBE name eq=%d h1=%llu h2=%llu\n",
@@ -223,6 +225,8 @@ jobs:
 
           probe_category = r'''
           {
+            extern lean_object* lean_name_mk_string(lean_object*, lean_object*);
+            extern lean_object* lean_mk_string(char const*);
             extern lean_object* l_Lean_Parser_addBuiltinLeadingParser(lean_object*, lean_object*, lean_object*, lean_object*);
             lean_object* pc = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
             lean_object* pd = lean_name_mk_string(lean_box(0), lean_mk_string("probeLevel"));

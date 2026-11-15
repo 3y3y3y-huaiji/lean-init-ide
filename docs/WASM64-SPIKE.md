@@ -101,6 +101,22 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
    wasm contains LEAN_WASM_ERR: 1
    ```
 
+## LSP 握手
+
+`node scripts/wasm64-lsp-handshake.mjs work/dist/lean.mjs work/olean32` 以 `-j2 --server` 启动，按 `Content-Length` 帧发送 `initialize`，捕获 fd1 输出：
+
+```
+[handshake] outcome=1 bytes=1564
+[handshake] ok
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{...},"serverInfo":{"name":"Lean 4 Server","version":"0.3.0"}}}
+```
+
+要点：
+
+- 当前 glue 没有 `lspStdin` 钩子（`grep -c lspStdin lean.mjs` 为 0），stdin 走标准 Emscripten `Module.stdin`
+- `Module.stdin` 必须**逐字节返回字符码**，EOF 返回 `null`；返回 `Buffer` 会被当成对象转成 `\x00`，服务端报 `Invalid header field`
+- LSP 协议帧只走 fd 1（stdout），所有内核诊断走 fd 2（stderr），与前述约定一致
+
 ## 当前产物与缓存
 
 | 名称 | key |

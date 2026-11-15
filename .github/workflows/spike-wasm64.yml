@@ -82,7 +82,7 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v1
+          key: wasm64-src-v4
 
       - name: fetch
         run: |
@@ -168,7 +168,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v2
+          key: wasm64-cgen-v1
 
       - name: cgen
         run: |
@@ -223,7 +223,7 @@ jobs:
           path: |
             work/lean4
             work/lean-*-linux
-          key: wasm64-src-v3
+          key: wasm64-src-v4
 
       - name: backport 上游 wasm64 修复
         run: |
@@ -268,7 +268,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v2
+          key: wasm64-cgen-v1
 
       # 诊断：确认 level category 注册后立刻查不到，是 Name 的 hash/eq 不一致，还是 map 本身丢了写入。
       # 只改动 Level.c，复用 objects 缓存，几分钟一轮。

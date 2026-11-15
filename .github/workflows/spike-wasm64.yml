@@ -208,7 +208,7 @@ jobs:
       - name: 在 Level 初始化里插入 Name / 查表探针
         run: |
           python3 - <<'PY'
-          import pathlib
+          import pathlib, re
 
           probe_names = r'''
           {
@@ -232,11 +232,14 @@ jobs:
           }
           '''
 
-          candidates = [p for p in pathlib.Path("work/cgen").rglob("*.c")
-                        if "runtime_initialize_Lean_Parser_Level" in p.read_text(errors="ignore")]
-          print("files with Level runtime init:", [str(p) for p in candidates])
+          candidates = []
+          for p in pathlib.Path("work/cgen").rglob("*.c"):
+              text = p.read_text(errors="ignore")
+              if re.search(r"runtime_initialize_Lean_Parser_Level\(uint8_t builtin\)\s*\{", text):
+                  candidates.append(p)
+          print("files defining Level runtime init:", [str(p) for p in candidates])
           if not candidates:
-              raise SystemExit("Level runtime init not found")
+              raise SystemExit("Level runtime init definition not found")
 
           path = candidates[0]
           src = path.read_text()

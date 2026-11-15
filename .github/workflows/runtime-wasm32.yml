@@ -312,7 +312,17 @@ jobs:
         run: |
           cd work/dist
           gzip -9 -c lean.wasm > lean.wasm.gz
-          zstd -19 -q -f lean.wasm -o lean.wasm.gz.bin
+          # 用 Node 的 zstd 与 scripts/fetch-assets.mjs 保持同一套压缩参数，
+          # 确保构建期重算的 .bin 与这里交付的字节完全一致。
+          node - <<'JS'
+          const fs = require('node:fs');
+          const zlib = require('node:zlib');
+          const wasm = fs.readFileSync('lean.wasm');
+          const bin = zlib.zstdCompressSync(wasm, {
+            params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
+          });
+          fs.writeFileSync('lean.wasm.gz.bin', bin);
+          JS
           sha256sum lean.mjs lean.wasm lean.wasm.gz lean.wasm.gz.bin > SHA256SUMS
           node - <<'JS'
           const fs = require('node:fs');

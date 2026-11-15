@@ -10,17 +10,16 @@
 
 ## 结论
 
-**跑通了。** 在无头 Chrome（157）里：
+**跑通了。** 最终状态（run `43744133944` 全绿）：
 
-```
-version:      ok=true  code=0
-compile-init: ok=true  code=0   oleanCount=1947
-probe.olean   exists=true size=1688
-```
+- 运行时：wasm64 + `USE_GMP=ON`（emcc 自建 GMP 6.3.0）→ 官方 64 位 Init/Std/Lean olean 直接可用
+- 浏览器（无头 Chrome 157）：`--version` 与 `import Init` 编译成功
+- 大整数：`#eval (2 ^ 100 : Nat)` 输出正确，`2 ^ 100 = ... := rfl` 通过（确认走真 GMP）
+- 真实依赖：Mathlib 裁切 `Mathlib.Tactic.Spread` 闭包 **66 个模块全部编译成功**（56 个来自缓存，3 个用默认解释器重试后成功），产出
+  `Mathlib/Tactic/Spread.olean`（177KB）+ `.ir` + `.olean.server` + `.olean.private`
+- LSP：`initialize` 握手正常；`didOpen → publishDiagnostics` 尚未打通（见下）
 
-即 wasm64 运行时 + 自建 64 位 Init oleans + `import Init` 编译（`example : 1 + 1 = 2 := rfl`）全部成功。
-
-关键前提有三个：`-O2` 构建、backport 上游的标量字面量修复、用 wasm64 Lean 自己生成 oleans。
+关键前提：`-O2`、标量字面量 backport、GMP、官方 oleans。
 
 ## 踩过的坑（按发现顺序）
 
@@ -143,6 +142,8 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `didOpen` 会让 watchdog `Process.spawn` 一个 `lean` 子进程（`Watchdog.lean`），上游 wasm 构建没有进程能力，报 `unsupported operation (error code: 52)` 后同样 `forceExit 1`。所以 `server` 模式只能验证到 didOpen；`publishDiagnostics` 走 `worker` 模式。
 - `mathlib-lib` 如果从旧缓存恢复，会带着 flags=0 的自建 Init olean，所有 import 报 `incompatible header (flags=0)`。基座必须用官方 olean 覆盖，缓存前缀也要换。
 - `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
+- 编译 Mathlib 不能带 `-Dinterpreter.prefer_native=false`：带 `initialize` 块的 Mathlib/Batteries 模块会踩 `ir_interpreter.cpp` 的 `mkDummyExternDecl` 断言（`fn_body_tag != Unreachable`）。默认解释器设置下同样的模块直接编过；编译步现在对失败模块自动用默认设置重试一次。
+- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出 `publishDiagnostics`**：FileWorker 的输出通道是 `Std.Channel.forAsync (prio := .dedicated)`，写回依赖 pthread 调度；我们的 harness 在主线程 `Atomics.wait` 等 stdin，主线程事件循环被占住，专用线程的消息永远送不回来。下一步要试的是 `-sPROXY_TO_PTHREAD=1` 单独链接一个 LSP 变体（main 跑在 pthread 上，主线程留出来泵消息）。
 
 ## 当前产物与缓存
 
@@ -156,15 +157,15 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 | GMP（wasm64 静态库） | `wasm64-gmp-v1` |
 | 官方 64 位 oleans | 不缓存，直接从引导包 `work/lean-*-linux/lib/lean` 复制到 `work/olean32` |
 | Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v2` |
-| Mathlib 裁切编译产物 | `wasm64-mathlib-lib-<run_number>`，`restore-keys: wasm64-mathlib-lib-` 取最新，逐轮增量 |
+| Mathlib 裁切编译产物 | `wasm64-mathlib-lib2-<run_number>`，`restore-keys: wasm64-mathlib-lib2-` 取最新，逐轮增量 |
 
-`work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ilean 文件。
+`work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ir 文件，`work/mathlib-lib` 是同一份官方库加上自己编出来的 Mathlib/Batteries olean。
 
 ## 尚未验证
 
-- 浏览器内 LSP：浏览器侧只验证了 CLI 编译（`--mode=version|compile`），`--server` 目前只在 Node 里跑通
-- 内存占用与性能：`-O2` + memory64 + 1GB 上限下的实际峰值未测
-- 与 Mathlib 的兼容性：裁切编译与诊断链路已接进 CI，等下一轮结果
+- 浏览器内 LSP：浏览器侧只验证了 CLI 编译（`--mode=version|compile`），`--server`/`--worker` 目前只在 Node 里跑
+- `didOpen → publishDiagnostics`：worker 模式收帧正常但拿不到诊断，怀疑与主线程阻塞有关，待 `PROXY_TO_PTHREAD` 变体验证
+- 内存占用与性能：`-O2` + memory64 + 1GB 上限下的实际峰值未测；66 模块在 wasm64 下每模块约 1–5 秒（带缓存）
 
 ## 复现
 

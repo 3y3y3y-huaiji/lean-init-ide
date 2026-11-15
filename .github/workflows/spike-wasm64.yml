@@ -277,10 +277,6 @@ jobs:
           # 定位到底是哪一次注册在报 unknown parser category。
           marked = []
           for line in src.splitlines(keepends=True):
-              call = re.search(r"l_Lean_Parser_addBuiltin(?:Leading|Trailing)Parser\(([^,]+),", line) if line.lstrip().startswith("res") else None
-              if call:
-                  cat = call.group(1).strip()
-                  marked.append(f'fprintf(stderr, "CATHASH %llu\\n", (unsigned long long)lean_name_hash({cat}));\n')
               ident = re.search(r"(l_\w+_regBuiltin\w*)\(\)", line)
               if ident and line.lstrip().startswith("res"):
                   marked.append(f'fprintf(stderr, "REG {ident.group(1)}\\n");\n')
@@ -288,6 +284,25 @@ jobs:
               else:
                   marked.append(line)
           src = "".join(marked)
+
+          # 在 Extension.c 的 addBuiltinLeadingParser 入口打印 catName 哈希，
+          # 与探针里新建的 level Name 哈希对比。
+          ext = pathlib.Path("work/cgen/Lean/Parser/Extension.c")
+          if ext.exists():
+              esrc = ext.read_text()
+              if "#include <stdio.h>" not in esrc:
+                  esrc = "#include <stdio.h>\n" + esrc
+              for fn in ("l_Lean_Parser_addBuiltinLeadingParser", "l_Lean_Parser_addBuiltinParser"):
+                  m = re.search(rf"{fn}\(lean_object\* (\w+)", esrc)
+                  if m:
+                      param = m.group(1)
+                      brace = esrc.find("{", m.end())
+                      inject = f'\nfprintf(stderr, "CAT {fn} hash=%llu\\n", (unsigned long long)lean_name_hash({param}));'
+                      esrc = esrc[:brace + 1] + inject + esrc[brace + 1:]
+                      print("cat probe added:", fn, param)
+                  else:
+                      print("cat probe: header missing for", fn)
+              ext.write_text(esrc)
 
           for phase in ("runtime_initialize_Lean_Parser_Level", "meta_initialize_Lean_Parser_Level"):
               header = re.search(rf"{phase}\(uint8_t builtin\)\s*\{{", src)

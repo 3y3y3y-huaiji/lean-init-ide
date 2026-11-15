@@ -143,7 +143,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `mathlib-lib` 如果从旧缓存恢复，会带着 flags=0 的自建 Init olean，所有 import 报 `incompatible header (flags=0)`。基座必须用官方 olean 覆盖，缓存前缀也要换。
 - `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
 - 编译 Mathlib 不能带 `-Dinterpreter.prefer_native=false`：带 `initialize` 块的 Mathlib/Batteries 模块会踩 `ir_interpreter.cpp` 的 `mkDummyExternDecl` 断言（`fn_body_tag != Unreachable`）。默认解释器设置下同样的模块直接编过；编译步现在对失败模块自动用默认设置重试一次。
-- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出 `publishDiagnostics`**：FileWorker 的输出通道是 `Std.Channel.forAsync (prio := .dedicated)`，写回依赖 pthread 调度；我们的 harness 在主线程 `Atomics.wait` 等 stdin，主线程事件循环被占住，专用线程的消息永远送不回来。下一步要试的是 `-sPROXY_TO_PTHREAD=1` 单独链接一个 LSP 变体（main 跑在 pthread 上，主线程留出来泵消息）。
+- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。剩余怀疑点是 `Std.Channel.forAsync (prio := .dedicated)` 的输出通道没被调度。要继续就得移植 SDK 的 glue 适配（`platform.js` 的 `_fd_read`/线程回收补丁 + 浏览器 Worker 宿主），属于独立的一块工作。
 
 ## 当前产物与缓存
 
@@ -164,7 +164,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 ## 尚未验证
 
 - 浏览器内 LSP：浏览器侧只验证了 CLI 编译（`--mode=version|compile`），`--server`/`--worker` 目前只在 Node 里跑
-- `didOpen → publishDiagnostics`：worker 模式收帧正常但拿不到诊断，怀疑与主线程阻塞有关，待 `PROXY_TO_PTHREAD` 变体验证
+- `didOpen → publishDiagnostics`：worker 模式收帧正常但整个输出通道无响应（hover 也不回），已排除 `setupFile` 的 spawn 与主线程阻塞；下一步需移植 SDK 的 glue 适配。
 - 内存占用与性能：`-O2` + memory64 + 1GB 上限下的实际峰值未测；66 模块在 wasm64 下每模块约 1–5 秒（带缓存）
 
 ## 复现

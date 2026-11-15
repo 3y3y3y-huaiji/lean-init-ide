@@ -21,6 +21,7 @@ env:
   EMSDK_VERSION: 6.0.0
   MAIN_STACK_BYTES: 67108864
   PTHREAD_STACK_BYTES: 33554432
+  LEAN_THREAD_STACK_BYTES: 33554432
 
 jobs:
   prepare:
@@ -80,13 +81,34 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh fetch
 
+      - name: 提高 Lean 自身线程栈（wasm32）
+        run: |
+          THREAD="$GITHUB_WORKSPACE/work/lean4/src/runtime/thread.cpp"
+          python3 - <<'PY'
+          import os
+          import pathlib
+
+          path = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "work/lean4/src/runtime/thread.cpp"
+          text = path.read_text()
+          old = "#define LEAN_DEFAULT_THREAD_STACK_SIZE 8*1024*1024 // 8MB for 32-bit"
+          new = f"#define LEAN_DEFAULT_THREAD_STACK_SIZE {os.environ['LEAN_THREAD_STACK_BYTES']} // wasm32 heap-backed stacks"
+          if old in text:
+              path.write_text(text.replace(old, new, 1))
+              print("patched thread.cpp")
+          elif new in text:
+              print("thread.cpp already patched")
+          else:
+              raise SystemExit("thread.cpp stack anchor not found")
+          PY
+          grep -n 'LEAN_DEFAULT_THREAD_STACK_SIZE' "$THREAD"
+
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
         with:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-v1
+          key: wasm32-runtime-v2
 
       - name: runtime
         run: |
@@ -167,7 +189,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm32-runtime-v1
+          key: wasm32-runtime-v2
 
       - name: 恢复 cgen
         uses: actions/cache@v6

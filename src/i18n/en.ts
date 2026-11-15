@@ -1272,6 +1272,8 @@ theorem exercise_for_reader (a b : Nat) : a + b = b + a := by
 -- "By the axiom of choice, just pick one."
 example (α : Type) (h : Nonempty α) : α := Classical.choice h
 
+#check Classical.choice
+
 end
 `,
     start: 'Start Lean',

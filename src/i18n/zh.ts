@@ -1270,6 +1270,8 @@ theorem exercise_for_reader (a b : Nat) : a + b = b + a := by
 -- “由选择公理，挑一个就行。”
 example (α : Type) (h : Nonempty α) : α := Classical.choice h
 
+#check Classical.choice
+
 end
 `,
     start: '启动 Lean',

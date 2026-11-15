@@ -149,9 +149,9 @@ const main = async () => {
       const initializeLine = snapshot.log
         .split('\n')
         .find((line) => line.includes('initialize 完成'));
-      const hasTypeError = snapshot.diagnostics.some((item) => item.includes('Type mismatch'));
-      const hasCheck = snapshot.diagnostics.some((item) => item.includes('Nat.add'));
-      if (snapshot.state === 'ready' && initializeLine && hasTypeError && hasCheck) {
+      const hasSorry = snapshot.diagnostics.some((item) => item.includes('sorry'));
+      const hasCheck = snapshot.diagnostics.some((item) => item.includes('Classical.choice'));
+      if (snapshot.state === 'ready' && initializeLine && hasSorry && hasCheck) {
         result = { ok: true, snapshot, initializeLine };
         break;
       }
@@ -165,8 +165,9 @@ const main = async () => {
     if (!result?.ok) {
       throw new Error(result?.reason ?? '等待诊断超时');
     }
-    if (final.runOk.visible) {
-      throw new Error('有错误的示例不应显示运行通过');
+    // 默认示例只有 sorry 警告，没有错误，应显示带警告数量的「运行通过」。
+    if (!final.runOk.visible || !final.runOk.text.includes('1 个警告')) {
+      throw new Error(`只有警告的默认示例应显示运行通过：${final.runOk.text}`);
     }
 
     // 第二阶段：换成无错误代码，确认界面上出现「运行通过」提示框，而不是只在日志里。

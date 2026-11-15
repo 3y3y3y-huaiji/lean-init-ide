@@ -1258,6 +1258,24 @@ export const en: Messages = {
   playground: {
     title: 'Lean playground',
     hint: 'The first run downloads about 102 MB of runtime; later visits use the persistent cache.',
+    defaultCode: `open Classical
+
+noncomputable section
+
+-- "This is obvious."
+example (n : Nat) : n + 0 = n := rfl
+
+-- "Left as an exercise to the reader."
+theorem exercise_for_reader (a b : Nat) : a + b = b + a := by
+  sorry
+
+-- "By the axiom of choice, just pick one."
+example (α : Type) (h : Nonempty α) : α := Classical.choice h
+
+#check Classical.choice
+
+end
+`,
     start: 'Start Lean',
     stop: 'Stop Lean',
     goalTitle: 'Goal',

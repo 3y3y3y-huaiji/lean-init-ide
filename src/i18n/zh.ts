@@ -1256,6 +1256,24 @@ export const zh: Messages = {
   playground: {
     title: 'Lean 编辑器',
     hint: '首次启动需下载约 102MB 运行时，之后会持久缓存。',
+    defaultCode: `open Classical
+
+noncomputable section
+
+-- “这很显然。”
+example (n : Nat) : n + 0 = n := rfl
+
+-- “留作习题。”
+theorem exercise_for_reader (a b : Nat) : a + b = b + a := by
+  sorry
+
+-- “由选择公理，挑一个就行。”
+example (α : Type) (h : Nonempty α) : α := Classical.choice h
+
+#check Classical.choice
+
+end
+`,
     start: '启动 Lean',
     stop: '关闭 Lean',
     goalTitle: 'Goal',

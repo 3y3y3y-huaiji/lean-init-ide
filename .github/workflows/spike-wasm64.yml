@@ -163,10 +163,11 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           cd wasm-llvm
           sed -i \
-            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=2 -DCMAKE_CXX_FLAGS=-sMEMORY64=2 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=2|' \
-            -e 's|emcc -c -O2|emcc -sMEMORY64=2 -c -O1|g' \
-            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=2 -O1 -pthread|g' \
+            -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
+            -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O1|g' \
+            -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O1 -pthread|g' \
             producer/lean-browser/scripts/build.sh
+          grep -n -- 'MEMORY64' producer/lean-browser/scripts/build.sh
 
       - name: 恢复 Lean 源码与引导包
         uses: actions/cache@v6
@@ -223,15 +224,23 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
 
-      - name: 安装无头 Chromium（Playwright）
+      - name: 准备浏览器驱动（pnpm + runner 自带 Chrome，不下载浏览器）
         run: |
-          npm install --no-save --no-package-lock playwright tsx
-          npx playwright install --with-deps chromium
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          mkdir -p work/browser
+          cd work/browser
+          pnpm init > /dev/null
+          pnpm pkg set type=module
+          pnpm add playwright-core tsx esbuild --allow-build=esbuild
+          cp ../../scripts/wasm64-browser-verify.ts .
+          pnpm exec esbuild ../../scripts/wasm64-browser-harness.ts --bundle --format=esm --outfile=../../work/dist/harness.mjs
 
-      - name: 关键验证：在无头 Chromium（Memory64 原生支持）里启动 wasm64 Lean
+      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里启动 wasm64 Lean
         timeout-minutes: 20
         run: |
-          npx tsx scripts/wasm64-browser-verify.ts work/dist
+          cd work/browser
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist
 
       - name: 保存产物与日志
         if: always()

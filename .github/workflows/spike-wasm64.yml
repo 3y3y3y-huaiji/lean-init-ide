@@ -203,6 +203,26 @@ jobs:
           path: work/cgen
           key: wasm64-cgen-v1
 
+      # 诊断：initialize_Lean 逐个调用依赖模块的 initializer，错误通过返回值上抛，栈里看不出来。
+      # 给生成的 C 里每个 initialize_X(builtin) 调用插入打印，最后一条 DEP 就是返回错误的那一块。
+      - name: 给 initialize_Lean 的依赖调用打点
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          path = pathlib.Path("work/cgen/Lean.c")
+          src = path.read_text()
+          if "#include <stdio.h>" not in src:
+              src = "#include <stdio.h>\n" + src
+          count = 0
+          def repl(match):
+              global count
+              count += 1
+              name = match.group(1)
+              return f'(fprintf(stderr, "DEP {name}\\n"), {name}(builtin))'
+          path.write_text(re.sub(r"\b(initialize_[A-Za-z0-9_]+)\(builtin\)", repl, src))
+          print("patched dependency calls:", count)
+          PY
+
       - name: 缓存 objects
         uses: actions/cache@v6
         with:

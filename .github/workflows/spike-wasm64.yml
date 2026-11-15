@@ -705,9 +705,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: work/mathlib-lib
-          key: wasm64-mathlib-lib-${{ github.run_number }}
+          key: wasm64-mathlib-lib2-${{ github.run_number }}
           restore-keys: |
-            wasm64-mathlib-lib-
+            wasm64-mathlib-lib2-
 
       # 每个文件单独起一次 wasm64 进程：EXIT_RUNTIME=1 之后同一实例不能复用。
       # 已编译的 olean 直接跳过，配合缓存可以逐轮补齐。
@@ -717,11 +717,12 @@ jobs:
         run: |
           set -uo pipefail
           if [ ! -f work/mathlib-slice.json ]; then echo "没有裁切结果，跳过"; exit 0; fi
-          # 缓存里可能已经有编译结果，只补缺失的 Init olean，不能整目录重建。
+          # 缓存里可能已经有编译结果。Init/Std/Lean 必须用官方 olean 覆盖：
+          # 旧缓存里带的是 flags=0 的自建 Init，留着会让所有 import 报 incompatible header。
           if [ ! -d work/mathlib-lib ]; then
             cp -a work/olean32 work/mathlib-lib
           else
-            cp -an work/olean32/. work/mathlib-lib/
+            cp -a work/olean32/. work/mathlib-lib/
           fi
           mkdir -p work/mathlib-log
           RUN=wasm-llvm/producer/lean-browser/scripts/run-lean.mjs
@@ -760,7 +761,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/mathlib-lib
-          key: wasm64-mathlib-lib-${{ github.run_number }}-${{ github.run_attempt }}
+          key: wasm64-mathlib-lib2-${{ github.run_number }}-${{ github.run_attempt }}
 
       # 完整诊断链路：initialize → initialized → didOpen → publishDiagnostics。
       # 有 Mathlib 裁切结果时用真实的 import 依赖打开文档；否则退化为 Init。

@@ -295,7 +295,8 @@ jobs:
 
       - name: 准备 modules.txt
         run: |
-          BOOT="$(ls -d "$GITHUB_WORKSPACE"/work/lean-*-linux | head -n 1)"
+          BOOT="$(find "$GITHUB_WORKSPACE/work" -maxdepth 1 -type d -name 'lean-*-linux' -print -quit)"
+          [ -n "$BOOT" ] || { echo '找不到 lean-*-linux 引导目录'; exit 1; }
           (cd "$BOOT/lib/lean" && find Init Std Lean -name '*.olean' | sed 's/\.olean$//'; printf '%s\n' Init Std Lean) \
             | LC_ALL=C sort > "$GITHUB_WORKSPACE/work/modules.txt"
           wc -l "$GITHUB_WORKSPACE/work/modules.txt"

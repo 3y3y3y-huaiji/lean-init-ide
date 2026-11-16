@@ -20,7 +20,7 @@ import { isMainModule } from './lib/entry.ts';
 import { requireDir, requireFile } from './lib/fs-guards.ts';
 
 export const DEFAULT_CHUNK_BYTES = 48 * 1024 * 1024;
-const ZSTD_LEVEL = 19;
+export const DEFAULT_ZSTD_LEVEL = 6;
 
 export interface PackChunk {
   readonly path: string;
@@ -59,12 +59,17 @@ export const packLibrary = (options: {
   outDir: string;
   prefix?: string;
   chunkBytes?: number;
+  level?: number;
 }): PackLibraryResult => {
   const libDir = requireDir(options.libDir, 'lib');
   const prefix = options.prefix ?? 'lean-init';
   const chunkBytes = options.chunkBytes ?? DEFAULT_CHUNK_BYTES;
+  const level = options.level ?? DEFAULT_ZSTD_LEVEL;
   if (!Number.isSafeInteger(chunkBytes) || chunkBytes <= 0) {
     throw new CliError(`chunkBytes 必须是正整数，收到 ${chunkBytes}`);
+  }
+  if (!Number.isInteger(level) || level < 1 || level > 22) {
+    throw new CliError(`level 必须是 1..22 整数，收到 ${level}`);
   }
   if (options.files.length === 0) throw new CliError('打包清单不能为空');
 
@@ -91,7 +96,7 @@ export const packLibrary = (options: {
     const logicalName = `${prefix}-${String(index).padStart(2, '0')}.pack`;
     const zstName = `${logicalName}.zst.bin`;
     const compressed = zstdCompressSync(slice, {
-      params: { [zlibConstants.ZSTD_c_compressionLevel]: ZSTD_LEVEL },
+      params: { [zlibConstants.ZSTD_c_compressionLevel]: level },
     });
     writeFileSync(join(options.outDir, zstName), compressed);
     compressedBytes += compressed.byteLength;
@@ -148,6 +153,7 @@ const SPEC: Record<string, FlagSpec> = {
   out: { kind: 'string', required: true, valueName: 'dir' },
   prefix: { kind: 'string', valueName: 'name' },
   'chunk-bytes': { kind: 'number', valueName: 'N' },
+  level: { kind: 'number', valueName: '1..22' },
 };
 
 const main = (): void => {
@@ -157,12 +163,14 @@ const main = (): void => {
   const prefix = optionalString(parsed, 'prefix');
   const chunkBytes =
     parsed.flags['chunk-bytes'] === undefined ? undefined : requireNumber(parsed, 'chunk-bytes');
+  const level = parsed.flags.level === undefined ? undefined : requireNumber(parsed, 'level');
   const result = packLibrary({
     libDir: requireString(parsed, 'lib'),
     files,
     outDir: requireString(parsed, 'out'),
     ...(prefix === undefined ? {} : { prefix }),
     ...(chunkBytes === undefined ? {} : { chunkBytes }),
+    ...(level === undefined ? {} : { level }),
   });
   const mb = (n: number): string => (n / (1024 * 1024)).toFixed(2);
   console.log(

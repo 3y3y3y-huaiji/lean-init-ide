@@ -469,14 +469,15 @@ jobs:
             --out work/mathlib-official-lib
           node scripts/ci/gen-olean-manifest.ts \
             --lib work/mathlib-official-lib \
-            --roots Init,Std,Lean,Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+            --roots Init,Std,Lean,Lake,Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
             --ir-roots Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
             --out work/dist/mathlib-official-manifest.json
           node scripts/pack-lean-lib.ts \
             --lib work/mathlib-official-lib \
             --manifest work/dist/mathlib-official-manifest.json \
             --out work/mathlib-pack \
-            --prefix lean-mathlib
+            --prefix lean-mathlib \
+            --level 6
           ls -lh work/mathlib-pack
           if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
             echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Chrome Compile + LSP) ==="

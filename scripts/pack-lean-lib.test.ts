@@ -59,5 +59,8 @@ describe('packLibrary', () => {
     expect(() =>
       packLibrary({ libDir, files: ['Init.olean'], outDir: join(root, 'out'), chunkBytes: 0 }),
     ).toThrowError(CliError);
+    expect(() =>
+      packLibrary({ libDir, files: ['Init.olean'], outDir: join(root, 'out'), level: 99 }),
+    ).toThrowError(CliError);
   });
 });

@@ -154,7 +154,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.ts') }}
+          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts') }}
 
       - name: runtime
         run: |
@@ -246,7 +246,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.ts') }}
+          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts') }}
 
       - name: 恢复 cgen
         uses: actions/cache@v6

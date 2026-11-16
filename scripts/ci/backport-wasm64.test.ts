@@ -39,6 +39,11 @@ const makeLean = (): string => {
   );
   write(
     root,
+    'src/runtime/io.cpp',
+    'extern "C" LEAN_EXPORT obj_res lean_io_exit(uint8_t code) {\n    exit(code);\n}\n',
+  );
+  write(
+    root,
     'src/library/module.cpp',
     '#include "runtime/io.h"\n' +
       `            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', invalid header").str());\n` +
@@ -49,7 +54,12 @@ const makeLean = (): string => {
     'src/util/shell.cpp',
     '#include "githash.h"\n' +
       'extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {\n' +
-      '    foo();\n' +
+      '    run_with_thread_stack([&]() {\n' +
+      '        try {\n' +
+      '            shell_rc = run_shell_main(argc - optind, argv + optind, shell_opts);\n' +
+      '        } catch (lean::throwable & ex) {\n' +
+      '            std::cerr << ex.what();\n' +
+      '        }\n' +
       '    });\n' +
       '    return shell_rc;\n' +
       '}\n',
@@ -74,8 +84,11 @@ describe('applyBackports', () => {
     expect(status('environment.cpp diag 返回类型')).toBe('patched');
     expect(status('thread.cpp 线程栈 64MB')).toBe('patched');
     expect(status('util/io.h 内核日志')).toBe('patched');
+    expect(status('util/io.h wasm 退出异常')).toBe('patched');
+    expect(status('runtime/io.cpp 避免 pthread exit')).toBe('patched');
     expect(status('module.cpp olean 头诊断')).toBe('patched');
     expect(status('shell.cpp 异常兜底')).toBe('patched');
+    expect(status('shell.cpp wasm 退出捕获')).toBe('patched');
     expect(status('init.cpp 阶段打点')).toBe('patched');
 
     const leanH = readFileSync(join(root, 'src/include/lean/lean.h'), 'utf8');
@@ -91,7 +104,12 @@ describe('applyBackports', () => {
 
     const shell = readFileSync(join(root, 'src/util/shell.cpp'), 'utf8');
     expect(shell).toContain('lean_wasm_report_exception');
+    expect(shell).toContain('lean_mark_mt(shell_opts.raw())');
+    expect(shell).toContain('catch (lean::wasm_exit_exception const & ex)');
     expect(shell).toContain('catch (...)');
+
+    const ioCpp = readFileSync(join(root, 'src/runtime/io.cpp'), 'utf8');
+    expect(ioCpp).toContain('throw lean::wasm_exit_exception(code);');
 
     const module = readFileSync(join(root, 'src/library/module.cpp'), 'utf8');
     expect(module).toContain('lean_trace_write("olean"');

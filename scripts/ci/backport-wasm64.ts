@@ -88,8 +88,35 @@ inline void lean_trace_write(char const * category, char const * message) {
     '        std::string msg = error.to_std_string();\n' +
     '        lean_trace_write("io", msg.c_str());\n' +
     '        throw exception(msg);';
-  if (!next.includes(oldThrow)) return next;
-  return next.replace(oldThrow, newThrow);
+  const nextIo = next.replace(oldThrow, newThrow);
+  return nextIo;
+};
+
+const patchIoExitHeader: Transformer = (text) => {
+  if (text.includes('wasm_exit_exception')) return text;
+  if (!text.includes('namespace lean {')) return null;
+  const exitClass =
+    '\nstruct wasm_exit_exception : std::exception {\n' +
+    '    int m_code;\n' +
+    '    explicit wasm_exit_exception(int code) noexcept : m_code(code) {}\n' +
+    '    char const * what() const noexcept override { return "wasm_exit"; }\n' +
+    '};\n';
+  return text.replace('namespace lean {', `namespace lean {${exitClass}`);
+};
+
+const patchIoExitCpp: Transformer = (text) => {
+  if (text.includes('wasm_exit_exception')) return text;
+  const oldExit = 'extern "C" LEAN_EXPORT obj_res lean_io_exit(uint8_t code) {\n    exit(code);\n}';
+  if (!text.includes(oldExit)) return null;
+  const newExit =
+    'extern "C" LEAN_EXPORT obj_res lean_io_exit(uint8_t code) {\n' +
+    '#ifdef LEAN_EMSCRIPTEN\n' +
+    '    throw lean::wasm_exit_exception(code);\n' +
+    '#else\n' +
+    '    exit(code);\n' +
+    '#endif\n' +
+    '}';
+  return text.replace(oldExit, newExit);
 };
 
 const patchModuleHeader: Transformer = (text) => {
@@ -153,6 +180,25 @@ static void lean_wasm_report_exception(char const * type, char const * msg) {
   return next.replace(tailOld, tailNew);
 };
 
+const patchShellExit: Transformer = (text) => {
+  if (text.includes('wasm_exit_exception')) return text;
+  const oldRun =
+    '    run_with_thread_stack([&]() {\n' +
+    '        try {\n' +
+    '            shell_rc = run_shell_main(argc - optind, argv + optind, shell_opts);\n' +
+    '        } catch (lean::throwable & ex) {';
+  if (!text.includes(oldRun)) return null;
+  const newRun =
+    '    lean_mark_mt(shell_opts.raw());\n' +
+    '    run_with_thread_stack([&]() {\n' +
+    '        try {\n' +
+    '            shell_rc = run_shell_main(argc - optind, argv + optind, shell_opts);\n' +
+    '        } catch (lean::wasm_exit_exception const & ex) {\n' +
+    '            shell_rc = ex.m_code;\n' +
+    '        } catch (lean::throwable & ex) {';
+  return text.replace(oldRun, newRun);
+};
+
 const patchInitTrace: Transformer = (text) => {
   if (text.includes('LEAN_WASM_TRACE')) return text;
   let next = text;
@@ -192,6 +238,14 @@ export const applyBackports = (leanRoot: string): BackportEntry[] => [
   ),
   applyFile(leanRoot, 'src/runtime/thread.cpp', 'thread.cpp 线程栈 64MB', false, patchThreadStack),
   applyFile(leanRoot, 'src/util/io.h', 'util/io.h 内核日志', false, patchIoHeader),
+  applyFile(leanRoot, 'src/util/io.h', 'util/io.h wasm 退出异常', false, patchIoExitHeader),
+  applyFile(
+    leanRoot,
+    'src/runtime/io.cpp',
+    'runtime/io.cpp 避免 pthread exit',
+    false,
+    patchIoExitCpp,
+  ),
   applyFile(
     leanRoot,
     'src/library/module.cpp',
@@ -200,6 +254,7 @@ export const applyBackports = (leanRoot: string): BackportEntry[] => [
     patchModuleHeader,
   ),
   applyFile(leanRoot, 'src/util/shell.cpp', 'shell.cpp 异常兜底', false, patchShell),
+  applyFile(leanRoot, 'src/util/shell.cpp', 'shell.cpp wasm 退出捕获', false, patchShellExit),
   applyFile(leanRoot, 'src/initialize/init.cpp', 'init.cpp 阶段打点', false, patchInitTrace),
 ];
 

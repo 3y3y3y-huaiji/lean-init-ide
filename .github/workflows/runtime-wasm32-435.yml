@@ -448,13 +448,40 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
         timeout-minutes: 300
         run: |
+          set +e
           node wasm-llvm/producer/lean-browser/scripts/build-oleans.mjs \
             "$GITHUB_WORKSPACE/work/dist/lean.mjs" \
             "$GITHUB_WORKSPACE/work" \
             "$GITHUB_WORKSPACE/work/batteries-filtered" \
             "$GITHUB_WORKSPACE/work/batteries-olean32" \
             3 Init Std Batteries
-          find "$GITHUB_WORKSPACE/work/batteries-olean32/Batteries" -name '*.olean' | wc -l
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo '--- 诊断：生成的 Batteries.lean 前 20 行 ---'
+            head -n 20 work/batteries-filtered/Batteries.lean
+            echo '--- 诊断：根文件 import 统计 ---'
+            echo "imports=$(grep -c '^import ' work/batteries-filtered/Batteries.lean)"
+            grep -n '^import Batteries$' work/batteries-filtered/Batteries.lean || echo '根文件没有自引用 import Batteries'
+            echo '--- 诊断：deps.txt 的 Batteries 行 ---'
+            grep '^Batteries:' work/deps.txt | cut -c1-400
+            echo '--- 诊断：outDir 根级文件 ---'
+            ls -l work/batteries-olean32 | head -n 15
+            echo '--- 诊断：子集中是否有模块 import Batteries ---'
+            grep -rn '^import Batteries$' work/batteries-filtered --include='*.lean' | head -n 5 || true
+            echo '--- 诊断：失败日志 ---'
+            head -n 40 work/Batteries.olean-fail.log 2>/dev/null || true
+          else
+            find "$GITHUB_WORKSPACE/work/batteries-olean32/Batteries" -name '*.olean' | wc -l
+          fi
+          exit "$status"
+
+      - name: 保存 Batteries oleans（失败也保留进度）
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: work/batteries-olean32
+          key: wasm435-batteries-olean32-v1
 
       - name: 冒烟：wasm 运行时 import Batteries
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions

@@ -1346,6 +1346,11 @@ end
     startFailureTitle: 'Lean failed to start',
     loadFailureDetail:
       'The Lean runtime did not download completely. Retry, or switch to another source. If a VPN is on, turn it off and try again.',
+    compatibilityTitle: 'This browser cannot run the Lean runtime',
+    compatibilityDetail:
+      'The playground needs cross-origin isolation (COOP/COEP) and SharedArrayBuffer. Use desktop Chrome or Edge, or open the site in a full browser; in-app browsers and some Android WebViews are not supported.',
+    compatibilityError:
+      'Lean LSP requires cross-origin isolation and SharedArrayBuffer; this browser does not expose them.',
     retryLoad: 'Retry',
     sourceCdn: 'Site CDN',
     sourceMirror: 'China mirror',

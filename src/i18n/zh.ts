@@ -1341,6 +1341,11 @@ end
     startFailureTitle: 'Lean 启动失败',
     loadFailureDetail:
       'Lean 运行时没有下载完整。可以重试，或换一个下载源；如果开着 VPN，先关掉 VPN 再试。',
+    compatibilityTitle: '当前浏览器无法启动 Lean',
+    compatibilityDetail:
+      '编辑器需要跨源隔离（COOP/COEP）和 SharedArrayBuffer。请使用桌面版 Chrome 或 Edge，或改用系统浏览器打开；应用内浏览器和部分安卓 WebView 暂不支持。',
+    compatibilityError:
+      'Lean LSP 需要 cross-origin isolation 与 SharedArrayBuffer；当前浏览器未启用。',
     retryLoad: '重试',
     sourceCdn: '站点 CDN',
     sourceMirror: '国内镜像',

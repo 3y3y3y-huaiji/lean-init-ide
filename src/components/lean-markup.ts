@@ -123,7 +123,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
           <p data-role="load-failure-title" class="m-0 font-[650] text-err"></p>
           <p data-role="load-failure-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
           <p data-role="load-failure-error" class="m-0 mb-2 break-words font-mono text-[10.5px] leading-normal text-muted"></p>
-          <div class="flex flex-wrap gap-2">
+          <div data-role="load-failure-actions" class="flex flex-wrap gap-2">
             <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
             <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
             <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>

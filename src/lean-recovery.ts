@@ -17,6 +17,14 @@ export const isAssetRelatedError = (message: string): boolean => ASSET_ERROR_RE.
 
 export const isStackOverflowError = (message: string): boolean => STACK_OVERFLOW_RE.test(message);
 
+/**
+ * Lean LSP 依赖 COOP/COEP 带来的 cross-origin isolation 与 SharedArrayBuffer。
+ * 注入环境对象便于单测；默认读 globalThis。
+ */
+export const supportsLeanRuntime = (
+  env: { crossOriginIsolated?: boolean; SharedArrayBuffer?: unknown } = globalThis,
+): boolean => env.crossOriginIsolated === true && typeof env.SharedArrayBuffer === 'function';
+
 export const shouldPreserveDiagnosticsOnCrash = (diagnostics: ReadonlyArray<unknown>): boolean =>
   diagnostics.length > 0;
 

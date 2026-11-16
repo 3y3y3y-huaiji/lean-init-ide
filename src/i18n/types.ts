@@ -194,6 +194,10 @@ export type Messages = {
     loadFailureTitle: string;
     startFailureTitle: string;
     loadFailureDetail: string;
+    /** 浏览器不支持 cross-origin isolation / SharedArrayBuffer 时的说明。 */
+    compatibilityTitle: string;
+    compatibilityDetail: string;
+    compatibilityError: string;
     retryLoad: string;
     sourceCdn: string;
     sourceMirror: string;

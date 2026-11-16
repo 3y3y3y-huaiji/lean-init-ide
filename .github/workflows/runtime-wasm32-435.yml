@@ -435,9 +435,11 @@ jobs:
         run: |
           BOOT="$(find "$GITHUB_WORKSPACE/work" -maxdepth 1 -type d -name 'lean-*-linux' -print -quit)"
           [ -n "$BOOT" ] || { echo '找不到 lean-*-linux 引导目录'; exit 1; }
+          # 整目录复制：除了 Init/ Std/ 子目录，根级 Init.olean/Std.olean 和 .ir
+          # 也要带上，build-oleans 才会把它们当作已构建，只编译 Batteries。
+          # 不删目录，避免把缓存里已有的 Batteries oleans 清掉。
           mkdir -p work/batteries-olean32
-          cp -a work/std-olean32/Init work/batteries-olean32/
-          cp -a work/std-olean32/Std work/batteries-olean32/
+          cp -a work/std-olean32/. work/batteries-olean32/
           node scripts/prepare-batteries-extension.mjs \
             --batteries work/batteries --bootstrap "$BOOT" \
             --work work --out-src work/batteries-filtered --out-deps work/deps.txt

@@ -155,7 +155,9 @@ jobs:
       - name: 逐课运行全部代码块
         env:
           LEAN_E2E_CHANNEL: chrome
-          LEAN_E2E_WORKERS: 3
+          # 工程课会同时加载 Init + Std + Batteries，三路并行把 runner 内存打爆；
+          # 单路慢一点，但能稳定跑完 27 节。
+          LEAN_E2E_WORKERS: 1
         run: node scripts/e2e-lessons.mjs
       - name: 失败时保留网关日志
         if: failure()

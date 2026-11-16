@@ -7,8 +7,9 @@
  * 与 e2e-lean.mjs 共用同一个网关和浏览器通道；CI 里两个脚本跑在同一个 job。
  * 新增或删除课程时同步下面的 SLUGS（与 src/i18n/zh.ts 保持一致）。
  *
- * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间；CI 用
- * LEAN_E2E_WORKERS=3。同一 context 共享 Service Worker 与运行时缓存。
+ * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间。工程课会加载
+ * Std / Batteries 扩展包，CI 用 LEAN_E2E_WORKERS=1 避免 runner 内存不足。
+ * 同一 context 共享 Service Worker 与运行时缓存。
  */
 import { chromium } from 'playwright-core';
 

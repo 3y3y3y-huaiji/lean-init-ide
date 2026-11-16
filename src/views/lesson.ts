@@ -29,6 +29,12 @@ const pickLesson = (lessons: LessonPage[], slug?: string): { page: LessonPage; i
   return { page: lessons[index]!, index };
 };
 
+/** 课程代码是否真的依赖扩展分包；只有命中的课才值得预加载 Std / Batteries。 */
+const needsExtensionPacks = (page: LessonPage): boolean =>
+  page.blocks.some(
+    (block) => block.kind === 'code' && /import\s+(?:Std|Batteries)\./.test(block.code),
+  );
+
 const renderBlocks = (
   page: LessonPage,
   runLabel: string,
@@ -376,8 +382,11 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
             // 用户再点同一块时就变成「重复声明」。面板本身是 sr-only，空文档不影响阅读。
             code: '',
             locale,
-            // 工程实战课的代码依赖 Std 与 Batteries，提前声明，避免用户点运行时才发现缺模块。
-            ...(page.track === 'eng' ? { requiredExtensions: ['std', 'batteries'] as const } : {}),
+            // 只有真正 import Std / Batteries 的工程课才预加载扩展包：
+            // 位运算与数组边界课只用 Init，提前挂载 75MB 的 Std 会白白吃掉内存。
+            ...(needsExtensionPacks(page)
+              ? { requiredExtensions: ['std', 'batteries'] as const }
+              : {}),
             // 低内存设备与省流模式都不自动下载 102MB，让用户先确认。
             autoStart,
             onProgress: (progress) => reportProgress?.(progress),

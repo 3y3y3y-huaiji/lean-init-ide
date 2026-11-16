@@ -3,7 +3,7 @@
  * 把 Lean 运行时资产上传到魔搭（ModelScope）公开仓库，作为国内镜像源。
  *
  * 用法：
- *   MODELSCOPE_USERNAME=xxx MODELSCOPE_TOKEN=xxx MODELSCOPE_REPO=user/lean4-assets \
+ *   MODELSCOPE_TOKEN=xxx MODELSCOPE_REPO=user/lean4-assets \
  *     node scripts/upload-modelscope.mjs
  *
  *   --repo=<ns/name>      覆盖 MODELSCOPE_REPO
@@ -19,6 +19,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -59,8 +60,9 @@ const args = new Map(
 const repo = args.get('repo') ?? process.env.MODELSCOPE_REPO ?? '';
 const repoType = args.get('type') ?? process.env.MODELSCOPE_REPO_TYPE ?? 'dataset';
 const rootDir = args.get('root') ?? manifest.mirror?.prefix ?? manifest.cacheKey;
-const username = process.env.MODELSCOPE_USERNAME ?? '';
 const token = process.env.MODELSCOPE_TOKEN ?? '';
+// ModelScope 的 Git 认证用户名固定是 oauth2，不是账号名。
+const gitUsername = 'oauth2';
 const dryRun = args.has('dry-run');
 const verifyOnly = args.has('verify-only');
 const prune = args.has('prune');
@@ -72,16 +74,62 @@ const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest(
 
 const remoteUrl = (name) =>
   `https://modelscope.cn/${repoPrefix}/${repo}/resolve/master/${rootDir}/${name}`;
-const cloneUrl = (withAuth) => {
-  const host = `www.modelscope.cn/${repoPrefix}/${repo}.git`;
-  return withAuth
-    ? `https://${encodeURIComponent(username)}:${encodeURIComponent(token)}@${host}`
-    : `https://${host}`;
+const repoUrl = `https://www.modelscope.cn/${repoPrefix}/${repo}.git`;
+
+// token 只通过环境变量交给 git 的临时 credential helper，不拼进 URL，
+// 避免写进 .git/config 或出现在进程参数里。
+const credentialHelper = `!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" "${gitUsername}" "$MODELSCOPE_TOKEN"; }; f`;
+const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+
+const configureCredentials = (cwd) => {
+  execFileSync('git', ['config', 'credential.helper', ''], { cwd, stdio: 'pipe', env: gitEnv });
+  execFileSync('git', ['config', '--add', 'credential.helper', credentialHelper], {
+    cwd,
+    stdio: 'pipe',
+    env: gitEnv,
+  });
 };
 
 const fail = (message) => {
   console.error(`modelscope: ${message}`);
   process.exit(1);
+};
+
+// Windows 上 git 对象文件是只读的，rmSync 会报 EPERM；先清掉只读位再删。
+const removeTree = (dir) => {
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    return;
+  } catch {
+    const stack = [dir];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      let entries;
+      try {
+        entries = readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      try {
+        chmodSync(current, 0o777);
+      } catch {
+        // 目录可能已消失或没有权限，继续清理其余文件。
+      }
+      for (const entry of entries) {
+        const full = join(current, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(full);
+        } else {
+          try {
+            chmodSync(full, 0o666);
+          } catch {
+            // 文件可能已消失，忽略。
+          }
+        }
+      }
+    }
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
 };
 
 if (!repo) fail('缺少仓库地址，传 --repo=<namespace/name> 或设置 MODELSCOPE_REPO');
@@ -136,26 +184,43 @@ const verifyRemote = async () => {
 };
 
 const upload = () => {
-  if (!username || !token) fail('上传需要 MODELSCOPE_USERNAME 与 MODELSCOPE_TOKEN');
+  if (!token) fail('上传需要 MODELSCOPE_TOKEN');
   const work = mkdtempSync(join(tmpdir(), 'modelscope-upload-'));
   try {
     console.log(`modelscope: 克隆 ${repoPrefix}/${repo} 到临时目录`);
     try {
-      execFileSync('git', ['clone', '--depth', '1', cloneUrl(true), work], {
-        stdio: 'pipe',
-        // 仓库里的 LFS 文件不会被改写，跳过 smudge 以免每次上传都重新下载 100MB。
-        env: { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' },
-      });
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'credential.helper=',
+          '-c',
+          `credential.helper=${credentialHelper}`,
+          'clone',
+          '--depth',
+          '1',
+          repoUrl,
+          work,
+        ],
+        {
+          stdio: 'pipe',
+          // 仓库里的 LFS 文件不会被改写，跳过 smudge 以免每次上传都重新下载 100MB。
+          env: { ...gitEnv, GIT_LFS_SKIP_SMUDGE: '1' },
+        },
+      );
     } catch {
       // 空仓库 clone 可能失败，退化为 init + remote。
       mkdirSync(work, { recursive: true });
-      execFileSync('git', ['init'], { cwd: work, stdio: 'pipe' });
-      execFileSync('git', ['remote', 'add', 'origin', cloneUrl(true)], {
+      execFileSync('git', ['init'], { cwd: work, stdio: 'pipe', env: gitEnv });
+      execFileSync('git', ['remote', 'add', 'origin', repoUrl], {
         cwd: work,
         stdio: 'pipe',
+        env: gitEnv,
       });
-      execFileSync('git', ['checkout', '-b', 'master'], { cwd: work, stdio: 'pipe' });
+      execFileSync('git', ['checkout', '-b', 'master'], { cwd: work, stdio: 'pipe', env: gitEnv });
     }
+    // push 与 git-lfs 子进程共用仓库内的 helper 配置；helper 只读环境变量，不含密钥。
+    configureCredentials(work);
     execFileSync('git', ['lfs', 'install', '--local'], { cwd: work, stdio: 'pipe' });
 
     if (prune) {
@@ -193,10 +258,21 @@ const upload = () => {
     } catch {
       console.log('modelscope: 没有新变更需要提交');
     }
-    execFileSync('git', ['push', 'origin', 'master'], { cwd: work, stdio: 'inherit' });
+    execFileSync('git', ['push', 'origin', 'master'], {
+      cwd: work,
+      stdio: 'inherit',
+      env: gitEnv,
+    });
   } finally {
-    if (keep) console.log(`modelscope: 临时目录保留在 ${work}`);
-    else rmSync(work, { recursive: true, force: true });
+    if (keep) {
+      console.log(`modelscope: 临时目录保留在 ${work}`);
+    } else {
+      try {
+        removeTree(work);
+      } catch {
+        console.warn(`modelscope: 临时目录清理失败，可手动删除 ${work}`);
+      }
+    }
   }
 };
 

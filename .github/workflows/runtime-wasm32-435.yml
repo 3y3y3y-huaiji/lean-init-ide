@@ -440,6 +440,7 @@ jobs:
           TAG="runtime-v${LEAN_VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
               --title "Lean ${LEAN_VERSION} wasm32 runtime" \
               --notes "wasm32 runtime + Init oleans, packaged by GitHub Actions."
           fi

@@ -1,6 +1,9 @@
 import type { Locale } from '../i18n';
+import runtimeManifest from '../../config/lean4-runtime.json';
 import type { Messages } from '../i18n/types';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from './ui';
+
+const runtimeLabel = `${runtimeManifest.runtime.replace(/ Init$/, '')} · WebAssembly · Init only`;
 
 export type LeanPanelVariant = 'full' | 'compact';
 
@@ -221,7 +224,7 @@ export const renderLeanMarkup = (
           class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start max-[900px]:gap-3"
         >
           <div class="min-w-0">
-            <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">Lean 4.34.1 · WebAssembly · Init only</p>
+            <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${runtimeLabel}</p>
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>

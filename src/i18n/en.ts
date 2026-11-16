@@ -44,7 +44,7 @@ export const en: Messages = {
     features: [
       {
         title: 'A real compiler, not a mock',
-        body: 'The Lean 4.34.1 Init runtime is compiled to WebAssembly, so parsing, elaboration and diagnostics all happen in the page.',
+        body: 'The Lean 4.35.0 Init runtime is compiled to WebAssembly, so parsing, elaboration and diagnostics all happen in the page.',
       },
       {
         title: 'Live diagnostics and goals',

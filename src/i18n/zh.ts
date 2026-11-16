@@ -42,7 +42,7 @@ export const zh: Messages = {
     features: [
       {
         title: '真编译器，不是模拟',
-        body: 'Lean 4.34.1 的 Init 运行时编译为 WebAssembly，解析、精化、诊断全部在浏览器里完成。',
+        body: 'Lean 4.35.0 的 Init 运行时编译为 WebAssembly，解析、精化、诊断全部在浏览器里完成。',
       },
       {
         title: '诊断与 Goal 实时反馈',

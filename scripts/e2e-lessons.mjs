@@ -107,6 +107,16 @@ const main = async () => {
       // 运行屏障已经结算；留一点时间接住迟到的诊断，但不必等满 500ms。
       await sleep(200);
 
+      const readOutput = async () =>
+        (await page.locator(`[data-output="${index}"]`).innerText()).trim();
+      let output = await readOutput();
+      // documentSymbol 屏障偶发提前结算，#check / #eval 的信息会晚一拍到达；
+      // 先补等一轮，仍为空才判失败，避免把无关的偶发竞态当成课程错误。
+      if (!output || output.includes('没有错误，也没有输出')) {
+        await sleep(1500);
+        output = await readOutput();
+      }
+
       const errors = await page.locator(`[data-output="${index}"] .text-err`).allTextContents();
       if (errors.length > 0) {
         failures.push(
@@ -115,7 +125,6 @@ const main = async () => {
       }
 
       // 课程里每块都应该有可见结果；#check / #eval 显示「没有输出」说明诊断丢了。
-      const output = (await page.locator(`[data-output="${index}"]`).innerText()).trim();
       if (!output || output.includes('没有错误，也没有输出')) {
         failures.push(`${slug} 第 ${index + 1} 块：没有可见输出`);
       }

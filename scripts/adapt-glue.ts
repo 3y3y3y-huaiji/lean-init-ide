@@ -89,7 +89,7 @@ export const adaptGlue = (source: string): AdaptResult => {
   glue = replaceOnce(
     glue,
     'getNewWorker(){if(PThread.unusedWorkers.length==0){',
-    'getNewWorker(){if(PThread.unusedWorkers.length==0){throw new Error("Lean LSP exhausted its pthread pool");',
+    'getNewWorker(){if(PThread.unusedWorkers.length==0){throw new Error("Lean LSP exhausted its pthread pool ("+Object.keys(PThread.pthreads).length+" active)");',
     '池耗尽报错',
   );
 

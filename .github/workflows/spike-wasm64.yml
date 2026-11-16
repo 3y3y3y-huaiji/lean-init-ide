@@ -520,6 +520,8 @@ jobs:
         env:
           LEAN_WASM_DIAG_DEBUG: '1'
           LEAN_WASM_TRACE: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
         run: |
           # 先跑 PROXY_TO_PTHREAD + 16 线程池的 lean-adapted-proxy.mjs（-j4），
           # 失败再回退 lean-adapted.mjs（池为 8，配 --jobs 1 避免超出线程池）。

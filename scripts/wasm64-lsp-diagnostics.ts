@@ -145,13 +145,32 @@ export const createSession = ({
   const waiters: Array<{
     match: (message: LspMessage) => boolean;
     resolve: (message: LspMessage) => void;
+    reject: (error: Error) => void;
     timer: NodeJS.Timeout;
   }> = [];
   let exited = false;
+  let disposing = false;
+  let fatalError: Error | undefined;
+
+  const failWaiters = (error: Error): void => {
+    fatalError ??= error;
+    for (const waiter of waiters.splice(0)) {
+      clearTimeout(waiter.timer);
+      waiter.reject(error);
+    }
+  };
 
   const waitFor = (match: (message: LspMessage) => boolean, label: string, timeoutMs: number) =>
     new Promise<LspMessage>((resolveWait, rejectWait) => {
-      const waiter = { match, resolve: resolveWait } as (typeof waiters)[number];
+      if (fatalError) {
+        rejectWait(fatalError);
+        return;
+      }
+      const waiter = {
+        match,
+        resolve: resolveWait,
+        reject: rejectWait,
+      } as (typeof waiters)[number];
       waiter.timer = setTimeout(() => {
         const index = waiters.indexOf(waiter);
         if (index !== -1) waiters.splice(index, 1);
@@ -169,6 +188,9 @@ export const createSession = ({
           : '';
       console.error(`[diag] recv method=${method} id=${String(message.id ?? '-')}${count}`);
     }
+    if (message.method && message.id !== undefined) {
+      writer.write(encodeFrame({ jsonrpc: '2.0', id: message.id, result: null }));
+    }
     for (let i = 0; i < waiters.length; i += 1) {
       const waiter = waiters[i];
       if (waiter && waiter.match(message)) {
@@ -185,12 +207,18 @@ export const createSession = ({
     else if (message.stdout instanceof Uint8Array) {
       for (const decoded of decoder.push(message.stdout)) dispatch(decoded as LspMessage);
     } else if (typeof message.stderr === 'string') process.stderr.write(`[lean] ${message.stderr}`);
-    else if (typeof message.failure === 'string') console.error(`[worker] ${message.failure}`);
-    else if (typeof message.exit === 'number') exited = true;
+    else if (typeof message.failure === 'string') {
+      console.error(`[worker] ${message.failure}`);
+      failWaiters(new Error(`worker 异常: ${message.failure}`));
+    } else if (typeof message.exit === 'number') exited = true;
   });
-  worker.on('error', (error) => console.error(`[worker] ${error.stack ?? error}`));
-  worker.on('exit', () => {
+  worker.on('error', (error) => {
+    console.error(`[worker] ${error.stack ?? error}`);
+    failWaiters(error instanceof Error ? error : new Error(String(error)));
+  });
+  worker.on('exit', (code) => {
     exited = true;
+    if (!disposing && code !== 0) failWaiters(new Error(`worker 异常退出 code=${code}`));
   });
 
   return {
@@ -202,6 +230,7 @@ export const createSession = ({
     waitFor,
     stats: () => writer.stats(),
     async dispose() {
+      disposing = true;
       // proxy 模式下 main 在 pthread 上，送 EOF 没必要，直接收掉整个 worker。
       if (!proxy) writer.close();
       if (exited) return;

@@ -23,6 +23,8 @@ export default defineConfig({
         'src/monaco-contrib.ts',
         // Monaco 装配层：依赖真实编辑器实例与 Web Worker，行为由线上冒烟兜底。
         'src/components/lean-panel.ts',
+        // 扩展包下载依赖浏览器 fetch / zstddec / SharedArrayBuffer，行为由浏览器冒烟覆盖。
+        'src/runtime-extensions.ts',
         // 入口文件只做装配，逻辑都在被覆盖的模块里。
         'src/main.ts',
         'src/sw.ts',

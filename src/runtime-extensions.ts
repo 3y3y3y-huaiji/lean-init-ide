@@ -16,6 +16,7 @@ type ExtensionAsset = {
   key: string;
   bytes: number;
   sha256: string;
+  contentType: string;
 };
 
 export type RuntimeExtensionId = 'std' | 'batteries';
@@ -37,13 +38,9 @@ type PackIndex = {
 
 export type ExtensionPacks = Record<string, ArrayBufferLike>;
 
-const manifest = runtimeManifest as unknown as {
-  cacheKey?: string;
-  primary: { label: string; baseUrl: string };
-  fallback: { label: string; baseUrl: string };
-  mirror?: { label: string; baseUrl: string; prefix?: string };
-  extensions?: RuntimeExtension[];
-};
+type Manifest = Parameters<typeof assetSources>[0] & { extensions?: RuntimeExtension[] };
+
+const manifest = runtimeManifest as unknown as Manifest;
 
 export const runtimeExtensions: RuntimeExtension[] = manifest.extensions ?? [];
 

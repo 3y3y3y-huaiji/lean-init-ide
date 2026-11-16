@@ -581,8 +581,41 @@ jobs:
           cp work/artifact/lean-init.index.json public/wasm-lean4/
           cp work/artifact/*.gz.bin public/wasm-lean4/
           cp scripts/assets/runner-worker.js public/wasm-lean4/
+          # 候选清单会覆盖 config；先把仓库里的 extensions（如果有）留一份。
+          cp config/lean4-runtime.json work/manifest-base.json
           cp work/artifact/runtime-manifest.json config/lean4-runtime.json
-          node -e "const m=require('./config/lean4-runtime.json'); console.log('manifest:', m.runtime, m.cacheKey, m.assets.length, 'assets')"
+          node -e "const fs=require('fs');const base=JSON.parse(fs.readFileSync('work/manifest-base.json'));const m=JSON.parse(fs.readFileSync('config/lean4-runtime.json'));if(base.extensions)m.extensions=base.extensions;fs.writeFileSync('config/lean4-runtime.json',JSON.stringify(m,null,2)+'\n')"
+          node -e "const m=require('./config/lean4-runtime.json'); console.log('manifest:', m.runtime, m.cacheKey, m.assets.length, 'assets', (m.extensions??[]).length, 'extensions')"
+
+      # 扩展包与 Init 一起发布：只做上传，客户端仍然按需下载。
+      - name: 下载 Std 扩展包
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm32-std-pack
+          path: work/extensions/std
+
+      - name: 下载 Batteries 扩展包
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm32-batteries-pack
+          path: work/extensions/batteries
+
+      - name: 生成扩展清单
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          node scripts/write-extension-manifest.mjs \
+            --std work/extensions/std --batteries work/extensions/batteries
+          mkdir -p work/extensions/upload
+          cp work/extensions/std/* work/extensions/batteries/* work/extensions/upload/
+          node scripts/verify-manifest.mjs
+
+      - name: 无扩展构建时只发布 Init
+        if: github.event_name != 'workflow_dispatch' || !inputs.build_extensions
+        run: |
+          node -e "const fs=require('fs');const p='config/lean4-runtime.json';const m=JSON.parse(fs.readFileSync(p));delete m.extensions;fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
+          echo '本次没有构建扩展包，跳过 Std / Batteries 上传'
 
       # 先保存候选清单：即使后面 R2 / 魔搭发布失败，也能拿到清单排查或重试。
       - name: 保存候选清单
@@ -592,6 +625,7 @@ jobs:
           path: |
             work/artifact/runtime-manifest.json
             work/artifact/SHA256SUMS
+            config/lean4-runtime.json
 
       - name: 发布 GitHub Release（回退源）
         env:
@@ -630,9 +664,9 @@ jobs:
           fi
           command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
           if [ "$VERIFY_ONLY" = "true" ]; then
-            pnpm run upload:assets -- --s3 --verify-only
+            pnpm run upload:assets -- --s3 --verify-only --extensions work/extensions/upload
           else
-            pnpm run upload:assets -- --s3
+            pnpm run upload:assets -- --s3 --extensions work/extensions/upload
           fi
 
       - name: 上传 ModelScope
@@ -649,8 +683,8 @@ jobs:
           command -v git-lfs >/dev/null || (sudo apt-get update && sudo apt-get install -y git-lfs)
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          pnpm run upload:modelscope
+          pnpm run upload:modelscope -- --extensions work/extensions/upload --metadata
 
       - name: 发布摘要
         run: |
-          node -e "const m=require('./config/lean4-runtime.json'); console.log('runtime:', m.runtime); console.log('cacheKey:', m.cacheKey); console.log('primary:', m.primary.baseUrl); console.log('fallback:', m.fallback.baseUrl); console.log('mirror:', m.mirror.baseUrl + m.mirror.prefix); for (const a of m.assets) console.log(' ', a.key, a.bytes, a.sha256.slice(0, 12));"
+          node -e "const m=require('./config/lean4-runtime.json'); console.log('runtime:', m.runtime); console.log('cacheKey:', m.cacheKey); console.log('primary:', m.primary.baseUrl); console.log('fallback:', m.fallback.baseUrl); console.log('mirror:', m.mirror.baseUrl + m.mirror.prefix); for (const a of m.assets) console.log(' ', a.key, a.bytes, a.sha256.slice(0, 12)); for (const e of m.extensions ?? []) for (const a of e.assets) console.log(' ext', a.key, a.bytes, a.sha256.slice(0, 12));"

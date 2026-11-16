@@ -49,14 +49,20 @@ if (existsSync(assetsEnvFile)) {
 }
 
 const manifest = JSON.parse(readFileSync(join(root, 'config/lean4-runtime.json'), 'utf8'));
-const args = new Map(
-  process.argv
-    .filter((arg) => arg.startsWith('--'))
-    .map((arg) => {
-      const [key, value] = arg.slice(2).split('=');
-      return [key, value ?? 'true'];
-    }),
-);
+const args = new Map();
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index += 1) {
+  const arg = argv[index];
+  if (!arg.startsWith('--')) continue;
+  const [key, value] = arg.slice(2).split('=');
+  if (value !== undefined) args.set(key, value);
+  else if (argv[index + 1] && !argv[index + 1].startsWith('--')) {
+    args.set(key, argv[index + 1]);
+    index += 1;
+  } else {
+    args.set(key, 'true');
+  }
+}
 
 const repo = args.get('repo') ?? process.env.MODELSCOPE_REPO ?? '';
 const repoType = args.get('type') ?? process.env.MODELSCOPE_REPO_TYPE ?? 'dataset';
@@ -257,6 +263,9 @@ const writeMetadata = async (work) => {
         `| \`${asset.name}\` | ${asset.bytes.toLocaleString('en-US')} | ${describeAsset(asset)} |`,
     )
     .join('\n');
+  const extensionRows = extensionAssets
+    .map((asset) => `| \`${asset.name}\` | ${asset.bytes.toLocaleString('en-US')} | 扩展库 |`)
+    .join('\n');
   const card = `---
 license: Apache-2.0
 language:
@@ -274,8 +283,9 @@ size_categories:
 
 # Lean Init IDE runtime assets
 
-浏览器端 Lean Init IDE 的 WebAssembly 运行时资产。默认运行时只包含 ${manifest.runtime}，
-不包含 Std / Batteries / Lean 编译器 / Lake / Mathlib；语言服务器在 Web Worker 中运行。
+浏览器端 Lean Init IDE 的 WebAssembly 运行时资产。基础运行时包含 ${manifest.runtime}；
+Std 与 Batteries 作为独立扩展包按需下载（同样 zstd + SHA-256），不包含 Lean 编译器 / Lake / Mathlib；
+语言服务器在 Web Worker 中运行。
 
 - 项目：https://github.com/3y3y3y-huaiji/lean-init-ide
 - 在线使用：https://criticalthinking.de5.net
@@ -295,6 +305,17 @@ size_categories:
 ${assetRows}
 
 完整性校验见 \`${rootDir}/SHA256SUMS\`。应用侧清单是主仓库的 \`config/lean4-runtime.json\`。
+${
+  extensionRows
+    ? `
+## 扩展库（按需）
+
+| 文件 | 字节 | 说明 |
+| --- | ---: | --- |
+${extensionRows}
+`
+    : ''
+}
 
 ## 使用
 

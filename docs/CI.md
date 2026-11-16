@@ -1,11 +1,12 @@
 # CI / CD 工作流地图
 
 Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检。
-名称统一用 `CI ·` / `Runtime ·` / `Smoke ·` 前缀，运行记录用 `run-name` 标出分支或动作，避免同类运行混在一起。
+名称统一用 `CI ·` / `Deploy ·` / `Runtime ·` / `Smoke ·` 前缀，运行记录用 `run-name` 标出分支或动作，避免同类运行混在一起。
 
 | 工作流 | 触发 | 用途 | 产物 / 影响 |
 | --- | --- | --- | --- |
-| [ci.yml](../.github/workflows/ci.yml) `CI · 应用` | push `main`、PR、手动 | 静态检查、单测、构建、浏览器 e2e、依赖审计、actionlint；`main` 上全部通过后部署 Pages 并跑线上 smoke | 生产站点 |
+| [ci.yml](../.github/workflows/ci.yml) `CI · 应用` | PR、手动、被 Deploy 复用 | 静态检查、单测、构建、浏览器 e2e、依赖审计、actionlint | PR 检查结果，不部署 |
+| [deploy.yml](../.github/workflows/deploy.yml) `Deploy · 应用` | push `main`、手动 | PR 合并：直接构建、部署、smoke；direct push：先复用 `CI · 应用`，通过后再部署 | 生产站点 |
 | [runtime-wasm32-435.yml](../.github/workflows/runtime-wasm32-435.yml) `Runtime · Lean 4.35 wasm32` | `runtime-v*` tag、手动 | 构建 4.35 wasm32 运行时、Init oleans 与 zstd 资产；手动可选发布 R2 / 魔搭 / GitHub Release | artifact；发布时写 R2、魔搭、Release |
 | [modelscope.yml](../.github/workflows/modelscope.yml) `Runtime · 魔搭镜像` | 手动 | 单独重传或校验魔搭镜像 | ModelScope |
 | [smoke.yml](../.github/workflows/smoke.yml) `Smoke · 线上巡检` | 每天 01:00 UTC、手动 | 首页、COOP/COEP、`sw.js`、`/cdn/` Range、白名单 404 巡检 | 只读 |
@@ -13,19 +14,22 @@ Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检
 
 ## 命名与触发约定
 
-- 应用 CI 只叫 `CI · 应用`，运行时构建不要混进来。
+- 应用 CI 只叫 `CI · 应用`，在 PR / 手动触发，并被 `Deploy · 应用` 在 direct push 时复用；运行时构建不要混进来。
+- 应用部署只叫 `Deploy · 应用`，只在 push `main` / 手动触发。PR 合并直接部署；direct push 先跑 CI，CI 不过不部署，不重复跑两份 PR 检查。
 - 运行时工作流统一 `Runtime · Lean <version> wasm32`；旧版本加 `(legacy)`。
 - 日常主分支不自动发布运行时；只有手动 dispatch 或 `runtime-v*` tag 才发布资产。
 - 4.34 的 `runtime-wasm32.yml` 已改为手动，不再接 `spike/*` 分支 push。
-- `run-name` 写动作（build / publish / verify），不要依赖 commit message。
+- `run-name` 写动作（build / deploy / publish / verify），不要依赖 commit message。
 - Std / Batteries 扩展包的 `build_extensions` 开关在 `spike/std-batteries` 分支验证，尚未合并到主工作流；生产默认只加载 Init。
+
+> 合并前必须让 PR 的 `CI · 应用` 全绿。直接 push 到 `main` 时，`Deploy · 应用` 会先在 `ci` job 里复用 `CI · 应用`，CI 不过不会部署。要连 push 本身都拒绝，需要额外开分支保护/规则集（Require a pull request before merging）。
 
 ## Secrets / Variables
 
 | 名称 | 用途 |
 | --- | --- |
-| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | Pages 部署（`ci.yml` deploy job） |
-| `CD_ENABLED` | 为 `true` 时 `main` 的 deploy job 才执行 |
+| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | Pages 部署（`deploy.yml`） |
+| `CD_ENABLED` | 为 `true` 时 push `main` 的 `Deploy · 应用` 才执行 |
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 运行时资产上传（桶级 Object Read & Write） |
 | `MODELSCOPE_TOKEN` | 魔搭镜像上传 |
 
@@ -34,6 +38,9 @@ R2 的 egress 免费；一次完整构建下载约 100 MB，按对象算是十�
 ## 常见操作
 
 ```bash
+# 手动部署当前 main（通常由 push main 自动触发）
+gh workflow run deploy.yml
+
 # 只构建、不发布 4.35
 gh workflow run runtime-wasm32-435.yml -f publish=none
 

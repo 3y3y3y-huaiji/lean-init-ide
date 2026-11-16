@@ -60,7 +60,7 @@
 1. **改前**：确认要动的是哪一层；如果涉及清单、路由、响应头，先读一遍上表的「为什么危险」。
 2. **改后**：跑完整门禁，不能只跑 `pnpm test`。
 3. **提交**：一个提交只做一件事；提交信息写清楚「为什么」，不是「改了什么」。
-4. **推送**：`main` 受分支保护，`static` / `test` / `build` / `e2e` / `audit` / `actionlint` 全绿才允许 PR 合并；直接 push 可行。上线由 CI 的 `deploy` job 负责（`CD_ENABLED=true` 时生效），不要绕过它去手动传文件。
+4. **推送**：PR 的 `CI · 应用`（`static` / `test` / `build` / `e2e` / `audit` / `actionlint`）全绿才合并；合并到 `main` 后由 `Deploy · 应用` 直接构建、部署和冒烟，不重复跑检查。直接 push `main` 时，`Deploy · 应用` 会先复用完整的 `CI · 应用`，CI 不过不会部署；要连 push 本身都拒绝，需开分支保护/规则集。上线由 `Deploy · 应用` 负责（`CD_ENABLED=true` 时生效），不要绕过它去手动传文件。
 
 ## 质量门禁
 

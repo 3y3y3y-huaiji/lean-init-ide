@@ -1,13 +1,14 @@
-name: Build wasm32 Lean 4.35 runtime
+name: Runtime · Lean 4.35 wasm32
+run-name: Runtime 4.35 · ${{ inputs.publish || 'build' }}
 
 # 把 wasm-llvm 的 4.34.1 recipe forward-port 到 Lean 4.35.0：
 # - 只改 manifest 的 Lean pin / bootstrap / patch 哈希
 # - 用 scripts/patches/lean-435-emscripten.patch（删掉上游已吸收的 event_loop hunk）
 # - 其余仍是上游默认，只把 emcc O2 改成 O3
 # - 重新编译 Init oleans 并打包成 lean-init-*.pack
+# 只在手动触发和 runtime-v* tag 时运行；日常应用发布走 ci.yml。
 on:
   push:
-    branches: [spike/lean-4.35]
     tags: ['runtime-v*']
   workflow_dispatch:
     inputs:

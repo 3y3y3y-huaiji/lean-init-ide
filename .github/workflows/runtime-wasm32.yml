@@ -1,12 +1,10 @@
-name: Build wasm32 Lean runtime
+name: Runtime · Lean 4.34 wasm32 (legacy)
+run-name: Runtime 4.34 · legacy build
 
-# 只做一件事：用 -O3 重编 wasm32 Lean 运行时，并把可托管资产打包成 artifact。
-# 栈大小、线程栈、maxRecDepth 全部保持上游默认；不应用任何内核补丁。
-# 触发器保留 workflow_dispatch 和 PR 分支 push，方便在 GitHub 上重跑。
+# 4.34 的 O3 生产构建，保留作历史对照；生产已切到 4.35（runtime-wasm32-435.yml）。
+# 只手动触发，避免旧的 spike 分支 push 继续产生运行记录。
 on:
   workflow_dispatch:
-  push:
-    branches: [spike/wasm32-runtime-ci]
 
 permissions:
   contents: read

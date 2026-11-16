@@ -1,7 +1,7 @@
 # 本地开发
 
 项目定位见 [README](../README.md)；分发链路见 [ARCHITECTURE](ARCHITECTURE.md)；
-部署与运维见 [OPERATIONS](OPERATIONS.md)。
+部署与运维见 [OPERATIONS](OPERATIONS.md)；CI 工作流地图见 [CI](CI.md)。
 
 ## 常用命令
 
@@ -9,7 +9,7 @@
 pnpm install         # 安装依赖并应用 patches/ 里的 @wasm-idle/lsp 补丁
 pnpm run dev         # 开发服务器（首次会下载并校验运行时资产）
 pnpm run build       # 生产构建（含资产下载）
-pnpm run build:web   # 只构建前端，跳过 102MB 资产（CI 使用）
+pnpm run build:web   # 只构建前端，跳过运行时资产下载（CI 使用）
 pnpm run preview     # 预览构建产物
 pnpm run smoke       # 线上冒烟，发版后跑
 ```
@@ -49,7 +49,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 | `pnpm run typecheck` | 三份 tsconfig：应用、Service Worker、Pages Functions |
 | `pnpm test` | Vitest + 覆盖率阈值 |
 | `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
-| `pnpm run build:web` | 生产构建（跳过 102 MB 资产下载） |
+| `pnpm run build:web` | 生产构建（跳过运行时资产下载） |
 | `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单（`/cdn/*` + `/api/telemetry`）、COOP/COEP、JS 体积预算 |
 | `pnpm run e2e:lessons` | 逐课运行全部代码块，出现 error 级诊断即失败（CI 的 e2e job 内执行） |
 

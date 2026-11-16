@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 里的 Lean 4.34.1 Init 语言服务器。
+浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 里的 Lean 4.35.0 Init 语言服务器。
 没有后端服务，没有构建期编译，全部逻辑在浏览器内完成。
 
 - 线上：<https://criticalthinking.de5.net>（单域名，`lean-init-ide.pages.dev` 仅作回退）
@@ -13,7 +13,7 @@
 
 ## 开始之前
 
-按顺序读：`README.md`（项目定位与用法）→ `docs/ARCHITECTURE.md`（分发链路与目录）→ 本文件（硬约束）→ 你要改的那个模块的源码。
+按顺序读：`README.md`（项目定位与用法）→ `docs/README.md`（文档索引）→ `docs/ARCHITECTURE.md`（分发链路与目录）→ 本文件（硬约束）→ 你要改的那个模块的源码。改 CI、发布或运维时先读 `docs/CI.md` 和 `docs/OPERATIONS.md`。
 
 不要凭猜测修改以下文件。它们的每一个字节都有外部依赖：
 
@@ -60,7 +60,7 @@
 1. **改前**：确认要动的是哪一层；如果涉及清单、路由、响应头，先读一遍上表的「为什么危险」。
 2. **改后**：跑完整门禁，不能只跑 `pnpm test`。
 3. **提交**：一个提交只做一件事；提交信息写清楚「为什么」，不是「改了什么」。
-4. **推送**：`main` 受分支保护，五个 check（`static` / `test` / `build` / `e2e` / `audit`）全绿才允许 PR 合并；直接 push 可行。上线由 CI 的 `deploy` job 负责（`CD_ENABLED=true` 时生效），不要绕过它去手动传文件。
+4. **推送**：`main` 受分支保护，`static` / `test` / `build` / `e2e` / `audit` / `actionlint` 全绿才允许 PR 合并；直接 push 可行。上线由 CI 的 `deploy` job 负责（`CD_ENABLED=true` 时生效），不要绕过它去手动传文件。
 
 ## 质量门禁
 
@@ -70,7 +70,7 @@ pnpm run lint           # ESLint
 pnpm run typecheck      # 三份 tsconfig：应用 / SW / Functions
 pnpm test               # Vitest + 覆盖率阈值
 pnpm run verify:manifest # 资产清单结构 + local 资产字节与哈希
-pnpm run build:web      # 生产构建（跳过 102MB 资产）
+pnpm run build:web      # 生产构建（跳过运行时资产下载）
 pnpm run verify:build   # 产物契约
 pnpm run smoke          # 线上冒烟（发版后跑）
 ```

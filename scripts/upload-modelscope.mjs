@@ -28,11 +28,24 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// 本地凭证文件放在仓库外，避免把 token 写进 git；已存在的环境变量优先。
+const assetsEnvFile =
+  process.env.ASSETS_ENV_FILE ?? join(homedir(), '.config', 'lean-init', 'assets.env');
+if (existsSync(assetsEnvFile)) {
+  for (const line of readFileSync(assetsEnvFile, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!match) continue;
+    const value = match[2].replace(/^["']|["']$/g, '');
+    if (value && process.env[match[1]] === undefined) process.env[match[1]] = value;
+  }
+}
+
 const manifest = JSON.parse(readFileSync(join(root, 'config/lean4-runtime.json'), 'utf8'));
 const args = new Map(
   process.argv

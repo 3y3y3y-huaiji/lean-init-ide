@@ -8,7 +8,22 @@ name: Build wasm32 Lean 4.35 runtime
 on:
   push:
     branches: [spike/lean-4.35]
+    tags: ['runtime-v*']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 构建完成后发布到
+        type: choice
+        options:
+          - none
+          - r2
+          - modelscope
+          - both
+        default: none
+      verify_only:
+        description: 只校验远端对象，不写入
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -154,6 +169,10 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
       - name: 安装构建依赖
         run: sudo apt-get update && sudo apt-get install -y cmake zstd
@@ -309,22 +328,18 @@ jobs:
           test -s work/mini/Mini.olean || { echo '最小文件没有产出 olean'; exit 1; }
           echo '4.35 runtime + Init oleans 冒烟通过'
 
-      - name: 打包 4.35 发布资产
+      - name: 打包 4.35 发布资产（zstd + 清单）
         run: |
           node wasm-llvm/producer/lean-browser/scripts/package.mjs --work work --out work/artifact
+          node scripts/package-runtime-assets.mjs \
+            --artifact work/artifact \
+            --lean-version "$LEAN_VERSION" \
+            --revision "$WASM_LLVM_REV" \
+            --key-prefix "wasm-lean4/$LEAN_VERSION" \
+            --mirror-prefix "wasm-lean4/$LEAN_VERSION" \
+            --fallback-base "https://github.com/${GITHUB_REPOSITORY}/releases/download/runtime-v${LEAN_VERSION}/" \
+            --manifest-out work/artifact/runtime-manifest.json
           ls -lh work/artifact
-          # 给 App 用的 zstd 资产，参数与 scripts/fetch-assets.mjs 一致。
-          node - <<'JS'
-          const fs = require('node:fs');
-          const zlib = require('node:zlib');
-          const wasm = fs.readFileSync('work/dist/lean.wasm');
-          const bin = zlib.zstdCompressSync(wasm, {
-            params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
-          });
-          fs.writeFileSync('work/artifact/lean.wasm.gz.bin', bin);
-          JS
-          cd work/artifact
-          sha256sum lean.mjs lean.wasm.gz lean.wasm.gz.bin > SHA256SUMS
 
       - name: 记录构建参数
         if: always()
@@ -348,3 +363,112 @@ jobs:
             work/mini.log
             work/build-flags.txt
           if-no-files-found: warn
+
+  publish:
+    name: 发布 4.35 运行时资产
+    needs: finish
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish != 'none') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/runtime-v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      PUBLISH_TARGET: ${{ github.event_name == 'push' && 'both' || inputs.publish }}
+      VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_only || 'false' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.18.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # 产物里的路径是 work/artifact/**，所以解压到 work 才能还原原目录。
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm32-runtime-4.35.0
+          path: work
+
+      - name: 准备上传目录与候选清单
+        run: |
+          mkdir -p public/wasm-lean4
+          cp work/artifact/lean.mjs public/wasm-lean4/
+          cp work/artifact/producer-receipt.json public/wasm-lean4/
+          cp work/artifact/lean-init.index.json public/wasm-lean4/
+          cp work/artifact/*.gz.bin public/wasm-lean4/
+          cp scripts/assets/runner-worker.js public/wasm-lean4/
+          cp work/artifact/runtime-manifest.json config/lean4-runtime.json
+          node -e "const m=require('./config/lean4-runtime.json'); console.log('manifest:', m.runtime, m.cacheKey, m.assets.length, 'assets')"
+
+      - name: 发布 GitHub Release（回退源）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="runtime-v${LEAN_VERSION}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "Lean ${LEAN_VERSION} wasm32 runtime" \
+              --notes "wasm32 runtime + Init oleans, packaged by GitHub Actions."
+          fi
+          gh release upload "$TAG" \
+            work/artifact/lean.mjs \
+            work/artifact/producer-receipt.json \
+            work/artifact/lean-init.index.json \
+            work/artifact/*.gz \
+            work/artifact/*.gz.bin \
+            work/artifact/runtime-manifest.json \
+            work/artifact/SHA256SUMS \
+            --clobber
+          gh release upload "$TAG" scripts/assets/runner-worker.js --clobber
+
+      - name: 上传 R2
+        if: env.PUBLISH_TARGET == 'r2' || env.PUBLISH_TARGET == 'both'
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_REGION: auto
+        run: |
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "缺少 R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY secrets"
+            exit 1
+          fi
+          command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
+          if [ "$VERIFY_ONLY" = "true" ]; then
+            pnpm run upload:assets -- --s3 --verify-only
+          else
+            pnpm run upload:assets -- --s3
+          fi
+
+      - name: 上传 ModelScope
+        if: env.PUBLISH_TARGET == 'modelscope' || env.PUBLISH_TARGET == 'both'
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO: HQZMSu/lean4-assets
+          MODELSCOPE_REPO_TYPE: dataset
+        run: |
+          if [ -z "$MODELSCOPE_TOKEN" ]; then
+            echo "缺少 MODELSCOPE_TOKEN secret"
+            exit 1
+          fi
+          command -v git-lfs >/dev/null || (sudo apt-get update && sudo apt-get install -y git-lfs)
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          pnpm run upload:modelscope
+
+      - name: 保存候选清单
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-manifest-4.35.0
+          path: |
+            work/artifact/runtime-manifest.json
+            work/artifact/SHA256SUMS
+
+      - name: 发布摘要
+        run: |
+          node -e "const m=require('./config/lean4-runtime.json'); console.log('runtime:', m.runtime); console.log('cacheKey:', m.cacheKey); console.log('primary:', m.primary.baseUrl); console.log('fallback:', m.fallback.baseUrl); console.log('mirror:', m.mirror.baseUrl + m.mirror.prefix); for (const a of m.assets) console.log(' ', a.key, a.bytes, a.sha256.slice(0, 12));"

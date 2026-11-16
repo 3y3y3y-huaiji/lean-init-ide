@@ -1300,7 +1300,8 @@ end
     exportCode: 'Export .lean',
     lessonPassed: 'Exercise passed',
     librariesTitle: 'Libraries',
-    librariesHint: 'Std and Batteries download on demand and use extra memory; release them anytime.',
+    librariesHint:
+      'Std and Batteries download on demand and use extra memory; release them anytime.',
     libraryBuiltin: 'built in',
     libraryLoad: 'Load',
     libraryLoading: (ratio) => `Downloading ${ratio}`,

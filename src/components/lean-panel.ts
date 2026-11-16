@@ -1376,9 +1376,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       for (const id of [...extensionPackCache.keys()]) {
         if (!previous.has(id)) extensionPackCache.delete(id);
       }
-      extensionPacks = Object.assign({}, ...previous.size
-        ? [...previous].map((id) => extensionPackCache.get(id))
-        : []);
+      extensionPacks = Object.assign(
+        {},
+        ...(previous.size ? [...previous].map((id) => extensionPackCache.get(id)) : []),
+      );
       activeExtensions.clear();
       for (const id of previous) activeExtensions.add(id);
     } finally {

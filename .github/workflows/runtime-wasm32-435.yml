@@ -461,7 +461,7 @@ jobs:
             echo '--- 诊断：生成的 Batteries.lean 前 8 行 ---'
             head -n 8 work/batteries-filtered/Batteries.lean
             echo '--- 诊断：outDir 根级文件 ---'
-            ls -l work/batteries-olean32 | head -n 15
+            find work/batteries-olean32 -maxdepth 1 -type f | head -n 15
             echo '--- 诊断：失败日志 ---'
             head -n 40 work/Batteries.olean-fail.log 2>/dev/null || true
           else

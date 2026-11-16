@@ -221,10 +221,12 @@ const probeRemote = async (asset, attempts = 1) => {
 
 const assets = [
   ...manifest.assets,
-  ...(manifest.extensions ?? []).flatMap((extension) => extension.assets.map((asset) => ({
-    ...asset,
-    extension: true,
-  }))),
+  ...(manifest.extensions ?? []).flatMap((extension) =>
+    extension.assets.map((asset) => ({
+      ...asset,
+      extension: true,
+    })),
+  ),
 ].filter((asset) => only.length === 0 || only.includes(asset.name) || only.includes(asset.key));
 if (assets.length === 0) throw new Error(`no manifest asset matches --only ${only.join(', ')}`);
 

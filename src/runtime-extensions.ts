@@ -71,7 +71,10 @@ const getDecoder = () => {
   decoderPromise ??= (async () => {
     const url = new URL('/vendor/zstddec.mjs', self.location.origin).href;
     const { ZSTDDecoder } = (await import(/* @vite-ignore */ url)) as {
-      ZSTDDecoder: new () => { init: () => Promise<void>; decode: (d: Uint8Array, n: number) => Uint8Array };
+      ZSTDDecoder: new () => {
+        init: () => Promise<void>;
+        decode: (d: Uint8Array, n: number) => Uint8Array;
+      };
     };
     const decoder = new ZSTDDecoder();
     await decoder.init();
@@ -82,12 +85,9 @@ const getDecoder = () => {
 
 const fetchAsset = async (asset: ExtensionAsset) => {
   // 扩展包只发布在 R2/魔搭：用 zstd 标记跳过 GitHub Release 回退。
-  const sources = assetSources(
-    manifest,
-    { ...asset, encoding: 'zstd' },
-    undefined,
-    { includeMirror: true },
-  ).filter((source) => source.url.startsWith('/') || /^https?:/i.test(source.url));
+  const sources = assetSources(manifest, { ...asset, encoding: 'zstd' }, undefined, {
+    includeMirror: true,
+  }).filter((source) => source.url.startsWith('/') || /^https?:/i.test(source.url));
   let lastError: unknown;
   for (const source of sources) {
     try {
@@ -101,7 +101,9 @@ const fetchAsset = async (asset: ExtensionAsset) => {
       lastError = error;
     }
   }
-  throw new Error(`${asset.name} 下载失败：${lastError instanceof Error ? lastError.message : lastError}`);
+  throw new Error(
+    `${asset.name} 下载失败：${lastError instanceof Error ? lastError.message : lastError}`,
+  );
 };
 
 /**
@@ -143,7 +145,9 @@ export const loadExtensionPacks = async (
       onProgress?.(total === 0 ? 0 : loaded / total, extension.label);
       const raw = decoder.decode(new Uint8Array(compressed), chunk.uncompressedBytes);
       if (raw.byteLength !== chunk.uncompressedBytes) {
-        throw new Error(`${chunk.path} 解压后 ${raw.byteLength} 字节，期望 ${chunk.uncompressedBytes}`);
+        throw new Error(
+          `${chunk.path} 解压后 ${raw.byteLength} 字节，期望 ${chunk.uncompressedBytes}`,
+        );
       }
       if ((await sha256Hex(raw.buffer as ArrayBuffer)) !== chunk.uncompressedSha256) {
         throw new Error(`${chunk.path} 解压后 SHA-256 不一致`);

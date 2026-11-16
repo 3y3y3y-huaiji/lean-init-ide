@@ -37,6 +37,18 @@ beforeEach(() => {
   writeFileSync(join(oleanDir, 'Std', 'B.ir'), 'B-ir');
   writeFileSync(join(oleanDir, 'Std', 'B.olean.server'), 'B-server');
   writeFileSync(join(oleanDir, 'Std', 'B.olean.private'), 'B-private');
+  // 根模块本身也要进包，否则运行时 import Std 找不到 Std.olean。
+  writeFileSync(join(oleanDir, 'Std.olean'), 'root-olean');
+  writeFileSync(join(oleanDir, 'Std.ir'), 'root-ir');
+  writeFileSync(join(oleanDir, 'Std.ir.sig'), 'root-ir-sig');
+  writeFileSync(join(oleanDir, 'Std.olean.server'), 'root-server');
+  writeFileSync(join(oleanDir, 'Std.olean.private'), 'root-private');
+  // 仅前缀相同但不是同一模块的目录不能被打进来。
+  mkdirSync(join(oleanDir, 'StdX'), { recursive: true });
+  writeFileSync(join(oleanDir, 'StdX', 'D.olean'), 'D-olean');
+  writeFileSync(join(oleanDir, 'StdX', 'D.ir'), 'D-ir');
+  writeFileSync(join(oleanDir, 'StdX.olean'), 'X-olean');
+  writeFileSync(join(oleanDir, 'StdX.ir'), 'X-ir');
   writeFileSync(join(oleanDir, 'Init', 'C.olean'), 'C-olean');
   writeFileSync(join(oleanDir, 'Init', 'C.ir'), 'C-ir');
 });
@@ -52,8 +64,13 @@ describe('package-runtime-extension', () => {
     const index = JSON.parse(readFileSync(join(outDir, 'lean-std.index.json'), 'utf8'));
     expect(index.schemaVersion).toBe(1);
     expect(index.root).toBe('/lean/lib/lean');
-    expect(index.modules).toBe(2);
+    expect(index.modules).toBe(3);
     expect(index.files.map((file) => file.path)).toEqual([
+      'Std.ir',
+      'Std.ir.sig',
+      'Std.olean',
+      'Std.olean.private',
+      'Std.olean.server',
       'Std/A.ir',
       'Std/A.olean',
       'Std/B.ir',

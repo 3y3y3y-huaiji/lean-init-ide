@@ -47,7 +47,9 @@ const walk = (root, relative = '') => {
   return out;
 };
 
-const underPrefix = (file) => file === prefix || file.startsWith(`${prefix}/`);
+// 前缀匹配同时覆盖根模块本身：<prefix>/... 以及 <prefix>.olean / .ir / .ir.sig 等。
+const underPrefix = (file) =>
+  file === prefix || file.startsWith(`${prefix}/`) || file.startsWith(`${prefix}.`);
 const files = walk(oleanDir)
   .filter((file) => underPrefix(file) && extensions.some((ext) => file.endsWith(ext)))
   .sort();

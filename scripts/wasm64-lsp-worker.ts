@@ -24,6 +24,7 @@ export interface LeanWorkerData {
 }
 
 interface LeanModule {
+  ENV?: Record<string, string>;
   FS: {
     mkdirTree(path: string): void;
     writeFile(path: string, data: Uint8Array): void;
@@ -77,17 +78,31 @@ for (const [path, text] of Object.entries(data.files)) {
   lean.FS.writeFile(path, new TextEncoder().encode(text));
 }
 
-// fd 1 是 LSP 协议通道，原样交给父线程解析帧。fd 0 由 glue 的环形缓冲补丁接管。
-const fd1 = lean.FS.getStream(1);
-fd1.stream_ops = {
-  ...fd1.stream_ops,
-  write(_stream: unknown, buffer: Uint8Array, offset: number, length: number): number {
-    const chunk = Uint8Array.from(buffer.subarray(offset, offset + length));
-    if (process.env.LEAN_WASM_DIAG_DEBUG) port.postMessage({ debug: `fd1 write ${length}` });
-    port.postMessage({ stdout: chunk });
-    return length;
-  },
-};
+// fd 1 是 LSP 协议通道，fd 2 转发 stderr（避免 pthread 写入在 proxy 模式下丢输出）。
+const stderrDecoder = new TextDecoder();
+for (const fd of [1, 2] as const) {
+  const stream = lean.FS.getStream(fd);
+  stream.stream_ops = {
+    ...stream.stream_ops,
+    write(_stream: unknown, buffer: Uint8Array, offset: number, length: number): number {
+      const chunk = Uint8Array.from(buffer.subarray(offset, offset + length));
+      if (fd === 1) {
+        if (process.env.LEAN_WASM_DIAG_DEBUG) port.postMessage({ debug: `fd1 write ${length}` });
+        port.postMessage({ stdout: chunk });
+      } else if (length > 0) {
+        port.postMessage({ stderr: stderrDecoder.decode(chunk) });
+      }
+      return length;
+    },
+  };
+}
+
+if (lean.ENV) {
+  for (const key of ['LEAN_WASM_TRACE', 'LEAN_STACK_SIZE_KB', 'LEAN_MAIN_USE_THREAD']) {
+    const val = process.env[key];
+    if (val !== undefined) lean.ENV[key] = val;
+  }
+}
 
 lean.FS.chdir('/workspace');
 port.postMessage({ ready: true });

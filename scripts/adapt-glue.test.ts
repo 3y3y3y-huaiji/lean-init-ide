@@ -38,7 +38,7 @@ describe('adaptGlue', () => {
     expect(fdReadSnippet).toContain('__emscripten_check_mailbox');
     expect(fdReadSnippet).toContain('!ENVIRONMENT_IS_PTHREAD');
     expect(fdReadSnippet).toContain('throw e');
-    expect(fdReadSnippet).toMatch(/Atomics\.wait\(c,0,Atomics\.load\(c,0\),20\)/);
+    expect(fdReadSnippet).toMatch(/Atomics\.wait\(c,0,Atomics\.load\(c,0\),1\)/);
   });
 
   it('锚点缺失时直接失败，而不是静默产出坏 glue', () => {

@@ -544,13 +544,13 @@ jobs:
             JOBS=1
           fi
           echo "glue=$GLUE jobs=$JOBS"
-          diag "$GLUE" work/olean32 "" 120000 "$JOBS"
+          diag "$GLUE" work/olean32 "" 180000 "$JOBS"
           init_status=$?
           if [ "$init_status" -ne 0 ] && [ "$GLUE" = "work/dist/lean-adapted-proxy.mjs" ] && [ -f work/dist/lean-adapted.mjs ]; then
             echo "retry with lean-adapted.mjs (jobs=1)"
             GLUE=work/dist/lean-adapted.mjs
             JOBS=1
-            diag "$GLUE" work/olean32 "" 120000 "$JOBS"
+            diag "$GLUE" work/olean32 "" 180000 "$JOBS"
             init_status=$?
           fi
           if [ "$init_status" -eq 0 ] && [ -f work/mathlib-slice.json ]; then

@@ -28,9 +28,16 @@ if(fd===0&&Module["lspStdin"]){
  // 主线程等 stdin 时必须顺手泵一次 Emscripten 的代理队列：
  // 诊断输出来自 dedicated 线程，_fd_write 会 proxy 回主线程；主线程若直接 Atomics.wait，
  // 代理永远没机会执行，表现为「帧都读了但一条 publishDiagnostics 都没有」。
+ // 1ms 短等避免卡住 MEMFS 的大量同步代理 syscall（20ms 会把 import Init 拖过超时）。
  while(Atomics.load(c,0)===Atomics.load(c,1)&&!Atomics.load(c,2)){
-  Atomics.wait(c,0,Atomics.load(c,0),20);
-  try{if(!ENVIRONMENT_IS_PTHREAD&&typeof __emscripten_check_mailbox==='function')__emscripten_check_mailbox()}catch(e){console.error('[lsp] mailbox error:',e);throw e}
+  if(!ENVIRONMENT_IS_PTHREAD&&typeof __emscripten_check_mailbox==='function'){
+   try{__emscripten_check_mailbox()}catch(e){console.error('[lsp] mailbox error:',e);throw e}
+   if(Atomics.load(c,0)!==Atomics.load(c,1)||Atomics.load(c,2))break;
+   Atomics.wait(c,0,Atomics.load(c,0),1);
+   try{__emscripten_check_mailbox()}catch(e){console.error('[lsp] mailbox error:',e);throw e}
+  }else{
+   Atomics.wait(c,0,Atomics.load(c,0),100);
+  }
  }
  growMemViews();var total=0,stop=false;
  for(var k=0;k<iovcnt&&!stop;k++){growMemViews();var ptr=Number(HEAPU64[iov/8]),len=Number(HEAPU64[(iov+8)/8]);iov+=16;
@@ -113,7 +120,14 @@ const main = (): void => {
   );
   const sourceFile = requireFile(sourcePath, 'source');
   if (!targetPath) throw new CliError('缺少 target');
-  const { glue } = adaptGlue(readFileSync(sourceFile, 'utf8'));
+  const sourceText = readFileSync(sourceFile, 'utf8');
+  const fdIdx = sourceText.indexOf('function _fd_read(');
+  if (fdIdx >= 0) console.log(`fd_read ctx: ${sourceText.slice(fdIdx, fdIdx + 220)}`);
+  const impIdx = sourceText.indexOf('fd_read:');
+  if (impIdx >= 0) {
+    console.log(`fd_read import: ${sourceText.slice(Math.max(0, impIdx - 60), impIdx + 80)}`);
+  }
+  const { glue } = adaptGlue(sourceText);
   writeFileSync(targetPath, glue);
   console.log(`adapted ${targetPath} (${glue.length} bytes)`);
 };

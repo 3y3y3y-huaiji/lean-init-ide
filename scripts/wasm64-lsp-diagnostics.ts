@@ -162,9 +162,12 @@ export const createSession = ({
 
   const dispatch = (message: LspMessage): void => {
     if (process.env.LEAN_WASM_DIAG_DEBUG) {
-      console.error(
-        `[diag] recv method=${message.method ?? '<response>'} id=${String(message.id ?? '-')}`,
-      );
+      const method = message.method ?? '<response>';
+      const count =
+        method === 'textDocument/publishDiagnostics'
+          ? ` count=${diagnosticsOf(message).length}`
+          : '';
+      console.error(`[diag] recv method=${method} id=${String(message.id ?? '-')}${count}`);
     }
     for (let i = 0; i < waiters.length; i += 1) {
       const waiter = waiters[i];
@@ -451,4 +454,13 @@ const main = async (): Promise<void> => {
   }
 };
 
-if (isMainModule(import.meta.url, process.argv[1])) runCli(main);
+if (isMainModule(import.meta.url, process.argv[1])) {
+  runCli(async () => {
+    await main();
+    // worker 里的 pthread 可能卡在 Atomics.wait，Node 不会自己退出；
+    // 刷新 stdout 后强制收尾，否则 CI 步骤会一直挂到 timeout。
+    const code = process.exitCode ?? 0;
+    await new Promise<void>((resolve) => process.stdout.write('', () => resolve()));
+    process.exit(code);
+  });
+}

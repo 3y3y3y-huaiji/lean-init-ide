@@ -147,6 +147,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
 - 编译 Mathlib 不能带 `-Dinterpreter.prefer_native=false`：带 `initialize` 块的 Mathlib/Batteries 模块会踩 `ir_interpreter.cpp` 的 `mkDummyExternDecl` 断言（`fn_body_tag != Unreachable`）。默认解释器设置下同样的模块直接编过；编译步现在对失败模块自动用默认设置重试一次。
 - `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。根因是 stdin 走的是 Emscripten 的 TTY 钩子/线程代理，worker 里没有可读的 fd 0。移植 SDK 的 glue 适配（`scripts/adapt-glue.ts`：`lspStdin` 透传、fd0 环形缓冲、线程回收走代理）后才真正把帧送进 Lean。
+- 4.36 下帧已经能送进 FileWorker（收到 `$/lean/ileanHeaderSetupInfo` 和一条**空的** `publishDiagnostics`），但随后异步 elaboration 不再推进，连 hover 请求都没有响应。线程池已按 SDK 的做法从 8 提到 16（`link-wasm64-lsp.sh` / `link-wasm64-release.sh`），诊断步骤限时 25 分钟，脚本在结论处强制 `process.exit`，避免 worker 卡在 `Atomics.wait` 把 CI 拖到硬超时。
 - 环形缓冲的 `_fd_read` 第一版照抄 wasm32 的 iovec 布局，在 memory64 下读出一整段零：`struct iovec` 是 16 字节（8 字节 base + 8 字节 len），`iov_len` 必须从 `iov+8` 取，`nread` 也必须写 8 字节的 `size_t`（`HEAPU64[pnum/8]`）。按 8 字节 stride 取到的是 `iov_base` 的高 32 位，写回只写低 32 位则让宿主看到巨大的读取长度，表现为 `Invalid header field` 后 `main returned 1`。
 
 ## CI 门禁
@@ -162,6 +163,8 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 | Workflow 语法 | `actionlint` | 校验 `.github/workflows/*.yml` |
 
 脚本全部是 TS，Node 24 直接执行（原生类型擦除），不再有 `.mjs` 与 `.ts` 混用。
+workflow 的 `actions/setup-node` 统一为 `@v7`（Node 24 action runtime），`package.json` 声明 `engines.node >= 24`。
+诊断步骤 `timeout-minutes: 25`：Init 两轮各 120 秒，Mathlib 900 秒，脚本结束后强制退出，不会再出现「日志停在超时、步骤却挂 45 分钟」。
 命令行参数统一走 `scripts/lib/cli.ts`：未知参数、缺值、空字符串、非数字都会以退出码 2 失败，
 workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 
@@ -189,7 +192,7 @@ oleans 的 githash 检查能过（运行时确实是新版），但前端还是�
 ## 尚未验证
 
 - 浏览器内 LSP：浏览器侧只验证了 CLI 编译（`--mode=version|compile`），`--server`/`--worker` 目前只在 Node 里跑
-- `didOpen → publishDiagnostics`：worker 模式收帧正常但整个输出通道无响应（hover 也不回），已排除 `setupFile` 的 spawn 与主线程阻塞；下一步需移植 SDK 的 glue 适配。
+- `didOpen → publishDiagnostics`：worker 模式已能收到 `ileanHeaderSetupInfo` 与空诊断，但异步 elaboration 随后停滞；已把 pthread 池对齐到 16 并限制步骤时长，下一步据此判断是线程池耗尽还是 4.36 异步任务调度在 wasm64 下的问题。
 - 内存占用与性能：`-O2` + memory64 + 1GB 上限下的实际峰值未测；66 模块在 wasm64 下每模块约 1–5 秒（带缓存）
 
 ## 复现

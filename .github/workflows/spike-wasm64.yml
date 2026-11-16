@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -58,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -187,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -514,7 +514,9 @@ jobs:
       # watchdog 模式的 didOpen 会 Process.spawn（wasm 不支持），所以按 SDK 的做法直接起文件 worker。
       - name: LSP 诊断链路（--worker，publishDiagnostics）
         continue-on-error: true
-        timeout-minutes: 45
+        # Init 两轮各 120s，Mathlib 900s；脚本本身会在结束时强制退出，
+        # 这里再留一倍余量，避免 worker 卡死时拖到 runner 的 6 小时上限。
+        timeout-minutes: 25
         env:
           LEAN_WASM_DIAG_DEBUG: '1'
         run: |
@@ -529,12 +531,12 @@ jobs:
           set +e
           if [ -f work/dist/lean-adapted.mjs ]; then GLUE=work/dist/lean-adapted.mjs; else GLUE=work/dist/lean.mjs; fi
           echo "glue=$GLUE"
-          diag "$GLUE" work/olean32 "" 300000
+          diag "$GLUE" work/olean32 "" 120000
           init_status=$?
           if [ "$init_status" -ne 0 ] && [ -f work/dist/lean-adapted-proxy.mjs ]; then
             echo "retry with lean-adapted-proxy.mjs"
             GLUE=work/dist/lean-adapted-proxy.mjs
-            diag "$GLUE" work/olean32 "" 300000
+            diag "$GLUE" work/olean32 "" 120000
             init_status=$?
           fi
           if [ "$init_status" -eq 0 ] && [ -f work/mathlib-slice.json ]; then

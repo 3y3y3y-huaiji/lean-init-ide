@@ -5,6 +5,9 @@
   "license": "(Apache-2.0 OR MulanPSL-2.0)",
   "description": "Browser-native Lean 4 Init IDE: Monaco + the upstream Lean language server running in WebAssembly workers.",
   "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "vite",
     "predev": "node scripts/fetch-assets.mjs && pnpm run build:sw",

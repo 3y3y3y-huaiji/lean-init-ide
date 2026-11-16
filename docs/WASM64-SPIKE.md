@@ -150,14 +150,19 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 | 名称 | key |
 | --- | --- |
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
-| Lean 源码与引导包 | `wasm64-src-v5` |
-| runtime（-O2 + GMP） | `wasm64-runtime-v13` |
-| cgen | `wasm64-cgen-v1` |
-| objects（-O2 + GMP） | `wasm64-obj-v8` |
+| Lean 源码与引导包 | `wasm64-src-v6` |
+| runtime（-O2 + GMP） | `wasm64-runtime-v14-<pin hash>` |
+| cgen | `wasm64-cgen-v2-<pin hash>` |
+| objects（-O2 + GMP） | `wasm64-obj-v9-<pin hash>` |
 | GMP（wasm64 静态库） | `wasm64-gmp-v1` |
 | 官方 64 位 oleans | 不缓存，直接从引导包 `work/lean-*-linux/lib/lean` 复制到 `work/olean32` |
-| Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v2` |
-| Mathlib 裁切编译产物 | `wasm64-mathlib-lib2-<run_number>`，`restore-keys: wasm64-mathlib-lib2-` 取最新，逐轮增量 |
+| Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v3` |
+| Mathlib 裁切编译产物 | `wasm64-mathlib-lib3-<pin hash>-<run_number>`，`restore-keys: wasm64-mathlib-lib3-<pin hash>-` 取最新，逐轮增量 |
+
+`<pin hash>` 是 `hashFiles('scripts/pin-lean.mjs')`。runtime / cgen / objects / Mathlib 产物的缓存键都带上它：
+`stage_cgen` 对已存在的 `.c` 直接跳过、不会随 Lean 版本失效，换版本后会拿旧版生成的 C 去配新版运行时，链出一个「混血」wasm——
+oleans 的 githash 检查能过（运行时确实是新版），但前端还是旧版，`#eval` 报 `cannot evaluate code because '[anonymous]' uses 'sorry'`。
+换 Lean 版本必须让这几类缓存一起失效。
 
 `work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ir 文件，`work/mathlib-lib` 是同一份官方库加上自己编出来的 Mathlib/Batteries olean。
 

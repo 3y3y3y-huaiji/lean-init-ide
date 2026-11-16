@@ -277,7 +277,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v13
+          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.mjs') }}
 
       - name: runtime
         run: |
@@ -292,7 +292,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v1
+          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.mjs') }}
 
       - name: cgen
         run: |
@@ -393,13 +393,13 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v13
+          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.mjs') }}
 
       - name: 恢复 cgen
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v1
+          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.mjs') }}
 
       # 诊断：确认 level category 注册后立刻查不到，是 Name 的 hash/eq 不一致，还是 map 本身丢了写入。
       # 只改动 Level.c，复用 objects 缓存，几分钟一轮。
@@ -519,7 +519,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v8
+          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.mjs') }}
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -548,7 +548,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v8
+          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.mjs') }}
 
       - name: link
         run: |
@@ -672,7 +672,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/mathlib
-          key: wasm64-mathlib-src-v2
+          key: wasm64-mathlib-src-v3
 
       - name: 裁切 Mathlib 依赖闭包
         timeout-minutes: 30
@@ -729,9 +729,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: work/mathlib-lib
-          key: wasm64-mathlib-lib2-${{ github.run_number }}
+          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.mjs') }}-${{ github.run_number }}
           restore-keys: |
-            wasm64-mathlib-lib2-
+            wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.mjs') }}-
 
       # 每个文件单独起一次 wasm64 进程：EXIT_RUNTIME=1 之后同一实例不能复用。
       # 已编译的 olean 直接跳过，配合缓存可以逐轮补齐。

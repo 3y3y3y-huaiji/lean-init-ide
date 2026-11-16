@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
       - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
@@ -41,6 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
       - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
@@ -64,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
       - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
@@ -89,6 +95,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
       - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
@@ -149,6 +157,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
       - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0
@@ -169,6 +179,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
       - uses: pnpm/action-setup@v6
         with:
           version: 12.18.0

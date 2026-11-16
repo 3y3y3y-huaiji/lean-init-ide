@@ -1,0 +1,34 @@
+name: Host info
+description: 打印当前 runner 的系统、CPU、内存与磁盘参数，并写入 Job Summary
+
+runs:
+  using: composite
+  steps:
+    - name: 打印主机参数
+      shell: bash
+      run: |
+        model=$(lscpu | awk -F: '/Model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}')
+        os=$(sed -n 's/^PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release)
+        {
+          echo "## Runner Host Info"
+          echo ""
+          echo "| 项目 | 值 |"
+          echo "| --- | --- |"
+          echo "| 时间 | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |"
+          echo "| 内核 | $(uname -srm) |"
+          echo "| 发行版 | ${os} |"
+          echo "| CPU | ${model} |"
+          echo "| vCPU | $(nproc) |"
+          echo "| 内存 | $(free -h | awk '/^Mem:/ {print $2}') |"
+          echo "| 根分区可用 | $(df -h / | awk 'NR==2 {print $4}') |"
+          echo ""
+          echo "<details><summary>完整 lscpu / free / df</summary>"
+          echo ""
+          echo '```'
+          lscpu
+          free -h
+          df -h
+          echo '```'
+          echo ""
+          echo "</details>"
+        } | tee -a "$GITHUB_STEP_SUMMARY"

@@ -4,16 +4,6 @@ import { draftKeyFor } from '../draft';
 import { messagesFor, type Locale } from '../i18n';
 import { getAutoStart } from '../settings';
 
-const DEFAULT_CODE = `def bad : Nat := true
-
-theorem add_comm (a b : Nat) : a + b = b + a := by
-  induction a with
-  | zero => simp
-  | succ a ih => simp only [Nat.succ_add, Nat.add_succ, ih]
-
-#check Nat.add
-`;
-
 export const renderPlayground = (locale: Locale = 'zh'): string =>
   `<div data-role="playground">${renderLeanMarkup(locale, 'full', messagesFor(locale).playground)}</div>`;
 
@@ -38,7 +28,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   // 课程页的「练习」按钮会带 ?lesson=<slug> 过来，直接载入该课的 starter。
   const slug = new URLSearchParams(location.search).get('lesson');
   const lesson = messagesFor(locale).lesson.lessons.find((item) => item.slug === slug);
-  const code = lesson?.exercise?.starter ?? DEFAULT_CODE;
+  const code = lesson?.exercise?.starter ?? messagesFor(locale).playground.defaultCode;
 
   // 把 3.5MB Monaco 与 LSP 推迟到页面骨架渲染完再按需加载，不阻塞首屏 H1 绘制。
   const { createLeanPanel } = await import('../components/lean-panel');

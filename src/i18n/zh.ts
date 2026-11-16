@@ -1256,6 +1256,24 @@ export const zh: Messages = {
   playground: {
     title: 'Lean 编辑器',
     hint: '首次启动需下载约 102MB 运行时，之后会持久缓存。',
+    defaultCode: `open Classical
+
+noncomputable section
+
+-- “这很显然。”
+example (n : Nat) : n + 0 = n := rfl
+
+-- “留作习题。”
+theorem exercise_for_reader (a b : Nat) : a + b = b + a := by
+  sorry
+
+-- “由选择公理，挑一个就行。”
+example (α : Type) (h : Nonempty α) : α := Classical.choice h
+
+#check Classical.choice
+
+end
+`,
     start: '启动 Lean',
     stop: '关闭 Lean',
     goalTitle: 'Goal',
@@ -1282,6 +1300,12 @@ export const zh: Messages = {
     showPanels: '显示面板',
     resizeHint: '拖动调整编辑器高度',
     splitHint: '拖动调整左右栏宽度',
+    selectAll: '全选',
+    copySelection: '复制',
+    paste: '粘贴',
+    copied: '已复制',
+    pasted: '已粘贴',
+    clipboardFailed: '无法访问剪贴板，请长按编辑区使用系统菜单',
     logCompletion: (line, column, count) => `补全 @${line}:${column} -> ${count} 项`,
     logHover: (line, column, found) => `悬停 ${line}:${column} -> ${found ? '有结果' : 'null'}`,
     logRequestFailed: (method, message) => `${method} 失败：${message}`,

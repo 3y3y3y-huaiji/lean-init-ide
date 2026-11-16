@@ -76,4 +76,5 @@ wrangler.toml        Pages 项目配置与 R2 binding
 ```
 
 仓库不保留生成的 JS 产物：`src/sw.ts` 由 `pnpm run build:sw` 编译成 `public/sw.js`（不入库）；
-`config/lean4-runtime.json` 是唯一资产清单。
+`config/lean4-runtime.json` 是唯一资产清单：`assets` 是启动必需的 Init 运行时，`extensions`
+（Std / Batteries）只登记索引与分片，供编辑器按需下载并挂载到同一个 Lean 进程。

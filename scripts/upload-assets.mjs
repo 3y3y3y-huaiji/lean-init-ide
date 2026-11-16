@@ -63,6 +63,9 @@ const dryRun = has('--dry-run');
 const verifyOnly = has('--verify-only');
 const forceUpload = has('--force-upload');
 const s3 = has('--s3') || process.env.R2_S3 === '1';
+// 扩展包不进入构建期下载目录；默认读 work/extensions，可用 --extensions 覆盖。
+const extensionDir =
+  option('--extensions') ?? process.env.LEAN_EXTENSION_DIR ?? path.join(root, 'work', 'extensions');
 // 空字符串同样视为未设置：GitHub Actions 里缺失的 secret 会变成空串。
 const { profile, endpoint, bucket } = resolveUploadConfig({
   s3,
@@ -216,9 +219,17 @@ const probeRemote = async (asset, attempts = 1) => {
   throw lastError;
 };
 
-const assets = manifest.assets.filter(
-  (asset) => only.length === 0 || only.includes(asset.name) || only.includes(asset.key),
-);
+const assets = [
+  ...manifest.assets,
+  ...(manifest.extensions ?? []).flatMap((extension) =>
+    extension.assets.map((asset) => ({
+      ...asset,
+      extension: true,
+    })),
+  ),
+]
+  .filter((asset) => only.length === 0 || only.includes(asset.name) || only.includes(asset.key))
+  .filter((asset) => !has('--extensions-only') || asset.extension === true);
 if (assets.length === 0) throw new Error(`no manifest asset matches --only ${only.join(', ')}`);
 
 let uploaded = 0;
@@ -226,7 +237,11 @@ let skipped = 0;
 let verified = 0;
 
 for (const asset of assets) {
-  const sourcePath = asset.local ? path.join(root, asset.local) : path.join(outDir, asset.name);
+  const sourcePath = asset.local
+    ? path.join(root, asset.local)
+    : asset.extension
+      ? path.join(extensionDir, asset.name)
+      : path.join(outDir, asset.name);
   if (!existsSync(sourcePath)) {
     throw new Error(`missing ${sourcePath}; run "npm run fetch:assets" first`);
   }
@@ -237,7 +252,8 @@ for (const asset of assets) {
     throw new Error(`${asset.name} failed local verification (${size} bytes / ${digest})`);
   }
   const localMd5 = md5(data);
-  const relativePath = path.relative(root, sourcePath).split(path.sep).join('/');
+  const relative = path.relative(root, sourcePath);
+  const bodyPath = relative.startsWith('..') ? sourcePath : relative.split(path.sep).join('/');
 
   let remote = null;
   if (s3) {
@@ -293,7 +309,7 @@ for (const asset of assets) {
       '--key',
       asset.key,
       '--body',
-      relativePath,
+      bodyPath,
       '--content-type',
       asset.contentType,
       '--cache-control',
@@ -307,7 +323,7 @@ for (const asset of assets) {
       continue;
     }
 
-    console.log(`upload ${asset.key} <- ${relativePath} (${size} bytes)`);
+    console.log(`upload ${asset.key} <- ${bodyPath} (${size} bytes)`);
     aws(putArgs, { stdio: 'inherit', encoding: undefined });
     uploaded += 1;
 
@@ -331,7 +347,7 @@ for (const asset of assets) {
     'put',
     `${bucket}/${asset.key}`,
     '--file',
-    relativePath,
+    bodyPath,
     '--content-type',
     asset.contentType,
     '--cache-control',
@@ -345,7 +361,7 @@ for (const asset of assets) {
     continue;
   }
 
-  console.log(`upload ${asset.key} <- ${relativePath} (${size} bytes)`);
+  console.log(`upload ${asset.key} <- ${bodyPath} (${size} bytes)`);
   wrangler(putArgs);
   uploaded += 1;
 

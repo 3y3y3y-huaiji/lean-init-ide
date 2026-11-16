@@ -25,9 +25,11 @@ type Context = {
   waitUntil?: (promise: Promise<unknown>) => void;
 };
 
-const assets = new Map<string, RuntimeAsset>(
-  (manifest.assets as unknown as RuntimeAsset[]).map((asset) => [asset.key, asset]),
-);
+const extensions = (manifest as unknown as { extensions?: Array<{ assets: RuntimeAsset[] }> })
+  .extensions;
+const runtimeAssets = [...(manifest.assets as unknown as RuntimeAsset[])];
+for (const extension of extensions ?? []) runtimeAssets.push(...extension.assets);
+const assets = new Map<string, RuntimeAsset>(runtimeAssets.map((asset) => [asset.key, asset]));
 
 const CACHE_CONTROL = 'public,max-age=31536000,immutable';
 

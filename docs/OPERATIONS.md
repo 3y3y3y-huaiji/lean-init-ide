@@ -146,7 +146,13 @@ pnpm run upload:assets               # 上传缺失/变更的对象，经同源�
 pnpm run upload:assets -- --verify-only
 pnpm run upload:modelscope -- --verify-only          # 只校验魔搭镜像
 pnpm run upload:modelscope -- --prune --metadata     # 同步资产、清理旧 revision、写数据集卡片
+# 扩展库（Std / Batteries）：把构建产物解压到 work/extensions/ 后带上 --extensions
+pnpm run upload:assets -- --s3 --extensions work/extensions
+pnpm run upload:modelscope -- --extensions work/extensions --metadata
 ```
+
+- 扩展包不进构建期下载目录（`public/wasm-lean4/`），由编辑器按需拉取；上传脚本通过 `--extensions`（或 `LEAN_EXTENSION_DIR`）定位文件。
+- 扩展资产登记在 `config/lean4-runtime.json` 的 `extensions` 数组里，key 位于 `wasm-lean4/<version>/extensions/<id>/`；魔搭镜像仍是扁平目录。
 
 - `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/` 下的 4.34 历史资产和 `wasm-lean4/4.35.0/`。
 - `--metadata` 会写 `README.md`（模型卡）、`LICENSE`（Apache-2.0）、`.gitattributes` 的 LFS 规则和 `wasm-lean4/4.35.0/SHA256SUMS`。

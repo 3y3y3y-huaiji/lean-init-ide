@@ -8,3 +8,4 @@ public/sw.js
 scripts/assets
 wrangler.toml
 *.md
+config/lean4-runtime.json

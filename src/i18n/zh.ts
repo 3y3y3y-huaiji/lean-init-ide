@@ -59,7 +59,7 @@ export const zh: Messages = {
     ],
     limitsTitle: '当前边界',
     limitsBody:
-      '只内置 Init，不含 Std / Lean / Lake / Mathlib，所以课程内容限定在基础类型、List 与命题逻辑。需要 cross-origin isolation，Chromium 系浏览器体验最佳。',
+      '内置 Init；Std 与 Batteries 作为扩展包按需加载，不含 Lean / Lake / Mathlib，课程内容限定在基础类型、List 与命题逻辑。需要 cross-origin isolation，Chromium 系浏览器体验最佳。',
     courseTitle: '第一课：认识 Lean',
     courseBody:
       '先弄明白 Lean 是什么、这门课为什么只用 Init，再从 #check 和 #eval 一路走到第一个归纳证明。',
@@ -1295,6 +1295,15 @@ end
     resetConfirmAction: '确认重置？',
     exportCode: '导出 .lean',
     lessonPassed: '本关已通过',
+    librariesTitle: '库',
+    librariesHint: 'Std 与 Batteries 按需下载，会额外占用内存；用完可随时释放。',
+    libraryBuiltin: '内置',
+    libraryLoad: '加载',
+    libraryLoading: (ratio) => `下载 ${ratio}`,
+    libraryLoaded: '已加载',
+    libraryRelease: '释放',
+    libraryRestarting: '正在重启 Lean…',
+    libraryError: (message) => `扩展库加载失败：${message}`,
     expand: '展开',
     panelsTitle: '面板显示',
     showPanels: '显示面板',
@@ -1312,7 +1321,7 @@ end
     logGoalFailed: (message) => `$/lean/plainGoal 失败：${message}`,
     logTitle: '日志',
     footer:
-      '浏览器内真实 Lean LSP · 仅支持 Init，不支持 Std / Lean / Lake / Mathlib · Chromium 优先',
+      '浏览器内真实 Lean LSP · Init 内置，Std / Batteries 按需加载 · 不含 Lean / Lake / Mathlib · Chromium 优先',
     openFull: '打开完整编辑器',
     statusIdle: '未启动',
     statusLowMemory: '低内存设备 · 手动启动',
@@ -1548,7 +1557,7 @@ end
   },
   footer: {
     license: 'Apache-2.0 OR MulanPSL-2.0',
-    note: '浏览器内真实 Lean LSP · 仅支持 Init',
+    note: '浏览器内真实 Lean LSP · Init + Std + Batteries',
     repo: '源码',
     privacy: '隐私',
   },

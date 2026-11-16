@@ -25,6 +25,17 @@ on:
         description: 只校验远端对象，不写入
         type: boolean
         default: false
+      publish_scope:
+        description: 发布范围（extensions 只上传扩展包，不动 Init 运行时）
+        type: choice
+        options:
+          - all
+          - extensions
+        default: all
+      build_extensions:
+        description: 同时编译 Std + Batteries 扩展 pack
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,6 +53,8 @@ env:
   BOOTSTRAP_URL: https://github.com/leanprover/lean4/releases/download/v4.35.0/lean-4.35.0-linux.tar.zst
   BOOTSTRAP_BYTES: 594481375
   BOOTSTRAP_SHA256: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
+  BATTERIES_TAG: v4.35.0
+  BATTERIES_COMMIT: 66e469188fe07963e5cf666c7d4433f45b8131c5
 
 jobs:
   prepare:
@@ -343,6 +356,159 @@ jobs:
             --manifest-out work/artifact/runtime-manifest.json
           ls -lh work/artifact
 
+      - name: 缓存 4.35 Std 扩展 oleans
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/cache@v6
+        with:
+          path: work/std-olean32
+          key: wasm435-std-olean32-v1
+
+      - name: 编译 4.35 Std 扩展 oleans
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        timeout-minutes: 300
+        run: |
+          BOOT="$(find "$GITHUB_WORKSPACE/work" -maxdepth 1 -type d -name 'lean-*-linux' -print -quit)"
+          [ -n "$BOOT" ] || { echo '找不到 lean-*-linux 引导目录'; exit 1; }
+          mkdir -p "$GITHUB_WORKSPACE/work/std-olean32"
+          cp -a "$GITHUB_WORKSPACE/work/olean32/Init" "$GITHUB_WORKSPACE/work/std-olean32/"
+          (
+            cd "$GITHUB_WORKSPACE/work/lean4/src"
+            (cd "$BOOT/lib/lean" && find Init Std -name '*.olean' | sed 's/\.olean$//'; printf 'Init\nStd\n') \
+              | LC_ALL=C sort > "$GITHUB_WORKSPACE/work/std-modules.txt"
+            : > "$GITHUB_WORKSPACE/work/deps.txt"
+            while read -r module; do
+              deps="$(LEAN_PATH="$BOOT/lib/lean" "$BOOT/bin/lean" --deps "$module.lean" | sed "s#^$BOOT/lib/lean/##; s#\.olean\$##" | tr '\n' ' ')"
+              printf '%s: %s\n' "$module" "$deps" >> "$GITHUB_WORKSPACE/work/deps.txt"
+            done < "$GITHUB_WORKSPACE/work/std-modules.txt"
+          )
+          node wasm-llvm/producer/lean-browser/scripts/build-oleans.mjs \
+            "$GITHUB_WORKSPACE/work/dist/lean.mjs" \
+            "$GITHUB_WORKSPACE/work" \
+            "$GITHUB_WORKSPACE/work/lean4/src" \
+            "$GITHUB_WORKSPACE/work/std-olean32" \
+            3 Init Std
+          find "$GITHUB_WORKSPACE/work/std-olean32/Std" -name '*.olean' | wc -l
+
+      - name: 冒烟：wasm 运行时 import Std
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          mkdir -p work/std-src
+          printf 'import Std\nexample : 1 + 1 = 2 := rfl\n' > work/std-src/Test.lean
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/std-src work/std-olean32 -- \
+            -j1 -R /src -o /src/Test.olean /src/Test.lean
+          test -s work/std-src/Test.olean
+
+      - name: 打包 Std 扩展 pack
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          node scripts/package-runtime-extension.mjs \
+            --oleans work/std-olean32 --prefix Std --name lean-std --out work/extensions/std
+          ls -lh work/extensions/std
+
+      - name: 上传 Std 扩展 pack
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm32-std-pack
+          path: work/extensions/std/**
+          if-no-files-found: warn
+
+      - name: 缓存 Batteries 源码
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/cache@v6
+        with:
+          path: work/batteries
+          key: batteries-v4.35.0
+
+      - name: 拉取 Batteries 4.35.0
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          if [ ! -d work/batteries/.git ]; then
+            rm -rf work/batteries
+            git clone --depth 1 --branch "$BATTERIES_TAG" https://github.com/leanprover-community/batteries.git work/batteries
+          fi
+          actual="$(git -C work/batteries rev-parse HEAD)"
+          test "$actual" = "$BATTERIES_COMMIT" || { echo "Batteries commit $actual != $BATTERIES_COMMIT"; exit 1; }
+
+      - name: 缓存 Batteries oleans
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/cache@v6
+        with:
+          path: work/batteries-olean32
+          key: wasm435-batteries-olean32-v1
+
+      - name: 准备 Batteries 无 Lean 子集
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          BOOT="$(find "$GITHUB_WORKSPACE/work" -maxdepth 1 -type d -name 'lean-*-linux' -print -quit)"
+          [ -n "$BOOT" ] || { echo '找不到 lean-*-linux 引导目录'; exit 1; }
+          # 整目录复制：除了 Init/ Std/ 子目录，根级 Init.olean/Std.olean 和 .ir
+          # 也要带上，build-oleans 才会把它们当作已构建，只编译 Batteries。
+          # 不删目录，避免把缓存里已有的 Batteries oleans 清掉。
+          mkdir -p work/batteries-olean32
+          cp -a work/std-olean32/. work/batteries-olean32/
+          node scripts/prepare-batteries-extension.mjs \
+            --batteries work/batteries --bootstrap "$BOOT" \
+            --work work --out-src work/batteries-filtered --out-deps work/deps.txt
+
+      - name: 编译 Batteries 子集 oleans
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        timeout-minutes: 300
+        run: |
+          set +e
+          node wasm-llvm/producer/lean-browser/scripts/build-oleans.mjs \
+            "$GITHUB_WORKSPACE/work/dist/lean.mjs" \
+            "$GITHUB_WORKSPACE/work" \
+            "$GITHUB_WORKSPACE/work/batteries-filtered" \
+            "$GITHUB_WORKSPACE/work/batteries-olean32" \
+            3 Init Std Batteries
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo '--- 诊断：生成的 Batteries.lean 前 8 行 ---'
+            head -n 8 work/batteries-filtered/Batteries.lean
+            echo '--- 诊断：outDir 根级文件 ---'
+            find work/batteries-olean32 -maxdepth 1 -type f | head -n 15
+            echo '--- 诊断：失败日志 ---'
+            head -n 40 work/Batteries.olean-fail.log 2>/dev/null || true
+          else
+            find "$GITHUB_WORKSPACE/work/batteries-olean32/Batteries" -name '*.olean' | wc -l
+          fi
+          exit "$status"
+
+      - name: 保存 Batteries oleans（失败也保留进度）
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: work/batteries-olean32
+          key: wasm435-batteries-olean32-v1
+
+      - name: 冒烟：wasm 运行时 import Batteries
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          mkdir -p work/batteries-src
+          printf 'import Batteries\nexample : 1 + 1 = 2 := rfl\n' > work/batteries-src/Test.lean
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/batteries-src work/batteries-olean32 -- \
+            -j1 -R /src -o /src/Test.olean /src/Test.lean
+          test -s work/batteries-src/Test.olean
+
+      - name: 打包 Batteries 扩展 pack
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          node scripts/package-runtime-extension.mjs \
+            --oleans work/batteries-olean32 --prefix Batteries --name lean-batteries --out work/extensions/batteries
+          ls -lh work/extensions/batteries
+
+      - name: 上传 Batteries 扩展 pack
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm32-batteries-pack
+          path: work/extensions/batteries/**
+          if-no-files-found: warn
+
       - name: 记录构建参数
         if: always()
         run: |
@@ -376,6 +542,7 @@ jobs:
       contents: write
     env:
       PUBLISH_TARGET: ${{ github.event_name == 'push' && 'both' || inputs.publish }}
+      PUBLISH_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_scope || 'all' }}
       VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_only || 'false' }}
     steps:
       - uses: actions/checkout@v7
@@ -415,6 +582,7 @@ jobs:
           path: work
 
       - name: 准备上传目录与候选清单
+        if: env.PUBLISH_SCOPE == 'all'
         run: |
           mkdir -p public/wasm-lean4
           cp work/artifact/lean.mjs public/wasm-lean4/
@@ -422,8 +590,41 @@ jobs:
           cp work/artifact/lean-init.index.json public/wasm-lean4/
           cp work/artifact/*.gz.bin public/wasm-lean4/
           cp scripts/assets/runner-worker.js public/wasm-lean4/
+          # 候选清单会覆盖 config；先把仓库里的 extensions（如果有）留一份。
+          cp config/lean4-runtime.json work/manifest-base.json
           cp work/artifact/runtime-manifest.json config/lean4-runtime.json
-          node -e "const m=require('./config/lean4-runtime.json'); console.log('manifest:', m.runtime, m.cacheKey, m.assets.length, 'assets')"
+          node -e "const fs=require('fs');const base=JSON.parse(fs.readFileSync('work/manifest-base.json'));const m=JSON.parse(fs.readFileSync('config/lean4-runtime.json'));if(base.extensions)m.extensions=base.extensions;fs.writeFileSync('config/lean4-runtime.json',JSON.stringify(m,null,2)+'\n')"
+          node -e "const m=require('./config/lean4-runtime.json'); console.log('manifest:', m.runtime, m.cacheKey, m.assets.length, 'assets', (m.extensions??[]).length, 'extensions')"
+
+      # 扩展包与 Init 一起发布：只做上传，客户端仍然按需下载。
+      - name: 下载 Std 扩展包
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm32-std-pack
+          path: work/extensions/std
+
+      - name: 下载 Batteries 扩展包
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm32-batteries-pack
+          path: work/extensions/batteries
+
+      - name: 生成扩展清单
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          node scripts/write-extension-manifest.mjs \
+            --std work/extensions/std --batteries work/extensions/batteries
+          mkdir -p work/extensions/upload
+          cp work/extensions/std/lean-* work/extensions/batteries/lean-* work/extensions/upload/
+          node scripts/verify-manifest.mjs
+
+      - name: 无扩展构建时只发布 Init
+        if: env.PUBLISH_SCOPE == 'all' && (github.event_name != 'workflow_dispatch' || !inputs.build_extensions)
+        run: |
+          node -e "const fs=require('fs');const p='config/lean4-runtime.json';const m=JSON.parse(fs.readFileSync(p));delete m.extensions;fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
+          echo '本次没有构建扩展包，跳过 Std / Batteries 上传'
 
       # 先保存候选清单：即使后面 R2 / 魔搭发布失败，也能拿到清单排查或重试。
       - name: 保存候选清单
@@ -433,8 +634,10 @@ jobs:
           path: |
             work/artifact/runtime-manifest.json
             work/artifact/SHA256SUMS
+            config/lean4-runtime.json
 
       - name: 发布 GitHub Release（回退源）
+        if: env.PUBLISH_SCOPE == 'all'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -470,10 +673,12 @@ jobs:
             exit 1
           fi
           command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
+          EXTRA=""
+          [ "$PUBLISH_SCOPE" = "extensions" ] && EXTRA="--extensions-only"
           if [ "$VERIFY_ONLY" = "true" ]; then
-            pnpm run upload:assets -- --s3 --verify-only
+            pnpm run upload:assets -- --s3 --verify-only --extensions work/extensions/upload $EXTRA
           else
-            pnpm run upload:assets -- --s3
+            pnpm run upload:assets -- --s3 --extensions work/extensions/upload $EXTRA
           fi
 
       - name: 上传 ModelScope
@@ -490,8 +695,12 @@ jobs:
           command -v git-lfs >/dev/null || (sudo apt-get update && sudo apt-get install -y git-lfs)
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          pnpm run upload:modelscope
+          if [ "$PUBLISH_SCOPE" = "extensions" ]; then
+            pnpm run upload:modelscope -- --extensions work/extensions/upload --extensions-only --metadata
+          else
+            pnpm run upload:modelscope -- --extensions work/extensions/upload --metadata
+          fi
 
       - name: 发布摘要
         run: |
-          node -e "const m=require('./config/lean4-runtime.json'); console.log('runtime:', m.runtime); console.log('cacheKey:', m.cacheKey); console.log('primary:', m.primary.baseUrl); console.log('fallback:', m.fallback.baseUrl); console.log('mirror:', m.mirror.baseUrl + m.mirror.prefix); for (const a of m.assets) console.log(' ', a.key, a.bytes, a.sha256.slice(0, 12));"
+          node -e "const m=require('./config/lean4-runtime.json'); console.log('runtime:', m.runtime); console.log('cacheKey:', m.cacheKey); console.log('primary:', m.primary.baseUrl); console.log('fallback:', m.fallback.baseUrl); console.log('mirror:', m.mirror.baseUrl + m.mirror.prefix); for (const a of m.assets) console.log(' ', a.key, a.bytes, a.sha256.slice(0, 12)); for (const e of m.extensions ?? []) for (const a of e.assets) console.log(' ext', a.key, a.bytes, a.sha256.slice(0, 12));"

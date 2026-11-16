@@ -17,8 +17,8 @@
 - 课堂上给学生演示「命题即类型」的环境
 - 想研究「语言服务器能不能跑在浏览器里」的开发者
 
-项目默认只内置 Init，不含 Std / Lean / Lake / Mathlib，所以课程限定在基础类型、List 与命题逻辑。
-Std / Batteries 的按需扩展在 `spike/std-batteries` 分支验证中，默认启动仍只加载 Init。
+项目默认只内置 Init，不含 Lean / Lake / Mathlib，所以课程限定在基础类型、List 与命题逻辑。
+Std 与 Batteries 打成独立扩展包，在编辑器里按需下载、挂载和释放；不用时不会占用额外内存。
 
 ## 快速开始
 
@@ -88,7 +88,7 @@ Std / Batteries 的按需扩展在 `spike/std-batteries` 分支验证中，默�
 
 ## 限制
 
-- 只带 **Init**，没有 Std / Lean / Lake / Mathlib，课程内容限定在基础类型、List 与命题逻辑
+- 默认只带 **Init**；Std / Batteries 是可选扩展包，不含 Lean / Lake / Mathlib
 - 需要 cross-origin isolation（COOP/COEP）与 SharedArrayBuffer，Chromium 系浏览器体验最佳
 
 ## 隐私

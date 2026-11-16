@@ -7,3 +7,6 @@ public/wasm-lean4/
 # 由 src/sw.ts 编译生成
 public/sw.js
 *.log
+
+# 构建产物目录（扩展包等，由 Actions 上传，不入库）
+/work/

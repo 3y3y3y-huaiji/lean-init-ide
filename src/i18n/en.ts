@@ -61,7 +61,7 @@ export const en: Messages = {
     ],
     limitsTitle: 'Current limits',
     limitsBody:
-      'Only Init ships with it—no Std / Lean / Lake / Mathlib—so lessons stay within basic types, List and propositional logic. Cross-origin isolation is required; Chromium-based browsers work best.',
+      'Init ships built in; Std and Batteries load on demand as extension packs—no Lean / Lake / Mathlib—so lessons stay within basic types, List and propositional logic. Cross-origin isolation is required; Chromium-based browsers work best.',
     courseTitle: 'Lesson one: meet Lean',
     courseBody:
       'Start with what Lean is and why this course only uses Init, then move from #check and #eval to your first inductive proof.',
@@ -1299,6 +1299,16 @@ end
     resetConfirmAction: 'Confirm reset?',
     exportCode: 'Export .lean',
     lessonPassed: 'Exercise passed',
+    librariesTitle: 'Libraries',
+    librariesHint:
+      'Std and Batteries download on demand and use extra memory; release them anytime.',
+    libraryBuiltin: 'built in',
+    libraryLoad: 'Load',
+    libraryLoading: (ratio) => `Downloading ${ratio}`,
+    libraryLoaded: 'Loaded',
+    libraryRelease: 'Release',
+    libraryRestarting: 'Restarting Lean…',
+    libraryError: (message) => `Failed to load library: ${message}`,
     expand: 'Expand',
     panelsTitle: 'Panels',
     showPanels: 'Visible panels',
@@ -1316,7 +1326,7 @@ end
     logGoalFailed: (message) => `$/lean/plainGoal failed: ${message}`,
     logTitle: 'Log',
     footer:
-      'A real Lean LSP in the browser · Init only, no Std / Lean / Lake / Mathlib · Chromium first',
+      'A real Lean LSP in the browser · Init built in, Std / Batteries on demand · no Lean / Lake / Mathlib · Chromium first',
     openFull: 'Open the full playground',
     statusIdle: 'Not started',
     statusLowMemory: 'Low-memory device · start manually',
@@ -1564,7 +1574,7 @@ end
   },
   footer: {
     license: 'Apache-2.0 OR MulanPSL-2.0',
-    note: 'A real Lean LSP in the browser · Init only',
+    note: 'A real Lean LSP in the browser · Init + Std + Batteries',
     repo: 'Source',
     privacy: 'Privacy',
   },

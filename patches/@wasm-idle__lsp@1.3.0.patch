@@ -218,11 +218,98 @@ index a53db81..63d6c19 100644
          maxTotalDeliveryBytes: total,
          reportProgress(progress) {
              loaded.set(progress.assetKey, progress.loadedBytes);
+diff --git a/dist/lean4/language-server.js b/dist/lean4/language-server.js
+index 8c0413a..dc3deff 100644
+--- a/dist/lean4/language-server.js
++++ b/dist/lean4/language-server.js
+@@ -123,6 +123,7 @@ export async function getLean4LanguageServer(options) {
+             initOptions: {
+                 baseUrl: config.baseUrl,
+                 maxMemoryBytes,
++                extensionPacks: host?.lean4?.extensionPacks,
+                 processStartupTimeoutMs: host?.startupTimeoutMs,
+                 assetTimeoutMs: host?.assetTimeoutMs,
+                 maxAssetBytes: host?.maxAssetBytes
 diff --git a/dist/lean4/runtime-worker.js b/dist/lean4/runtime-worker.js
-index cd8db8b..d7dffb0 100644
+index cd8db8b..27c5a14 100644
 --- a/dist/lean4/runtime-worker.js
 +++ b/dist/lean4/runtime-worker.js
-@@ -139,7 +139,7 @@ self.onmessage = async ({ data }) => {
+@@ -20,38 +20,45 @@ globalThis.Worker = class {
+ 	}
+ };
+ function unpackLibrary(payload) {
+-	const index = JSON.parse(
+-		new TextDecoder().decode(new Uint8Array(payload['lean-init.index.json']))
+-	);
+-	const chunks = index.chunks.map((chunk) => {
+-		const bytes = payload[chunk.path.replace(/\.gz$/, '')];
+-		if (!(bytes instanceof Uint8Array) || bytes.byteLength !== chunk.uncompressedBytes)
+-			throw new Error(`Lean library chunk ${chunk.path} is missing.`);
+-		return { ...chunk, bytes };
+-	});
++	const indexPaths = Object.keys(payload)
++		.filter((name) => name.endsWith('.index.json'))
++		.sort();
++	if (!indexPaths.includes('lean-init.index.json'))
++		throw new Error('Lean library index is missing.');
+ 	const files = [];
+-	for (const file of index.files) {
+-		if (!/^Init(\/[A-Za-z0-9_]+)*\.(olean(\.server|\.private)?|ir(\.sig)?)$/.test(file.path))
+-			throw new Error(`Lean library entry ${file.path} is invalid.`);
+-		const parts = [];
+-		for (const chunk of chunks) {
+-			const start = Math.max(file.offset, chunk.offset);
+-			const end = Math.min(file.offset + file.bytes, chunk.offset + chunk.uncompressedBytes);
+-			if (start < end)
+-				parts.push(chunk.bytes.subarray(start - chunk.offset, end - chunk.offset));
+-		}
+-		let bytes = parts[0] || new Uint8Array();
+-		if (parts.length > 1) {
+-			bytes = new Uint8Array(file.bytes);
+-			let offset = 0;
+-			for (const part of parts) {
+-				bytes.set(part, offset);
+-				offset += part.byteLength;
++	for (const indexPath of indexPaths) {
++		const index = JSON.parse(
++			new TextDecoder().decode(new Uint8Array(payload[indexPath]))
++		);
++		const chunks = index.chunks.map((chunk) => {
++			const bytes = payload[chunk.path.replace(/\.gz(\.bin)?$/, '')];
++			if (!(bytes instanceof Uint8Array) || bytes.byteLength !== chunk.uncompressedBytes)
++				throw new Error(`Lean library chunk ${chunk.path} is missing.`);
++			return { ...chunk, bytes };
++		});
++		for (const file of index.files) {
++			if (!/^(Init|Std|Batteries)(\/[A-Za-z0-9_]+)*\.(olean(\.server|\.private)?|ir(\.sig)?)$/.test(file.path))
++				throw new Error(`Lean library entry ${file.path} is invalid.`);
++			const parts = [];
++			for (const chunk of chunks) {
++				const start = Math.max(file.offset, chunk.offset);
++				const end = Math.min(file.offset + file.bytes, chunk.offset + chunk.uncompressedBytes);
++				if (start < end)
++					parts.push(chunk.bytes.subarray(start - chunk.offset, end - chunk.offset));
++			}
++			let bytes = parts[0] || new Uint8Array();
++			if (parts.length > 1) {
++				bytes = new Uint8Array(file.bytes);
++				let offset = 0;
++				for (const part of parts) {
++					bytes.set(part, offset);
++					offset += part.byteLength;
++				}
+ 			}
++			if (bytes.byteLength !== file.bytes)
++				throw new Error(`Lean library entry ${file.path} is truncated.`);
++			files.push({ path: file.path, bytes });
+ 		}
+-		if (bytes.byteLength !== file.bytes)
+-			throw new Error(`Lean library entry ${file.path} is truncated.`);
+-		files.push({ path: file.path, bytes });
+ 	}
+ 	return files;
+ }
+@@ -139,7 +146,7 @@ self.onmessage = async ({ data }) => {
  			const path = LIBRARY_ROOT + '/' + file.path;
  			lean.FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
  			// Copy into this process: a document's #eval must never modify the shared source pack.
@@ -232,7 +319,7 @@ index cd8db8b..d7dffb0 100644
  		lean.FS.chdir('/workspace');
  		self.postMessage({ ready: true });
 diff --git a/dist/lean4/worker.js b/dist/lean4/worker.js
-index ecf242e..e17e894 100644
+index ecf242e..9a77393 100644
 --- a/dist/lean4/worker.js
 +++ b/dist/lean4/worker.js
 @@ -34,6 +34,7 @@ const unsupported = new Set([
@@ -285,11 +372,30 @@ index ecf242e..e17e894 100644
              const stream = new Blob([new Uint8Array(delivered)])
                  .stream()
                  .pipeThrough(new DecompressionStream('gzip'));
-@@ -418,6 +432,7 @@ async function init(data) {
+@@ -418,6 +432,13 @@ async function init(data) {
              shared.set(bytes);
              library[logicalName] = shared;
          }
 +        delete payload[name];
++    }
++    for (const [name, buffer] of Object.entries(data.options.extensionPacks ?? {})) {
++        const bytes = new Uint8Array(buffer);
++        const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));
++        shared.set(bytes);
++        library[name] = shared;
      }
      bootstrap = startProcess(['-j2', '--server'], 8, (message) => {
          if (!message.method && message.id === initializeId && message.result) {
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index 209ea07..df961ad 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -63,6 +63,8 @@ export interface EditorLanguageServerRuntimeOptions {
+         baseUrl?: string;
+         /** Per-document shared Wasm memory ceiling; defaults to 1 GiB. */
+         maxMemoryBytes?: number;
++        /** Extra verified library packs (logicalName -> compressed bytes) mounted with Init. */
++        extensionPacks?: Record<string, ArrayBuffer>;
+     };
+     nim?: {
+         /** External, pinned nimlsp/nimsuggest browser assets. */

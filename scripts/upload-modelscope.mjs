@@ -49,14 +49,20 @@ if (existsSync(assetsEnvFile)) {
 }
 
 const manifest = JSON.parse(readFileSync(join(root, 'config/lean4-runtime.json'), 'utf8'));
-const args = new Map(
-  process.argv
-    .filter((arg) => arg.startsWith('--'))
-    .map((arg) => {
-      const [key, value] = arg.slice(2).split('=');
-      return [key, value ?? 'true'];
-    }),
-);
+const args = new Map();
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index += 1) {
+  const arg = argv[index];
+  if (!arg.startsWith('--')) continue;
+  const [key, value] = arg.slice(2).split('=');
+  if (value !== undefined) args.set(key, value);
+  else if (argv[index + 1] && !argv[index + 1].startsWith('--')) {
+    args.set(key, argv[index + 1]);
+    index += 1;
+  } else {
+    args.set(key, 'true');
+  }
+}
 
 const repo = args.get('repo') ?? process.env.MODELSCOPE_REPO ?? '';
 const repoType = args.get('type') ?? process.env.MODELSCOPE_REPO_TYPE ?? 'dataset';
@@ -71,6 +77,15 @@ const metadata = args.has('metadata');
 const keep = args.has('keep');
 
 const assetDir = join(root, 'public', 'wasm-lean4');
+// 扩展包按需发布，不进入构建期下载目录；用 --extensions 指向解压后的扩展产物目录。
+const extensionDir =
+  args.get('extensions') ?? process.env.LEAN_EXTENSION_DIR ?? join(root, 'work', 'extensions');
+const extensionAssets = (manifest.extensions ?? []).flatMap((extension) => extension.assets);
+const allAssets = [...manifest.assets, ...extensionAssets];
+const selectedAssets = args.has('extensions-only') ? extensionAssets : allAssets;
+const extensionNames = new Set(extensionAssets.map((asset) => asset.name));
+const localFileOf = (asset) =>
+  join(extensionNames.has(asset.name) ? extensionDir : assetDir, asset.name);
 const repoPrefix = repoType === 'model' ? 'models' : 'datasets';
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
@@ -137,15 +152,15 @@ const removeTree = (dir) => {
 if (!repo) fail('缺少仓库地址，传 --repo=<namespace/name> 或设置 MODELSCOPE_REPO');
 
 const verifyLocal = () => {
-  for (const asset of manifest.assets) {
-    const file = join(assetDir, asset.name);
+  for (const asset of selectedAssets) {
+    const file = localFileOf(asset);
     if (!existsSync(file)) fail(`本地缺少 ${asset.name}，先执行 npm run fetch:assets`);
     const bytes = readFileSync(file).length;
     if (bytes !== asset.bytes) fail(`${asset.name} 字节数 ${bytes}，清单要求 ${asset.bytes}`);
     const digest = sha256(file);
     if (digest !== asset.sha256) fail(`${asset.name} sha256 与清单不一致`);
   }
-  console.log(`modelscope: 本地 ${manifest.assets.length} 个资产校验通过`);
+  console.log(`modelscope: 本地 ${selectedAssets.length} 个资产校验通过`);
 };
 
 const verifyRemoteAsset = async (asset) => {
@@ -193,11 +208,11 @@ const verifyRemoteAsset = async (asset) => {
 };
 
 const verifyRemote = async () => {
-  // push 后 ModelScope 的 LFS/CDN 有几秒到几十秒的传播窗口，
-  // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
-  const attempts = 10;
+  // push 后 ModelScope 的 LFS/CDN 有几秒到几分钟的传播窗口（大对象首次挂 CORS 更慢），
+  // 立即校验会看到 404 / 缺 CORS，这里给每个资产留约 2.5 分钟重试时间。
+  const attempts = 30;
   const failures = [];
-  for (const asset of manifest.assets) {
+  for (const asset of selectedAssets) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
@@ -249,6 +264,9 @@ const writeMetadata = async (work) => {
         `| \`${asset.name}\` | ${asset.bytes.toLocaleString('en-US')} | ${describeAsset(asset)} |`,
     )
     .join('\n');
+  const extensionRows = extensionAssets
+    .map((asset) => `| \`${asset.name}\` | ${asset.bytes.toLocaleString('en-US')} | 扩展库 |`)
+    .join('\n');
   const card = `---
 license: Apache-2.0
 language:
@@ -266,8 +284,9 @@ size_categories:
 
 # Lean Init IDE runtime assets
 
-浏览器端 Lean Init IDE 的 WebAssembly 运行时资产。默认运行时只包含 ${manifest.runtime}，
-不包含 Std / Batteries / Lean 编译器 / Lake / Mathlib；语言服务器在 Web Worker 中运行。
+浏览器端 Lean Init IDE 的 WebAssembly 运行时资产。基础运行时包含 ${manifest.runtime}；
+Std 与 Batteries 作为独立扩展包按需下载（同样 zstd + SHA-256），不包含 Lean 编译器 / Lake / Mathlib；
+语言服务器在 Web Worker 中运行。
 
 - 项目：https://github.com/3y3y3y-huaiji/lean-init-ide
 - 在线使用：https://criticalthinking.de5.net
@@ -287,6 +306,17 @@ size_categories:
 ${assetRows}
 
 完整性校验见 \`${rootDir}/SHA256SUMS\`。应用侧清单是主仓库的 \`config/lean4-runtime.json\`。
+${
+  extensionRows
+    ? `
+## 扩展库（按需）
+
+| 文件 | 字节 | 说明 |
+| --- | ---: | --- |
+${extensionRows}
+`
+    : ''
+}
 
 ## 使用
 
@@ -322,7 +352,7 @@ https://modelscope.cn/${repoPrefix}/${repo}/resolve/master/${rootDir}/<name>
   writeFileSync(join(work, 'LICENSE'), await licenseResponse.text());
 
   mkdirSync(join(work, rootDir), { recursive: true });
-  const sums = `${manifest.assets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n')}\n`;
+  const sums = `${allAssets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n')}\n`;
   writeFileSync(join(work, rootDir, 'SHA256SUMS'), sums);
 };
 
@@ -400,8 +430,8 @@ const upload = async () => {
 
     const target = join(work, rootDir);
     mkdirSync(target, { recursive: true });
-    for (const asset of manifest.assets) {
-      copyFileSync(join(assetDir, asset.name), join(target, asset.name));
+    for (const asset of selectedAssets) {
+      copyFileSync(localFileOf(asset), join(target, asset.name));
     }
 
     execFileSync('git', ['add', '-A'], { cwd: work, stdio: 'pipe' });
@@ -438,7 +468,7 @@ const upload = async () => {
 const main = async () => {
   verifyLocal();
   if (dryRun) {
-    for (const asset of manifest.assets) console.log(`  ${remoteUrl(asset.name)}`);
+    for (const asset of selectedAssets) console.log(`  ${remoteUrl(asset.name)}`);
     return;
   }
   if (!verifyOnly) await upload();

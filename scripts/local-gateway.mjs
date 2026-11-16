@@ -20,7 +20,11 @@ const manifest = JSON.parse(readFileSync(path.join(root, 'config', 'lean4-runtim
 const port = Number(process.env.LEAN_GATEWAY_PORT ?? 4174);
 const verbose = process.env.LEAN_GATEWAY_VERBOSE === '1';
 
-const assetsByKey = new Map(manifest.assets.map((asset) => [asset.key, asset]));
+const assetsByKey = new Map(
+  [...manifest.assets, ...(manifest.extensions ?? []).flatMap((extension) => extension.assets)].map(
+    (asset) => [asset.key, asset],
+  ),
+);
 const etagCache = new Map();
 
 const etagOf = (file) => {

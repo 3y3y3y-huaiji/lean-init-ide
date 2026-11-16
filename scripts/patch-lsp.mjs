@@ -125,6 +125,146 @@ applyPatch(
 );
 
 /**
+ * 5b. 扩展包（Std / Batteries）：一个进程里同时挂载多个库索引。
+ *     - 索引按 *.index.json 收集，Init 必需；
+ *     - chunk 既支持 Init 的 .pack.gz，也支持扩展包的 .pack.gz.bin；
+ *     - 文件路径允许 Init / Std / Batteries 三个前缀。
+ */
+applyPatch(
+  path.join('lean4', 'runtime-worker.js'),
+  `function unpackLibrary(payload) {
+	const index = JSON.parse(
+		new TextDecoder().decode(new Uint8Array(payload['lean-init.index.json']))
+	);
+	const chunks = index.chunks.map((chunk) => {
+		const bytes = payload[chunk.path.replace(/\\.gz$/, '')];
+		if (!(bytes instanceof Uint8Array) || bytes.byteLength !== chunk.uncompressedBytes)
+			throw new Error(\`Lean library chunk \${chunk.path} is missing.\`);
+		return { ...chunk, bytes };
+	});
+	const files = [];
+	for (const file of index.files) {
+		if (!/^Init(\\/[A-Za-z0-9_]+)*\\.(olean(\\.server|\\.private)?|ir(\\.sig)?)$/.test(file.path))
+			throw new Error(\`Lean library entry \${file.path} is invalid.\`);
+		const parts = [];
+		for (const chunk of chunks) {
+			const start = Math.max(file.offset, chunk.offset);
+			const end = Math.min(file.offset + file.bytes, chunk.offset + chunk.uncompressedBytes);
+			if (start < end)
+				parts.push(chunk.bytes.subarray(start - chunk.offset, end - chunk.offset));
+		}
+		let bytes = parts[0] || new Uint8Array();
+		if (parts.length > 1) {
+			bytes = new Uint8Array(file.bytes);
+			let offset = 0;
+			for (const part of parts) {
+				bytes.set(part, offset);
+				offset += part.byteLength;
+			}
+		}
+		if (bytes.byteLength !== file.bytes)
+			throw new Error(\`Lean library entry \${file.path} is truncated.\`);
+		files.push({ path: file.path, bytes });
+	}
+	return files;
+}`,
+  `function unpackLibrary(payload) {
+	const indexPaths = Object.keys(payload)
+		.filter((name) => name.endsWith('.index.json'))
+		.sort();
+	if (!indexPaths.includes('lean-init.index.json'))
+		throw new Error('Lean library index is missing.');
+	const files = [];
+	for (const indexPath of indexPaths) {
+		const index = JSON.parse(
+			new TextDecoder().decode(new Uint8Array(payload[indexPath]))
+		);
+		const chunks = index.chunks.map((chunk) => {
+			const bytes = payload[chunk.path.replace(/\\.gz(\\.bin)?$/, '')];
+			if (!(bytes instanceof Uint8Array) || bytes.byteLength !== chunk.uncompressedBytes)
+				throw new Error(\`Lean library chunk \${chunk.path} is missing.\`);
+			return { ...chunk, bytes };
+		});
+		for (const file of index.files) {
+			if (!/^(Init|Std|Batteries)(\\/[A-Za-z0-9_]+)*\\.(olean(\\.server|\\.private)?|ir(\\.sig)?)$/.test(file.path))
+				throw new Error(\`Lean library entry \${file.path} is invalid.\`);
+			const parts = [];
+			for (const chunk of chunks) {
+				const start = Math.max(file.offset, chunk.offset);
+				const end = Math.min(file.offset + file.bytes, chunk.offset + chunk.uncompressedBytes);
+				if (start < end)
+					parts.push(chunk.bytes.subarray(start - chunk.offset, end - chunk.offset));
+			}
+			let bytes = parts[0] || new Uint8Array();
+			if (parts.length > 1) {
+				bytes = new Uint8Array(file.bytes);
+				let offset = 0;
+				for (const part of parts) {
+					bytes.set(part, offset);
+					offset += part.byteLength;
+				}
+			}
+			if (bytes.byteLength !== file.bytes)
+				throw new Error(\`Lean library entry \${file.path} is truncated.\`);
+			files.push({ path: file.path, bytes });
+		}
+	}
+	return files;
+}`,
+  'multi-library unpacking (Init/Std/Batteries)',
+);
+
+/**
+ * 5c. 扩展包从页面侧下载完成后随 initOptions 传进 worker（SharedArrayBuffer），
+ *     挂到 library；页面重开会话时即可生效。
+ */
+applyPatch(
+  leanWorker,
+  `        delete payload[name];
+    }
+    bootstrap = startProcess(['-j2', '--server'], 8, (message) => {`,
+  `        delete payload[name];
+    }
+    for (const [name, buffer] of Object.entries(data.options.extensionPacks ?? {})) {
+        const bytes = new Uint8Array(buffer);
+        const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));
+        shared.set(bytes);
+        library[name] = shared;
+    }
+    bootstrap = startProcess(['-j2', '--server'], 8, (message) => {`,
+  'mount extension packs from init options',
+);
+
+applyPatch(
+  path.join('lean4', 'language-server.js'),
+  `            initOptions: {
+                baseUrl: config.baseUrl,
+                maxMemoryBytes,`,
+  `            initOptions: {
+                baseUrl: config.baseUrl,
+                maxMemoryBytes,
+                extensionPacks: host?.lean4?.extensionPacks,`,
+  'forward extensionPacks to worker',
+);
+
+applyPatch(
+  path.join('types.d.ts'),
+  `    lean4?: {
+        baseUrl?: string;
+        /** Per-document shared Wasm memory ceiling; defaults to 1 GiB. */
+        maxMemoryBytes?: number;
+    };`,
+  `    lean4?: {
+        baseUrl?: string;
+        /** Per-document shared Wasm memory ceiling; defaults to 1 GiB. */
+        maxMemoryBytes?: number;
+        /** Extra verified library packs (logicalName -> compressed bytes) mounted with Init. */
+        extensionPacks?: Record<string, ArrayBuffer>;
+    };`,
+  'extensionPacks option type',
+);
+
+/**
  * 5. 包内硬编码的 runner worker 字节数与 SHA-256 用我们的源文件动态重算，
  *    并同步到 workerReceipt；?v= 随之变化，cacheKey 保持不变。
  */

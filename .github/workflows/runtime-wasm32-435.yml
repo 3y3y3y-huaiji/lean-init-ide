@@ -696,7 +696,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ "$PUBLISH_SCOPE" = "extensions" ]; then
-            pnpm run upload:modelscope -- --extensions work/extensions/upload --extensions-only
+            pnpm run upload:modelscope -- --extensions work/extensions/upload --extensions-only --metadata
           else
             pnpm run upload:modelscope -- --extensions work/extensions/upload --metadata
           fi

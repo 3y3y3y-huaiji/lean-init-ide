@@ -352,7 +352,7 @@ https://modelscope.cn/${repoPrefix}/${repo}/resolve/master/${rootDir}/<name>
   writeFileSync(join(work, 'LICENSE'), await licenseResponse.text());
 
   mkdirSync(join(work, rootDir), { recursive: true });
-  const sums = `${manifest.assets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n')}\n`;
+  const sums = `${allAssets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n')}\n`;
   writeFileSync(join(work, rootDir, 'SHA256SUMS'), sums);
 };
 

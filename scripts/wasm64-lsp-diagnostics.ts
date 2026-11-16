@@ -39,13 +39,17 @@ export interface DocumentSet {
   readonly exampleLine: number;
 }
 
+const DEFAULT_GOOD_BODY = 'example : 1 + 1 = 2 := rfl\n';
+
 /** import 行占掉第 0 行，示例在第 1 行；nudge 的 hover 位置要落在示例上。 */
-export const buildDocuments = (moduleName?: string): DocumentSet => {
+export const buildDocuments = (moduleName?: string, goodBody?: string): DocumentSet => {
   const importLine = moduleName ? `import ${moduleName}\n` : '';
+  const body = goodBody ?? DEFAULT_GOOD_BODY;
+  const goodSource = body.endsWith('\n') ? body : `${body}\n`;
   return {
     documents: {
       'Bad.lean': `${importLine}example : 1 + 1 = 3 := rfl\n`,
-      'Good.lean': `${importLine}example : 1 + 1 = 2 := rfl\n`,
+      'Good.lean': `${importLine}${goodSource}`,
     },
     exampleLine: moduleName ? 1 : 0,
   };
@@ -335,6 +339,7 @@ export interface DiagOptions {
   readonly leanMjs: string;
   readonly libDir: string;
   readonly moduleName?: string;
+  readonly goodCode?: string;
   readonly mode: 'worker' | 'server';
   readonly timeoutMs: number;
   readonly jobs: number;
@@ -437,6 +442,11 @@ const DIAG_SPEC: Record<string, FlagSpec> = {
     valueName: 'Module.Name',
     description: '要被 import 的模块（默认只验证 Init）',
   },
+  'good-code': {
+    kind: 'string',
+    valueName: 'LeanCode',
+    description: '覆盖 Good.lean 的测试主体，用于验证具体 Mathlib 引理/策略',
+  },
   mode: { kind: 'string', valueName: 'worker|server' },
   timeout: { kind: 'number', valueName: 'ms' },
   jobs: { kind: 'number', valueName: 'n', description: 'worker 模式的 -j 线程数（默认 4）' },
@@ -450,12 +460,13 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
   const timeoutMs = parsed.flags.timeout === undefined ? 300_000 : requireNumber(parsed, 'timeout');
   const jobs = parsed.flags.jobs === undefined ? 4 : requireNumber(parsed, 'jobs');
   if (!Number.isInteger(jobs) || jobs < 1) throw new CliError(`--jobs 必须是正整数，收到 ${jobs}`);
+  const moduleName = optionalString(parsed, 'module');
+  const goodCode = optionalString(parsed, 'good-code');
   return {
     leanMjs: requireFile(requireString(parsed, 'lean'), 'lean.mjs'),
     libDir: requireDir(requireString(parsed, 'lib'), 'lib'),
-    ...(optionalString(parsed, 'module') === undefined
-      ? {}
-      : { moduleName: optionalString(parsed, 'module') }),
+    ...(moduleName === undefined ? {} : { moduleName }),
+    ...(goodCode === undefined ? {} : { goodCode }),
     mode,
     timeoutMs,
     jobs,
@@ -464,7 +475,7 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
 
 const main = async (): Promise<void> => {
   const options = parseDiagOptions(process.argv.slice(2));
-  const { documents, exampleLine } = buildDocuments(options.moduleName);
+  const { documents, exampleLine } = buildDocuments(options.moduleName, options.goodCode);
 
   // 兜底：worker 卡在 Atomics.wait 时 Node 不会自己退出，超时直接杀掉。
   const watchdogMs = Number(process.env.LEAN_WASM_DIAG_TIMEOUT_MS ?? 900_000);

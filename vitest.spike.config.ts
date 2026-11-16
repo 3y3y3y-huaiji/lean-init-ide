@@ -14,6 +14,7 @@ export default defineConfig({
         // 下面三个是进程级集成脚本：主体是启动 wasm/pthread 与真实 LSP 会话，
         // 单测只覆盖其中可导出的纯函数，整体行数不计入阈值（避免用假 wasm 刷覆盖率）。
         'scripts/wasm64-lsp-worker.ts',
+        'scripts/wasm64-lsp-browser-worker.ts',
         'scripts/wasm64-lsp-diagnostics.ts',
         'scripts/wasm64-lsp-handshake.ts',
         'scripts/wasm64-browser-verify.ts',

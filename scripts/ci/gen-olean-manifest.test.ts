@@ -40,4 +40,22 @@ describe('collectOleanManifest', () => {
     const root = mkdtempSync(join(tmpdir(), 'olean-empty-'));
     expect(collectOleanManifest(root)).toEqual([]);
   });
+
+  it('支持 --roots 收集 Mathlib 及可选 .ir 文件', () => {
+    const root = mkdtempSync(join(tmpdir(), 'olean-mathlib-'));
+    mkdirSync(join(root, 'Init'), { recursive: true });
+    mkdirSync(join(root, 'Mathlib', 'Order'), { recursive: true });
+    writeFileSync(join(root, 'Init.olean'), '');
+    writeFileSync(join(root, 'Mathlib.olean'), '');
+    writeFileSync(join(root, 'Mathlib', 'Order', 'Basic.olean'), '');
+    writeFileSync(join(root, 'Mathlib', 'Order', 'Basic.ir'), '');
+    writeFileSync(join(root, 'Lake.olean'), '');
+
+    expect(collectOleanManifest(root, { roots: ['Init', 'Mathlib'], includeIr: true })).toEqual([
+      'Init.olean',
+      'Mathlib.olean',
+      'Mathlib/Order/Basic.ir',
+      'Mathlib/Order/Basic.olean',
+    ]);
+  });
 });

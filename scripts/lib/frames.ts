@@ -1,12 +1,33 @@
 // LSP 帧编解码与 stdin 环形缓冲。诊断脚本和单测共用同一份实现。
 
-export const HEADER_END = Buffer.from('\r\n\r\n', 'latin1');
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+export const HEADER_END = encoder.encode('\r\n\r\n');
 export const RING_CONTROL_BYTES = 16;
 
-export const encodeFrame = (message: unknown): Buffer => {
-  const body = Buffer.from(JSON.stringify(message), 'utf8');
-  const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'latin1');
-  return Buffer.concat([header, body]);
+const concatBytes = (left: Uint8Array, right: Uint8Array): Uint8Array => {
+  const out = new Uint8Array(left.length + right.length);
+  out.set(left, 0);
+  out.set(right, left.length);
+  return out;
+};
+
+const indexOfSequence = (haystack: Uint8Array, needle: Uint8Array): number => {
+  const limit = haystack.length - needle.length;
+  outer: for (let i = 0; i <= limit; i += 1) {
+    for (let j = 0; j < needle.length; j += 1) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+};
+
+export const encodeFrame = (message: unknown): Uint8Array => {
+  const body = encoder.encode(JSON.stringify(message));
+  const header = encoder.encode(`Content-Length: ${body.length}\r\n\r\n`);
+  return concatBytes(header, body);
 };
 
 export class FrameError extends Error {
@@ -18,15 +39,15 @@ export class FrameError extends Error {
 
 /** 增量解码：TCP/管道式的分片输入，一次 push 可能返回 0..n 条消息。 */
 export class FrameDecoder {
-  #inbox: Buffer = Buffer.alloc(0);
+  #inbox: Uint8Array = new Uint8Array(0);
 
   push(chunk: Uint8Array): unknown[] {
-    this.#inbox = Buffer.concat([this.#inbox, Buffer.from(chunk)]);
+    this.#inbox = concatBytes(this.#inbox, chunk);
     const messages: unknown[] = [];
     for (;;) {
-      const headerEnd = this.#inbox.indexOf(HEADER_END);
+      const headerEnd = indexOfSequence(this.#inbox, HEADER_END);
       if (headerEnd === -1) return messages;
-      const header = this.#inbox.subarray(0, headerEnd).toString('latin1');
+      const header = decoder.decode(this.#inbox.subarray(0, headerEnd));
       const match = /Content-Length:\s*(\d+)/i.exec(header);
       if (!match) {
         // 不是 LSP 帧：丢掉这段头，继续找下一个。
@@ -35,7 +56,7 @@ export class FrameDecoder {
       }
       const bodyEnd = headerEnd + HEADER_END.length + Number(match[1]);
       if (this.#inbox.length < bodyEnd) return messages;
-      const body = this.#inbox.subarray(headerEnd + HEADER_END.length, bodyEnd).toString('utf8');
+      const body = decoder.decode(this.#inbox.subarray(headerEnd + HEADER_END.length, bodyEnd));
       this.#inbox = this.#inbox.subarray(bodyEnd);
       try {
         messages.push(JSON.parse(body));

@@ -25,7 +25,8 @@ describe('encodeFrame / FrameDecoder', () => {
   it('Content-Length 按 UTF-8 字节计算', () => {
     const message = { text: '中文' };
     const frame = encodeFrame(message);
-    const header = frame.subarray(0, frame.indexOf('\r\n\r\n')).toString('latin1');
+    const raw = Buffer.from(frame);
+    const header = raw.subarray(0, raw.indexOf('\r\n\r\n')).toString('latin1');
     expect(header).toBe(`Content-Length: ${Buffer.byteLength(JSON.stringify(message))}`);
     expect(new FrameDecoder().push(frame)).toEqual([message]);
   });

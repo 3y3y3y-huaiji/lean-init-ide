@@ -1,10 +1,12 @@
 /**
- * 页面内探针：在真实 Chromium 中加载 wasm64 Lean 产物并执行 --version。
+ * 页面内探针：在真实 Chromium 中加载 wasm64 Lean 产物并执行 --version / compile / LSP (--worker)。
  *
  * 由 esbuild 单独打包成 ESM 模块给页面加载，不经过 page.evaluate 的函数序列化，
  * 否则 tsx/esbuild 注入的 __name helper 在页面里不存在。
  * 只调用 Emscripten 公开 API（callMain），不直接读写 wasm 指针。
  */
+import { FrameDecoder, RING_CONTROL_BYTES, RingWriter, encodeFrame } from './lib/frames.ts';
+
 interface EmscriptenFS {
   mkdirTree(path: string): void;
   writeFile(path: string, data: Uint8Array): void;
@@ -101,27 +103,85 @@ const finish = (value: ProbeReport): void => {
   window.__probeResult = value;
 };
 
-const PROBE_SOURCE = 'import Init\nexample : 1 + 1 = 2 := rfl\n';
+const DEFAULT_GOOD_BODY = 'example : 1 + 1 = 2 := rfl\n';
+const DEFAULT_BAD_BODY = 'example : 1 + 1 = 3 := rfl\n';
+const RING_BYTES = 8 * 1024 * 1024 + 8192;
+const FETCH_CONCURRENCY = 16;
+
+const FALLBACK_TZIF = Uint8Array.from([
+  84, 90, 105, 102, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 85, 84, 67, 0, 84, 90, 105,
+  102, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 85, 84, 67, 0, 10, 85, 84, 67, 48, 10,
+]);
+
+interface QueryConfig {
+  readonly mode: string;
+  readonly manifestUrl: string;
+  readonly moduleName?: string;
+  readonly goodCode?: string;
+}
+
+const readQueryConfig = (): QueryConfig => {
+  const params = new URLSearchParams(location.search);
+  const mode = params.get('mode') ?? 'auto';
+  const manifestUrl = params.get('manifest') ?? '/olean-manifest.json';
+  const moduleName = params.get('module') ?? undefined;
+  const goodCode = params.get('good') ?? undefined;
+  return {
+    mode,
+    manifestUrl,
+    ...(moduleName ? { moduleName } : {}),
+    ...(goodCode ? { goodCode } : {}),
+  };
+};
+
+const buildSource = (moduleName: string | undefined, body: string): string => {
+  const importLine = moduleName ? `import ${moduleName}\n` : '';
+  const normalized = body.endsWith('\n') ? body : `${body}\n`;
+  return `${importLine}${normalized}`;
+};
+
+const fetchAssetsConcurrent = async (
+  files: readonly string[],
+): Promise<Array<{ rel: string; bytes: Uint8Array }>> => {
+  const out = new Array<{ rel: string; bytes: Uint8Array }>(files.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(FETCH_CONCURRENCY, Math.max(1, files.length)) },
+    async () => {
+      while (cursor < files.length) {
+        const idx = cursor;
+        cursor += 1;
+        const rel = files[idx];
+        if (!rel) continue;
+        const response = await fetch(`/lean-lib/${rel}`);
+        if (!response.ok) throw new Error(`olean 加载失败 ${rel}: ${response.status}`);
+        out[idx] = { rel, bytes: new Uint8Array(await response.arrayBuffer()) };
+      }
+    },
+  );
+  await Promise.all(workers);
+  return out;
+};
 
 /**
- * 把自建的 64 位 Init oleans 读进 MEMFS 的 /lean/lib/lean。
+ * 把自建的 64 位 Init (+ 可选 Mathlib) oleans 读进 MEMFS 的 /lean/lib/lean。
  * 清单由 CI 生成；没有清单时返回空数组，退化为 --version 冒烟。
  */
-const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
+const mountOleans = async (lean: LeanInstance, config: QueryConfig): Promise<string[]> => {
   // Lean 启动时会解析 libdir，即使不导入任何模块也要有 /lean/lib/lean。
   lean.FS.mkdirTree('/lean/bin');
   lean.FS.mkdirTree('/lean/lib/lean');
   lean.FS.mkdirTree('/src');
-  const manifestResponse = await fetch('/olean-manifest.json');
+  const manifestResponse = await fetch(config.manifestUrl);
   if (!manifestResponse.ok) {
-    log.push('olean manifest 缺失，跳过 olean 阶段');
+    log.push(`olean manifest 缺失 (${config.manifestUrl})，跳过 olean 阶段`);
     return [];
   }
   const files = (await manifestResponse.json()) as string[];
-  for (const rel of files) {
-    const response = await fetch(`/lean-lib/${rel}`);
-    if (!response.ok) throw new Error(`olean 加载失败 ${rel}: ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
+  const loaded = await fetchAssetsConcurrent(files);
+  for (const { rel, bytes } of loaded) {
     const target = `/lean/lib/lean/${rel}`;
     const parent = target.slice(0, target.lastIndexOf('/'));
     if (parent) lean.FS.mkdirTree(parent);
@@ -129,7 +189,11 @@ const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
   }
   lean.FS.mkdirTree('/lean/bin');
   lean.FS.mkdirTree('/src');
-  lean.FS.writeFile('/src/Probe.lean', new TextEncoder().encode(PROBE_SOURCE));
+  const probeSource = buildSource(
+    config.moduleName ?? 'Init',
+    config.goodCode ?? DEFAULT_GOOD_BODY,
+  );
+  lean.FS.writeFile('/src/Probe.lean', new TextEncoder().encode(probeSource));
   // 自检：确认关键文件确实落在 MEMFS 的预期路径上。
   const fsAny = lean.FS as unknown as {
     analyzePath(path: string): { exists: boolean; object?: { contents?: Uint8Array } };
@@ -148,12 +212,235 @@ const mountOleans = async (lean: LeanInstance): Promise<string[]> => {
   return files;
 };
 
+interface LspDiagnostic {
+  readonly range?: { readonly start?: { readonly line?: number; readonly character?: number } };
+  readonly severity?: number;
+  readonly message?: string;
+}
+
+interface LspMessage {
+  readonly id?: number | string;
+  readonly method?: string;
+  readonly params?: Record<string, unknown>;
+}
+
+const initializeParams = {
+  processId: null,
+  rootUri: 'file:///workspace',
+  workspaceFolders: null,
+  capabilities: { textDocument: { publishDiagnostics: {}, synchronization: {} } },
+};
+
+const runLspDoc = async (
+  name: string,
+  text: string,
+  waitUntilFinal: boolean,
+  config: QueryConfig,
+  nudgeLine: number,
+): Promise<{ diagnostics: LspDiagnostic[]; elapsedMs: number }> => {
+  const startedAt = performance.now();
+  const uri = `file:///workspace/${name}`;
+  const ringBuffer = new SharedArrayBuffer(RING_CONTROL_BYTES + RING_BYTES);
+  const writer = new RingWriter(ringBuffer, RING_BYTES);
+  const decoder = new FrameDecoder();
+  const worker = new Worker('/lsp-worker.mjs', { type: 'module' });
+
+  const waitMessage = <T extends LspMessage>(
+    match: (msg: LspMessage) => boolean,
+    label: string,
+    timeoutMs: number,
+  ): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`${name}: ${label} 超时 (${timeoutMs}ms)`));
+      }, timeoutMs);
+      const onError = (event: ErrorEvent) => {
+        cleanup();
+        reject(new Error(`${name}: worker error ${event.message}`));
+      };
+      const onMessage = (event: MessageEvent<Record<string, unknown>>) => {
+        const msg = event.data;
+        if (typeof msg.failure === 'string') {
+          cleanup();
+          reject(new Error(`${name}: worker failure ${msg.failure}`));
+          return;
+        }
+        if (typeof msg.exit === 'number' && msg.exit !== 0) {
+          cleanup();
+          reject(new Error(`${name}: lean exited with ${msg.exit}`));
+          return;
+        }
+        if (typeof msg.stderr === 'string') {
+          const line = msg.stderr.trim();
+          if (line) log.push(`[${name}:err] ${line.slice(0, 240)}`);
+          return;
+        }
+        if (!(msg.stdout instanceof Uint8Array)) return;
+        for (const decoded of decoder.push(msg.stdout)) {
+          const frame = decoded as LspMessage;
+          if (
+            frame.method === 'workspace/inlayHint/refresh' ||
+            frame.method === 'workspace/semanticTokens/refresh'
+          ) {
+            if (frame.id !== undefined) {
+              writer.write(encodeFrame({ jsonrpc: '2.0', id: frame.id, result: null }));
+            }
+          }
+          if (frame.method) log.push(`[${name}] recv ${frame.method}`);
+          if (match(frame)) {
+            cleanup();
+            resolve(frame as T);
+            return;
+          }
+        }
+      };
+      const cleanup = () => {
+        clearTimeout(timer);
+        worker.removeEventListener('message', onMessage);
+        worker.removeEventListener('error', onError);
+      };
+      worker.addEventListener('message', onMessage);
+      worker.addEventListener('error', onError);
+    });
+
+  const readyPromise = new Promise<number>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${name}: worker ready 超时`)), 180_000);
+    const onReady = (event: MessageEvent<Record<string, unknown>>) => {
+      const msg = event.data;
+      if (typeof msg.failure === 'string') {
+        clearTimeout(timer);
+        worker.removeEventListener('message', onReady);
+        reject(new Error(`${name}: ${msg.failure}`));
+      } else if (msg.ready === true) {
+        clearTimeout(timer);
+        worker.removeEventListener('message', onReady);
+        resolve(typeof msg.assets === 'number' ? msg.assets : 0);
+      }
+    };
+    worker.addEventListener('message', onReady);
+    worker.addEventListener('error', (event) => {
+      clearTimeout(timer);
+      reject(new Error(`${name}: worker error ${event.message}`));
+    });
+  });
+
+  worker.postMessage({
+    leanMjsUrl: '/lean-adapted-proxy.mjs',
+    manifestUrl: config.manifestUrl,
+    libBaseUrl: '/lean-lib',
+    stdin: { buffer: ringBuffer, capacity: RING_BYTES },
+    files: { [`/workspace/${name}`]: text },
+    args: ['-j4', '--worker', uri],
+    env: {
+      LEAN_STACK_SIZE_KB: '16384',
+      LEAN_MAIN_USE_THREAD: '0',
+    },
+    timezone: FALLBACK_TZIF,
+  });
+
+  try {
+    const assetCount = await readyPromise;
+    log.push(`[${name}] worker ready assets=${assetCount}`);
+
+    writer.write(
+      encodeFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams }),
+    );
+    writer.write(
+      encodeFrame({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri, languageId: 'lean', version: 1, text } },
+      }),
+    );
+
+    const collected: LspDiagnostic[][] = [];
+    const nudgeTimer = setTimeout(() => {
+      writer.write(
+        encodeFrame({
+          jsonrpc: '2.0',
+          id: 900,
+          method: 'textDocument/hover',
+          params: { textDocument: { uri }, position: { line: nudgeLine, character: 10 } },
+        }),
+      );
+    }, 30_000);
+
+    try {
+      const timeoutMs = config.moduleName ? 600_000 : 180_000;
+      const deadline = performance.now() + timeoutMs;
+      for (;;) {
+        const remaining = Math.max(1_000, Math.round(deadline - performance.now()));
+        const msg = await waitMessage<LspMessage>(
+          (frame) =>
+            (frame.method === 'textDocument/publishDiagnostics' &&
+              String(frame.params?.uri ?? '').endsWith(uri)) ||
+            (waitUntilFinal && frame.method === '$/lean/ileanInfoFinal'),
+          'publishDiagnostics',
+          remaining,
+        );
+        if (msg.method === '$/lean/ileanInfoFinal') {
+          return {
+            diagnostics: collected.at(-1) ?? [],
+            elapsedMs: Math.round(performance.now() - startedAt),
+          };
+        }
+        const diagnostics = (msg.params?.diagnostics ?? []) as LspDiagnostic[];
+        collected.push(diagnostics);
+        if (diagnostics.length > 0) {
+          return { diagnostics, elapsedMs: Math.round(performance.now() - startedAt) };
+        }
+      }
+    } finally {
+      clearTimeout(nudgeTimer);
+    }
+  } finally {
+    writer.close();
+    worker.terminate();
+  }
+};
+
+const runLspMode = async (environment: EnvironmentReport, config: QueryConfig): Promise<void> => {
+  const mod = config.moduleName;
+  const nudgeLine = mod ? 1 : 0;
+  const badText = buildSource(mod, DEFAULT_BAD_BODY);
+  const goodText = buildSource(mod, config.goodCode ?? DEFAULT_GOOD_BODY);
+
+  const bad = await runLspDoc('Bad.lean', badText, false, config, nudgeLine);
+  log.push(`Bad.lean diagnostics=${bad.diagnostics.length} (${bad.elapsedMs}ms)`);
+  const hasTypeError = bad.diagnostics.some((d) => /mismatch|type/i.test(String(d.message ?? '')));
+  if (!hasTypeError) {
+    throw new Error(`Bad.lean 未收到预期类型错误: ${JSON.stringify(bad.diagnostics)}`);
+  }
+
+  const good = await runLspDoc('Good.lean', goodText, true, config, nudgeLine);
+  log.push(`Good.lean diagnostics=${good.diagnostics.length} (${good.elapsedMs}ms)`);
+  if (good.diagnostics.length > 0) {
+    throw new Error(`Good.lean 不该有诊断: ${JSON.stringify(good.diagnostics)}`);
+  }
+
+  finish({
+    ok: true,
+    stage: mod ? `lsp-${mod}` : 'lsp-init',
+    code: 0,
+    environment,
+    log,
+  });
+};
+
 const run = async (): Promise<void> => {
   const environment = readEnvironment();
-  const mode = new URLSearchParams(location.search).get('mode') ?? 'auto';
-  log.push(`mode=${mode} env ${JSON.stringify(environment)}`);
+  const config = readQueryConfig();
+  const mode = config.mode;
+  log.push(
+    `mode=${mode} manifest=${config.manifestUrl} module=${config.moduleName ?? '<none>'} env ${JSON.stringify(environment)}`,
+  );
   let lean: LeanInstance | undefined;
   try {
+    if (mode === 'lsp') {
+      await runLspMode(environment, config);
+      return;
+    }
     // 用变量持有 URL，避免打包阶段把 /lean.mjs 解析成模块依赖。
     const leanModuleUrl = '/lean.mjs';
     const module = (await import(/* @vite-ignore */ leanModuleUrl)) as unknown as {
@@ -175,7 +462,7 @@ const run = async (): Promise<void> => {
     lean.FS.mkdirTree('/lean/lib/lean');
     lean.FS.mkdirTree('/src');
     // version 模式只验证启动；compile 模式挂载自建 oleans 后编译。两个模式用独立页面加载，避免 EXIT_RUNTIME 影响。
-    const oleans = mode === 'version' ? [] : await mountOleans(lean);
+    const oleans = mode === 'version' ? [] : await mountOleans(lean, config);
     log.push(`oleans=${oleans.length}`);
     // Emscripten 的 callMain 会自己补 argv[0]，这里只传真实参数；
     // 再塞一个程序名会被 Lean 当成输入文件（"Expected exactly one file name"）。
@@ -183,7 +470,11 @@ const run = async (): Promise<void> => {
     const argv = compile
       ? ['-j1', '-R', '/src', '-o', '/src/Probe.olean', '/src/Probe.lean']
       : ['--version'];
-    const stage = compile ? 'compile-init' : 'version';
+    const stage = compile
+      ? config.moduleName
+        ? `compile-${config.moduleName}`
+        : 'compile-init'
+      : 'version';
     log.push(`stage=${stage} argv=${JSON.stringify(argv)}`);
     // -sEXIT_RUNTIME=1 下 callMain 用 ExitStatus 异常退出，状态码即 Lean 的退出码。
     let code = 0;

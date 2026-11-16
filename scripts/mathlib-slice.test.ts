@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CliError } from './lib/cli.ts';
-import { collectClosure, indexSources, readImports, slice } from './mathlib-slice.ts';
+import {
+  collectClosure,
+  collectClosures,
+  indexSources,
+  readImports,
+  slice,
+} from './mathlib-slice.ts';
 
 describe('readImports', () => {
   it('识别 module / prelude / 修饰符 / 行尾注释', () => {
@@ -127,5 +133,54 @@ describe('slice', () => {
   it('--targets 为空直接报错', () => {
     const { root, out, manifest } = makeTree();
     expect(() => slice({ root, targets: [], out, manifest })).toThrowError(CliError);
+  });
+
+  it('--union 与 --optional 在预算内贪心打包多个 Mathlib 目标', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mathlib-slice-union-'));
+    mkdirSync(join(root, 'mathlib4', 'Mathlib'), { recursive: true });
+    writeFileSync(join(root, 'mathlib4', 'Mathlib', 'Base.lean'), '');
+    writeFileSync(join(root, 'mathlib4', 'Mathlib', 'A.lean'), 'import Mathlib.Base\n');
+    writeFileSync(join(root, 'mathlib4', 'Mathlib', 'B.lean'), 'import Mathlib.Base\n');
+    writeFileSync(join(root, 'mathlib4', 'Mathlib', 'Huge1.lean'), 'import Mathlib.Base\n');
+    writeFileSync(join(root, 'mathlib4', 'Mathlib', 'Huge2.lean'), 'import Mathlib.Huge1\n');
+    const out = join(root, 'out');
+    const manifest = join(root, 'slice.json');
+    const result = slice({
+      root,
+      targets: ['Mathlib.A'],
+      optional: ['Mathlib.B', 'Mathlib.Huge2'],
+      union: true,
+      out,
+      manifest,
+      max: 3,
+    });
+    expect(result).toEqual({
+      target: 'Mathlib.A',
+      targets: ['Mathlib.A', 'Mathlib.B'],
+      modules: ['Mathlib.Base', 'Mathlib.A', 'Mathlib.B'],
+    });
+    const written = JSON.parse(readFileSync(manifest, 'utf8'));
+    expect(written.targets).toEqual(['Mathlib.A', 'Mathlib.B']);
+  });
+});
+
+describe('collectClosures', () => {
+  it('合并多个目标且共享依赖不重复输出', () => {
+    const sources = new Map<string, string>([
+      ['A', 'import Shared\n'],
+      ['B', 'import Shared\n'],
+      ['Shared', ''],
+    ]);
+    const index = new Map<string, string>([
+      ['A', 'A.lean'],
+      ['B', 'B.lean'],
+      ['Shared', 'Shared.lean'],
+    ]);
+    const { order } = collectClosures(
+      index,
+      ['A', 'B'],
+      (file) => sources.get(file.replace('.lean', '')) ?? '',
+    );
+    expect(order).toEqual(['Shared', 'A', 'B']);
   });
 });

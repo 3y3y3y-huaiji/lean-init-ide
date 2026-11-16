@@ -23,6 +23,16 @@ describe('buildDocuments', () => {
     expect(exampleLine).toBe(1);
     expect(documents['Bad.lean']?.startsWith('import Mathlib.Tactic.Spread\n')).toBe(true);
   });
+
+  it('自定义 goodCode 替换 Good.lean 主体并保留 import', () => {
+    const { documents } = buildDocuments(
+      'Mathlib.Data.Nat.Prime.Basic',
+      'example : Nat.Prime 2 := Nat.prime_two',
+    );
+    expect(documents['Good.lean']).toBe(
+      'import Mathlib.Data.Nat.Prime.Basic\nexample : Nat.Prime 2 := Nat.prime_two\n',
+    );
+  });
 });
 
 describe('诊断断言', () => {

@@ -364,12 +364,13 @@ jobs:
           pnpm add playwright-core tsx esbuild --allow-build=esbuild
           cp ../../scripts/wasm64-browser-verify.ts .
           pnpm exec esbuild ../../scripts/wasm64-browser-harness.ts --bundle --format=esm --outfile=../../work/dist/harness.mjs
+          pnpm exec esbuild ../../scripts/wasm64-lsp-browser-worker.ts --bundle --format=esm --outfile=../../work/dist/lsp-worker.mjs
 
-      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里用自建 64 位 oleans 编译
+      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里用自建 64 位 oleans 编译与 LSP
         timeout-minutes: 30
         run: |
           cd work/browser
-          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32 --modes version,compile,lsp
 
       # 真实依赖：从 Mathlib 源码裁出目标模块的静态 import 闭包，再用 wasm64 编译器逐个重编。
       # 只做静态分析，不需要官方 Linux 工具链；闭包超过上限时脚本以 3 退出，后续步骤跳过编译。
@@ -419,8 +420,10 @@ jobs:
           done < work/mathlib-deps.txt
           node scripts/mathlib-slice.ts slice \
             --root work/mathlib \
-            --targets "Mathlib.Order.Notation,Mathlib.Tactic.Spread,Mathlib.Order.Basic" \
-            --max 120 \
+            --union \
+            --targets "Mathlib.Tactic.Spread" \
+            --optional "Mathlib.Order.Notation,Mathlib.Order.Basic,Mathlib.Logic.Basic,Mathlib.Data.Nat.Defs" \
+            --max 240 \
             --out work/mathlib-src \
             --manifest work/mathlib-slice.json
           code=$?
@@ -429,6 +432,76 @@ jobs:
             exit 0
           fi
           exit "$code"
+
+      - name: 实验：直接复用官方 Mathlib 64 位 olean 缓存（lake exe cache get + Node/Chrome LSP）
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_WASM_TRACE: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          set -uo pipefail
+          BOOT="$(node scripts/ci/boot-dir.ts)"
+          export PATH="$BOOT/bin:$PATH"
+          echo "mathlib toolchain: $(cat work/mathlib/mathlib4/lean-toolchain 2>/dev/null || echo missing)"
+          echo "mathlib head: $(git -C work/mathlib/mathlib4 rev-parse HEAD 2>/dev/null || echo missing)"
+          mkdir -p work/mathlib/mathlib4/.lake/packages
+          while read -r url rev name; do
+            [ -z "${name:-}" ] && continue
+            if [ -d "work/mathlib/$name" ]; then
+              ln -sfn "$PWD/work/mathlib/$name" "work/mathlib/mathlib4/.lake/packages/$name"
+            fi
+          done < work/mathlib-deps.txt
+          (
+            cd work/mathlib/mathlib4
+            lake exe cache get \
+              Mathlib/Tactic/Spread.lean \
+              Mathlib/Order/Basic.lean \
+              Mathlib/Data/Nat/Prime/Basic.lean \
+              Mathlib/Tactic/Ring.lean
+          )
+          rm -rf work/mathlib-official-lib
+          node scripts/ci/collect-lake-libs.ts \
+            --base work/olean32 \
+            --lake work/mathlib/mathlib4 \
+            --out work/mathlib-official-lib
+          if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
+            echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Node LSP) ==="
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean work/dist/lean-adapted-proxy.mjs \
+              --lib work/mathlib-official-lib \
+              --module Mathlib.Data.Nat.Prime.Basic \
+              --good-code "example : Nat.Prime 2 := Nat.prime_two" \
+              --mode worker --timeout 300000 --jobs 4
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Tactic/Ring.olean ]; then
+            echo "=== 测试官方 Mathlib.Tactic.Ring (Node LSP) ==="
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean work/dist/lean-adapted-proxy.mjs \
+              --lib work/mathlib-official-lib \
+              --module Mathlib.Tactic.Ring \
+              --good-code "example (a b : Nat) : (a + b) * (a + b) = a * a + 2 * a * b + b * b := by ring" \
+              --mode worker --timeout 300000 --jobs 4
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
+            node scripts/ci/gen-olean-manifest.ts \
+              --lib work/mathlib-official-lib \
+              --roots Init,Std,Lean,Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+              --ir-roots Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+              --out work/dist/mathlib-official-manifest.json
+            echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Chrome Compile + LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes compile,lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Data.Nat.Prime.Basic \
+                --good "example : Nat.Prime 2 := Nat.prime_two"
+            )
+          fi
 
       - name: 恢复 Mathlib 裁切编译产物
         uses: actions/cache/restore@v6
@@ -560,6 +633,14 @@ jobs:
               diag "$GLUE" work/mathlib-lib "$TARGET" 900000 "$JOBS"
             else
               echo "::warning::$TARGET 没编完，跳过 Mathlib 诊断"
+            fi
+            if [ -f "work/mathlib-lib/Mathlib/Order/Basic.olean" ]; then
+              node scripts/wasm64-lsp-diagnostics.ts \
+                --lean "$GLUE" \
+                --lib work/mathlib-lib \
+                --module Mathlib.Order.Basic \
+                --good-code "example {α : Type} [Preorder α] {a b c : α} (h₁ : a ≤ b) (h₂ : b ≤ c) : a ≤ c := le_trans h₁ h₂" \
+                --mode worker --timeout 900000 --jobs "$JOBS"
             fi
           fi
 

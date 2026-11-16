@@ -12,8 +12,37 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { chromium } from 'playwright-core';
 
-const distDir = resolve(process.argv[2] ?? 'work/dist');
-const libDir = process.argv[3] ? resolve(process.argv[3]) : null;
+const readCliConfig = (argv: readonly string[]) => {
+  const positionals: string[] = [];
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i] ?? '';
+    if (!arg.startsWith('--')) {
+      positionals.push(arg);
+      continue;
+    }
+    const name = arg.slice(2);
+    const val = argv[i + 1];
+    if (val === undefined) throw new Error(`missing value for --${name}`);
+    flags[name] = val;
+    i += 1;
+  }
+  return {
+    distDir: resolve(positionals[0] ?? 'work/dist'),
+    libDir: positionals[1] ? resolve(positionals[1]) : null,
+    modes: (flags.modes ?? 'version,compile,lsp')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    manifest: flags.manifest,
+    moduleName: flags.module,
+    goodCode: flags.good,
+  };
+};
+
+const cli = readCliConfig(process.argv.slice(2));
+const distDir = cli.distDir;
+const libDir = cli.libDir;
 
 const MIME_TYPES: Record<string, string> = {
   '.mjs': 'text/javascript; charset=utf-8',
@@ -113,7 +142,11 @@ const runMode = async (mode: string): Promise<ProbeResult> => {
   const page = await browser.newPage();
   page.on('console', (message) => console.log(`[${mode}:${message.type()}] ${message.text()}`));
   page.on('pageerror', (error) => console.log(`[${mode}:pageerror] ${error.message}`));
-  await page.goto(`${origin}/?mode=${mode}`, { waitUntil: 'load', timeout: 60_000 });
+  const query = new URLSearchParams({ mode });
+  if (cli.manifest) query.set('manifest', cli.manifest);
+  if (cli.moduleName) query.set('module', cli.moduleName);
+  if (cli.goodCode) query.set('good', cli.goodCode);
+  await page.goto(`${origin}/?${query.toString()}`, { waitUntil: 'load', timeout: 60_000 });
   // 用字符串表达式轮询与取值，避免把 TS 编译后的函数序列化进页面。
   await page.waitForFunction('window.__probeResult !== undefined', undefined, { timeout: 900_000 });
   const result = (await page.evaluate('window.__probeResult')) as ProbeResult;
@@ -123,11 +156,11 @@ const runMode = async (mode: string): Promise<ProbeResult> => {
 
 try {
   console.log(`chrome: ${browser.version()}`);
-  const version = await runMode('version');
-  console.log(JSON.stringify(version, null, 2));
-  const compile = await runMode('compile');
-  console.log(JSON.stringify(compile, null, 2));
-  if (!version.ok || !compile.ok) process.exitCode = 1;
+  for (const mode of cli.modes) {
+    const result = await runMode(mode);
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.ok) process.exitCode = 1;
+  }
 } finally {
   await browser.close();
   await new Promise<void>((resolveClose) => server.close(() => resolveClose()));

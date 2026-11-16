@@ -1,20 +1,21 @@
 # 部署与运维
 
-分发链路的设计见 [ARCHITECTURE](ARCHITECTURE.md)；本地命令与门禁见 [DEVELOPMENT](DEVELOPMENT.md)。
+分发链路的设计见 [ARCHITECTURE](ARCHITECTURE.md)；本地命令与门禁见 [DEVELOPMENT](DEVELOPMENT.md)；
+GitHub Actions 的职责与触发条件见 [CI](CI.md)。
 
 ## 部署与冒烟
 
 部署由 GitHub Actions 负责，**CI 全绿才会上线**：
 
 ```
-static / test / build / audit  →  deploy  →  smoke
+static / test / build / e2e / audit / actionlint  →  deploy  →  smoke
 ```
 
 `deploy` job 只在 `main` 分支、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
-它跑完整 `pnpm run build`（含 102 MB 同源兜底副本，`build:web` 会省掉这一层），
+它跑完整 `pnpm run build`（含约 102 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
-仍失败则整条流水线标红。运行时资产由维护者用 `pnpm run upload:assets` 手动上传，
-CI 不负责 R2 写入；换 `cacheKey` 后先传资产、再部署页面。
+仍失败则整条流水线标红。运行时资产由 `Runtime · Lean 4.35 wasm32` 的 publish，或维护者用
+`pnpm run upload:assets` 上传；应用 CI 不写 R2。换 `cacheKey` 后先传资产、再部署页面。
 
 ### 首次启用
 
@@ -232,7 +233,7 @@ beacon（Pages 项目注入 + zone 注入），建议在面板只保留一个，
 用第三方优选 IP 工具定期更新 A 记录。代价是失去 Cloudflare 的 WAF / 缓存，需要自己补限流与证书。
 
 **方案 B**：国内反代或对象存储镜像。必须保持与主站同源，否则 Service Worker 缓存与 localStorage
-按 origin 隔离，换域名等于让用户重下 102MB。
+按 origin 隔离，换域名等于让用户重下约 102MB。
 
 代码侧提供两个诊断工具，不改 DNS 也能判断问题在哪一段：
 

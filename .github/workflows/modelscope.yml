@@ -1,4 +1,5 @@
-name: ModelScope Mirror
+name: Runtime · 魔搭镜像
+run-name: ModelScope · ${{ inputs.verify_only && 'verify' || 'upload' }}
 
 on:
   workflow_dispatch:

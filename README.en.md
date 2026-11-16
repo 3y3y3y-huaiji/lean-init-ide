@@ -2,103 +2,92 @@
 
 # Lean Init IDE
 
-A Lean 4 learning environment in the browser: a Monaco editor plus a real Lean language server
-running in a Web Worker. Write proofs, read diagnostics and inspect goals without installing a
-toolchain — and without a backend.
+Run a real Lean 4.35.0 theorem prover in your browser. A Monaco editor plus the full language server,
+all inside a Web Worker — not a regex mock, and not code shipped to a server. Open the page, write
+proofs, read diagnostics and inspect goals; your code never leaves the browser.
 
 Live: <https://criticalthinking.de5.net> (fallback: <https://lean-init-ide.pages.dev>)
 
-## What it is
+## Start in 30 seconds
 
-A Lean 4 learning environment that needs no installation. The Lean 4.35.0 Init runtime is compiled
-to WebAssembly and the real language server runs in a Web Worker: open the page, write proofs,
-read diagnostics and goals, and your code never leaves the browser.
+Open <https://criticalthinking.de5.net>, pick a lesson, press **Run**.
 
-Who it is for:
+- The first run downloads about 102 MB (zstd-compressed), then caches it in the browser; later visits
+  are usually ready in 4–7 seconds.
+- It requires cross-origin isolation (COOP/COEP) and SharedArrayBuffer; Chromium-based browsers work best.
+- Low-memory devices (`navigator.deviceMemory ≤ 4`) do not auto-download; press **Start Lean** yourself.
+- Reading lessons does not require starting the engine; the runtime only loads when you press **Run**.
 
-- people who want to try Lean without installing elan / Lake / Mathlib
-- classrooms demonstrating “propositions as types”
-- developers curious whether a language server can run in the browser
+## Why this is not just another sandbox
 
-It ships Init only by default: no Std / Lean / Lake / Mathlib, so the lessons stay within basic
-types, List and propositional logic. Std / Batteries lazy extensions are being validated on the
-`spike/std-batteries` branch; the default startup still loads Init only.
+Unit tests only cover the cases you remembered to write. Lean uses mathematical logic to rule out
+every possible input at once, and the compiler stops you with a red line the moment a step breaks.
 
-## Quick start
+- **A real compiler, not a mock.** Lean 4.35.0 is compiled to WebAssembly, so parsing, elaboration and
+  diagnostics all happen in the page. No regex ever decides whether a proof is valid.
+- **Live diagnostics and goals.** The LSP publishes diagnostics once typing settles, and the goal panel
+  follows your cursor inside a proof.
+- **Init + Std + Batteries, split into packs.** Only Init downloads by default; engineering lessons
+  mount Std and Batteries on demand and release them when they are no longer needed.
+- **27 lessons, three paths.** From absolute basics to real data structures and state machines, every
+  lesson runs in the page.
 
-Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sign-up, no install.
+## Three learning paths
 
-- The first run downloads about 102 MB (zstd-compressed) and then caches it in the browser (later
-  visits are usually ready in 4–7 seconds).
-- It requires cross-origin isolation and SharedArrayBuffer; Chromium-based browsers work best.
-- Low-memory devices (`navigator.deviceMemory ≤ 4`) do not auto-download; press **Start Lean**
-  yourself.
-- Reading lessons does not require starting the engine.
-
-## Docs
-
-- [Docs index](docs/README.md): what each document covers
-- [CI / CD workflow map](docs/CI.md): when each workflow runs and what it publishes
-- [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) · [Operations](docs/OPERATIONS.md)
-
-## Features
-
-- A real Lean 4.35.0 Init runtime: parsing, elaboration and diagnostics in the page
-- Diagnostics, goal state (`$/lean/plainGoal`), hover, completion and go-to-definition
-- Lean Unicode abbreviations: type `\to` or `\forall` and press space or Tab to get `→` or `∀`
-- Bilingual UI (`/zh/` and `/en/`), remembers your choice
-- Light / dark / system themes, with Monaco following along
-- 22 lessons: 9 intro + 13 math & verification; code blocks run in place, exercises open the playground with a starter
-- Exercise drafts stay in your browser across reloads, with one-click reset and `.lean` export
-- Passing an exercise records completion; the home “continue” link and TOC ✓ marks follow
-- A bilingual reference page for tactics, symbols and common errors
-- The runtime streams in 4 MB ranges with per-chunk verification and automatic source fallback
-- When a download fails, the editor explains why and offers retry with a one-click source switch
-  (same-origin R2 / China mirror / GitHub / auto)
-- Low-memory devices skip auto-download and cap the persistent cache at 128 MB
+| Path | Who it is for | Lessons |
+| --- | --- | --- |
+| Getting started | Complete beginners who want to feel interactive proving first | 9 |
+| Math & verification | Readers with mathematical intuition who want to translate it into Lean | 13 |
+| Engineering | Backend, systems and security engineers verifying real data structures and invariants | 5 |
 
 ## Lessons
 
-Each lesson has two to four runnable code blocks and one exercise, all within Init.
-
-**Getting started**
+### Getting started (9)
 
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
-| `what-is-lean` | What is Lean? | `#eval`, `#check`, the Init boundary |
-| `first-proof` | Ask Lean a question | `#check`, `#eval`, `rfl` |
-| `implication` | Propositions are types | `intro`, `exact`, function composition |
-| `connectives` | Building and using ∧ / ∨ | `⟨hp, hq⟩`, `h.1` / `h.2`, `cases` |
-| `induction` | Prove commutativity by induction | `induction ... with`, `simp only` |
-| `rewrite` | Rewrite the goal with rw | `rw [Nat.add_comm]`, `rw [h]` |
-| `simp` | Let simp finish the goal | `simp`, `simp only [Nat.succ_add]` |
-| `quantifiers` | Using ∀ and ∃ | `∀` as a function, `⟨n, proof⟩`, unpacking ∃ |
-| `list-structure` | Inductive types and structures | List `nil` / `cons`, `structure`, `#eval` |
+| `what-is-lean` | A compiler that does math homework | `#eval`, `#check`, `rfl` |
+| `first-proof` | Your first leak-proof proof | `rfl`, equality as a type |
+| `implication` | Write an if…then… proof function | `intro`, `exact` |
+| `connectives` | Pack and unpack: ∧ and ∨ | `⟨hp, hq⟩`, `h.1` / `h.2`, `cases` |
+| `induction` | Dominoes: induction is recursion | `induction ... with`, `simp only` |
+| `rewrite` | Ctrl+H, but for proofs | `rw [Nat.add_comm]`, `rw [h]` |
+| `simp` | Let `simp` clean up | `simp`, `simp only [Nat.succ_add]` |
+| `quantifiers` | ∀ passes an argument, ∃ hands in a sample | `∀` as a function, `⟨n, proof⟩`, unpacking ∃ |
+| `list-structure` | Build your own data structure | List `nil` / `cons`, `structure`, `#eval` |
 
-**Math & verification**
+### Math & verification (13)
 
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
-| `math-proof-style` | Translating a math proof | `rcases`, `refine`, `by_cases` and `induction` for “let / take / cases / induct” |
-| `math-divisibility` | Divisibility as a definition | Existential `∣`, transitivity, `dvd_add` |
-| `math-parity` | Parity and the first real proof | `Even` / `Odd`, unpacking ∃, `grind` |
-| `math-gcd` | Specifying the GCD | `IsGcd`, proving `Nat.gcd` meets it, uniqueness |
-| `math-primes` | Primes and counterexamples | `Prime`, refutation, arbitrary divisors |
-| `math-sets` | Sets: membership and subsets | Predicate sets, `Subset`, union |
+| `math-proof-style` | Translating a paper draft into Lean | `rcases`, `refine`, `by_cases`, `induction` |
+| `math-divisibility` | Divisibility is multiplication in disguise | Existential `∣`, transitivity, `dvd_add` |
+| `math-parity` | Your first complete parity proof | `Even` / `Odd`, unpacking ∃, `grind` |
+| `math-gcd` | Specifying the greatest common divisor | `IsGcd`, proving `Nat.gcd` meets it, uniqueness |
+| `math-primes` | Proof by contradiction, with primes | `Prime`, refutation, arbitrary divisors |
+| `math-sets` | A set is just a function returning Prop | Predicate sets, `Subset`, union |
 | `math-functions` | Injective, surjective, bijective | Function properties, composition |
-| `math-relations` | Equivalence relations | `IsEquivalence`, same-length relation |
-| `math-strong-induction` | Strong induction and Fibonacci | `Nat.strongRecOn`, exponential bound |
-| `code-sorting` | Insertion sort correctness | `Sorted`, membership preservation, sortedness exercise |
-| `code-sum` | Recursive functions and induction | `sum`, `sum_append`, structural induction |
-| `math-axioms` | Axioms, sorry and trust | `#print axioms`, `sorryAx` |
-| `math-mathlib` | From Init to Mathlib | Mini library vs Mathlib, local setup |
+| `math-relations` | Equivalence relations: three rules for sorting data | `IsEquivalence`, same-length relation |
+| `math-strong-induction` | Strong induction: borrow every earlier step | `Nat.strongRecOn`, exponential bound |
+| `code-sorting` | Prove insertion sort never sorts wrong | `Sorted`, membership preservation, sortedness exercise |
+| `code-sum` | Why concatenating two lists preserves sums | `sum`, `sum_append`, structural induction |
+| `math-axioms` | The cheat detector: `sorry` and `#print axioms` | `#print axioms`, `sorryAx` |
+| `math-mathlib` | From the browser sandbox to Mathlib | Built-in library boundary, local full toolchain |
+
+### Engineering (5, based on Std + Batteries)
+
+| Lesson | Topic | Key moves |
+| --- | --- | --- |
+| `eng-hashmap` | No more KeyNotFound or runtime panics | `Std.HashMap`, `k ∈ m`, `m[k]'h` |
+| `eng-bitvec` | Bit operations and overflow guards | `BitVec`, `UInt32` / `UInt64`, `decide`, `Nat.mod_eq_of_lt` |
+| `eng-rbmap` | Not a toy list: ordered TreeMap | `Std.TreeMap`, `insert` / `get?`, lookup-after-insert |
+| `eng-array-bounds` | Eliminate out-of-bounds access | `Array.getElem?_eq_getElem`, `i < arr.size` in the signature |
+| `eng-state-machine` | State machines and ledger conservation | `structure` + `HashMap`, `transfer`, conservation, non-negative balances |
 
 ## Limitations
 
-- **Init only** — no Std / Lean / Lake / Mathlib, so lessons stay within basic types, List and
-  propositional logic.
-- Requires cross-origin isolation (COOP/COEP) and SharedArrayBuffer; Chromium-based browsers work
-  best.
+- **Init by default**; Std and Batteries are optional extension packs. No Lean / Lake / Mathlib.
+- Requires cross-origin isolation (COOP/COEP) and SharedArrayBuffer; Chromium-based browsers work best.
 
 ## Privacy
 
@@ -108,10 +97,12 @@ Page views and Core Web Vitals are collected by Cloudflare Web Analytics.
 
 ## Under the hood
 
-- **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.35.0 runs in a Web Worker and speaks LSP
-  over postMessage.
-- **Asset layer**: a Service Worker fetches the ~102 MB runtime from a same-origin `/cdn/` gateway
-  backed by R2 in 4 MB ranges, falling back to GitHub raw and a static copy.
+- **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.35.0 runs in a Web Worker and speaks LSP over postMessage.
+- **Cross-origin isolation**: COOP/COEP and SharedArrayBuffer let the wasm threading model run unchanged,
+  which is what makes a real compiler possible in the page.
+- **Asset layer**: a Service Worker fetches assets from R2 through the same-origin `/cdn/` gateway in
+  4 MB ranges, verifies each range with SHA-256, and falls back to GitHub raw and a static copy.
+  `Init` is about 102 MB, `Std` about 75 MB and `Batteries` about 5.7 MB, loaded on demand.
 - **App layer**: a static site; routing, i18n and theming are all client-side, and Pages Functions
   only provide the asset gateway and the telemetry receiver.
 
@@ -134,11 +125,14 @@ Run the full gate before committing; commands and coverage thresholds are in
 ## Contributing
 
 - Read [AGENTS.md](AGENTS.md) first: hard constraints, module boundaries and known traps (in Chinese).
-- One concern per commit; lesson content must stay within Init.
+- One concern per commit; lesson code must stay within what the runtime can load (Init, plus Std /
+  Batteries for engineering lessons).
 - User-visible copy must be added in both languages; a parity test enforces the key set.
 
 ## Docs
 
+- [Docs index](docs/README.md)
+- [CI / CD workflow map](docs/CI.md)
 - [Architecture and runtime distribution](docs/ARCHITECTURE.md)
 - [Local development and quality gates](docs/DEVELOPMENT.md)
 - [Deployment, telemetry and troubleshooting](docs/OPERATIONS.md)

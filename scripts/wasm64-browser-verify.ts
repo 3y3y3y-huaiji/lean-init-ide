@@ -23,7 +23,8 @@ const MIME_TYPES: Record<string, string> = {
   '.json': 'application/json',
 };
 
-const PAGE = '<!doctype html><meta charset="utf-8"><title>wasm64 lean probe</title><script type="module" src="/harness.mjs"></script>';
+const PAGE =
+  '<!doctype html><meta charset="utf-8"><title>wasm64 lean probe</title><script type="module" src="/harness.mjs"></script>';
 
 interface ProbeResult {
   ok: boolean;
@@ -34,7 +35,12 @@ interface ProbeResult {
   error?: Record<string, unknown>;
 }
 
-const send = (res: ServerResponse, status: number, headers: Record<string, string>, body?: string | Buffer): void => {
+const send = (
+  res: ServerResponse,
+  status: number,
+  headers: Record<string, string>,
+  body?: string | Buffer,
+): void => {
   res.writeHead(status, headers);
   res.end(body);
 };

@@ -107,7 +107,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 
 ## LSP 握手
 
-`node scripts/wasm64-lsp-handshake.mjs work/dist/lean.mjs work/olean32` 以 `-j2 --server` 启动，按 `Content-Length` 帧发送 `initialize`，捕获 fd1 输出：
+`node scripts/wasm64-lsp-handshake.ts work/dist/lean.mjs work/olean32` 以 `-j2 --server` 启动，按 `Content-Length` 帧发送 `initialize`，捕获 fd1 输出：
 
 ```
 [handshake] outcome=1 bytes=1564
@@ -125,13 +125,13 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 
 握手只证明 server 能启动。为了验证 `didOpen → publishDiagnostics`，新增两个脚本：
 
-- `scripts/wasm64-lsp-diagnostics.mjs`：把 wasm 放进 worker 线程，用 `SharedArrayBuffer` + `Atomics` 让 `Module.stdin`
-  在没数据时挂起（主线程阻塞会拿不到 stdout），父线程按响应逐帧喂。两种模式：
+- `scripts/wasm64-lsp-diagnostics.ts`：把 wasm 放进 worker 线程，用 `SharedArrayBuffer` 环形缓冲接管 fd 0
+  （`scripts/lib/frames.ts` 负责帧编解码与游标），父线程按响应逐帧喂。两种模式：
   - `server`：`-j2 --server`，`initialize` → `initialized` → `didOpen`。只用于确认 watchdog 的行为。
-  - `worker`：`-j2 --worker <uri>`，直接起文件 worker 再发 `initialize` + `didOpen`——SDK 在浏览器里就是这么绕开
+  - `worker`：`-j4 --worker <uri>`，直接起文件 worker 再发 `initialize` + `didOpen`——SDK 在浏览器里就是这么绕开
     `Process.spawn` 的（`worker.js` 的 `startProcess(['-j4','--worker',document.uri])`）。这是真正验证 `publishDiagnostics` 的模式。
   断言 Bad.lean 收到带 `mismatch` 的诊断、Good.lean 为空。Good.lean 干净同时说明 import 的 olean 真被加载成功。
-- `scripts/mathlib-slice.mjs`：不依赖 Lean 工具链，静态解析 `import` 得到候选目标的依赖闭包
+- `scripts/mathlib-slice.ts`：不依赖 Lean 工具链，静态解析 `import` 得到候选目标的依赖闭包
   （`Mathlib.Order.Notation`（10 模块）/ `Mathlib.Tactic.Spread`（43）/ `Mathlib.Order.Basic`（94）里取最小的），
   按拓扑序把源文件摊平到 `work/mathlib-src`，再由 `run-lean.mjs` 逐个编译进 `work/mathlib-lib`（官方 olean 的副本）。
   闭包超过 120 个模块时脚本以 3 退出，workflow 跳过编译、诊断链路降级为 Init。
@@ -146,8 +146,24 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `mathlib-lib` 如果从旧缓存恢复，会带着 flags=0 的自建 Init olean，所有 import 报 `incompatible header (flags=0)`。基座必须用官方 olean 覆盖，缓存前缀也要换。
 - `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
 - 编译 Mathlib 不能带 `-Dinterpreter.prefer_native=false`：带 `initialize` 块的 Mathlib/Batteries 模块会踩 `ir_interpreter.cpp` 的 `mkDummyExternDecl` 断言（`fn_body_tag != Unreachable`）。默认解释器设置下同样的模块直接编过；编译步现在对失败模块自动用默认设置重试一次。
-- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。根因是 stdin 走的是 Emscripten 的 TTY 钩子/线程代理，worker 里没有可读的 fd 0。移植 SDK 的 glue 适配（`scripts/adapt-glue.mjs`：`lspStdin` 透传、fd0 环形缓冲、线程回收走代理）后才真正把帧送进 Lean。
+- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。根因是 stdin 走的是 Emscripten 的 TTY 钩子/线程代理，worker 里没有可读的 fd 0。移植 SDK 的 glue 适配（`scripts/adapt-glue.ts`：`lspStdin` 透传、fd0 环形缓冲、线程回收走代理）后才真正把帧送进 Lean。
 - 环形缓冲的 `_fd_read` 第一版照抄 wasm32 的 iovec 布局，在 memory64 下读出一整段零：`struct iovec` 是 16 字节（8 字节 base + 8 字节 len），`iov_len` 必须从 `iov+8` 取，`nread` 也必须写 8 字节的 `size_t`（`HEAPU64[pnum/8]`）。按 8 字节 stride 取到的是 `iov_base` 的高 32 位，写回只写低 32 位则让宿主看到巨大的读取长度，表现为 `Invalid header field` 后 `main returned 1`。
+
+## CI 门禁
+
+`.github/workflows/spike-wasm64.yml` 的 `lint` 作业先于 6 小时构建跑完，任何一项失败都不会占用构建 runner：
+
+| 检查 | 命令 | 说明 |
+| --- | --- | --- |
+| 类型 | `pnpm run typecheck:spike` | `tsconfig.spike.json`，`strict` + `erasableSyntaxOnly`（保证 Node 能直接跑 .ts） |
+| Lint | `pnpm run lint:spike` | `eslint.spike.config.mjs`，只覆盖 `scripts/**/*.ts` |
+| 格式 | `pnpm run format:check:spike` | Prettier |
+| 单测 + 覆盖率 | `pnpm run test:spike:coverage` | `vitest.spike.config.ts`，阈值 75% 行 / 60% 函数 |
+| Workflow 语法 | `actionlint` | 校验 `.github/workflows/*.yml` |
+
+脚本全部是 TS，Node 24 直接执行（原生类型擦除），不再有 `.mjs` 与 `.ts` 混用。
+命令行参数统一走 `scripts/lib/cli.ts`：未知参数、缺值、空字符串、非数字都会以退出码 2 失败，
+workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 
 ## 当前产物与缓存
 
@@ -163,7 +179,7 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 | Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v3` |
 | Mathlib 裁切编译产物 | `wasm64-mathlib-lib3-<pin hash>-<run_number>`，`restore-keys: wasm64-mathlib-lib3-<pin hash>-` 取最新，逐轮增量 |
 
-`<pin hash>` 是 `hashFiles('scripts/pin-lean.mjs')`。runtime / cgen / objects / Mathlib 产物的缓存键都带上它：
+`<pin hash>` 是 `hashFiles('scripts/pin-lean.ts')`。runtime / cgen / objects / Mathlib 产物的缓存键都带上它：
 `stage_cgen` 对已存在的 `.c` 直接跳过、不会随 Lean 版本失效，换版本后会拿旧版生成的 C 去配新版运行时，链出一个「混血」wasm——
 oleans 的 githash 检查能过（运行时确实是新版），但前端还是旧版，`#eval` 报 `cannot evaluate code because '[anonymous]' uses 'sorry'`。
 换 Lean 版本必须让这几类缓存一起失效。
@@ -184,4 +200,6 @@ git push origin spike/wasm64
 gh run watch
 ```
 
-诊断插桩在 `finish` job 的「在 Level 初始化里插入 Name / 查表探针」步骤，属于临时诊断代码；`-O2` 与三处 backport（lean.h、environment.cpp、thread.cpp）是实际生效的修改。
+wasm64 的源码修复集中在 `scripts/ci/backport-wasm64.ts`（lean.h 标量字面量、CMakeLists 的 MEMORY64、线程栈、
+内核日志与异常兜底插桩），关键锚点缺失会让 CI 直接失败；`-O2` 与这三处 backport 是实际生效的修改。
+缓存键统一绑定 `scripts/pin-lean.ts` 的哈希，换 Lean 版本自动失效。

@@ -16,11 +16,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 便宜的门禁先跑：类型、lint、格式、单测、workflow 语法。
+  # 任何一项不过就不该占用 6 小时的构建 runner。
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 安装依赖
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          pnpm install --frozen-lockfile
+
+      - name: TypeScript 静态检查
+        run: pnpm run typecheck:spike
+
+      - name: ESLint
+        run: pnpm run lint:spike
+
+      - name: Prettier
+        run: pnpm run format:check:spike
+
+      - name: 单测与覆盖率
+        run: pnpm run test:spike:coverage
+
+      - name: GitHub Actions 语法检查
+        run: |
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color -shellcheck=
+
   prepare:
+    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - name: 安装构建依赖
         run: sudo apt-get update && sudo apt-get install -y cmake zstd
@@ -81,7 +121,7 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
           # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
-          node scripts/pin-lean.mjs "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       - name: 缓存 Lean 源码与引导包
         uses: actions/cache@v6
@@ -104,172 +144,9 @@ jobs:
             git -C "$WASM_LLVM_LEAN_WORK_DIR/lean4" clean -fdq
           fi
           bash producer/lean-browser/scripts/build.sh fetch
-          # LibUV 的 ExternalProject 只接收 EMSCRIPTEN_SETTINGS 作为 CMAKE_C_FLAGS，
-          # 不带上 64 位指针选项会编出 wasm32 的 libuv.a，链接时报 "wasm32 object file can't be linked in wasm64 mode"。
-          sed -i 's|set(EMSCRIPTEN_SETTINGS "-s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|set(EMSCRIPTEN_SETTINGS "-sMEMORY64=1 -s ALLOW_MEMORY_GROWTH=1 -fwasm-exceptions -pthread")|' \
-            "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt"
-          grep -n 'EMSCRIPTEN_SETTINGS' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/CMakeLists.txt" | head -n 3
-          # 诊断：Lean 的初始化错误通过 Except 返回，异常栈里看不到是哪一级失败的。
-          # 直接给 Init / Std / Lean 三个顶层初始化打点，失败时 stderr 的最后一行就是坏掉的那一级。
-          INIT="$WASM_LLVM_LEAN_WORK_DIR/lean4/src/initialize/init.cpp"
-          sed -i '1i #include <cstdio>\n#include <cstdlib>' "$INIT"
-          for stage in Init Std Lean; do
-            sed -i "s|^\( *\)consume_io_result(initialize_${stage}(builtin));|\1if (std::getenv(\"LEAN_WASM_TRACE\")) { fprintf(stderr, \"info: [init] ${stage} start\\\\n\"); fflush(stderr); }\n\1consume_io_result(initialize_${stage}(builtin));|" "$INIT"
-          done
-          grep -n 'LEAN_WASM_TRACE' "$INIT"
-
-      - name: backport 上游 wasm64 修复
-        run: |
-          python3 - <<'PY'
-          import pathlib
-
-          src = pathlib.Path("work/lean4")
-
-          # 上游 #15814 / PR #15816：静态构造对象的标量字段按 8 字节写入，
-          # LEAN_SCALAR_PTR_LITERAL 必须按指针宽度选择 4/8 字节形式。
-          # v4.34.1 用 LEAN_EMSCRIPTEN 判断，wasm64 下会走 4 字节形式，导致 Name 哈希被截断。
-          lean_h = src / "src/include/lean/lean.h"
-          text = lean_h.read_text()
-          old = "#ifdef LEAN_EMSCRIPTEN\n#define LEAN_SCALAR_PTR_LITERAL"
-          new = "#if UINTPTR_MAX == UINT32_MAX\n#define LEAN_SCALAR_PTR_LITERAL"
-          if old in text:
-              lean_h.write_text(text.replace(old, new, 1))
-              print("patched lean.h")
-          elif new in text:
-              print("lean.h already patched")
-          else:
-              raise SystemExit("lean.h anchor not found")
-
-          # 上游 #14886：C++ 侧声明返回 uint8*，Lean 导出的是 Bool（uint8）。
-          env = src / "src/kernel/environment.cpp"
-          text = env.read_text()
-          old = 'extern "C" uint8* lean_kernel_diag_is_enabled(object*);'
-          new = 'extern "C" uint8 lean_kernel_diag_is_enabled(object*);'
-          if old in text:
-              env.write_text(text.replace(old, new))
-              print("patched environment.cpp")
-          elif new in text:
-              print("environment.cpp already patched")
-          else:
-              print("environment.cpp anchor missing (非致命)")
-
-          # thread.cpp 把 Emscripten 的默认线程栈写死成 8MB（按 32 位帧大小估算），
-          # wasm64 帧更大，Init.Prelude 的 getHeadInfo? 深递归会栈溢出。
-          thread_cpp = src / "src/runtime/thread.cpp"
-          text = thread_cpp.read_text()
-          old = "#define LEAN_DEFAULT_THREAD_STACK_SIZE 8*1024*1024 // 8MB for 32-bit"
-          new = "#define LEAN_DEFAULT_THREAD_STACK_SIZE 64*1024*1024 // 64MB for wasm64"
-          if old in text:
-              thread_cpp.write_text(text.replace(old, new))
-              print("patched thread.cpp")
-          elif new in text:
-              print("thread.cpp already patched")
-          else:
-              print("thread.cpp anchor missing (非致命)")
-
-          # 内核侧日志：在 stderr 上统一输出 `level: [category] message`，供宿主 lean-log 解析。
-          # consume_io_result 是所有 Except.error 转 C++ 异常的汇聚点，最值得插桩。
-          io_h = src / "src/util/io.h"
-          text = io_h.read_text()
-          if "lean_log_write" not in text:
-              if "#include <cstdio>" not in text:
-                  text = text.replace("#pragma once", "#pragma once\n#include <cstdio>", 1)
-              helper = r'''
-              inline void lean_log_write(unsigned level, char const * category, char const * message) {
-                  static char const * const names[] = {"error", "warning", "info", "debug"};
-                  std::fprintf(stderr, "%s: [%s] %s\n", names[level < 4 ? level : 0], category ? category : "lean", message ? message : "");
-                  std::fflush(stderr);
-              }
-              inline bool lean_wasm_trace_enabled() {
-                  static int cached = -1;
-                  if (cached < 0) cached = std::getenv("LEAN_WASM_TRACE") ? 1 : 0;
-                  return cached == 1;
-              }
-              inline void lean_trace_write(char const * category, char const * message) {
-                  if (lean_wasm_trace_enabled()) lean_log_write(2, category, message);
-              }
-              '''
-              text = text.replace("namespace lean {", "namespace lean {" + helper, 1)
-              old = "        throw exception(error.to_std_string());"
-              new = '        std::string msg = error.to_std_string();\n        lean_trace_write("io", msg.c_str());\n        throw exception(msg);'
-              if old not in text:
-                  print("util/io.h consume_io_result anchor missing (非致命)")
-              else:
-                  text = text.replace(old, new, 1)
-              io_h.write_text(text)
-              print("patched util/io.h")
-          else:
-              print("util/io.h already patched")
-
-          # olean 头校验失败时输出具体版本与 flags，之前只能看到一句 incompatible header。
-          module_cpp = src / "src/library/module.cpp"
-          text = module_cpp.read_text()
-          if "lean_log_write" not in text:
-              if '#include "util/io.h"' not in text:
-                  text = text.replace('#include "runtime/io.h"', '#include "runtime/io.h"\n#include "util/io.h"', 1)
-              invalid_old = '''            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', invalid header").str());'''
-              invalid_new = r'''            {
-                auto msg = (sstream() << "failed to read file '" << olean_fn << "', invalid header").str();
-                lean_trace_write("olean", msg.c_str());
-                return io_result_mk_error(msg);
-            }'''
-              incompatible_old = '''            return io_result_mk_error((sstream() << "failed to read file '" << olean_fn << "', incompatible header").str());'''
-              incompatible_new = r'''            {
-                auto msg = (sstream() << "failed to read file '" << olean_fn << "', incompatible header (version=" << int(header.version) << ", flags=" << int(header.flags) << ", githash=" << std::string(header.githash, strnlen(header.githash, sizeof(header.githash))).c_str() << ")").str();
-                lean_trace_write("olean", msg.c_str());
-                return io_result_mk_error(msg);
-            }'''
-              text = text.replace(invalid_old, invalid_new, 1)
-              text = text.replace(incompatible_old, incompatible_new, 1)
-              module_cpp.write_text(text)
-              print("patched module.cpp")
-          else:
-              print("module.cpp already patched")
-
-          # 外层兜底：在异常离开 wasm 之前用 C++ 接住，固定前缀写 stderr 并返回非零。
-          # JS 侧不再需要处理 WebAssembly.Exception / getExceptionMessage。
-          shell_cpp = src / "src/util/shell.cpp"
-          text = shell_cpp.read_text()
-          if "LEAN_WASM_ERR" not in text:
-              if "#include <cstdio>" not in text:
-                  text = text.replace('#include "githash.h"', '#include <cstdio>\n#include "githash.h"', 1)
-              helper = r'''
-              static void lean_wasm_report_exception(char const * type, char const * msg) {
-                  std::fprintf(stderr, "[LEAN_WASM_ERR] {\"type\":\"%s\",\"msg\":\"", type);
-                  for (char const * p = msg; p && *p; ++p) {
-                      unsigned char c = (unsigned char)*p;
-                      std::fputc((c == '"' || c == '\\' || c < 0x20) ? '\'' : (char)c, stderr);
-                  }
-                  std::fprintf(stderr, "\"}\n");
-                  std::fflush(stderr);
-              }
-              '''
-              text = text.replace(
-                  'extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {',
-                  helper + '\nextern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {\n    try {',
-                  1)
-              tail_old = '    });\n    return shell_rc;\n}'
-              tail_new = ('    });\n    return shell_rc;\n'
-                          '    } catch (lean::throwable & ex) {\n'
-                          '        lean_wasm_report_exception("lean::exception", ex.what());\n'
-                          '        return 1;\n'
-                          '    } catch (std::exception & ex) {\n'
-                          '        lean_wasm_report_exception("std::exception", ex.what());\n'
-                          '        return 1;\n'
-                          '    } catch (...) {\n'
-                          '        lean_wasm_report_exception("unknown", "non-standard exception");\n'
-                          '        return 1;\n'
-                          '    }\n'
-                          '}')
-              if tail_old not in text:
-                  print("shell.cpp tail anchor missing (非致命)")
-              else:
-                  text = text.replace(tail_old, tail_new, 1)
-              shell_cpp.write_text(text)
-              print("patched shell.cpp")
-          else:
-              print("shell.cpp already patched")
-          PY
+          # wasm64 的源码修复（lean.h / CMakeLists / 诊断插桩）统一放在 TS 脚本里，
+          # 锚点缺失会让这一步直接失败，不再靠 sed 静默跳过。
+          node "$GITHUB_WORKSPACE/scripts/ci/backport-wasm64.ts" "$WASM_LLVM_LEAN_WORK_DIR/lean4"
 
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
@@ -277,7 +154,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.mjs') }}
+          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.ts') }}
 
       - name: runtime
         run: |
@@ -292,7 +169,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.mjs') }}
+          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.ts') }}
 
       - name: cgen
         run: |
@@ -309,6 +186,10 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - name: 安装构建依赖
         run: sudo apt-get update && sudo apt-get install -y cmake zstd
@@ -346,7 +227,7 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
           # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
-          node scripts/pin-lean.mjs "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       - name: 恢复 Lean 源码与引导包
         uses: actions/cache@v6
@@ -357,35 +238,7 @@ jobs:
           key: wasm64-src-v6
 
       - name: backport 上游 wasm64 修复
-        run: |
-          python3 - <<'PY'
-          import pathlib
-
-          src = pathlib.Path("work/lean4")
-          lean_h = src / "src/include/lean/lean.h"
-          text = lean_h.read_text()
-          old = "#ifdef LEAN_EMSCRIPTEN\n#define LEAN_SCALAR_PTR_LITERAL"
-          new = "#if UINTPTR_MAX == UINT32_MAX\n#define LEAN_SCALAR_PTR_LITERAL"
-          if old in text:
-              lean_h.write_text(text.replace(old, new, 1))
-              print("patched lean.h")
-          elif new in text:
-              print("lean.h already patched")
-          else:
-              raise SystemExit("lean.h anchor not found")
-
-          env = src / "src/kernel/environment.cpp"
-          text = env.read_text()
-          old = 'extern "C" uint8* lean_kernel_diag_is_enabled(object*);'
-          new = 'extern "C" uint8 lean_kernel_diag_is_enabled(object*);'
-          if old in text:
-              env.write_text(text.replace(old, new))
-              print("patched environment.cpp")
-          elif new in text:
-              print("environment.cpp already patched")
-          else:
-              print("environment.cpp anchor missing (非致命)")
-          PY
+        run: node scripts/ci/backport-wasm64.ts work/lean4
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -393,133 +246,21 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.mjs') }}
+          key: wasm64-runtime-v14-${{ hashFiles('scripts/pin-lean.ts') }}
 
       - name: 恢复 cgen
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.mjs') }}
+          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.ts') }}
 
       # 诊断：确认 level category 注册后立刻查不到，是 Name 的 hash/eq 不一致，还是 map 本身丢了写入。
       # 只改动 Level.c，复用 objects 缓存，几分钟一轮。
-      - name: 在 Level 初始化里插入 Name / 查表探针
-        run: |
-          python3 - <<'PY'
-          import pathlib, re
-
-          probe_names = r'''
-          {
-            extern lean_object* lean_name_mk_string(lean_object*, lean_object*);
-            extern lean_object* lean_mk_string(char const*);
-            lean_object* pa = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
-            lean_object* pb = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
-            fprintf(stderr, "PROBE name eq=%d h1=%llu h2=%llu\n",
-                    (int)lean_name_eq(pa, pb),
-                    (unsigned long long)lean_name_hash(pa),
-                    (unsigned long long)lean_name_hash(pb));
-          }
-          '''
-
-          probe_category = r'''
-          {
-            extern lean_object* lean_name_mk_string(lean_object*, lean_object*);
-            extern lean_object* lean_mk_string(char const*);
-            extern lean_object* l_Lean_Parser_addBuiltinLeadingParser(lean_object*, lean_object*, lean_object*, lean_object*);
-            lean_object* pc = lean_name_mk_string(lean_box(0), lean_mk_string("level"));
-            lean_object* pd = lean_name_mk_string(lean_box(0), lean_mk_string("probeLevel"));
-            lean_object* pr = l_Lean_Parser_addBuiltinLeadingParser(pc, pd, l_Lean_Parser_Level_paren, lean_box(0));
-            fprintf(stderr, "PROBE addLeading is_error=%d\n", (int)lean_io_result_is_error(pr));
-            lean_dec_ref(pr);
-          }
-          '''
-
-          candidates = []
-          for p in pathlib.Path("work/cgen").rglob("*.c"):
-              text = p.read_text(errors="ignore")
-              if re.search(r"runtime_initialize_Lean_Parser_Level\(uint8_t builtin\)\s*\{", text):
-                  candidates.append(p)
-          print("files defining Level runtime init:", [str(p) for p in candidates])
-          if not candidates:
-              raise SystemExit("Level runtime init definition not found")
-
-          path = candidates[0]
-          src = path.read_text()
-          if "#include <stdio.h>" not in src:
-              src = "#include <stdio.h>\n" + src
-
-          header = re.search(r"runtime_initialize_Lean_Parser_Level\(uint8_t builtin\)\s*\{", src)
-          if not header:
-              print("probe A: function header missing")
-          else:
-              brace = header.end() - 1
-              print("probe A context:", repr(src[max(0, brace - 120):brace + 60]))
-              src = src[:brace + 1] + "\n" + probe_names + src[brace + 1:]
-              print("probe A injected at function entry")
-
-          lines = src.splitlines(keepends=True)
-          target = None
-          for i, line in enumerate(lines):
-              if re.match(r"\s*res\s*=\s*[^\n]*_Level_paren___regBuiltin[^\n]*\(\);\s*$", line):
-                  target = i
-                  break
-          if target is None:
-              print("probe B: call line missing")
-          else:
-              print("probe B context:", repr("".join(lines[max(0, target - 1):target + 1])))
-              lines.insert(target, probe_category + "\n")
-              src = "".join(lines)
-              print("probe B injected before paren regBuiltin call")
-
-          # 给 Level.c 里每一次 regBuiltin 调用加标记，并标出 runtime/meta 阶段入口，
-          # 定位到底是哪一次注册在报 unknown parser category。
-          marked = []
-          for line in src.splitlines(keepends=True):
-              ident = re.search(r"(l_\w+_regBuiltin\w*)\(\)", line)
-              if ident and line.lstrip().startswith("res"):
-                  marked.append(f'fprintf(stderr, "REG {ident.group(1)}\\n");\n')
-                  marked.append(line)
-              else:
-                  marked.append(line)
-          src = "".join(marked)
-
-          # 在 Extension.c 的 addBuiltinLeadingParser 入口打印 catName 哈希，
-          # 与探针里新建的 level Name 哈希对比。
-          ext = pathlib.Path("work/cgen/Lean/Parser/Extension.c")
-          if ext.exists():
-              esrc = ext.read_text()
-              if "#include <stdio.h>" not in esrc:
-                  esrc = "#include <stdio.h>\n" + esrc
-              for fn in ("l_Lean_Parser_addBuiltinLeadingParser", "l_Lean_Parser_addBuiltinParser"):
-                  m = re.search(rf"{fn}\(lean_object\* (\w+)", esrc)
-                  if m:
-                      param = m.group(1)
-                      brace = esrc.find("{", m.end())
-                      inject = f'\nfprintf(stderr, "CAT {fn} hash=%llu\\n", (unsigned long long)lean_name_hash({param}));'
-                      esrc = esrc[:brace + 1] + inject + esrc[brace + 1:]
-                      print("cat probe added:", fn, param)
-                  else:
-                      print("cat probe: header missing for", fn)
-              ext.write_text(esrc)
-
-          for phase in ("runtime_initialize_Lean_Parser_Level", "meta_initialize_Lean_Parser_Level"):
-              header = re.search(rf"{phase}\(uint8_t builtin\)\s*\{{", src)
-              if header:
-                  brace = header.end() - 1
-                  src = src[:brace + 1] + f'\nfprintf(stderr, "PHASE {phase}\\n");' + src[brace + 1:]
-                  print("phase marker added:", phase)
-              else:
-                  print("phase header missing:", phase)
-
-          path.write_text(src)
-          print("patched", path, len(src), "bytes")
-          PY
-
       - name: 缓存 objects
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.mjs') }}
+          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts') }}
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -548,7 +289,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.mjs') }}
+          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts') }}
 
       - name: link
         run: |
@@ -569,8 +310,8 @@ jobs:
 
       - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收）
         run: |
-          node scripts/adapt-glue.mjs work/dist/lean.mjs work/dist/lean-adapted.mjs
-          node scripts/adapt-glue.mjs work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
+          node scripts/adapt-glue.ts work/dist/lean.mjs work/dist/lean-adapted.mjs
+          node scripts/adapt-glue.ts work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
 
       # 发布用产物：去掉 --profiling-funcs / EXCEPTION_STACK_TRACES，wasm 从 129MB 降到约 110MB。
       - name: 链接 release 变体（无调试符号）
@@ -579,23 +320,9 @@ jobs:
           source emsdk/emsdk_env.sh
           bash scripts/link-wasm64-release.sh "$GITHUB_WORKSPACE"
 
-      # 判定探针：不 import 任何模块的最小文件能否编译。
-      # 通过 → 崩溃与 Init.Prelude 的深递归/规模有关；失败 → 运行时 baseline 就坏了。
-      - name: 最小文件探针（不 import Init）
-        run: |
-          set +e
-          mkdir -p work/mini work/olean32
-          printf 'def one : Nat := 1\n' > work/mini/Mini.lean
-          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-            work/dist/lean.mjs work/mini work/olean32 -- \
-            -j1 -o /src/Mini.olean /src/Mini.lean
-          echo "mini exit=$?"
-
-      # USE_GMP=ON 之后 flags 与 githash 都与官方一致，官方 64 位 oleans 可以直接用，
-      # 不再需要用这个 wasm64 Lean 重编 Init。
       - name: 使用官方 64 位 oleans（GMP 编码）
         run: |
-          BOOT="$(ls -d work/lean-*-linux | head -n 1)"
+          BOOT="$(node scripts/ci/boot-dir.ts)"
           rm -rf work/olean32
           cp -a "$BOOT/lib/lean" work/olean32
           echo "oleans: $(find work/olean32 -name '*.olean' | wc -l)"
@@ -620,33 +347,11 @@ jobs:
       - name: LSP 握手（--server）
         run: |
           echo -n "glue lspStdin refs: "; grep -c 'lspStdin' work/dist/lean.mjs || true
-          node scripts/wasm64-lsp-handshake.mjs work/dist/lean.mjs work/olean32
+          node scripts/wasm64-lsp-handshake.ts work/dist/lean.mjs work/olean32
 
-      - name: 生成自建 Init olean 清单
+      - name: 生成浏览器用 olean 清单
         run: |
-          OLEANS="$GITHUB_WORKSPACE/work/olean32"
-          node -e '
-          const { existsSync, readdirSync, writeFileSync } = require("node:fs");
-          const { join, relative } = require("node:path");
-          const root = process.argv[1];
-          const out = [];
-          const walk = (dir) => {
-            for (const entry of readdirSync(dir, { withFileTypes: true })) {
-              const p = join(dir, entry.name);
-              if (entry.isDirectory()) walk(p);
-              else if (/[.](olean|olean[.]server|olean[.]private|ilean)$/.test(entry.name)) out.push(relative(root, p));
-            }
-          };
-          walk(join(root, "Init"));
-          // 根目录下的 Init.olean 及其附属文件不在 Init/ 子目录里，需要单独补。
-          for (const name of ["Init.olean", "Init.olean.server", "Init.olean.private", "Init.ilean"]) {
-            if (existsSync(join(root, name))) out.push(name);
-          }
-          out.sort();
-          writeFileSync("work/dist/olean-manifest.json", JSON.stringify(out));
-          console.log("olean files:", out.length);
-          ' "$OLEANS"
-          du -sh "$OLEANS/Init"
+          node scripts/ci/gen-olean-manifest.ts --lib work/olean32 --out work/dist/olean-manifest.json
 
       - name: 准备浏览器驱动（pnpm + runner 自带 Chrome，不下载浏览器）
         run: |
@@ -679,8 +384,8 @@ jobs:
         run: |
           set -uo pipefail
           if [ ! -d work/mathlib/mathlib4/.git ]; then
-            # lean-toolchain 被引导流程改写成 build/release/stage1，版本要从引导包目录名取。
-            BOOT="$(ls -d work/lean-*-linux 2>/dev/null | head -n 1)"
+            # 版本从 manifest 解析，避免 `ls | head -1` 在 4.34 与 4.36 目录并存时取错。
+            BOOT="$(node scripts/ci/boot-dir.ts 2>/dev/null || true)"
             VER=""
             if [ -n "$BOOT" ]; then
               VER="v$(basename "$BOOT" | sed -E 's/^lean-([^-]+)-linux$/\1/')"
@@ -698,7 +403,7 @@ jobs:
             fi
             git clone --depth 1 --branch "$TAG" https://github.com/leanprover-community/mathlib4.git work/mathlib/mathlib4
           fi
-          node scripts/mathlib-slice.mjs deps work/mathlib/mathlib4 > work/mathlib-deps.txt
+          node scripts/mathlib-slice.ts deps work/mathlib/mathlib4 > work/mathlib-deps.txt
           cat work/mathlib-deps.txt
           while read -r url rev name; do
             [ -z "${name:-}" ] && continue
@@ -712,7 +417,7 @@ jobs:
               echo "::warning::依赖 $name 拉取失败，编译时可能缺模块"
             fi
           done < work/mathlib-deps.txt
-          node scripts/mathlib-slice.mjs slice \
+          node scripts/mathlib-slice.ts slice \
             --root work/mathlib \
             --targets "Mathlib.Order.Notation,Mathlib.Tactic.Spread,Mathlib.Order.Basic" \
             --max 120 \
@@ -729,9 +434,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: work/mathlib-lib
-          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.mjs') }}-${{ github.run_number }}
+          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-${{ github.run_number }}
           restore-keys: |
-            wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.mjs') }}-
+            wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-
 
       # 每个文件单独起一次 wasm64 进程：EXIT_RUNTIME=1 之后同一实例不能复用。
       # 已编译的 olean 直接跳过，配合缓存可以逐轮补齐。
@@ -794,7 +499,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/mathlib-lib
-          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.mjs') }}-${{ github.run_number }}-${{ github.run_attempt }}
+          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-${{ github.run_number }}-${{ github.run_attempt }}
 
       # 门禁：Mathlib 裁切的目标模块必须真的产出 olean。编译步本身 continue-on-error，
       # 是为了让诊断链路那一步还能跑；这里才是整轮是否成功的判据。
@@ -826,18 +531,25 @@ jobs:
             fi
           fi
           echo "lib=$LIB module=${MODULE:-<Init>}"
+          # --module 只在真的编出目标 olean 时才传；空字符串会被参数校验拒绝。
+          diag() {
+            local lean="$1"
+            local extra=(--lean "$lean" --lib "$LIB" --mode worker)
+            if [ -n "$MODULE" ]; then extra+=(--module "$MODULE"); fi
+            node scripts/wasm64-lsp-diagnostics.ts "${extra[@]}"
+          }
           set +e
           if [ -f work/dist/lean-adapted.mjs ]; then
             echo "glue=lean-adapted.mjs"
-            node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean-adapted.mjs "$LIB" "$MODULE" worker
+            diag work/dist/lean-adapted.mjs
             plain=$?
             if [ "$plain" -ne 0 ] && [ -f work/dist/lean-adapted-proxy.mjs ]; then
               echo "retry with lean-adapted-proxy.mjs"
-              node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean-adapted-proxy.mjs "$LIB" "$MODULE" worker
+              diag work/dist/lean-adapted-proxy.mjs
             fi
           else
             echo "glue=lean.mjs（未适配，只验证帧收发）"
-            node scripts/wasm64-lsp-diagnostics.mjs work/dist/lean.mjs "$LIB" "$MODULE" worker
+            diag work/dist/lean.mjs
           fi
 
       - name: 打包 npm（lean4-wasm64）
@@ -847,7 +559,7 @@ jobs:
           VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then VERSION="${GITHUB_REF_NAME#npm-v}"; fi
           echo "NPM_VERSION=$VERSION" >> "$GITHUB_ENV"
-          node scripts/pack-npm.mjs --dist work/release --out work/npm --version "$VERSION"
+          node scripts/pack-npm.ts --dist work/release --out work/npm --version "$VERSION"
           cd work/npm
           pnpm pack
           ls -l ./*.tgz

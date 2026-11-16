@@ -54,7 +54,12 @@ const probeMemory = (descriptor: Record<string, unknown>): string => {
 };
 
 const describe = (error: unknown, instance?: LeanInstance): Record<string, unknown> => {
-  const candidate = error as { name?: string; message?: string; stack?: string; constructor?: { name?: string } };
+  const candidate = error as {
+    name?: string;
+    message?: string;
+    stack?: string;
+    constructor?: { name?: string };
+  };
   const info: Record<string, unknown> = {
     ctor: candidate?.constructor?.name,
     name: candidate?.name,
@@ -64,7 +69,8 @@ const describe = (error: unknown, instance?: LeanInstance): Record<string, unkno
   if (typeof WebAssembly !== 'undefined' && error instanceof WebAssembly.Exception) {
     info.isWasmException = true;
     try {
-      info.arg0 = error.getArg(error.tag, 0);
+      const exception = error as WebAssembly.Exception & { readonly tag: WebAssembly.Tag };
+      info.arg0 = exception.getArg(exception.tag, 0);
     } catch {
       // tag 未导出时无法解码，忽略。
     }
@@ -89,7 +95,9 @@ const readEnvironment = (): EnvironmentReport => ({
 });
 
 const finish = (value: ProbeReport): void => {
-  log.push(`result ok=${String(value.ok)} stage=${value.stage}${value.code === undefined ? '' : ` code=${value.code}`}`);
+  log.push(
+    `result ok=${String(value.ok)} stage=${value.stage}${value.code === undefined ? '' : ` code=${value.code}`}`,
+  );
   window.__probeResult = value;
 };
 
@@ -188,8 +196,11 @@ const run = async (): Promise<void> => {
     }
     log.push(`callMain code=${code}`);
     if (compile) {
-      const output = (lean.FS as unknown as { analyzePath(p: string): { exists: boolean; object?: { contents?: Uint8Array } } })
-        .analyzePath('/src/Probe.olean');
+      const output = (
+        lean.FS as unknown as {
+          analyzePath(p: string): { exists: boolean; object?: { contents?: Uint8Array } };
+        }
+      ).analyzePath('/src/Probe.olean');
       log.push(`probe.olean exists=${output.exists} size=${output.object?.contents?.length ?? -1}`);
     }
     finish({ ok: code === 0, stage, code, oleanCount: oleans.length, environment, log });

@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest';
+import { adaptGlue } from './adapt-glue.ts';
+
+// 最小 fixture：包含所有被替换的锚点，用来锁住补丁行为；真实 glue 由 CI 生成。
+const FIXTURE = [
+  'var proxiedFunctionTable=[_emscripten_builtin_malloc,emscripten_builtin_memalign];',
+  'worker.postMessage({cmd:1,handlers,wasmMemory,wasmModule})',
+  'wasmMemory=msgData.wasmMemory;updateMemoryViews();',
+  'if(!ENVIRONMENT_IS_PTHREAD)cleanupThread(thread);else postMessage({cmd:6,thread})',
+  '_proc_exit(code){if(ENVIRONMENT_IS_PTHREAD)return proxyToMainThread(0,0,1,code);EXITSTATUS=code;',
+  'getNewWorker(){if(PThread.unusedWorkers.length==0){',
+  'function _fd_read(fd,iov,iovcnt,pnum){return 0}',
+].join('\n');
+
+describe('adaptGlue', () => {
+  it('注入全部 6 处补丁', () => {
+    const { glue } = adaptGlue(FIXTURE);
+    expect(glue).toContain('lspStdin:Module["lspStdin"]');
+    expect(glue).toContain('Module["lspStdin"]=msgData.lspStdin;');
+    expect(glue).toContain('__emscripten_thread_cleanup];');
+    expect(glue).toContain('proxyToMainThread(2,0,1,thread)');
+    expect(glue).toContain('Module["lspProcessExit"]?.(code);');
+    expect(glue).toContain('Lean LSP exhausted its pthread pool');
+  });
+
+  it('memory64 的 fd0 读取用 16 字节 iovec 与 HEAPU64', () => {
+    const { glue, fdReadSnippet } = adaptGlue(FIXTURE);
+    expect(glue).toContain(fdReadSnippet);
+    expect(fdReadSnippet).toContain('HEAPU64[iov/8]');
+    expect(fdReadSnippet).toContain('HEAPU64[(iov+8)/8]');
+    expect(fdReadSnippet).toContain('iov+=16');
+    expect(fdReadSnippet).toContain('HEAPU64[pnum/8]=BigInt(total)');
+    expect(fdReadSnippet).not.toContain('HEAPU32[(iov+k*8)>>>2]');
+  });
+
+  it('锚点缺失时直接失败，而不是静默产出坏 glue', () => {
+    expect(() => adaptGlue('function nope(){}')).toThrowError(/期望命中 1 处/);
+  });
+
+  it('同一锚点出现两次也失败', () => {
+    expect(() =>
+      adaptGlue(`${FIXTURE}\nworker.postMessage({cmd:1,handlers,wasmMemory,wasmModule})`),
+    ).toThrowError(/期望命中 1 处/);
+  });
+
+  it('proxy 表下标按追加前的长度计算', () => {
+    const { glue } = adaptGlue(FIXTURE);
+    expect(glue).toContain('proxyToMainThread(2,0,1,thread)');
+  });
+});

@@ -8,12 +8,14 @@ import {
 } from './lean-markup';
 
 describe('renderLeanMarkup', () => {
-  it('全屏变体输出稳定视口单位、strict containment 与静态水合标记', () => {
+  it('全屏变体输出稳定视口单位与静态水合标记', () => {
     const html = renderLeanMarkup('zh', 'full', messagesFor('zh').playground);
     expect(html).toContain('data-ssr-markup="full"');
     expect(html).toContain(`>${messagesFor('zh').playground.title}</h1>`);
     expect(html).toContain('data-role="editor"');
-    expect(html).toContain('[contain:strict]');
+    // 编辑器容器不能有 paint/layout containment，否则 hover 浮层会被裁剪。
+    expect(html).not.toContain('[contain:');
+    expect(html).toContain('data-role="editor-loading"');
     expect(html).toContain('100svh');
     expect(html).not.toContain('100dvh');
     expect(html).not.toContain('52dvh');

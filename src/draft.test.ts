@@ -4,10 +4,9 @@ import { clearDraft, draftKeyFor, readDraft, saveDraft } from './draft';
 describe('练习草稿', () => {
   beforeEach(() => localStorage.clear());
 
-  it('自由编辑器与课时使用不同的 key', () => {
-    expect(draftKeyFor()).toBe('lean:draft:zh:playground');
-    expect(draftKeyFor('first-proof')).toBe('lean:draft:zh:first-proof');
-    expect(draftKeyFor('first-proof', 'en')).toBe('lean:draft:en:first-proof');
+  it('自由编辑器与课时使用不同的 key，且不区分界面语言', () => {
+    expect(draftKeyFor()).toBe('lean:draft:playground');
+    expect(draftKeyFor('first-proof')).toBe('lean:draft:first-proof');
   });
 
   it('保存后能读回代码与时间戳', () => {

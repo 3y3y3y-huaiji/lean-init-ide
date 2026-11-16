@@ -1,4 +1,5 @@
 const AUTO_START_KEY = 'lean:auto-start';
+const RUNTIME_SESSION_KEY = 'lean:runtime-session';
 
 /**
  * 打开编辑器页时是否自动下载并启动 Lean。
@@ -17,5 +18,42 @@ export const setAutoStart = (value: boolean) => {
     localStorage.setItem(AUTO_START_KEY, String(value));
   } catch {
     // 忽略隐私模式下的写入失败，当前页面仍然生效。
+  }
+};
+
+export type RuntimeSessionState = {
+  /** 同一标签页上一页是否处于运行或启动中。 */
+  active: boolean;
+  /** 已选中的扩展库 id，导航回来后据此恢复，避免用户重新点一遍。 */
+  extensions: string[];
+};
+
+/**
+ * 页面跳转会销毁 Web Worker，运行时无法真正跨页存活；用 sessionStorage 记住
+ * “上一页是运行中”和已选库，回到编辑器页时自动恢复，避免看起来像被重置。
+ * 用 sessionStorage 而不是 localStorage：新标签页不应自动下载 100MB。
+ */
+export const readRuntimeSession = (): RuntimeSessionState | null => {
+  try {
+    const raw = sessionStorage.getItem(RUNTIME_SESSION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const { active, extensions } = parsed as Partial<RuntimeSessionState>;
+    if (typeof active !== 'boolean' || !Array.isArray(extensions)) return null;
+    return {
+      active,
+      extensions: extensions.filter((id): id is string => typeof id === 'string'),
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const writeRuntimeSession = (state: RuntimeSessionState): void => {
+  try {
+    sessionStorage.setItem(RUNTIME_SESSION_KEY, JSON.stringify(state));
+  } catch {
+    // 同上：隐私模式下忽略。
   }
 };

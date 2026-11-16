@@ -72,7 +72,18 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
                <span data-role="clip-hint" role="status" aria-live="polite" class="ml-1 min-w-0 truncate text-[11px] text-muted"></span>
              </div>`
       }
-      <div class="relative min-h-0 flex-1 [contain:strict]" data-role="editor"></div>
+      <div class="relative min-h-0 flex-1" data-role="editor">
+        <div
+          data-role="editor-loading"
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 flex flex-col gap-2.5 bg-editor-bg p-4"
+        >
+          <span class="h-2 w-2/5 rounded bg-line/60"></span>
+          <span class="h-2 w-3/5 rounded bg-line/50"></span>
+          <span class="h-2 w-1/2 rounded bg-line/40"></span>
+          <span class="h-2 w-2/3 rounded bg-line/30"></span>
+        </div>
+      </div>
     </section>
     ${
       compact

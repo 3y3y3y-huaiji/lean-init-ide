@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageConnection } from 'vscode-jsonrpc/browser';
 import {
+  anchorImportDiagnostic,
   LeanSession,
   type LeanSessionOptions,
   type LeanSessionServer,
@@ -60,11 +61,12 @@ const makeHarness = (overrides: Partial<LeanSessionOptions> = {}) => {
     dispose: vi.fn(),
   };
   const states: string[] = [];
+  const onDiagnostics = vi.fn();
   const createServer = vi.fn(async () => server);
   const session = new LeanSession({
     createServer,
     createConnection: () => connection as unknown as MessageConnection,
-    onDiagnostics: vi.fn(),
+    onDiagnostics,
     onLog: vi.fn(),
     onStateChange: (state) => states.push(state),
     readyTimeoutMs: 1000,
@@ -80,6 +82,7 @@ const makeHarness = (overrides: Partial<LeanSessionOptions> = {}) => {
     connection,
     states,
     handlers,
+    onDiagnostics,
     publish: (params: DiagnosticParams) => publishDiagnostics?.(params),
     emitFileProgress: (params: unknown) => fileProgress?.(params),
     completeRun: () => documentSymbolResolvers.shift()?.(),
@@ -394,6 +397,29 @@ describe('LeanSession', () => {
     await expect(running).resolves.toEqual([]);
   });
 
+  it('非 run 期间也不把旧版本诊断转给 UI', async () => {
+    const h = makeHarness();
+    await h.session.start('initial');
+
+    h.publish({
+      uri: 'file:///workspace/Main.lean',
+      version: 1,
+      diagnostics: [diagnostic('current')],
+    });
+    h.publish({
+      uri: 'file:///workspace/Main.lean',
+      version: 0,
+      diagnostics: [diagnostic('stale')],
+    });
+
+    expect(h.onDiagnostics).toHaveBeenCalledOnce();
+    expect(h.onDiagnostics).toHaveBeenCalledWith({
+      uri: 'file:///workspace/Main.lean',
+      version: 1,
+      diagnostics: [diagnostic('current')],
+    });
+  });
+
   it('忽略其他文档的诊断，等待就绪与等待诊断超时都返回空数组', async () => {
     const h = makeHarness();
     const sync = vi.fn();
@@ -494,5 +520,56 @@ describe('LeanSession', () => {
     expect(reqHandler('window/workDoneProgress/create')?.({})).toBeNull();
     expect(reqHandler('client/registerCapability')?.({})).toBeNull();
     expect(() => notifHandler('window/logMessage')?.({ message: 'lean log' })).not.toThrow();
+  });
+});
+
+describe('anchorImportDiagnostic', () => {
+  const atFileStart = (message: string): LspDiagnostic => ({
+    range: {
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 0 },
+    },
+    message,
+  });
+
+  it('把文件头的 unknown module 诊断锚定到对应 import 行', () => {
+    const code = 'import Std\nimport Batteries\n\ndef x := 1';
+    const anchored = anchorImportDiagnostic(atFileStart("unknown module prefix 'Batteries'"), code);
+    expect(anchored.range).toEqual({
+      start: { line: 1, character: 7 },
+      end: { line: 1, character: 16 },
+    });
+  });
+
+  it('把错误指到上一个 import 行的诊断也校正过来', () => {
+    const code = 'import Std\nimport Batteries';
+    const wrongLine: LspDiagnostic = {
+      range: {
+        start: { line: 0, character: 7 },
+        end: { line: 0, character: 10 },
+      },
+      message: "unknown module prefix 'Batteries'",
+    };
+    expect(anchorImportDiagnostic(wrongLine, code).range.start).toEqual({ line: 1, character: 7 });
+  });
+
+  it('已经带具体位置的诊断不移动', () => {
+    const code = 'import Std\nimport Batteries';
+    const original: LspDiagnostic = {
+      range: {
+        start: { line: 1, character: 7 },
+        end: { line: 1, character: 16 },
+      },
+      message: "unknown module prefix 'Batteries'",
+    };
+    expect(anchorImportDiagnostic(original, code)).toBe(original);
+  });
+
+  it('找不到对应 import 或消息不匹配时保持原样', () => {
+    const code = 'import Std';
+    const missing = atFileStart("unknown module prefix 'Batteries'");
+    const unrelated = atFileStart('type mismatch');
+    expect(anchorImportDiagnostic(missing, code)).toBe(missing);
+    expect(anchorImportDiagnostic(unrelated, code)).toBe(unrelated);
   });
 });

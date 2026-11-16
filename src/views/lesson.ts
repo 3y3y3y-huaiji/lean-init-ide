@@ -1,4 +1,5 @@
 import type { LeanPanel, LeanPanelProgress, LspDiagnostic } from '../components/lean-panel';
+import { anchorImportDiagnostics } from '../lean-session';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { messagesFor, type Locale } from '../i18n';
@@ -429,7 +430,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
       .then(({ list }) => {
         renderOutput(
           output,
-          dropSpuriousRedeclarations(list, code),
+          anchorImportDiagnostics(dropSpuriousRedeclarations(list, code), code),
           looksLikeProof(code) ? t.proofAccepted : t.noOutput,
         );
       })

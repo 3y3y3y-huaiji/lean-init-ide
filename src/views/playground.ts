@@ -41,7 +41,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
     code,
     locale,
     lessonSlug: lesson?.slug,
-    draftKey: draftKeyFor(lesson?.slug, locale),
+    draftKey: draftKeyFor(lesson?.slug),
     autoStart: getAutoStart() && currentMemoryTier() !== 'low',
     startImmediately: startRequested,
   });

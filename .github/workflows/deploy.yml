@@ -14,12 +14,46 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  gate:
+    name: 判断来源
+    runs-on: ubuntu-latest
+    outputs:
+      direct: ${{ steps.detect.outputs.direct }}
+    steps:
+      - name: 是否为 PR 合并提交
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.merged_at != null)] | length')
+          if [ "$merged" -gt 0 ]; then
+            echo "direct=false" >> "$GITHUB_OUTPUT"
+            echo "PR merge commit: PR CI already covered it"
+          else
+            echo "direct=true" >> "$GITHUB_OUTPUT"
+            echo "direct push: run CI before deploy"
+          fi
+
+  ci:
+    name: 直接 push 的 CI
+    needs: gate
+    if: github.ref == 'refs/heads/main' && needs.gate.outputs.direct == 'true'
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: 部署
-    # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
-    if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
+    needs: [gate, ci]
+    # PR 合并：PR CI 已经跑过，直接部署。
+    # 直接 push：先在 ci job 里复用完整 CI，通过后才部署。
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      vars.CD_ENABLED == 'true' &&
+      needs.gate.result == 'success' &&
+      (needs.gate.outputs.direct == 'false' || needs.ci.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

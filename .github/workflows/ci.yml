@@ -1,10 +1,12 @@
 name: CI · 应用
 run-name: CI · ${{ github.ref_name }} · ${{ github.event_name }}
 
-# PR 是唯一门禁；合并到 main 后由 deploy.yml 直接构建、部署和冒烟，不重复跑整条 CI。
+# PR 走本工作流；deploy.yml 在 direct push 时复用本工作流，PR 合并则直接部署。
 on:
   pull_request:
   workflow_dispatch:
+  # 允许 deploy.yml 在 direct push 时复用同一套检查。
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}

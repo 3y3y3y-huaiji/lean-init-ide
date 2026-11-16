@@ -5,10 +5,12 @@ GitHub Actions 的职责与触发条件见 [CI](CI.md)。
 
 ## 部署与冒烟
 
-PR CI 负责门禁，合并到 `main` 后由 `Deploy · 应用` 直接构建、部署和冒烟，不重复跑检查：
+PR CI 负责常规门禁；合并到 `main` 后由 `Deploy · 应用` 直接构建、部署和冒烟。
+直接 push `main` 时，`Deploy · 应用` 会先复用完整的 `CI · 应用`，通过后才部署：
 
 ```
 PR CI（static / test / build / e2e / audit / actionlint） → merge main → Deploy · 应用（build + deploy + smoke）
+direct push main → Deploy · 应用（CI · 应用 → build + deploy + smoke）
 ```
 
 `Deploy · 应用` 只在 push `main`、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。

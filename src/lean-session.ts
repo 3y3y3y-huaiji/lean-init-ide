@@ -19,6 +19,42 @@ export type FileProgressNotification = {
   processingCount: number;
 };
 
+const UNKNOWN_IMPORT_PATTERN = /unknown module(?: prefix)? '([^']+)'/i;
+
+/**
+ * Lean 对无法解析的 import 有时只在文件头 0:0 报错，也可能把错误指到上一个
+ * import 行。这里把 “unknown module 'X'” 锚定到真正声明 X 的 import 行；
+ * 已经指向该行的诊断保持服务端原样。
+ */
+export const anchorImportDiagnostic = (diagnostic: LspDiagnostic, code: string): LspDiagnostic => {
+  const match = UNKNOWN_IMPORT_PATTERN.exec(diagnostic.message);
+  if (!match) return diagnostic;
+
+  const moduleName = match[1];
+  if (!moduleName) return diagnostic;
+  const escaped = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const importPattern = new RegExp(`^\\s*(?:(?:public|private|meta)\\s+)*import\\s+${escaped}\\b`);
+  const lines = code.split(/\r?\n/);
+  const lineIndex = lines.findIndex((line) => importPattern.test(line));
+  const line = lines[lineIndex];
+  if (lineIndex < 0 || line === undefined) return diagnostic;
+  if (diagnostic.range.start.line === lineIndex) return diagnostic;
+  const character = line.indexOf(moduleName);
+  if (character < 0) return diagnostic;
+  return {
+    ...diagnostic,
+    range: {
+      start: { line: lineIndex, character },
+      end: { line: lineIndex, character: character + moduleName.length },
+    },
+  };
+};
+
+export const anchorImportDiagnostics = (
+  diagnostics: readonly LspDiagnostic[],
+  code: string,
+): LspDiagnostic[] => diagnostics.map((diagnostic) => anchorImportDiagnostic(diagnostic, code));
+
 export type LeanSessionOptions = {
   createServer: () => Promise<LeanSessionServer>;
   createConnection: (server: LeanSessionServer) => MessageConnection;
@@ -201,15 +237,19 @@ export class LeanSession {
       connection.onNotification('textDocument/publishDiagnostics', (params: PublishDiagnostics) => {
         // Lean 会带上文档版本；run 期间只接受本次版本，避免旧版本的迟到诊断污染结果。
         const run = this.activeRun;
-        const current =
-          params.uri.toLowerCase() === this.uri.toLowerCase() &&
-          run?.opened &&
-          (params.version === undefined || params.version === run.version);
+        const sameDocument = params.uri.toLowerCase() === this.uri.toLowerCase();
+        const versionMatchesRun =
+          typeof params.version !== 'number' || !run || params.version === run.version;
+        const current = sameDocument && run?.opened && versionMatchesRun;
         if (current && run) {
           run.diagnostics = params.diagnostics;
           run.lastPublishAt = Date.now();
         }
-        this.options.onDiagnostics?.(params);
+        // 非 run 期间的诊断也要按当前版本过滤，否则重启/改行后旧版本的位置会
+        // 标到新文档上（例如错误 import 被指到上一行）。
+        const latest =
+          sameDocument && (typeof params.version !== 'number' || params.version === this.version);
+        if (latest) this.options.onDiagnostics?.(params);
       });
       connection.onNotification('$/lean/fileProgress', (params: RawFileProgress) => {
         const uri = params?.textDocument?.uri;

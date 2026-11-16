@@ -11,9 +11,9 @@ export type Draft = {
   updatedAt: number;
 };
 
-/** 同一节课在中英文下各用一份草稿，避免切语言时把中文示例带到英文页。 */
-export const draftKeyFor = (lessonSlug?: string, locale: string = 'zh'): string =>
-  `${PREFIX}${locale}:${lessonSlug && lessonSlug.length > 0 ? lessonSlug : 'playground'}`;
+/** 草稿跟代码走，不跟界面语言走：切中英文后应继续看到同一份编辑内容。 */
+export const draftKeyFor = (lessonSlug?: string): string =>
+  `${PREFIX}${lessonSlug && lessonSlug.length > 0 ? lessonSlug : 'playground'}`;
 
 export const readDraft = (key: string): Draft | null => {
   try {

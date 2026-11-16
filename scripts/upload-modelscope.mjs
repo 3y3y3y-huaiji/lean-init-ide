@@ -183,7 +183,10 @@ const verifyRemoteAsset = async (asset) => {
   }
 
   if (!response.headers.get('access-control-allow-origin')) {
-    throw new Error(`${asset.name} 缺少 Access-Control-Allow-Origin`);
+    const host = new URL(response.url).host;
+    throw new Error(
+      `${asset.name} 缺少 Access-Control-Allow-Origin（HTTP ${response.status}, ${host}）`,
+    );
   }
 };
 
@@ -191,20 +194,33 @@ const verifyRemote = async () => {
   // push 后 ModelScope 的 LFS/CDN 有几秒到几十秒的传播窗口，
   // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
   const attempts = 10;
+  const failures = [];
   for (const asset of manifest.assets) {
+    let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         await verifyRemoteAsset(asset);
-        console.log(`modelscope: ${asset.name} 远端 ${asset.ranged ? '206' : '200'} / CORS 正常`);
+        lastError = undefined;
         break;
       } catch (error) {
-        if (attempt === attempts) throw error;
-        console.log(
-          `modelscope: ${asset.name} 尚未就绪（${attempt}/${attempts}）：${error.message}，5 秒后重试`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        lastError = error;
+        if (attempt < attempts) {
+          console.log(
+            `modelscope: ${asset.name} 尚未就绪（${attempt}/${attempts}）：${error.message}，5 秒后重试`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
       }
     }
+    if (lastError) {
+      failures.push(lastError);
+      console.warn(`modelscope: ${asset.name} 校验未通过：${lastError.message}`);
+    } else {
+      console.log(`modelscope: ${asset.name} 远端 ${asset.ranged ? '206' : '200'} / CORS 正常`);
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `${failures.length} 个资产远端校验未通过`);
   }
 };
 
@@ -308,7 +324,15 @@ const main = async () => {
     return;
   }
   if (!verifyOnly) upload();
-  await verifyRemote();
+  try {
+    await verifyRemote();
+  } catch (error) {
+    // 上传已经成功，镜像校验失败不该阻塞 R2 / GitHub Release 的发布；
+    // --verify-only 仍然保持严格模式，用来单独检查镜像健康度。
+    if (verifyOnly) throw error;
+    console.warn(`modelscope: 远端校验未通过，但资产已 push：${error.message}`);
+    console.warn('modelscope: 可用 --verify-only 单独复查；不影响 R2 / GitHub Release');
+  }
   console.log(
     'modelscope: 完成；把 config/lean4-runtime.json 的 mirror.baseUrl 指向上面的目录即可',
   );

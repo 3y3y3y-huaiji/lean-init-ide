@@ -1,7 +1,12 @@
 # wasm32 递归深度与编译性能 spike 结论
 
+> 历史记录：以下实验基于 Lean 4.34.1。生产已升级到 Lean 4.35.0
+> （`.github/workflows/runtime-wasm32-435.yml`）；结论（Chrome Worker 原生栈上界、
+> `maxRecDepth` 1000、只保留 O3）仍然适用。
+
 分支：`perf/wasm32-runtime`（实验分支，不合并 main）
-工作流：`.github/workflows/runtime-wasm32.yml`
+工作流：4.34 历史工作流 `.github/workflows/runtime-wasm32.yml`（legacy）；4.35 生产工作流
+`.github/workflows/runtime-wasm32-435.yml`
 日期：2026-11-16
 
 ## 目标

@@ -1,13 +1,5 @@
 <h3>简体中文 | <a href="README.en.md">English</a></h3>
 
-# English overview
-
-Lean Init IDE is a browser-native Lean 4 learning environment. The Lean 4.34.1 Init runtime and
-the real language server run in Web Workers, so you can write proofs and read diagnostics and
-goals without installing a toolchain. It is a static site on Cloudflare Pages; the 102 MB runtime
-streams from R2 through a same-origin gateway in 4 MB ranges with SHA-256 checks. Nine intro-level
-lessons, no backend, and no code upload.
-
 # Lean Init IDE
 
 浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 中的 Lean 语言服务器。打开网页即可写证明、看诊断、看 Goal，不需要安装 Lean 工具链，也没有后端。
@@ -16,7 +8,7 @@ lessons, no backend, and no code upload.
 
 ## 这是什么
 
-一个**不用安装任何工具链**的 Lean 4 学习环境。Lean 4.34.1 的 Init 运行时被编译成 WebAssembly，
+一个**不用安装任何工具链**的 Lean 4 学习环境。Lean 4.35.0 的 Init 运行时被编译成 WebAssembly，
 语言服务器跑在浏览器的 Web Worker 里：打开网页就能写证明、看诊断、看 Goal，代码不会上传，也没有后端。
 
 适合三类使用场景：
@@ -25,20 +17,27 @@ lessons, no backend, and no code upload.
 - 课堂上给学生演示「命题即类型」的环境
 - 想研究「语言服务器能不能跑在浏览器里」的开发者
 
-项目只内置 Init，不含 Std / Lean / Lake / Mathlib，所以课程限定在基础类型、List 与命题逻辑。
+项目默认只内置 Init，不含 Std / Lean / Lake / Mathlib，所以课程限定在基础类型、List 与命题逻辑。
+Std / Batteries 的按需扩展在 `spike/std-batteries` 分支验证中，默认启动仍只加载 Init。
 
 ## 快速开始
 
 直接打开 <https://criticalthinking.de5.net>，选一门课点「运行」即可，无需注册或安装。
 
-- 首次会下载约 102MB 运行时，之后走浏览器持久缓存（二次进入通常 4–7 秒可用）。
+- 首次会下载约 102MB 运行时（zstd 压缩后），之后走浏览器持久缓存（二次进入通常 4–7 秒可用）。
 - 需要 cross-origin isolation 与 SharedArrayBuffer，Chromium 系浏览器体验最佳。
 - 低内存设备（`navigator.deviceMemory ≤ 4`）不会自动下载，需要手动点「启动 Lean」。
 - 只想读课程时不必启动引擎：课程正文直接可看，编辑器页默认也不自动下载。
 
+## 文档
+
+- [文档索引](docs/README.md)：架构、开发、运维、CI 各自负责什么
+- [CI / CD 工作流地图](docs/CI.md)：每个 workflow 何时运行、发布什么
+- [架构](docs/ARCHITECTURE.md) · [开发](docs/DEVELOPMENT.md) · [运维](docs/OPERATIONS.md)
+
 ## 功能
 
-- 真实 Lean 4.34.1 Init 运行时，在浏览器内完成解析、精化与诊断
+- 真实 Lean 4.35.0 Init 运行时，在浏览器内完成解析、精化与诊断
 - 诊断、Goal（`$/lean/plainGoal`）、悬停、补全、跳转定义
 - Lean Unicode 缩写：输入 `\to`、`\forall` 后按空格或 Tab 展开为 `→`、`∀`
 - 中英文界面，`/zh/`、`/en/` 双前缀，可切换并记住偏好
@@ -99,7 +98,7 @@ lessons, no backend, and no code upload.
 
 ## 技术一览
 
-- **语言层**：Monaco + `@wasm-idle/lsp`，Lean 4.34.1 跑在 Web Worker 里，LSP 走 postMessage
+- **语言层**：Monaco + `@wasm-idle/lsp`，Lean 4.35.0 跑在 Web Worker 里，LSP 走 postMessage
 - **资产层**：Service Worker 经站点同源 `/cdn/` 网关从 R2 按 4MB 分片下载，失败回退 GitHub raw 与静态副本
 - **应用层**：静态站点，路由 / i18n / 主题都在前端；Pages Functions 只提供资产网关与指标接收端
 
@@ -110,7 +109,7 @@ lessons, no backend, and no code upload.
 ```bash
 pnpm install         # 安装依赖并应用 patches/ 里的 @wasm-idle/lsp 补丁
 pnpm run dev         # 开发服务器（首次会下载并校验运行时资产）
-pnpm run build:web   # 只构建前端，跳过 102MB 资产
+pnpm run build:web   # 只构建前端，跳过运行时资产下载
 pnpm test            # Vitest + 覆盖率阈值
 pnpm run smoke       # 线上冒烟，发版后跑
 ```

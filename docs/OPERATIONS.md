@@ -1,20 +1,23 @@
 # 部署与运维
 
-分发链路的设计见 [ARCHITECTURE](ARCHITECTURE.md)；本地命令与门禁见 [DEVELOPMENT](DEVELOPMENT.md)。
+分发链路的设计见 [ARCHITECTURE](ARCHITECTURE.md)；本地命令与门禁见 [DEVELOPMENT](DEVELOPMENT.md)；
+GitHub Actions 的职责与触发条件见 [CI](CI.md)。
 
 ## 部署与冒烟
 
-部署由 GitHub Actions 负责，**CI 全绿才会上线**：
+PR CI 负责常规门禁；合并到 `main` 后由 `Deploy · 应用` 直接构建、部署和冒烟。
+直接 push `main` 时，`Deploy · 应用` 会先复用完整的 `CI · 应用`，通过后才部署：
 
 ```
-static / test / build / audit  →  deploy  →  smoke
+PR CI（static / test / build / e2e / audit / actionlint） → merge main → Deploy · 应用（build + deploy + smoke）
+direct push main → Deploy · 应用（CI · 应用 → build + deploy + smoke）
 ```
 
-`deploy` job 只在 `main` 分支、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
-它跑完整 `pnpm run build`（含 102 MB 同源兜底副本，`build:web` 会省掉这一层），
+`Deploy · 应用` 只在 push `main`、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
+它跑完整 `pnpm run build`（含约 102 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
-仍失败则整条流水线标红。运行时资产由维护者用 `pnpm run upload:assets` 手动上传，
-CI 不负责 R2 写入；换 `cacheKey` 后先传资产、再部署页面。
+仍失败则整条流水线标红。运行时资产由 `Runtime · Lean 4.35 wasm32` 的 publish，或维护者用
+`pnpm run upload:assets` 上传；应用 CI 与 Deploy 都不写 R2。换 `cacheKey` 后先传资产、再部署页面。
 
 ### 首次启用
 
@@ -141,8 +144,13 @@ pnpm run fetch:assets                # 下载并校验到 public/wasm-lean4/
 pnpm run upload:assets -- --dry-run  # 预览将上传的对象
 pnpm run upload:assets               # 上传缺失/变更的对象，经同源网关复核 ETag 与长度
 pnpm run upload:assets -- --verify-only
+pnpm run upload:modelscope -- --verify-only          # 只校验魔搭镜像
+pnpm run upload:modelscope -- --prune --metadata     # 同步资产、清理旧 revision、写数据集卡片
 ```
 
+- `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/` 下的 4.34 历史资产和 `wasm-lean4/4.35.0/`。
+- `--metadata` 会写 `README.md`（模型卡）、`LICENSE`（Apache-2.0）、`.gitattributes` 的 LFS 规则和 `wasm-lean4/4.35.0/SHA256SUMS`。
+- 删除工作区文件不会回收 Git LFS 历史对象；要彻底回收魔搭存储，需要重建数据集或改写历史。
 - `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
 - `--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶。
 
@@ -232,7 +240,7 @@ beacon（Pages 项目注入 + zone 注入），建议在面板只保留一个，
 用第三方优选 IP 工具定期更新 A 记录。代价是失去 Cloudflare 的 WAF / 缓存，需要自己补限流与证书。
 
 **方案 B**：国内反代或对象存储镜像。必须保持与主站同源，否则 Service Worker 缓存与 localStorage
-按 origin 隔离，换域名等于让用户重下 102MB。
+按 origin 隔离，换域名等于让用户重下约 102MB。
 
 代码侧提供两个诊断工具，不改 DNS 也能判断问题在哪一段：
 

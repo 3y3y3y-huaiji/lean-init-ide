@@ -1,4 +1,5 @@
-name: Smoke
+name: Smoke · 线上巡检
+run-name: Smoke · ${{ inputs.origin || 'pages.dev' }}
 
 on:
   workflow_dispatch:

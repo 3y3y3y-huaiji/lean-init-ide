@@ -10,7 +10,7 @@ Live: <https://criticalthinking.de5.net> (fallback: <https://lean-init-ide.pages
 
 ## What it is
 
-A Lean 4 learning environment that needs no installation. The Lean 4.34.1 Init runtime is compiled
+A Lean 4 learning environment that needs no installation. The Lean 4.35.0 Init runtime is compiled
 to WebAssembly and the real language server runs in a Web Worker: open the page, write proofs,
 read diagnostics and goals, and your code never leaves the browser.
 
@@ -20,23 +20,30 @@ Who it is for:
 - classrooms demonstrating “propositions as types”
 - developers curious whether a language server can run in the browser
 
-It ships Init only: no Std / Lean / Lake / Mathlib, so the lessons stay within basic types, List
-and propositional logic.
+It ships Init only by default: no Std / Lean / Lake / Mathlib, so the lessons stay within basic
+types, List and propositional logic. Std / Batteries lazy extensions are being validated on the
+`spike/std-batteries` branch; the default startup still loads Init only.
 
 ## Quick start
 
 Open <https://criticalthinking.de5.net>, pick a lesson and press **Run**. No sign-up, no install.
 
-- The first run downloads about 102 MB and then caches it in the browser (later visits are usually
-  ready in 4–7 seconds).
+- The first run downloads about 102 MB (zstd-compressed) and then caches it in the browser (later
+  visits are usually ready in 4–7 seconds).
 - It requires cross-origin isolation and SharedArrayBuffer; Chromium-based browsers work best.
 - Low-memory devices (`navigator.deviceMemory ≤ 4`) do not auto-download; press **Start Lean**
   yourself.
 - Reading lessons does not require starting the engine.
 
+## Docs
+
+- [Docs index](docs/README.md): what each document covers
+- [CI / CD workflow map](docs/CI.md): when each workflow runs and what it publishes
+- [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) · [Operations](docs/OPERATIONS.md)
+
 ## Features
 
-- A real Lean 4.34.1 Init runtime: parsing, elaboration and diagnostics in the page
+- A real Lean 4.35.0 Init runtime: parsing, elaboration and diagnostics in the page
 - Diagnostics, goal state (`$/lean/plainGoal`), hover, completion and go-to-definition
 - Lean Unicode abbreviations: type `\to` or `\forall` and press space or Tab to get `→` or `∀`
 - Bilingual UI (`/zh/` and `/en/`), remembers your choice
@@ -101,7 +108,7 @@ Page views and Core Web Vitals are collected by Cloudflare Web Analytics.
 
 ## Under the hood
 
-- **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.34.1 runs in a Web Worker and speaks LSP
+- **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.35.0 runs in a Web Worker and speaks LSP
   over postMessage.
 - **Asset layer**: a Service Worker fetches the ~102 MB runtime from a same-origin `/cdn/` gateway
   backed by R2 in 4 MB ranges, falling back to GitHub raw and a static copy.
@@ -116,7 +123,7 @@ Technical docs are currently in Chinese: [architecture](docs/ARCHITECTURE.md),
 ```bash
 pnpm install         # install dependencies and apply the @wasm-idle/lsp patches
 pnpm run dev         # dev server (downloads and verifies the runtime on first run)
-pnpm run build:web   # front-end build only, skipping the 102 MB assets
+pnpm run build:web   # front-end build only, skipping the runtime assets
 pnpm test            # Vitest + coverage thresholds
 pnpm run smoke       # production smoke test, after a release
 ```

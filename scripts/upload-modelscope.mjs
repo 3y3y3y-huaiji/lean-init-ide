@@ -146,40 +146,65 @@ const verifyLocal = () => {
   console.log(`modelscope: 本地 ${manifest.assets.length} 个资产校验通过`);
 };
 
-const verifyRemote = async () => {
-  for (const asset of manifest.assets) {
-    const url = remoteUrl(asset.name);
-    const ranged = asset.ranged === true;
-    const response = await fetch(url, {
-      headers: {
-        ...(ranged ? { Range: 'bytes=0-15' } : {}),
-        Origin: 'https://criticalthinking.de5.net',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(30000),
-    });
+const verifyRemoteAsset = async (asset) => {
+  const url = remoteUrl(asset.name);
+  const ranged = asset.ranged === true;
+  const response = await fetch(url, {
+    headers: {
+      ...(ranged ? { Range: 'bytes=0-15' } : {}),
+      Origin: 'https://criticalthinking.de5.net',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30000),
+  });
 
-    // 大文件走 LFS CDN 并支持 Range；小文件是普通对象，直接 200 全量返回。
-    if (ranged) {
-      if (response.status !== 206) fail(`${asset.name} 远端期望 206，实际 ${response.status}`);
-      const range = response.headers.get('content-range');
-      const expected = `bytes 0-15/${asset.bytes}`;
-      if (range !== expected)
-        fail(`${asset.name} Content-Range=${range ?? '(缺失)'}，期望 ${expected}`);
-      const body = await response.arrayBuffer();
-      if (body.byteLength !== 16) fail(`${asset.name} 分片长度 ${body.byteLength}，期望 16`);
-    } else {
-      if (response.status !== 200) fail(`${asset.name} 远端期望 200，实际 ${response.status}`);
-      const body = await response.arrayBuffer();
-      if (body.byteLength !== asset.bytes) {
-        fail(`${asset.name} 远端 ${body.byteLength} 字节，清单要求 ${asset.bytes}`);
+  // 大文件走 LFS CDN 并支持 Range；小文件是普通对象，直接 200 全量返回。
+  if (ranged) {
+    if (response.status !== 206) {
+      throw new Error(`${asset.name} 远端期望 206，实际 ${response.status}`);
+    }
+    const range = response.headers.get('content-range');
+    const expected = `bytes 0-15/${asset.bytes}`;
+    if (range !== expected) {
+      throw new Error(`${asset.name} Content-Range=${range ?? '(缺失)'}，期望 ${expected}`);
+    }
+    const body = await response.arrayBuffer();
+    if (body.byteLength !== 16) {
+      throw new Error(`${asset.name} 分片长度 ${body.byteLength}，期望 16`);
+    }
+  } else {
+    if (response.status !== 200) {
+      throw new Error(`${asset.name} 远端期望 200，实际 ${response.status}`);
+    }
+    const body = await response.arrayBuffer();
+    if (body.byteLength !== asset.bytes) {
+      throw new Error(`${asset.name} 远端 ${body.byteLength} 字节，清单要求 ${asset.bytes}`);
+    }
+  }
+
+  if (!response.headers.get('access-control-allow-origin')) {
+    throw new Error(`${asset.name} 缺少 Access-Control-Allow-Origin`);
+  }
+};
+
+const verifyRemote = async () => {
+  // push 后 ModelScope 的 LFS/CDN 有几秒到几十秒的传播窗口，
+  // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
+  const attempts = 10;
+  for (const asset of manifest.assets) {
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        await verifyRemoteAsset(asset);
+        console.log(`modelscope: ${asset.name} 远端 ${asset.ranged ? '206' : '200'} / CORS 正常`);
+        break;
+      } catch (error) {
+        if (attempt === attempts) throw error;
+        console.log(
+          `modelscope: ${asset.name} 尚未就绪（${attempt}/${attempts}）：${error.message}，5 秒后重试`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
-
-    if (!response.headers.get('access-control-allow-origin')) {
-      fail(`${asset.name} 缺少 Access-Control-Allow-Origin`);
-    }
-    console.log(`modelscope: ${asset.name} 远端 ${ranged ? '206' : '200'} / CORS 正常`);
   }
 };
 

@@ -62,15 +62,20 @@ const dryRun = has('--dry-run');
 const verifyOnly = has('--verify-only');
 const forceUpload = has('--force-upload');
 const s3 = has('--s3') || process.env.R2_S3 === '1';
-const profile = option('--profile') ?? process.env.AWS_PROFILE;
-const endpoint = option('--endpoint') ?? process.env.R2_ENDPOINT;
-const bucket = option('--bucket') ?? process.env.R2_BUCKET ?? manifest.bucket;
+// 空字符串同样视为未设置：GitHub Actions 里缺失的 secret 会变成空串，
+// 用 ?? 会把它当成有效值，导致 bucket 变成 ""。
+const profile = option('--profile') || process.env.AWS_PROFILE || undefined;
+const endpoint = option('--endpoint') || process.env.R2_ENDPOINT || undefined;
+const bucket = option('--bucket') || process.env.R2_BUCKET || manifest.bucket;
 // 主源是站点同源 /cdn/ 网关；探测时补一个可达的站点域名。
 const probeOrigin = process.env.LEAN_ASSET_ORIGIN?.trim() || 'https://criticalthinking.de5.net';
 
 if (s3 && local) throw new Error('--s3 不能与 --local 同时使用');
 if (s3 && !profile && !endpoint) {
   throw new Error('--s3 需要 AWS_PROFILE 或 R2_ENDPOINT（见 assets.env 模板）');
+}
+if (s3 && !bucket) {
+  throw new Error('--s3 需要 bucket：--bucket、R2_BUCKET 或 manifest.bucket');
 }
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -264,8 +269,11 @@ for (const asset of assets) {
   }
 
   if (remote?.error) {
+    // S3 探测失败通常意味着凭据 / bucket / endpoint 配置错误，
+    // 不能像网关探测那样降级跳过，否则会出现“0 uploaded 但退出码 0”的假成功。
+    if (s3) throw new Error(`${asset.key} S3 探测失败：${remote.error}`);
     console.log(
-      `skip   ${asset.key} (${s3 ? 'S3' : '网关'}探测不可用：${remote.error}；可用 LEAN_ASSET_ORIGIN 指定站点域名)`,
+      `skip   ${asset.key} (网关探测不可用：${remote.error}；可用 LEAN_ASSET_ORIGIN 指定站点域名)`,
     );
     continue;
   }

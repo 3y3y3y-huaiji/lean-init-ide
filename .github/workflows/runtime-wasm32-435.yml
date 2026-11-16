@@ -404,6 +404,15 @@ jobs:
           cp work/artifact/runtime-manifest.json config/lean4-runtime.json
           node -e "const m=require('./config/lean4-runtime.json'); console.log('manifest:', m.runtime, m.cacheKey, m.assets.length, 'assets')"
 
+      # 先保存候选清单：即使后面 R2 / 魔搭发布失败，也能拿到清单排查或重试。
+      - name: 保存候选清单
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-manifest-4.35.0
+          path: |
+            work/artifact/runtime-manifest.json
+            work/artifact/SHA256SUMS
+
       - name: 发布 GitHub Release（回退源）
         env:
           GH_TOKEN: ${{ github.token }}
@@ -460,14 +469,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           pnpm run upload:modelscope
-
-      - name: 保存候选清单
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-manifest-4.35.0
-          path: |
-            work/artifact/runtime-manifest.json
-            work/artifact/SHA256SUMS
 
       - name: 发布摘要
         run: |

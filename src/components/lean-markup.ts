@@ -1,6 +1,6 @@
 import type { Locale } from '../i18n';
 import type { Messages } from '../i18n/types';
-import { buttonClass, ghostButtonClass } from './ui';
+import { buttonClass, ghostButtonClass, toolbarButtonClass } from './ui';
 
 export type LeanPanelVariant = 'full' | 'compact';
 
@@ -54,10 +54,22 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       ${compact ? 'data-role="editor-wrap" style="flex:0 0 45%"' : ''}
       class="${
         compact
-          ? 'relative min-h-[130px] overflow-hidden rounded-xl border border-line bg-editor-bg'
-          : 'relative h-[calc(100svh-292px)] min-h-[520px] overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52svh] max-[900px]:min-h-[360px]'
+          ? 'relative flex min-h-[130px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg'
+          : 'relative flex h-[calc(100svh-292px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52svh] max-[900px]:min-h-[360px]'
       }"
-    ><div class="absolute inset-0 [contain:strict]" data-role="editor"></div></section>
+    >
+      ${
+        compact
+          ? ''
+          : `<div data-role="mobile-actions" class="flex shrink-0 items-center gap-1 border-b border-line bg-panel-soft px-2 py-1.5 min-[901px]:hidden">
+               <button type="button" class="${toolbarButtonClass}" data-role="select-all">${t.selectAll}</button>
+               <button type="button" class="${toolbarButtonClass}" data-role="copy-selection" disabled>${t.copySelection}</button>
+               <button type="button" class="${toolbarButtonClass}" data-role="paste">${t.paste}</button>
+               <span data-role="clip-hint" role="status" aria-live="polite" class="ml-1 min-w-0 truncate text-[11px] text-muted"></span>
+             </div>`
+      }
+      <div class="relative min-h-0 flex-1 [contain:strict]" data-role="editor"></div>
+    </section>
     ${
       compact
         ? `<div

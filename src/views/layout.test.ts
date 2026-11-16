@@ -85,6 +85,15 @@ describe('页面骨架渲染', () => {
     expect(html).toContain('aria-label="设置"');
     expect(html).toContain('>EN<');
   });
+
+  it('窄屏头部保持层叠上下文，设置面板可在视口内滚动', () => {
+    const html = renderLayout('zh', 'home', '');
+
+    // static 会让 backdrop-filter 的层叠上下文压不住下面的编辑器。
+    expect(html).toContain('max-[900px]:relative');
+    expect(html).toContain('max-[900px]:max-h-[calc(100dvh-160px)]');
+    expect(html).toContain('max-[900px]:overflow-y-auto');
+  });
 });
 
 describe('骨架交互绑定', () => {

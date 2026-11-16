@@ -40,7 +40,8 @@ describe('playground 页面', () => {
     expect(host.dataset.role).toBe('playground');
     expect(options.variant).toBe('full');
     expect(options.locale).toBe('zh');
-    expect(options.code).toContain('theorem');
+    expect(options.code).toContain('exercise_for_reader');
+    expect(options.code).toContain('Classical.choice');
     expect(typeof options.autoStart).toBe('boolean');
   });
 

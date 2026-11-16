@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assetSources } from '../src/asset-sources.mjs';
+import { resolveUploadConfig } from '../src/upload-config.mjs';
 
 /**
  * Publishes the pinned Lean runtime to the Cloudflare R2 bucket.
@@ -62,21 +63,20 @@ const dryRun = has('--dry-run');
 const verifyOnly = has('--verify-only');
 const forceUpload = has('--force-upload');
 const s3 = has('--s3') || process.env.R2_S3 === '1';
-// 空字符串同样视为未设置：GitHub Actions 里缺失的 secret 会变成空串，
-// 用 ?? 会把它当成有效值，导致 bucket 变成 ""。
-const profile = option('--profile') || process.env.AWS_PROFILE || undefined;
-const endpoint = option('--endpoint') || process.env.R2_ENDPOINT || undefined;
-const bucket = option('--bucket') || process.env.R2_BUCKET || manifest.bucket;
+// 空字符串同样视为未设置：GitHub Actions 里缺失的 secret 会变成空串。
+const { profile, endpoint, bucket } = resolveUploadConfig({
+  s3,
+  local,
+  cli: {
+    profile: option('--profile'),
+    endpoint: option('--endpoint'),
+    bucket: option('--bucket'),
+  },
+  env: process.env,
+  manifest,
+});
 // 主源是站点同源 /cdn/ 网关；探测时补一个可达的站点域名。
 const probeOrigin = process.env.LEAN_ASSET_ORIGIN?.trim() || 'https://criticalthinking.de5.net';
-
-if (s3 && local) throw new Error('--s3 不能与 --local 同时使用');
-if (s3 && !profile && !endpoint) {
-  throw new Error('--s3 需要 AWS_PROFILE 或 R2_ENDPOINT（见 assets.env 模板）');
-}
-if (s3 && !bucket) {
-  throw new Error('--s3 需要 bucket：--bucket、R2_BUCKET 或 manifest.bucket');
-}
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const md5 = (data) => createHash('md5').update(data).digest('hex');

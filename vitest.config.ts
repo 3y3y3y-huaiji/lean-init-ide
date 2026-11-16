@@ -5,7 +5,7 @@ export default defineConfig({
     pool: 'vmThreads',
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
-    include: ['src/**/*.test.ts', 'functions/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'functions/**/*.test.ts', 'scripts/**/*.test.mjs'],
     restoreMocks: true,
     coverage: {
       provider: 'v8',

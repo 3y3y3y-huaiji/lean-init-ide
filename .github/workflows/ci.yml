@@ -36,6 +36,15 @@ jobs:
       - name: 资产清单结构
         run: pnpm run verify:manifest
 
+  actionlint:
+    name: Actions 工作流静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # 固定版本，避免 latest 变更导致流水线突然变红。
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
+
   test:
     name: 单元测试
     runs-on: ubuntu-latest
@@ -163,7 +172,7 @@ jobs:
 
   deploy:
     name: 部署
-    needs: [static, test, build, e2e, audit]
+    needs: [static, test, build, e2e, audit, actionlint]
     # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
     if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
     runs-on: ubuntu-latest

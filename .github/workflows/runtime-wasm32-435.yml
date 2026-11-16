@@ -387,6 +387,25 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # 缺少 secret 时尽早失败，不浪费下载产物和创建 Release 的时间。
+      - name: 检查发布凭据
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+        run: |
+          set -eu
+          if [ "$PUBLISH_TARGET" = "r2" ] || [ "$PUBLISH_TARGET" = "both" ]; then
+            for name in R2_ENDPOINT R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+              value="${!name}"
+              [ -n "$value" ] || { echo "缺少 $name"; exit 1; }
+            done
+          fi
+          if [ "$PUBLISH_TARGET" = "modelscope" ] || [ "$PUBLISH_TARGET" = "both" ]; then
+            [ -n "$MODELSCOPE_TOKEN" ] || { echo "缺少 MODELSCOPE_TOKEN"; exit 1; }
+          fi
+
       # 产物里的路径是 work/artifact/**，所以解压到 work 才能还原原目录。
       - uses: actions/download-artifact@v8
         with:

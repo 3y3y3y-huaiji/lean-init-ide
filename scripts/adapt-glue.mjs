@@ -60,6 +60,8 @@ replace(
 );
 
 // 6. fd 0 直接读共享环形缓冲，绕开 Emscripten 的 TTY 读循环与 fd_read 线程代理。
+// memory64 下 struct iovec 是 16 字节（8 字节 base + 8 字节 len），pnum 指向 8 字节 size_t；
+// 按 wasm32 的 8 字节 stride / HEAPU32 写长度会把 iov_base 的高 32 位当成长度，读出一堆零。
 replace(
   'function _fd_read(fd,iov,iovcnt,pnum){',
   `function _fd_read(fd,iov,iovcnt,pnum){
@@ -68,10 +70,10 @@ if(fd===0&&Module["lspStdin"]){
  var d=Module["lspStdin"],c=new Int32Array(d.buffer,0,4),input=new Uint8Array(d.buffer,16,d.capacity),range=Math.floor(4294967296/d.capacity)*d.capacity;
  while(Atomics.load(c,0)===Atomics.load(c,1)&&!Atomics.load(c,2))Atomics.wait(c,0,Atomics.load(c,0),100);
  growMemViews();var total=0,stop=false;
- for(var k=0;k<iovcnt&&!stop;k++){var ptr=HEAPU32[(iov+k*8)>>>2],len=HEAPU32[(iov+k*8+4)>>>2];
+ for(var k=0;k<iovcnt&&!stop;k++){growMemViews();var ptr=Number(HEAPU64[iov/8]),len=Number(HEAPU64[(iov+8)/8]);iov+=16;
   for(var j=0;j<len;j++){var r=Atomics.load(c,1)>>>0,w=Atomics.load(c,0)>>>0;if(r===w){stop=true;break;}HEAPU8[ptr+j]=input[r%d.capacity];Atomics.store(c,1,(r+1)%range);total++;}
  }
- HEAPU32[pnum>>>2]=total;Atomics.notify(c,1);return 0;
+ growMemViews();HEAPU64[pnum/8]=BigInt(total);Atomics.notify(c,1);return 0;
 }`,
   'fd0 环形缓冲'
 );

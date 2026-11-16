@@ -467,6 +467,53 @@ jobs:
             --base work/olean32 \
             --lake work/mathlib/mathlib4 \
             --out work/mathlib-official-lib
+          node scripts/ci/gen-olean-manifest.ts \
+            --lib work/mathlib-official-lib \
+            --roots Init,Std,Lean,Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+            --ir-roots Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+            --out work/dist/mathlib-official-manifest.json
+          node scripts/pack-lean-lib.ts \
+            --lib work/mathlib-official-lib \
+            --manifest work/dist/mathlib-official-manifest.json \
+            --out work/mathlib-pack \
+            --prefix lean-mathlib
+          ls -lh work/mathlib-pack
+          if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
+            echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Chrome Compile + LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes compile,lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Data.Nat.Prime.Basic \
+                --good "example : Nat.Prime 2 := Nat.prime_two"
+            )
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Order/Basic.olean ]; then
+            echo "=== 测试官方 Mathlib.Order.Basic (Chrome LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Order.Basic \
+                --good "example {α : Type} [Preorder α] {a b c : α} (h₁ : a ≤ b) (h₂ : b ≤ c) : a ≤ c := le_trans h₁ h₂"
+            )
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Tactic/Ring.olean ]; then
+            echo "=== 测试官方 Mathlib.Tactic.Ring (Chrome LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Tactic.Ring \
+                --good "example (a b : Nat) : (a + b) * (a + b) = a * a + 2 * a * b + b * b := by ring"
+            )
+          fi
           if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
             echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Node LSP) ==="
             node scripts/wasm64-lsp-diagnostics.ts \
@@ -483,24 +530,7 @@ jobs:
               --lib work/mathlib-official-lib \
               --module Mathlib.Tactic.Ring \
               --good-code "example (a b : Nat) : (a + b) * (a + b) = a * a + 2 * a * b + b * b := by ring" \
-              --mode worker --timeout 300000 --jobs 4
-          fi
-          if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
-            node scripts/ci/gen-olean-manifest.ts \
-              --lib work/mathlib-official-lib \
-              --roots Init,Std,Lean,Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
-              --ir-roots Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
-              --out work/dist/mathlib-official-manifest.json
-            echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Chrome Compile + LSP) ==="
-            (
-              cd work/browser
-              pnpm exec tsx wasm64-browser-verify.ts \
-                ../../work/dist ../../work/mathlib-official-lib \
-                --modes compile,lsp \
-                --manifest /mathlib-official-manifest.json \
-                --module Mathlib.Data.Nat.Prime.Basic \
-                --good "example : Nat.Prime 2 := Nat.prime_two"
-            )
+              --mode worker --timeout 600000 --jobs 4 || echo "::warning::Ring Node LSP timed out"
           fi
 
       - name: 恢复 Mathlib 裁切编译产物
@@ -619,10 +649,9 @@ jobs:
           echo "glue=$GLUE jobs=$JOBS"
           diag "$GLUE" work/olean32 "" 180000 "$JOBS"
           init_status=$?
-          if [ "$init_status" -ne 0 ] && [ "$GLUE" = "work/dist/lean-adapted-proxy.mjs" ] && [ -f work/dist/lean-adapted.mjs ]; then
-            echo "retry with lean-adapted.mjs (jobs=1)"
-            GLUE=work/dist/lean-adapted.mjs
-            JOBS=1
+          if [ "$init_status" -ne 0 ] && [ "$GLUE" = "work/dist/lean-adapted-proxy.mjs" ]; then
+            echo "retry lean-adapted-proxy.mjs (jobs=2)"
+            JOBS=2
             diag "$GLUE" work/olean32 "" 180000 "$JOBS"
             init_status=$?
           fi

@@ -82,6 +82,7 @@ const extensionDir =
   args.get('extensions') ?? process.env.LEAN_EXTENSION_DIR ?? join(root, 'work', 'extensions');
 const extensionAssets = (manifest.extensions ?? []).flatMap((extension) => extension.assets);
 const allAssets = [...manifest.assets, ...extensionAssets];
+const selectedAssets = args.has('extensions-only') ? extensionAssets : allAssets;
 const extensionNames = new Set(extensionAssets.map((asset) => asset.name));
 const localFileOf = (asset) =>
   join(extensionNames.has(asset.name) ? extensionDir : assetDir, asset.name);
@@ -151,7 +152,7 @@ const removeTree = (dir) => {
 if (!repo) fail('缺少仓库地址，传 --repo=<namespace/name> 或设置 MODELSCOPE_REPO');
 
 const verifyLocal = () => {
-  for (const asset of allAssets) {
+  for (const asset of selectedAssets) {
     const file = localFileOf(asset);
     if (!existsSync(file)) fail(`本地缺少 ${asset.name}，先执行 npm run fetch:assets`);
     const bytes = readFileSync(file).length;
@@ -159,7 +160,7 @@ const verifyLocal = () => {
     const digest = sha256(file);
     if (digest !== asset.sha256) fail(`${asset.name} sha256 与清单不一致`);
   }
-  console.log(`modelscope: 本地 ${allAssets.length} 个资产校验通过`);
+  console.log(`modelscope: 本地 ${selectedAssets.length} 个资产校验通过`);
 };
 
 const verifyRemoteAsset = async (asset) => {
@@ -211,7 +212,7 @@ const verifyRemote = async () => {
   // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
   const attempts = 10;
   const failures = [];
-  for (const asset of allAssets) {
+  for (const asset of selectedAssets) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
@@ -429,7 +430,7 @@ const upload = async () => {
 
     const target = join(work, rootDir);
     mkdirSync(target, { recursive: true });
-    for (const asset of allAssets) {
+    for (const asset of selectedAssets) {
       copyFileSync(localFileOf(asset), join(target, asset.name));
     }
 
@@ -467,7 +468,7 @@ const upload = async () => {
 const main = async () => {
   verifyLocal();
   if (dryRun) {
-    for (const asset of allAssets) console.log(`  ${remoteUrl(asset.name)}`);
+    for (const asset of selectedAssets) console.log(`  ${remoteUrl(asset.name)}`);
     return;
   }
   if (!verifyOnly) await upload();

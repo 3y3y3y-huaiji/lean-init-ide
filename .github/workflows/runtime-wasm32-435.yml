@@ -25,6 +25,13 @@ on:
         description: 只校验远端对象，不写入
         type: boolean
         default: false
+      publish_scope:
+        description: 发布范围（extensions 只上传扩展包，不动 Init 运行时）
+        type: choice
+        options:
+          - all
+          - extensions
+        default: all
       build_extensions:
         description: 同时编译 Std + Batteries 扩展 pack
         type: boolean
@@ -535,6 +542,7 @@ jobs:
       contents: write
     env:
       PUBLISH_TARGET: ${{ github.event_name == 'push' && 'both' || inputs.publish }}
+      PUBLISH_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_scope || 'all' }}
       VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_only || 'false' }}
     steps:
       - uses: actions/checkout@v7
@@ -574,6 +582,7 @@ jobs:
           path: work
 
       - name: 准备上传目录与候选清单
+        if: env.PUBLISH_SCOPE == 'all'
         run: |
           mkdir -p public/wasm-lean4
           cp work/artifact/lean.mjs public/wasm-lean4/
@@ -608,11 +617,11 @@ jobs:
           node scripts/write-extension-manifest.mjs \
             --std work/extensions/std --batteries work/extensions/batteries
           mkdir -p work/extensions/upload
-          cp work/extensions/std/* work/extensions/batteries/* work/extensions/upload/
+          cp work/extensions/std/lean-* work/extensions/batteries/lean-* work/extensions/upload/
           node scripts/verify-manifest.mjs
 
       - name: 无扩展构建时只发布 Init
-        if: github.event_name != 'workflow_dispatch' || !inputs.build_extensions
+        if: env.PUBLISH_SCOPE == 'all' && (github.event_name != 'workflow_dispatch' || !inputs.build_extensions)
         run: |
           node -e "const fs=require('fs');const p='config/lean4-runtime.json';const m=JSON.parse(fs.readFileSync(p));delete m.extensions;fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
           echo '本次没有构建扩展包，跳过 Std / Batteries 上传'
@@ -628,6 +637,7 @@ jobs:
             config/lean4-runtime.json
 
       - name: 发布 GitHub Release（回退源）
+        if: env.PUBLISH_SCOPE == 'all'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -663,10 +673,12 @@ jobs:
             exit 1
           fi
           command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
+          EXTRA=""
+          [ "$PUBLISH_SCOPE" = "extensions" ] && EXTRA="--extensions-only"
           if [ "$VERIFY_ONLY" = "true" ]; then
-            pnpm run upload:assets -- --s3 --verify-only --extensions work/extensions/upload
+            pnpm run upload:assets -- --s3 --verify-only --extensions work/extensions/upload $EXTRA
           else
-            pnpm run upload:assets -- --s3 --extensions work/extensions/upload
+            pnpm run upload:assets -- --s3 --extensions work/extensions/upload $EXTRA
           fi
 
       - name: 上传 ModelScope
@@ -683,7 +695,11 @@ jobs:
           command -v git-lfs >/dev/null || (sudo apt-get update && sudo apt-get install -y git-lfs)
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          pnpm run upload:modelscope -- --extensions work/extensions/upload --metadata
+          if [ "$PUBLISH_SCOPE" = "extensions" ]; then
+            pnpm run upload:modelscope -- --extensions work/extensions/upload --extensions-only
+          else
+            pnpm run upload:modelscope -- --extensions work/extensions/upload --metadata
+          fi
 
       - name: 发布摘要
         run: |

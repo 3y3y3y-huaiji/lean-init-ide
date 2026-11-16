@@ -227,7 +227,9 @@ const assets = [
       extension: true,
     })),
   ),
-].filter((asset) => only.length === 0 || only.includes(asset.name) || only.includes(asset.key));
+]
+  .filter((asset) => only.length === 0 || only.includes(asset.name) || only.includes(asset.key))
+  .filter((asset) => !has('--extensions-only') || asset.extension === true);
 if (assets.length === 0) throw new Error(`no manifest asset matches --only ${only.join(', ')}`);
 
 let uploaded = 0;

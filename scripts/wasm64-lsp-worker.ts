@@ -51,7 +51,7 @@ const lean = await createLean({
   noInitialRun: true,
   lspStdin: data.stdin,
   lspProcessExit: (code: number) => port.postMessage({ exit: code }),
-  print: (text: string) => port.postMessage({ stdout: new TextEncoder().encode(`${text}\n`) }),
+  print: (text: string) => port.postMessage({ stderr: `${text}\n` }),
   printErr: (text: string) => port.postMessage({ stderr: `${text}\n` }),
 });
 

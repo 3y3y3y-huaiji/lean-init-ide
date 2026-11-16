@@ -519,31 +519,43 @@ jobs:
         timeout-minutes: 25
         env:
           LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_WASM_TRACE: '1'
         run: |
-          # 先跑 Init（快，验证链路），再跑 Mathlib（慢，验证真实依赖）。
+          # 先跑 PROXY_TO_PTHREAD + 16 线程池的 lean-adapted-proxy.mjs（-j4），
+          # 失败再回退 lean-adapted.mjs（池为 8，配 --jobs 1 避免超出线程池）。
           # --module 只在真的编出目标 olean 时才传；空字符串会被参数校验拒绝。
           diag() {
-            local lean="$1" lib="$2" module="$3" timeout="$4"
-            local extra=(--lean "$lean" --lib "$lib" --mode worker --timeout "$timeout")
+            local lean="$1" lib="$2" module="$3" timeout="$4" jobs="${5:-4}"
+            local extra=(--lean "$lean" --lib "$lib" --mode worker --timeout "$timeout" --jobs "$jobs")
             if [ -n "$module" ]; then extra+=(--module "$module"); fi
             node scripts/wasm64-lsp-diagnostics.ts "${extra[@]}"
           }
           set +e
-          if [ -f work/dist/lean-adapted.mjs ]; then GLUE=work/dist/lean-adapted.mjs; else GLUE=work/dist/lean.mjs; fi
-          echo "glue=$GLUE"
-          diag "$GLUE" work/olean32 "" 120000
-          init_status=$?
-          if [ "$init_status" -ne 0 ] && [ -f work/dist/lean-adapted-proxy.mjs ]; then
-            echo "retry with lean-adapted-proxy.mjs"
+          JOBS=4
+          if [ -f work/dist/lean-adapted-proxy.mjs ]; then
             GLUE=work/dist/lean-adapted-proxy.mjs
-            diag "$GLUE" work/olean32 "" 120000
+          elif [ -f work/dist/lean-adapted.mjs ]; then
+            GLUE=work/dist/lean-adapted.mjs
+            JOBS=1
+          else
+            GLUE=work/dist/lean.mjs
+            JOBS=1
+          fi
+          echo "glue=$GLUE jobs=$JOBS"
+          diag "$GLUE" work/olean32 "" 120000 "$JOBS"
+          init_status=$?
+          if [ "$init_status" -ne 0 ] && [ "$GLUE" = "work/dist/lean-adapted-proxy.mjs" ] && [ -f work/dist/lean-adapted.mjs ]; then
+            echo "retry with lean-adapted.mjs (jobs=1)"
+            GLUE=work/dist/lean-adapted.mjs
+            JOBS=1
+            diag "$GLUE" work/olean32 "" 120000 "$JOBS"
             init_status=$?
           fi
           if [ "$init_status" -eq 0 ] && [ -f work/mathlib-slice.json ]; then
             TARGET="$(node -e 'process.stdout.write(require("./work/mathlib-slice.json").target)')"
             REL="$(printf '%s' "$TARGET" | tr '.' '/')"
             if [ -f "work/mathlib-lib/$REL.olean" ]; then
-              diag "$GLUE" work/mathlib-lib "$TARGET" 900000
+              diag "$GLUE" work/mathlib-lib "$TARGET" 900000 "$JOBS"
             else
               echo "::warning::$TARGET 没编完，跳过 Mathlib 诊断"
             fi

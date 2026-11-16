@@ -37,6 +37,7 @@ describe('adaptGlue', () => {
     const { fdReadSnippet } = adaptGlue(FIXTURE);
     expect(fdReadSnippet).toContain('__emscripten_check_mailbox');
     expect(fdReadSnippet).toContain('!ENVIRONMENT_IS_PTHREAD');
+    expect(fdReadSnippet).toContain('throw e');
     expect(fdReadSnippet).toMatch(/Atomics\.wait\(c,0,Atomics\.load\(c,0\),20\)/);
   });
 

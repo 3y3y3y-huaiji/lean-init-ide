@@ -58,9 +58,10 @@ describe('parseDiagOptions', () => {
     expect(options.mode).toBe('worker');
     expect(options.moduleName).toBeUndefined();
     expect(options.timeoutMs).toBe(300_000);
+    expect(options.jobs).toBe(4);
   });
 
-  it('接受 --module 与 --mode', () => {
+  it('接受 --module、--mode 与 --jobs', () => {
     const { lean, lib } = makePaths();
     const options = parseDiagOptions([
       '--lean',
@@ -71,9 +72,19 @@ describe('parseDiagOptions', () => {
       'Mathlib.X',
       '--mode',
       'server',
+      '--jobs',
+      '1',
     ]);
     expect(options.moduleName).toBe('Mathlib.X');
     expect(options.mode).toBe('server');
+    expect(options.jobs).toBe(1);
+  });
+
+  it('拒绝非法 --jobs', () => {
+    const { lean, lib } = makePaths();
+    expect(() => parseDiagOptions(['--lean', lean, '--lib', lib, '--jobs', '0'])).toThrowError(
+      CliError,
+    );
   });
 
   it('拒绝空字符串模块（避免把 "" 当缺省值传）', () => {

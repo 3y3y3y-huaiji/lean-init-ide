@@ -30,7 +30,7 @@ if(fd===0&&Module["lspStdin"]){
  // 代理永远没机会执行，表现为「帧都读了但一条 publishDiagnostics 都没有」。
  while(Atomics.load(c,0)===Atomics.load(c,1)&&!Atomics.load(c,2)){
   Atomics.wait(c,0,Atomics.load(c,0),20);
-  try{if(!ENVIRONMENT_IS_PTHREAD&&typeof __emscripten_check_mailbox==='function')__emscripten_check_mailbox()}catch(_){}
+  try{if(!ENVIRONMENT_IS_PTHREAD&&typeof __emscripten_check_mailbox==='function')__emscripten_check_mailbox()}catch(e){console.error('[lsp] mailbox error:',e);throw e}
  }
  growMemViews();var total=0,stop=false;
  for(var k=0;k<iovcnt&&!stop;k++){growMemViews();var ptr=Number(HEAPU64[iov/8]),len=Number(HEAPU64[(iov+8)/8]);iov+=16;

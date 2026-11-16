@@ -227,11 +227,13 @@ const diagnosticsOf = (message: LspMessage): Diagnostic[] =>
   ((message.params as { diagnostics?: Diagnostic[] } | undefined)?.diagnostics ??
     []) as Diagnostic[];
 
-/** 等一个文档的诊断；Lean 可能先发空数组再发真结果，所以持续收集到 accept 为止。 */
+const isIleanFinal = (message: LspMessage): boolean => message.method === '$/lean/ileanInfoFinal';
+
+/** 等一个文档的诊断；Lean 会先在 setupImports 发空数组，所以 Good 也要等到 ileanInfoFinal。 */
 const awaitDiagnostics = async (
   session: Session,
   uri: string,
-  accept: (diagnostics: readonly Diagnostic[]) => boolean,
+  waitUntilFinal: boolean,
   label: string,
   timeoutMs: number,
   nudgeLine: number,
@@ -252,6 +254,8 @@ const awaitDiagnostics = async (
       params: { textDocument: { uri }, position: { line: nudgeLine, character: 10 } },
     });
   }, 30_000);
+  const match = (message: LspMessage): boolean =>
+    isPublishFor(uri)(message) || (waitUntilFinal && isIleanFinal(message));
   try {
     for (;;) {
       const remaining = timeoutMs - (Date.now() - started);
@@ -259,10 +263,11 @@ const awaitDiagnostics = async (
         const last = collected.at(-1)?.length ?? 0;
         throw new Error(`${label} 超时，最后一条诊断数=${last}`);
       }
-      const message = await session.waitFor(isPublishFor(uri), `${label} 的诊断`, remaining);
+      const message = await session.waitFor(match, `${label} 的诊断`, remaining);
+      if (isIleanFinal(message)) return collected.at(-1) ?? [];
       const diagnostics = diagnosticsOf(message);
       collected.push(diagnostics);
-      if (accept(diagnostics)) return diagnostics;
+      if (diagnostics.length > 0) return diagnostics;
     }
   } finally {
     clearTimeout(nudge);
@@ -303,6 +308,7 @@ export interface DiagOptions {
   readonly moduleName?: string;
   readonly mode: 'worker' | 'server';
   readonly timeoutMs: number;
+  readonly jobs: number;
 }
 
 const initializeParams = {
@@ -345,7 +351,7 @@ const runServerMode = async (
     const diagnostics = await awaitDiagnostics(
       session,
       uri,
-      (list) => list.length > 0,
+      false,
       'Bad.lean',
       options.timeoutMs,
       exampleLine,
@@ -369,7 +375,7 @@ const runWorkerMode = async (
       leanMjs: options.leanMjs,
       libDir: options.libDir,
       files: { [`/workspace/${name}`]: documents[name] ?? '' },
-      args: ['-j4', '--worker', uri],
+      args: [`-j${options.jobs}`, '--worker', uri],
       proxy,
       timezone: readTimezone(),
     });
@@ -377,13 +383,11 @@ const runWorkerMode = async (
       // 按 SDK 的顺序：initialize 与 didOpen 连着发，不等待 initialize 响应。
       session.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams });
       openDocument(session, name, uri, documents);
-      // Bad 必须等到非空诊断；Good 允许第一条就是空数组。
-      const accept =
-        name === 'Bad.lean' ? (list: readonly Diagnostic[]) => list.length > 0 : () => true;
+      // Bad 等到非空诊断；Good 等到 ileanInfoFinal（跳过 setupImports 的空通知）。
       const diagnostics = await awaitDiagnostics(
         session,
         uri,
-        accept,
+        name === 'Good.lean',
         name,
         options.timeoutMs,
         exampleLine,
@@ -406,6 +410,7 @@ const DIAG_SPEC: Record<string, FlagSpec> = {
   },
   mode: { kind: 'string', valueName: 'worker|server' },
   timeout: { kind: 'number', valueName: 'ms' },
+  jobs: { kind: 'number', valueName: 'n', description: 'worker 模式的 -j 线程数（默认 4）' },
 };
 
 export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
@@ -414,6 +419,8 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
   if (mode !== 'worker' && mode !== 'server')
     throw new CliError(`--mode 只能是 worker 或 server，收到 ${mode}`);
   const timeoutMs = parsed.flags.timeout === undefined ? 300_000 : requireNumber(parsed, 'timeout');
+  const jobs = parsed.flags.jobs === undefined ? 4 : requireNumber(parsed, 'jobs');
+  if (!Number.isInteger(jobs) || jobs < 1) throw new CliError(`--jobs 必须是正整数，收到 ${jobs}`);
   return {
     leanMjs: requireFile(requireString(parsed, 'lean'), 'lean.mjs'),
     libDir: requireDir(requireString(parsed, 'lib'), 'lib'),
@@ -422,6 +429,7 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
       : { moduleName: optionalString(parsed, 'module') }),
     mode,
     timeoutMs,
+    jobs,
   };
 };
 

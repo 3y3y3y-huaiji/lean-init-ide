@@ -24,6 +24,10 @@ on:
         description: 只校验远端对象，不写入
         type: boolean
         default: false
+      build_extensions:
+        description: 同时编译 Std 扩展 pack（Batteries 后续）
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -341,6 +345,64 @@ jobs:
             --fallback-base "https://github.com/${GITHUB_REPOSITORY}/releases/download/runtime-v${LEAN_VERSION}/" \
             --manifest-out work/artifact/runtime-manifest.json
           ls -lh work/artifact
+
+      - name: 缓存 4.35 Std 扩展 oleans
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/cache@v6
+        with:
+          path: work/std-olean32
+          key: wasm435-std-olean32-v1
+
+      - name: 编译 4.35 Std 扩展 oleans
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        timeout-minutes: 300
+        run: |
+          BOOT="$(find "$GITHUB_WORKSPACE/work" -maxdepth 1 -type d -name 'lean-*-linux' -print -quit)"
+          [ -n "$BOOT" ] || { echo '找不到 lean-*-linux 引导目录'; exit 1; }
+          mkdir -p "$GITHUB_WORKSPACE/work/std-olean32"
+          cp -a "$GITHUB_WORKSPACE/work/olean32/Init" "$GITHUB_WORKSPACE/work/std-olean32/"
+          (
+            cd "$GITHUB_WORKSPACE/work/lean4/src"
+            (cd "$BOOT/lib/lean" && find Init Std -name '*.olean' | sed 's/\.olean$//'; printf 'Init\nStd\n') \
+              | LC_ALL=C sort > "$GITHUB_WORKSPACE/work/std-modules.txt"
+            : > "$GITHUB_WORKSPACE/work/deps.txt"
+            while read -r module; do
+              deps="$(LEAN_PATH="$BOOT/lib/lean" "$BOOT/bin/lean" --deps "$module.lean" | sed "s#^$BOOT/lib/lean/##; s#\.olean\$##" | tr '\n' ' ')"
+              printf '%s: %s\n' "$module" "$deps" >> "$GITHUB_WORKSPACE/work/deps.txt"
+            done < "$GITHUB_WORKSPACE/work/std-modules.txt"
+          )
+          node wasm-llvm/producer/lean-browser/scripts/build-oleans.mjs \
+            "$GITHUB_WORKSPACE/work/dist/lean.mjs" \
+            "$GITHUB_WORKSPACE/work" \
+            "$GITHUB_WORKSPACE/work/lean4/src" \
+            "$GITHUB_WORKSPACE/work/std-olean32" \
+            3 Init Std
+          find "$GITHUB_WORKSPACE/work/std-olean32/Std" -name '*.olean' | wc -l
+
+      - name: 冒烟：wasm 运行时 import Std
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          mkdir -p work/std-src
+          printf 'import Std\nexample : 1 + 1 = 2 := rfl\n' > work/std-src/Test.lean
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/std-src work/std-olean32 -- \
+            -j1 -R /src -o /src/Test.olean /src/Test.lean
+          test -s work/std-src/Test.olean
+
+      - name: 打包 Std 扩展 pack
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        run: |
+          node scripts/package-runtime-extension.mjs \
+            --oleans work/std-olean32 --prefix Std --name lean-std --out work/extensions/std
+          ls -lh work/extensions/std
+
+      - name: 上传 Std 扩展 pack
+        if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm32-std-pack
+          path: work/extensions/std/**
+          if-no-files-found: warn
 
       - name: 记录构建参数
         if: always()

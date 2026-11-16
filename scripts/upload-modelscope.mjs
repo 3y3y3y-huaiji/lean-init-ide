@@ -208,9 +208,9 @@ const verifyRemoteAsset = async (asset) => {
 };
 
 const verifyRemote = async () => {
-  // push 后 ModelScope 的 LFS/CDN 有几秒到几十秒的传播窗口，
-  // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
-  const attempts = 10;
+  // push 后 ModelScope 的 LFS/CDN 有几秒到几分钟的传播窗口（大对象首次挂 CORS 更慢），
+  // 立即校验会看到 404 / 缺 CORS，这里给每个资产留约 2.5 分钟重试时间。
+  const attempts = 30;
   const failures = [];
   for (const asset of selectedAssets) {
     let lastError;

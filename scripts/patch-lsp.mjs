@@ -140,6 +140,11 @@ const runtimePath = path.join(lspDist, 'bundledLean4Runtime.js');
  */
 const manifest = JSON.parse(readFileSync(path.join(root, 'config', 'lean4-runtime.json'), 'utf8'));
 const { WASM_LEAN4_PROFILE: profile } = await import(pathToFileURL(runtimePath).href);
+const runtimeVersion = /(\d+\.\d+\.\d+)/.exec(manifest.runtime ?? '')?.[1];
+if (runtimeVersion) {
+  profile.version = runtimeVersion;
+  profile.profileId = String(profile.profileId).replace(/\d+\.\d+\.\d+/, runtimeVersion);
+}
 for (const asset of manifest.assets) {
   const entry = profile.assets[asset.name];
   if (!entry) continue;
@@ -159,5 +164,5 @@ writeFileSync(
   `export const WASM_LEAN4_PROFILE = ${JSON.stringify(profile, null, 4)};\n//# sourceMappingURL=bundledLean4Runtime.js.map\n`,
 );
 console.log(
-  `lsp patch: profile assets synced; workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`,
+  `lsp patch: profile assets synced (${profile.version ?? 'unknown'}); workerReceipt -> ${workerBytes.length} bytes / ${workerSha.slice(0, 12)}…`,
 );

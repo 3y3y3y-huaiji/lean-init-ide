@@ -189,7 +189,18 @@ const createSession = (args, files) => {
     });
   };
 
-  return { sendFrame, waitFor, dispose, status: () => ({ exited, exitCode }) };
+  return {
+    sendFrame,
+    waitFor,
+    dispose,
+    // 环形缓冲的两个游标：read 不前进说明 Lean 根本没读到帧。
+    stats: () => ({
+      write: Atomics.load(ctrl, 0),
+      read: Atomics.load(ctrl, 1),
+      closed: Atomics.load(ctrl, 2),
+    }),
+    status: () => ({ exited, exitCode }),
+  };
 };
 
 const isPublishFor = (uri) => (message) =>
@@ -206,6 +217,10 @@ const describe = (diagnostic) => {
 const awaitDiagnostics = async (session, uri, accept, label, timeoutMs) => {
   const collected = [];
   const started = Date.now();
+  const progress = setInterval(() => {
+    const { write, read, closed } = session.stats();
+    console.error(`[diag] 环形缓冲 write=${write} read=${read} closed=${closed} 已收集=${collected.length}`);
+  }, 10_000);
   // 30 秒还没有诊断就 hover 一下，逼 Lean 立刻精化这个文档。
   const nudge = setTimeout(() => {
     session
@@ -231,6 +246,7 @@ const awaitDiagnostics = async (session, uri, accept, label, timeoutMs) => {
     }
   } finally {
     clearTimeout(nudge);
+    clearInterval(progress);
   }
 };
 

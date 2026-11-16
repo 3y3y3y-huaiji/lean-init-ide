@@ -6,20 +6,23 @@
 
 ## 目标
 
-把 Lean 4.34.1 浏览器运行时从 wasm32 改成真 64 位 WebAssembly（Emscripten `MEMORY64=1`），复用官方 64 位 Init olean，跟随官方 Lean 版本。
+把 Lean 浏览器运行时从 wasm32 改成真 64 位 WebAssembly（Emscripten `MEMORY64=1`），复用官方 64 位 Init olean，跟随官方 Lean 版本。
+当前跟到 mathlib4 主线使用的工具链 **v4.36.0-rc2**（commit `b35cb10c`）。
 
 ## 结论
 
-**跑通了。** 最终状态（run `43744133944` 全绿）：
+**4.36.0-rc2 跑通了**（run `43811606032` 全绿，53 分钟）：
 
 - 运行时：wasm64 + `USE_GMP=ON`（emcc 自建 GMP 6.3.0）→ 官方 64 位 Init/Std/Lean olean 直接可用
 - 浏览器（无头 Chrome 157）：`--version` 与 `import Init` 编译成功
-- 大整数：`#eval (2 ^ 100 : Nat)` 输出正确，`2 ^ 100 = ... := rfl` 通过（确认走真 GMP）
-- 真实依赖：Mathlib 裁切 `Mathlib.Tactic.Spread` 闭包 **66 个模块全部编译成功**（56 个来自缓存，3 个用默认解释器重试后成功），产出
-  `Mathlib/Tactic/Spread.olean`（177KB）+ `.ir` + `.olean.server` + `.olean.private`
-- LSP：`initialize` 握手正常；`didOpen → publishDiagnostics` 尚未打通（见下）
+- 大整数：`#eval (2 ^ 100 : Nat)` 输出 `1267650600228229401496703205376`，`2 ^ 100 = ... := rfl` 通过（确认走真 GMP）
+- 真实依赖：Mathlib 裁切 `Mathlib.Tactic.Spread` 闭包 94 个模块（4.36 版 mathlib 的闭包比 4.34 时大），
+  93 个编译成功（7 个需要去掉 `-Dinterpreter.prefer_native=false` 重试），1 个（`Mathlib.Tactic.Linter.DirectoryDependency`）失败但不影响目标产物；
+  `Mathlib/Tactic/Spread.olean` + `.ir` + `.olean.server` + `.olean.private` 都产出了
+- 产物体积：release 变体 `lean.wasm` 122,042,100 B，zstd -19 后 11,218,328 B（10.7 MiB）
+- LSP：`initialize` 握手正常；`didOpen → publishDiagnostics` 仍在打通中（见下）
 
-关键前提：`-O2`、标量字面量 backport、GMP、官方 oleans。
+关键前提：`-O2`、标量字面量 backport、GMP、官方 oleans、缓存键绑定 Lean pin。
 
 ## 踩过的坑（按发现顺序）
 
@@ -143,7 +146,8 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `mathlib-lib` 如果从旧缓存恢复，会带着 flags=0 的自建 Init olean，所有 import 报 `incompatible header (flags=0)`。基座必须用官方 olean 覆盖，缓存前缀也要换。
 - `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
 - 编译 Mathlib 不能带 `-Dinterpreter.prefer_native=false`：带 `initialize` 块的 Mathlib/Batteries 模块会踩 `ir_interpreter.cpp` 的 `mkDummyExternDecl` 断言（`fn_body_tag != Unreachable`）。默认解释器设置下同样的模块直接编过；编译步现在对失败模块自动用默认设置重试一次。
-- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。剩余怀疑点是 `Std.Channel.forAsync (prio := .dedicated)` 的输出通道没被调度。要继续就得移植 SDK 的 glue 适配（`platform.js` 的 `_fd_read`/线程回收补丁 + 浏览器 Worker 宿主），属于独立的一块工作。
+- `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。根因是 stdin 走的是 Emscripten 的 TTY 钩子/线程代理，worker 里没有可读的 fd 0。移植 SDK 的 glue 适配（`scripts/adapt-glue.mjs`：`lspStdin` 透传、fd0 环形缓冲、线程回收走代理）后才真正把帧送进 Lean。
+- 环形缓冲的 `_fd_read` 第一版照抄 wasm32 的 iovec 布局，在 memory64 下读出一整段零：`struct iovec` 是 16 字节（8 字节 base + 8 字节 len），`iov_len` 必须从 `iov+8` 取，`nread` 也必须写 8 字节的 `size_t`（`HEAPU64[pnum/8]`）。按 8 字节 stride 取到的是 `iov_base` 的高 32 位，写回只写低 32 位则让宿主看到巨大的读取长度，表现为 `Invalid header field` 后 `main returned 1`。
 
 ## 当前产物与缓存
 

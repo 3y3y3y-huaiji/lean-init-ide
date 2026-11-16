@@ -794,7 +794,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/mathlib-lib
-          key: wasm64-mathlib-lib2-${{ github.run_number }}-${{ github.run_attempt }}
+          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.mjs') }}-${{ github.run_number }}-${{ github.run_attempt }}
 
       # 门禁：Mathlib 裁切的目标模块必须真的产出 olean。编译步本身 continue-on-error，
       # 是为了让诊断链路那一步还能跑；这里才是整轮是否成功的判据。

@@ -146,6 +146,37 @@ pnpm run upload:assets -- --verify-only
 - `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
 - `--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶。
 
+### 用桶级 R2 S3 凭证上传
+
+如果不想依赖 Wrangler 的账号级 OAuth，可以给 R2 创建**只限当前桶**的 API token，
+用 S3 兼容端点上传。推荐配置：
+
+1. Cloudflare Dashboard → R2 → Manage R2 API Tokens → Create API Token：
+   - Permissions 选 **Object Read & Write**；
+   - Specify bucket 选 `lean4-ide-releases`；
+   - 不要授予账号级管理权限。
+2. 把 Access Key ID / Secret Access Key 写入本机 `~/.aws/credentials` 的 `lean-r2` profile，
+   并在 `~/.aws/config` 指定 endpoint：
+
+   ```ini
+   [profile lean-r2]
+   region = auto
+   endpoint_url = https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   ```
+
+3. 在仓库外的 `~/.config/lean-init/assets.env` 填 `R2_ENDPOINT`、`R2_BUCKET`、`AWS_PROFILE`
+   （模板见该文件注释；脚本会自动读取，已存在的环境变量优先）。
+4. 先只读校验，再上传：
+
+   ```bash
+   pnpm run upload:assets -- --s3 --verify-only
+   pnpm run upload:assets -- --s3
+   ```
+
+`--s3` 模式用 `HeadObject` 的 `Content-Length` 和自定义 `sha256` metadata 校验远端；
+大文件走单次 `PutObject`，不走 multipart，因此 ETag 也可以作为 MD5 回退校验。
+魔搭上传脚本同样读取 `~/.config/lean-init/assets.env` 里的 `MODELSCOPE_*` 变量。
+
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 

@@ -11,3 +11,38 @@ diff --git a/dist/runtime-manifest.js b/dist/runtime-manifest.js
                  throw new TypeError(`Invalid asset encoding for runtime ${runtime.runtimeId}: ${asset.key}`);
              }
              if (asset.encoding === 'identity' &&
+diff --git a/dist/runtime-preflight.js b/dist/runtime-preflight.js
+index e3eda68..4437b28 100644
+--- a/dist/runtime-preflight.js
++++ b/dist/runtime-preflight.js
+@@ -269,7 +269,7 @@ async function preflightAssetFromNetwork(asset, assetRootUrl, requestUrlOverride
+             throw signal.reason ?? new Error('Runtime asset preflight was aborted');
+         }
+         const requestInit = {
+-            credentials: 'omit',
++            credentials: 'same-origin',
+             redirect,
+             referrerPolicy: 'no-referrer',
+             signal
+diff --git a/dist/runtime-asset-loader.js b/dist/runtime-asset-loader.js
+index 53e963e..91ab0fd 100644
+--- a/dist/runtime-asset-loader.js
++++ b/dist/runtime-asset-loader.js
+@@ -342,7 +342,7 @@ export async function fetchRuntimeJson(url, options = {}) {
+         throw runtimeAbortReason(options.signal);
+     const requestInit = {
+         cache: 'no-store',
+-        credentials: 'omit',
++        credentials: 'same-origin',
+         redirect: 'error',
+         referrerPolicy: 'no-referrer'
+     };
+@@ -658,7 +658,7 @@ const readBufferInternal = async (name, progress, maxOutputBytes = DEFAULT_MAX_D
+         pending = (async () => {
+             const resolvedUrl = resolveRuntimeAssetUrl(name);
+             const requestInit = {
+-                credentials: 'omit',
++                credentials: 'same-origin',
+                 redirect: 'error',
+                 referrerPolicy: 'no-referrer'
+             };

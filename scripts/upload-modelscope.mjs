@@ -3,7 +3,7 @@
  * 把 Lean 运行时资产上传到魔搭（ModelScope）公开仓库，作为国内镜像源。
  *
  * 用法：
- *   MODELSCOPE_USERNAME=xxx MODELSCOPE_TOKEN=xxx MODELSCOPE_REPO=user/lean4-assets \
+ *   MODELSCOPE_TOKEN=xxx MODELSCOPE_REPO=user/lean4-assets \
  *     node scripts/upload-modelscope.mjs
  *
  *   --repo=<ns/name>      覆盖 MODELSCOPE_REPO
@@ -19,6 +19,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -28,11 +29,24 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// 本地凭证文件放在仓库外，避免把 token 写进 git；已存在的环境变量优先。
+const assetsEnvFile =
+  process.env.ASSETS_ENV_FILE ?? join(homedir(), '.config', 'lean-init', 'assets.env');
+if (existsSync(assetsEnvFile)) {
+  for (const line of readFileSync(assetsEnvFile, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!match) continue;
+    const value = match[2].replace(/^["']|["']$/g, '');
+    if (value && process.env[match[1]] === undefined) process.env[match[1]] = value;
+  }
+}
+
 const manifest = JSON.parse(readFileSync(join(root, 'config/lean4-runtime.json'), 'utf8'));
 const args = new Map(
   process.argv
@@ -46,8 +60,9 @@ const args = new Map(
 const repo = args.get('repo') ?? process.env.MODELSCOPE_REPO ?? '';
 const repoType = args.get('type') ?? process.env.MODELSCOPE_REPO_TYPE ?? 'dataset';
 const rootDir = args.get('root') ?? manifest.mirror?.prefix ?? manifest.cacheKey;
-const username = process.env.MODELSCOPE_USERNAME ?? '';
 const token = process.env.MODELSCOPE_TOKEN ?? '';
+// ModelScope 的 Git 认证用户名固定是 oauth2，不是账号名。
+const gitUsername = 'oauth2';
 const dryRun = args.has('dry-run');
 const verifyOnly = args.has('verify-only');
 const prune = args.has('prune');
@@ -59,16 +74,62 @@ const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest(
 
 const remoteUrl = (name) =>
   `https://modelscope.cn/${repoPrefix}/${repo}/resolve/master/${rootDir}/${name}`;
-const cloneUrl = (withAuth) => {
-  const host = `www.modelscope.cn/${repoPrefix}/${repo}.git`;
-  return withAuth
-    ? `https://${encodeURIComponent(username)}:${encodeURIComponent(token)}@${host}`
-    : `https://${host}`;
+const repoUrl = `https://www.modelscope.cn/${repoPrefix}/${repo}.git`;
+
+// token 只通过环境变量交给 git 的临时 credential helper，不拼进 URL，
+// 避免写进 .git/config 或出现在进程参数里。
+const credentialHelper = `!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" "${gitUsername}" "$MODELSCOPE_TOKEN"; }; f`;
+const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+
+const configureCredentials = (cwd) => {
+  execFileSync('git', ['config', 'credential.helper', ''], { cwd, stdio: 'pipe', env: gitEnv });
+  execFileSync('git', ['config', '--add', 'credential.helper', credentialHelper], {
+    cwd,
+    stdio: 'pipe',
+    env: gitEnv,
+  });
 };
 
 const fail = (message) => {
   console.error(`modelscope: ${message}`);
   process.exit(1);
+};
+
+// Windows 上 git 对象文件是只读的，rmSync 会报 EPERM；先清掉只读位再删。
+const removeTree = (dir) => {
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    return;
+  } catch {
+    const stack = [dir];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      let entries;
+      try {
+        entries = readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      try {
+        chmodSync(current, 0o777);
+      } catch {
+        // 目录可能已消失或没有权限，继续清理其余文件。
+      }
+      for (const entry of entries) {
+        const full = join(current, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(full);
+        } else {
+          try {
+            chmodSync(full, 0o666);
+          } catch {
+            // 文件可能已消失，忽略。
+          }
+        }
+      }
+    }
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
 };
 
 if (!repo) fail('缺少仓库地址，传 --repo=<namespace/name> 或设置 MODELSCOPE_REPO');
@@ -85,64 +146,122 @@ const verifyLocal = () => {
   console.log(`modelscope: 本地 ${manifest.assets.length} 个资产校验通过`);
 };
 
-const verifyRemote = async () => {
-  for (const asset of manifest.assets) {
-    const url = remoteUrl(asset.name);
-    const ranged = asset.ranged === true;
-    const response = await fetch(url, {
-      headers: {
-        ...(ranged ? { Range: 'bytes=0-15' } : {}),
-        Origin: 'https://criticalthinking.de5.net',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(30000),
-    });
+const verifyRemoteAsset = async (asset) => {
+  const url = remoteUrl(asset.name);
+  const ranged = asset.ranged === true;
+  const response = await fetch(url, {
+    headers: {
+      ...(ranged ? { Range: 'bytes=0-15' } : {}),
+      Origin: 'https://criticalthinking.de5.net',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30000),
+  });
 
-    // 大文件走 LFS CDN 并支持 Range；小文件是普通对象，直接 200 全量返回。
-    if (ranged) {
-      if (response.status !== 206) fail(`${asset.name} 远端期望 206，实际 ${response.status}`);
-      const range = response.headers.get('content-range');
-      const expected = `bytes 0-15/${asset.bytes}`;
-      if (range !== expected)
-        fail(`${asset.name} Content-Range=${range ?? '(缺失)'}，期望 ${expected}`);
-      const body = await response.arrayBuffer();
-      if (body.byteLength !== 16) fail(`${asset.name} 分片长度 ${body.byteLength}，期望 16`);
-    } else {
-      if (response.status !== 200) fail(`${asset.name} 远端期望 200，实际 ${response.status}`);
-      const body = await response.arrayBuffer();
-      if (body.byteLength !== asset.bytes) {
-        fail(`${asset.name} 远端 ${body.byteLength} 字节，清单要求 ${asset.bytes}`);
+  // 大文件走 LFS CDN 并支持 Range；小文件是普通对象，直接 200 全量返回。
+  if (ranged) {
+    if (response.status !== 206) {
+      throw new Error(`${asset.name} 远端期望 206，实际 ${response.status}`);
+    }
+    const range = response.headers.get('content-range');
+    const expected = `bytes 0-15/${asset.bytes}`;
+    if (range !== expected) {
+      throw new Error(`${asset.name} Content-Range=${range ?? '(缺失)'}，期望 ${expected}`);
+    }
+    const body = await response.arrayBuffer();
+    if (body.byteLength !== 16) {
+      throw new Error(`${asset.name} 分片长度 ${body.byteLength}，期望 16`);
+    }
+  } else {
+    if (response.status !== 200) {
+      throw new Error(`${asset.name} 远端期望 200，实际 ${response.status}`);
+    }
+    const body = await response.arrayBuffer();
+    if (body.byteLength !== asset.bytes) {
+      throw new Error(`${asset.name} 远端 ${body.byteLength} 字节，清单要求 ${asset.bytes}`);
+    }
+  }
+
+  if (!response.headers.get('access-control-allow-origin')) {
+    const host = new URL(response.url).host;
+    throw new Error(
+      `${asset.name} 缺少 Access-Control-Allow-Origin（HTTP ${response.status}, ${host}）`,
+    );
+  }
+};
+
+const verifyRemote = async () => {
+  // push 后 ModelScope 的 LFS/CDN 有几秒到几十秒的传播窗口，
+  // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
+  const attempts = 10;
+  const failures = [];
+  for (const asset of manifest.assets) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        await verifyRemoteAsset(asset);
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts) {
+          console.log(
+            `modelscope: ${asset.name} 尚未就绪（${attempt}/${attempts}）：${error.message}，5 秒后重试`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
       }
     }
-
-    if (!response.headers.get('access-control-allow-origin')) {
-      fail(`${asset.name} 缺少 Access-Control-Allow-Origin`);
+    if (lastError) {
+      failures.push(lastError);
+      console.warn(`modelscope: ${asset.name} 校验未通过：${lastError.message}`);
+    } else {
+      console.log(`modelscope: ${asset.name} 远端 ${asset.ranged ? '206' : '200'} / CORS 正常`);
     }
-    console.log(`modelscope: ${asset.name} 远端 ${ranged ? '206' : '200'} / CORS 正常`);
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `${failures.length} 个资产远端校验未通过`);
   }
 };
 
 const upload = () => {
-  if (!username || !token) fail('上传需要 MODELSCOPE_USERNAME 与 MODELSCOPE_TOKEN');
+  if (!token) fail('上传需要 MODELSCOPE_TOKEN');
   const work = mkdtempSync(join(tmpdir(), 'modelscope-upload-'));
   try {
     console.log(`modelscope: 克隆 ${repoPrefix}/${repo} 到临时目录`);
     try {
-      execFileSync('git', ['clone', '--depth', '1', cloneUrl(true), work], {
-        stdio: 'pipe',
-        // 仓库里的 LFS 文件不会被改写，跳过 smudge 以免每次上传都重新下载 100MB。
-        env: { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' },
-      });
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'credential.helper=',
+          '-c',
+          `credential.helper=${credentialHelper}`,
+          'clone',
+          '--depth',
+          '1',
+          repoUrl,
+          work,
+        ],
+        {
+          stdio: 'pipe',
+          // 仓库里的 LFS 文件不会被改写，跳过 smudge 以免每次上传都重新下载 100MB。
+          env: { ...gitEnv, GIT_LFS_SKIP_SMUDGE: '1' },
+        },
+      );
     } catch {
       // 空仓库 clone 可能失败，退化为 init + remote。
       mkdirSync(work, { recursive: true });
-      execFileSync('git', ['init'], { cwd: work, stdio: 'pipe' });
-      execFileSync('git', ['remote', 'add', 'origin', cloneUrl(true)], {
+      execFileSync('git', ['init'], { cwd: work, stdio: 'pipe', env: gitEnv });
+      execFileSync('git', ['remote', 'add', 'origin', repoUrl], {
         cwd: work,
         stdio: 'pipe',
+        env: gitEnv,
       });
-      execFileSync('git', ['checkout', '-b', 'master'], { cwd: work, stdio: 'pipe' });
+      execFileSync('git', ['checkout', '-b', 'master'], { cwd: work, stdio: 'pipe', env: gitEnv });
     }
+    // push 与 git-lfs 子进程共用仓库内的 helper 配置；helper 只读环境变量，不含密钥。
+    configureCredentials(work);
     execFileSync('git', ['lfs', 'install', '--local'], { cwd: work, stdio: 'pipe' });
 
     if (prune) {
@@ -180,10 +299,21 @@ const upload = () => {
     } catch {
       console.log('modelscope: 没有新变更需要提交');
     }
-    execFileSync('git', ['push', 'origin', 'master'], { cwd: work, stdio: 'inherit' });
+    execFileSync('git', ['push', 'origin', 'master'], {
+      cwd: work,
+      stdio: 'inherit',
+      env: gitEnv,
+    });
   } finally {
-    if (keep) console.log(`modelscope: 临时目录保留在 ${work}`);
-    else rmSync(work, { recursive: true, force: true });
+    if (keep) {
+      console.log(`modelscope: 临时目录保留在 ${work}`);
+    } else {
+      try {
+        removeTree(work);
+      } catch {
+        console.warn(`modelscope: 临时目录清理失败，可手动删除 ${work}`);
+      }
+    }
   }
 };
 
@@ -194,7 +324,15 @@ const main = async () => {
     return;
   }
   if (!verifyOnly) upload();
-  await verifyRemote();
+  try {
+    await verifyRemote();
+  } catch (error) {
+    // 上传已经成功，镜像校验失败不该阻塞 R2 / GitHub Release 的发布；
+    // --verify-only 仍然保持严格模式，用来单独检查镜像健康度。
+    if (verifyOnly) throw error;
+    console.warn(`modelscope: 远端校验未通过，但资产已 push：${error.message}`);
+    console.warn('modelscope: 可用 --verify-only 单独复查；不影响 R2 / GitHub Release');
+  }
   console.log(
     'modelscope: 完成；把 config/lean4-runtime.json 的 mirror.baseUrl 指向上面的目录即可',
   );

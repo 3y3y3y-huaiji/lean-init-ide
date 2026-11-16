@@ -1,0 +1,42 @@
+name: Probe Lean 4.35 wasm32 recipe
+
+# 只做兼容性探针：把 forward-port 后的 4.35 Emscripten patch 套到 Lean 4.35.0 源码上。
+# 通过后再启动 runtime + Init oleans 的完整构建。
+on:
+  push:
+    branches: [spike/lean-4.35]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 显示 4.35 patch 哈希
+        run: sha256sum scripts/patches/lean-435-emscripten.patch
+
+      - name: 获取 Lean 4.35.0 源码
+        run: |
+          git clone --depth 1 --branch v4.35.0 https://github.com/leanprover/lean4.git lean4
+          git -C lean4 log -1 --format='%H %s'
+
+      - name: 检查 Emscripten patch
+        run: |
+          cd lean4
+          git apply --check ../scripts/patches/lean-435-emscripten.patch
+          echo "PATCH_OK Lean 4.35.0 可以应用 forward-port patch"
+
+      - name: 记录 4.35.0 bootstrap 信息
+        if: always()
+        run: |
+          cat <<'EOF'
+          bootstrap: https://github.com/leanprover/lean4/releases/download/v4.35.0/lean-4.35.0-linux.tar.zst
+          bytes: 594481375
+          sha256: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
+          commit: eb6cafb7290e8bd5f2937522d8d804f58f02bafc
+          EOF

@@ -29,6 +29,35 @@ const primaryOverride =
     : undefined);
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * GitHub Release / 镜像在大规模并发下偶发连接重置或 5xx；
+ * 单个源内重试，避免一次抖动就让整个构建失败。
+ */
+const fetchWithRetry = async (url, init, attempts = 3) => {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      if (response.status === 429 || response.status >= 500) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        console.warn(
+          `warn   ${url} 第 ${attempt}/${attempts} 次请求失败：${error.message ?? error}，重试`,
+        );
+        await sleep(attempt * 1000);
+      }
+    }
+  }
+  throw lastError;
+};
+
 const isValid = (file, asset) => {
   if (!existsSync(file)) return false;
   if (statSync(file).size !== asset.bytes) return false;
@@ -54,7 +83,7 @@ const fetchUpstream = async (asset) => {
     throw new Error(`${asset.name} 缺少 upstream 字段，无法生成 zstd 资产`);
   }
   const url = new URL(asset.upstream, manifest.fallback.baseUrl).href;
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Accept-Encoding': 'identity' },
     redirect: 'follow',
   });
@@ -80,15 +109,16 @@ const toZstd = (asset, upstream) => {
 
 const fetchFromSources = async (asset) => {
   let lastError;
-  const candidates = assetSources(manifest, asset, primaryOverride).filter((source) =>
-    /^https?:\/\//i.test(source.url),
-  );
+  // 构建期把魔搭镜像也纳入回退：GitHub Release 偶发抖动时仍能完成下载。
+  const candidates = assetSources(manifest, asset, primaryOverride, {
+    includeMirror: true,
+  }).filter((source) => /^https?:\/\//i.test(source.url));
   if (candidates.length === 0) {
     throw new Error(`no fetchable absolute source for ${asset.name}; set LEAN_ASSET_ORIGIN`);
   }
   for (const source of candidates) {
     try {
-      const response = await fetch(source.url, {
+      const response = await fetchWithRetry(source.url, {
         headers: { 'Accept-Encoding': 'identity' },
         redirect: 'follow',
       });

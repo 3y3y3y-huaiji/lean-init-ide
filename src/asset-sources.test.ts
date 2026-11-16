@@ -44,53 +44,55 @@ describe('withCacheKey', () => {
 });
 
 describe('assetSources', () => {
-  it('puts the same-origin R2 gateway first and GitHub raw second', () => {
-    const sources = assetSources(manifest, assetByName('lean.mjs'));
+  it('puts the same-origin R2 gateway first and the fallback second', () => {
+    const asset = assetByName('lean.mjs');
+    const sources = assetSources(manifest, asset);
     expect(sources).toHaveLength(2);
     expect(sources[0]?.label).toBe('Pages Functions (R2)');
-    expect(sources[0]?.url).toBe(`/cdn/lean.mjs?r=${manifest.cacheKey}`);
-    expect(sources[1]?.label).toBe('GitHub raw');
-    expect(sources[1]?.url).toContain('raw.githubusercontent.com');
-    expect(sources[1]?.url).toContain(`?r=${manifest.cacheKey}`);
+    expect(sources[0]?.url).toBe(`/cdn/${asset.key}?r=${manifest.cacheKey}`);
+    expect(sources[1]?.label).toBe(manifest.fallback.label);
+    const fallbackUrl = new URL(asset.source ?? '', manifest.fallback.baseUrl).href;
+    expect(sources[1]?.url).toBe(withCacheKey(fallbackUrl, manifest.cacheKey));
   });
 
-  it('zstd 资产不回退到 GitHub raw 的上游 gzip', () => {
+  it('zstd 资产不回退到上游 gzip', () => {
     const asset = assetByName('lean.wasm.gz.bin');
     expect(asset.encoding).toBe('zstd');
     const sources = assetSources(manifest, asset);
     expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)']);
-    expect(sources[0]?.url).toBe(`/cdn/lean.wasm.gz.bin?r=${manifest.cacheKey}`);
+    expect(sources[0]?.url).toBe(`/cdn/${asset.key}?r=${manifest.cacheKey}`);
   });
 
   it('resolves the relative primary to an absolute URL for Node builds', () => {
     const origin = 'https://criticalthinking.de5.net';
     const absolute = new URL(manifest.primary.baseUrl, origin).href;
-    const sources = assetSources(manifest, assetByName('lean.mjs'), absolute);
+    const asset = assetByName('lean.mjs');
+    const sources = assetSources(manifest, asset, absolute);
     expect(sources[0]?.url).toBe(
-      `https://criticalthinking.de5.net/cdn/lean.mjs?r=${manifest.cacheKey}`,
+      `https://criticalthinking.de5.net/cdn/${asset.key}?r=${manifest.cacheKey}`,
     );
   });
 
   it('normalizes an override base URL that lacks a trailing slash', () => {
-    const sources = assetSources(
-      manifest,
-      assetByName('lean.mjs'),
-      'https://staging.example.com/assets',
-    );
+    const asset = assetByName('lean.mjs');
+    const sources = assetSources(manifest, asset, 'https://staging.example.com/assets');
     expect(sources[0]?.url).toBe(
-      `https://staging.example.com/assets/lean.mjs?r=${manifest.cacheKey}`,
+      `https://staging.example.com/assets/${asset.key}?r=${manifest.cacheKey}`,
     );
   });
 
   it('deduplicates sources that resolve to the same URL', () => {
-    const sources = assetSources(manifest, assetByName('lean.mjs'), manifest.fallback.baseUrl);
+    const flatAsset = { ...assetByName('lean.mjs'), key: 'lean.mjs' };
+    const flatManifest = { ...manifest, assets: [flatAsset] };
+    const sources = assetSources(flatManifest, flatAsset, manifest.fallback.baseUrl);
     expect(sources).toHaveLength(1);
   });
 
-  it('does not invent a GitHub fallback for a local-only asset', () => {
-    const sources = assetSources(manifest, assetByName('runner-worker.js'));
+  it('does not invent a fallback for a local-only asset', () => {
+    const localOnly = { ...assetByName('runner-worker.js'), source: undefined };
+    const sources = assetSources(manifest, localOnly);
     expect(sources).toHaveLength(1);
-    expect(sources[0]?.url).toBe(`/cdn/runner-worker.js?r=${manifest.cacheKey}`);
+    expect(sources[0]?.url).toBe(`/cdn/${localOnly.key}?r=${manifest.cacheKey}`);
   });
 
   describe('魔搭镜像', () => {
@@ -109,7 +111,7 @@ describe('assetSources', () => {
       expect(sources.map((source) => source.label)).toEqual([
         'ModelScope (CN)',
         'Pages Functions (R2)',
-        'GitHub raw',
+        manifest.fallback.label,
       ]);
       expect(sources[0]?.url).toBe(
         `https://modelscope.cn/datasets/example/lean4-assets/resolve/master/${manifest.cacheKey}/lean.mjs`,
@@ -150,29 +152,34 @@ describe('assetSources', () => {
       expect(sources.map((source) => source.label)).toEqual([
         'Pages Functions (R2)',
         'ModelScope (CN)',
-        'GitHub raw',
+        manifest.fallback.label,
       ]);
     });
 
     it('默认不启用镜像，Node 构建行为不变', () => {
       const sources = assetSources(mirrored, assetByName('lean.mjs'));
-      expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)', 'GitHub raw']);
+      expect(sources.map((source) => source.label)).toEqual([
+        'Pages Functions (R2)',
+        manifest.fallback.label,
+      ]);
     });
   });
 
   describe('诊断用的强制源', () => {
-    it('githubFirst 把 GitHub 排到最前，其余源保留做回退', () => {
-      const sources = assetSources(manifest, assetByName('lean.mjs'), undefined, {
-        githubFirst: true,
-      });
-      expect(sources.map((source) => source.label)).toEqual(['GitHub raw', 'Pages Functions (R2)']);
-      expect(sources[0]?.url).toContain('raw.githubusercontent.com');
+    it('githubFirst 把 fallback 排到最前，其余源保留做回退', () => {
+      const asset = assetByName('lean.mjs');
+      const sources = assetSources(manifest, asset, undefined, { githubFirst: true });
+      expect(sources.map((source) => source.label)).toEqual([
+        manifest.fallback.label,
+        'Pages Functions (R2)',
+      ]);
+      const fallbackUrl = new URL(asset.source ?? '', manifest.fallback.baseUrl).href;
+      expect(sources[0]?.url).toBe(withCacheKey(fallbackUrl, manifest.cacheKey));
     });
 
-    it('没有 GitHub 回退的资产不会凭空造源', () => {
-      const sources = assetSources(manifest, assetByName('runner-worker.js'), undefined, {
-        githubFirst: true,
-      });
+    it('没有 fallback 的资产不会凭空造源', () => {
+      const localOnly = { ...assetByName('runner-worker.js'), source: undefined };
+      const sources = assetSources(manifest, localOnly, undefined, { githubFirst: true });
       expect(sources.map((source) => source.label)).toEqual(['Pages Functions (R2)']);
     });
 

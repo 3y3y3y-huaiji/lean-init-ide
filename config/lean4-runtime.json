@@ -155,5 +155,81 @@
       "sha256": "3611a263c4304246c9ee2967c07be2a1c70764a39d642db87ba0b86bfbe9d519",
       "contentType": "text/javascript"
     }
+  ],
+  "extensions": [
+    {
+      "id": "std",
+      "label": "Std",
+      "prefix": "Std",
+      "requires": [],
+      "assets": [
+        {
+          "name": "lean-std-00.pack.gz.bin",
+          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-00.pack.gz.bin",
+          "bytes": 17089330,
+          "sha256": "1d42200cde9f6c2d56b4f961e62b5f73f5206c55575afa2ff13c3c1310ca9ee0",
+          "contentType": "application/octet-stream"
+        },
+        {
+          "name": "lean-std-01.pack.gz.bin",
+          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-01.pack.gz.bin",
+          "bytes": 16993170,
+          "sha256": "70dcdb9db4030e77048e01c5ee987217636db046b1efd484aca9dc451e4612aa",
+          "contentType": "application/octet-stream"
+        },
+        {
+          "name": "lean-std-02.pack.gz.bin",
+          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-02.pack.gz.bin",
+          "bytes": 15588270,
+          "sha256": "9acd813218a3757bfac6bc692e5764aa38f51a60d56d7effc3fdf458fe632cc7",
+          "contentType": "application/octet-stream"
+        },
+        {
+          "name": "lean-std-03.pack.gz.bin",
+          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-03.pack.gz.bin",
+          "bytes": 16737439,
+          "sha256": "2a8d1366803d53712b18a498260bcb799fd2f8c69ff452ba23e6b1496bbbe65f",
+          "contentType": "application/octet-stream"
+        },
+        {
+          "name": "lean-std-04.pack.gz.bin",
+          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-04.pack.gz.bin",
+          "bytes": 6161083,
+          "sha256": "9d9885d43be5cde0f922964fb5e6fdae2d7f5543c3fbd9c2d73b06824f0771e4",
+          "contentType": "application/octet-stream"
+        },
+        {
+          "name": "lean-std.index.json",
+          "key": "wasm-lean4/4.35.0/extensions/std/lean-std.index.json",
+          "bytes": 259150,
+          "sha256": "0bfcb7a6a94521513475fcdfaaabbe4e4aca12305e0d0372be5c63761b03c668",
+          "contentType": "application/json"
+        }
+      ]
+    },
+    {
+      "id": "batteries",
+      "label": "Batteries",
+      "prefix": "Batteries",
+      "requires": [
+        "std"
+      ],
+      "assets": [
+        {
+          "name": "lean-batteries-00.pack.gz.bin",
+          "key": "wasm-lean4/4.35.0/extensions/batteries/lean-batteries-00.pack.gz.bin",
+          "bytes": 5891844,
+          "sha256": "4367a2e21f70a766311e291cb1724f94f074da99f137184fc74c5af89ab31cb2",
+          "contentType": "application/octet-stream"
+        },
+        {
+          "name": "lean-batteries.index.json",
+          "key": "wasm-lean4/4.35.0/extensions/batteries/lean-batteries.index.json",
+          "bytes": 39890,
+          "sha256": "2a81320feda25cd5e74aa9c6714fb6ce0ba3a4fb8abdb4998cd795ff8c8b373e",
+          "contentType": "application/json"
+        }
+      ]
+    }
   ]
 }

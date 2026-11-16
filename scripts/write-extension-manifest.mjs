@@ -17,14 +17,20 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(root, 'config/lean4-runtime.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
-const args = new Map(
-  process.argv
-    .filter((arg) => arg.startsWith('--'))
-    .map((arg) => {
-      const [key, value] = arg.slice(2).split('=');
-      return [key, value ?? 'true'];
-    }),
-);
+const args = new Map();
+const argv = process.argv.slice(2);
+for (let index = 0; index < argv.length; index += 1) {
+  const arg = argv[index];
+  if (!arg.startsWith('--')) continue;
+  const [key, value] = arg.slice(2).split('=');
+  if (value !== undefined) args.set(key, value);
+  else if (argv[index + 1] && !argv[index + 1].startsWith('--')) {
+    args.set(key, argv[index + 1]);
+    index += 1;
+  } else {
+    args.set(key, 'true');
+  }
+}
 const dirOf = (name) => args.get(name) ?? process.env[`LEAN_${name.toUpperCase()}_DIR`] ?? '';
 
 const version = /(\d+\.\d+\.\d+)/.exec(manifest.mirror?.prefix ?? manifest.runtime ?? '')?.[1];

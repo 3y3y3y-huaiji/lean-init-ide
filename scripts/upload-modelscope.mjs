@@ -69,6 +69,14 @@ const prune = args.has('prune');
 const keep = args.has('keep');
 
 const assetDir = join(root, 'public', 'wasm-lean4');
+// 扩展包按需发布，不进入构建期下载目录；用 --extensions 指向解压后的扩展产物目录。
+const extensionDir =
+  args.get('extensions') ?? process.env.LEAN_EXTENSION_DIR ?? join(root, 'work', 'extensions');
+const extensionAssets = (manifest.extensions ?? []).flatMap((extension) => extension.assets);
+const allAssets = [...manifest.assets, ...extensionAssets];
+const extensionNames = new Set(extensionAssets.map((asset) => asset.name));
+const localFileOf = (asset) =>
+  join(extensionNames.has(asset.name) ? extensionDir : assetDir, asset.name);
 const repoPrefix = repoType === 'model' ? 'models' : 'datasets';
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
@@ -135,15 +143,15 @@ const removeTree = (dir) => {
 if (!repo) fail('缺少仓库地址，传 --repo=<namespace/name> 或设置 MODELSCOPE_REPO');
 
 const verifyLocal = () => {
-  for (const asset of manifest.assets) {
-    const file = join(assetDir, asset.name);
+  for (const asset of allAssets) {
+    const file = localFileOf(asset);
     if (!existsSync(file)) fail(`本地缺少 ${asset.name}，先执行 npm run fetch:assets`);
     const bytes = readFileSync(file).length;
     if (bytes !== asset.bytes) fail(`${asset.name} 字节数 ${bytes}，清单要求 ${asset.bytes}`);
     const digest = sha256(file);
     if (digest !== asset.sha256) fail(`${asset.name} sha256 与清单不一致`);
   }
-  console.log(`modelscope: 本地 ${manifest.assets.length} 个资产校验通过`);
+  console.log(`modelscope: 本地 ${allAssets.length} 个资产校验通过`);
 };
 
 const verifyRemoteAsset = async (asset) => {
@@ -195,7 +203,7 @@ const verifyRemote = async () => {
   // 立即校验会看到 404 / 缺 CORS，这里给每个资产留重试时间。
   const attempts = 10;
   const failures = [];
-  for (const asset of manifest.assets) {
+  for (const asset of allAssets) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
@@ -289,8 +297,8 @@ const upload = () => {
 
     const target = join(work, rootDir);
     mkdirSync(target, { recursive: true });
-    for (const asset of manifest.assets) {
-      copyFileSync(join(assetDir, asset.name), join(target, asset.name));
+    for (const asset of allAssets) {
+      copyFileSync(localFileOf(asset), join(target, asset.name));
     }
 
     execFileSync('git', ['add', '-A'], { cwd: work, stdio: 'pipe' });
@@ -320,7 +328,7 @@ const upload = () => {
 const main = async () => {
   verifyLocal();
   if (dryRun) {
-    for (const asset of manifest.assets) console.log(`  ${remoteUrl(asset.name)}`);
+    for (const asset of allAssets) console.log(`  ${remoteUrl(asset.name)}`);
     return;
   }
   if (!verifyOnly) upload();

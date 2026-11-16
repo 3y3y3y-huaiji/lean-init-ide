@@ -1,9 +1,10 @@
 import type { Locale } from '../i18n';
 import runtimeManifest from '../../config/lean4-runtime.json';
+import { runtimeExtensions } from '../runtime-extensions';
 import type { Messages } from '../i18n/types';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from './ui';
 
-const runtimeLabel = `${runtimeManifest.runtime.replace(/ Init$/, '')} · WebAssembly · Init only`;
+const runtimeLabel = `${runtimeManifest.runtime.replace(/ Init$/, '')} · WebAssembly · Init + Std + Batteries`;
 
 export type LeanPanelVariant = 'full' | 'compact';
 
@@ -217,6 +218,30 @@ export const renderLeanMarkup = (
       </div>
     </details>`;
 
+  const librariesMenu = () => `
+    <details class="relative shrink-0" data-role="libraries">
+      <summary class="${ghostButtonClass} cursor-pointer list-none" title="${t.librariesTitle}">
+        ${t.librariesTitle}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>
+      </summary>
+      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-64 rounded-xl border border-line bg-panel p-2">
+        <div class="flex items-center justify-between gap-2 px-1.5 py-1 text-[13px]">
+          <span class="min-w-0 truncate">Init</span>
+          <span class="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] text-muted">${t.libraryBuiltin}</span>
+        </div>
+        ${runtimeExtensions
+          .map(
+            (extension) => `
+          <div class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
+            <span class="min-w-0 truncate">${extension.label}</span>
+            <button type="button" class="${toolbarButtonClass}" data-library="${extension.id}" data-state="idle">${t.libraryLoad}</button>
+          </div>`,
+          )
+          .join('')}
+        <p class="m-0 mt-1 px-1.5 text-[11px] leading-normal text-muted">${t.librariesHint}</p>
+      </div>
+    </details>`;
+
   if (!compact) {
     return `
       <section data-ssr-markup="full" class="flex min-h-[calc(100svh-61px)] flex-col max-[900px]:min-h-0">
@@ -228,7 +253,7 @@ export const renderLeanMarkup = (
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${panelsMenu(false)}${status}${start}</div>
+          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
         </div>
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">
@@ -250,7 +275,7 @@ export const renderLeanMarkup = (
     <section data-ssr-markup="compact" class="flex h-full flex-col overflow-hidden rounded-[14px] border border-line bg-panel">
       <div class="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
         <div class="flex min-w-0 flex-col">
-          <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init</span>
+          <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init+Std+Batteries</span>
           <strong class="truncate text-sm">${t.title}</strong>
         </div>
         <div class="flex shrink-0 items-center gap-2">${status}${panelsMenu(true)}${start}</div>

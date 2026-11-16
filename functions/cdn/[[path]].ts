@@ -26,7 +26,12 @@ type Context = {
 };
 
 const assets = new Map<string, RuntimeAsset>(
-  (manifest.assets as unknown as RuntimeAsset[]).map((asset) => [asset.key, asset]),
+  [
+    ...(manifest.assets as unknown as RuntimeAsset[]),
+    ...((manifest.extensions ?? []) as Array<{ assets: RuntimeAsset[] }>).flatMap(
+      (extension) => extension.assets,
+    ),
+  ].map((asset) => [asset.key, asset]),
 );
 
 const CACHE_CONTROL = 'public,max-age=31536000,immutable';

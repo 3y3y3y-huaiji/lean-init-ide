@@ -30,6 +30,13 @@ import {
   supportsLeanRuntime,
 } from '../lean-recovery';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
+import {
+  loadExtensionPacks,
+  resolveExtensionIds,
+  runtimeExtensions,
+  type ExtensionPacks,
+  type RuntimeExtensionId,
+} from '../runtime-extensions';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
@@ -897,6 +904,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
   };
 
+  // 扩展库按需下载：packs 常驻内存直到用户释放；每次变化都通过重开会话生效。
+  const extensionPackCache = new Map<RuntimeExtensionId, ExtensionPacks>();
+  const activeExtensions = new Set<RuntimeExtensionId>();
+  let extensionPacks: ExtensionPacks = {};
+  let libraryBusy = false;
+
   const session = new LeanSession({
     createServer: async () => {
       // 运行时约 700KB，按需加载，首屏只留编辑器。
@@ -912,7 +925,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           maxEntryBytes: cacheBudgetBytes(memoryTier),
         },
         // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
-        lean4: { maxMemoryBytes: 1024 ** 3 },
+        lean4: {
+          maxMemoryBytes: 1024 ** 3,
+          ...(Object.keys(extensionPacks).length > 0
+            ? { extensionPacks: extensionPacks as unknown as Record<string, ArrayBuffer> }
+            : {}),
+        },
         createWorker: () => new LeanWorker(),
         onStatus: (status) => {
           if (status.state === 'loading') {
@@ -1312,6 +1330,80 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (session.isReady) stop();
     else void start();
   });
+
+  // 扩展库开关：下载后重开会话挂载；释放时丢弃 SharedArrayBuffer 引用。
+  const libraryButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-library]')];
+
+  const syncLibraryButtons = () => {
+    for (const button of libraryButtons) {
+      const id = button.dataset.library as RuntimeExtensionId;
+      const active = activeExtensions.has(id);
+      button.textContent = active ? t.libraryRelease : t.libraryLoad;
+      button.dataset.state = active ? 'loaded' : 'idle';
+      button.disabled = libraryBusy;
+    }
+  };
+
+  const applyExtensionSelection = async (next: Set<RuntimeExtensionId>) => {
+    if (libraryBusy) return;
+    const previous = new Set(activeExtensions);
+    const resolved = resolveExtensionIds(next);
+    libraryBusy = true;
+    syncLibraryButtons();
+    const wasActive = session.isReady || session.state === 'starting';
+    try {
+      for (const id of resolved) {
+        if (extensionPackCache.has(id)) continue;
+        const packs = await loadExtensionPacks([id], (ratio) => {
+          const button = libraryButtons.find((item) => item.dataset.library === id);
+          if (button) button.textContent = t.libraryLoading(`${Math.round(ratio * 100)}%`);
+        });
+        extensionPackCache.set(id, packs);
+      }
+      extensionPacks = Object.assign({}, ...resolved.map((id) => extensionPackCache.get(id)));
+      activeExtensions.clear();
+      for (const id of resolved) activeExtensions.add(id);
+      if (wasActive) {
+        setStatus(t.libraryRestarting, 'loading');
+        stop();
+        await start();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(t.libraryError(message));
+      setStatus(t.libraryError(message), 'error');
+      // 回滚到上一次已生效的集合，避免留下半个扩展。
+      for (const id of [...extensionPackCache.keys()]) {
+        if (!previous.has(id)) extensionPackCache.delete(id);
+      }
+      extensionPacks = Object.assign({}, ...previous.size
+        ? [...previous].map((id) => extensionPackCache.get(id))
+        : []);
+      activeExtensions.clear();
+      for (const id of previous) activeExtensions.add(id);
+    } finally {
+      libraryBusy = false;
+      syncLibraryButtons();
+    }
+  };
+
+  for (const button of libraryButtons) {
+    button.addEventListener('click', () => {
+      const id = button.dataset.library as RuntimeExtensionId;
+      const next = new Set(activeExtensions);
+      if (next.has(id)) {
+        next.delete(id);
+        // 释放被依赖的库时，把依赖它的库一起释放。
+        for (const extension of runtimeExtensions) {
+          if (extension.requires.includes(id)) next.delete(extension.id);
+        }
+      } else {
+        next.add(id);
+      }
+      void applyExtensionSelection(next);
+    });
+  }
+  syncLibraryButtons();
 
   /**
    * Lean worker 崩溃：释放旧会话、清掉过期诊断，并在 60 秒内首次崩溃时自动重启。

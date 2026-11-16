@@ -147,6 +147,16 @@ export type Messages = {
     resetConfirmAction: string;
     exportCode: string;
     lessonPassed: string;
+    /** 扩展库菜单：Init 内置，Std / Batteries 按需下载并占用额外内存。 */
+    librariesTitle: string;
+    librariesHint: string;
+    libraryBuiltin: string;
+    libraryLoad: string;
+    libraryLoading: (ratio: string) => string;
+    libraryLoaded: string;
+    libraryRelease: string;
+    libraryRestarting: string;
+    libraryError: (message: string) => string;
     expand: string;
     panelsTitle: string;
     showPanels: string;

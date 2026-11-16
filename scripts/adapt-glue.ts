@@ -120,14 +120,7 @@ const main = (): void => {
   );
   const sourceFile = requireFile(sourcePath, 'source');
   if (!targetPath) throw new CliError('缺少 target');
-  const sourceText = readFileSync(sourceFile, 'utf8');
-  const fdIdx = sourceText.indexOf('function _fd_read(');
-  if (fdIdx >= 0) console.log(`fd_read ctx: ${sourceText.slice(fdIdx, fdIdx + 220)}`);
-  const impIdx = sourceText.indexOf('fd_read:');
-  if (impIdx >= 0) {
-    console.log(`fd_read import: ${sourceText.slice(Math.max(0, impIdx - 60), impIdx + 80)}`);
-  }
-  const { glue } = adaptGlue(sourceText);
+  const { glue } = adaptGlue(readFileSync(sourceFile, 'utf8'));
   writeFileSync(targetPath, glue);
   console.log(`adapted ${targetPath} (${glue.length} bytes)`);
 };

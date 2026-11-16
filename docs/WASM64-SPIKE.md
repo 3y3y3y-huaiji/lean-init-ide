@@ -20,7 +20,7 @@
   93 个编译成功（7 个需要去掉 `-Dinterpreter.prefer_native=false` 重试），1 个（`Mathlib.Tactic.Linter.DirectoryDependency`）失败但不影响目标产物；
   `Mathlib/Tactic/Spread.olean` + `.ir` + `.olean.server` + `.olean.private` 都产出了
 - 产物体积：release 变体 `lean.wasm` 122,042,100 B，zstd -19 后 11,218,328 B（10.7 MiB）
-- LSP：`initialize` 握手正常；`didOpen → publishDiagnostics` 仍在打通中（见下）
+- LSP：`initialize` 握手与 `didOpen → publishDiagnostics` 诊断链路全部打通（run `43892016062`：`Init` 轮 `Bad.lean` 报 `Type mismatch`、`Good.lean` 等到 `$/lean/ileanInfoFinal` 且 `diagnostics=0`；`Mathlib.Tactic.Spread` 轮同样全过）
 
 关键前提：`-O2`、标量字面量 backport、GMP、官方 oleans、缓存键绑定 Lean pin。
 
@@ -147,7 +147,9 @@ failed to read file '/lean/lib/lean/Init.olean', incompatible header
 - `EXIT_RUNTIME=1` 会在 main 返回后跑静态析构；官方 Init olean（402MB）下 `~initializer` 的 `free` 会抢 pthread 锁，浏览器主线程不允许 `Atomics.wait`，编译成功后反而在退出期抛异常。链接改成 `-sEXIT_RUNTIME=0`，退出码只看 `callMain` 返回值。
 - 编译 Mathlib 不能带 `-Dinterpreter.prefer_native=false`：带 `initialize` 块的 Mathlib/Batteries 模块会踩 `ir_interpreter.cpp` 的 `mkDummyExternDecl` 断言（`fn_body_tag != Unreachable`）。默认解释器设置下同样的模块直接编过；编译步现在对失败模块自动用默认设置重试一次。
 - `--worker` 模式能收下 `initialize` 与 `didOpen`，但**不产出任何输出**（连 hover 响应都没有）：已排除 `FileWorker.setupFile`（没有 `lake` 时直接返回 `noLakefile`，不会 `Process.spawn`），也排除了主线程阻塞（单独链了 `-sPROXY_TO_PTHREAD=1` 的 `lean-lsp.mjs`，main 跑在 pthread 上，现象不变；`PTHREAD_POOL_SIZE` 也从 4 调到 8）。根因是 stdin 走的是 Emscripten 的 TTY 钩子/线程代理，worker 里没有可读的 fd 0。移植 SDK 的 glue 适配（`scripts/adapt-glue.ts`：`lspStdin` 透传、fd0 环形缓冲、线程回收走代理）后才真正把帧送进 Lean。
-- 4.36 下帧已经能送进 FileWorker（收到 `$/lean/ileanHeaderSetupInfo` 和一条**空的** `publishDiagnostics`），但随后异步 elaboration 不再推进，连 hover 请求都没有响应。线程池已按 SDK 的做法从 8 提到 16（`link-wasm64-lsp.sh` / `link-wasm64-release.sh`），诊断步骤限时 25 分钟，脚本在结论处强制 `process.exit`，避免 worker 卡在 `Atomics.wait` 把 CI 拖到硬超时。
+- 4.36 下 `--worker -j4` 并发线程数超过 16（8/16 都会触发 `Lean LSP exhausted its pthread pool`；早期因 `adapt-glue.ts` 在 `__emscripten_check_mailbox()` 外包了一层 `catch(_){}` 把异常静默吞掉了，才误判成“异步调度卡死”）。LSP 专用变体（`link-wasm64-lsp.sh`）将 `-sPTHREAD_POOL_SIZE` 提高到 48、`-sDEFAULT_PTHREAD_STACK_SIZE` 设为 32MB，配合 `LEAN_STACK_SIZE_KB=16384` 与 `LEAN_MAIN_USE_THREAD=0`；CLI 与 release 变体保持 8 线程池，避免 CLI 启动开销。
+- `_fd_read` 主线程等待 `lspStdin` 时的 `Atomics.wait(..., 20)` 会把每组跨线程代理 syscall（`stat`/`open`/`read`/MEMFS 文件加载以及 `fd1 write`）卡到 20ms 一拍，导致 `import Init` 的数千次 MEMFS 调用拖过 120s 超时；改成 `1ms` 短等并在前后均泵 `__emscripten_check_mailbox()` 后，Init 与 `Mathlib.Tactic.Spread` 的 `Bad.lean`/`Good.lean` 均在 26–56 秒内跑完并拿到正确诊断。
+- CLI 退出期偶发 `lean::object_ref::~object_ref()` → `emscripten_builtin_free` 越界：`Shell.lean` 结尾在 `lthread` 里调 `IO.Process.exit`（`libc exit()`），在 `-sEXIT_RUNTIME=0` 下会先触发 `__funcs_on_exit()` 再回到 `lean_main` 跑析构。`backport-wasm64.ts` 让 `LEAN_EMSCRIPTEN` 下的 `lean_io_exit` 改为抛出 `lean::wasm_exit_exception`，并在 `shell.cpp` 进 `run_with_thread_stack` 前 `lean_mark_mt(shell_opts.raw())`、lambda 内捕获该异常写回 `shell_rc`。
 - 环形缓冲的 `_fd_read` 第一版照抄 wasm32 的 iovec 布局，在 memory64 下读出一整段零：`struct iovec` 是 16 字节（8 字节 base + 8 字节 len），`iov_len` 必须从 `iov+8` 取，`nread` 也必须写 8 字节的 `size_t`（`HEAPU64[pnum/8]`）。按 8 字节 stride 取到的是 `iov_base` 的高 32 位，写回只写低 32 位则让宿主看到巨大的读取长度，表现为 `Invalid header field` 后 `main returned 1`。
 
 ## CI 门禁
@@ -174,7 +176,7 @@ workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 | --- | --- |
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
 | Lean 源码与引导包 | `wasm64-src-v6` |
-| runtime（-O2 + GMP） | `wasm64-runtime-v14-<pin hash>` |
+| runtime（-O2 + GMP） | `wasm64-runtime-v15-<pin+backport hash>` |
 | cgen | `wasm64-cgen-v2-<pin hash>` |
 | objects（-O2 + GMP） | `wasm64-obj-v9-<pin hash>` |
 | GMP（wasm64 静态库） | `wasm64-gmp-v1` |
@@ -191,9 +193,9 @@ oleans 的 githash 检查能过（运行时确实是新版），但前端还是�
 
 ## 尚未验证
 
-- 浏览器内 LSP：浏览器侧只验证了 CLI 编译（`--mode=version|compile`），`--server`/`--worker` 目前只在 Node 里跑
-- `didOpen → publishDiagnostics`：worker 模式已能收到 `ileanHeaderSetupInfo` 与空诊断，但异步 elaboration 随后停滞；已把 pthread 池对齐到 16 并限制步骤时长，下一步据此判断是线程池耗尽还是 4.36 异步任务调度在 wasm64 下的问题。
-- 内存占用与性能：`-O2` + memory64 + 1GB 上限下的实际峰值未测；66 模块在 wasm64 下每模块约 1–5 秒（带缓存）
+- 浏览器内 LSP：浏览器侧目前只验证了 CLI 编译（`--mode=version|compile`），`--worker` 诊断链路已在 Node `worker_threads` 跑通 `Init` 与 `Mathlib.Tactic.Spread`，尚未接入前端 Monaco + 浏览器 Worker 联调
+- Mathlib 教学子集扩展：已打通 `Mathlib.Tactic.Spread` 的 `olean` 编译与 LSP 诊断，后续按需扩展 `scripts/mathlib-slice.ts` 目标并打包进浏览器运行时资产
+- 内存占用与性能：`-O2` + memory64 下的峰值内存未精细压测；当前 Init 诊断约 26–37 秒、`Mathlib.Tactic.Spread` 约 51–56 秒（受限于 MEMFS 跨线程 syscall 每拍 1ms 的 `Atomics.wait`）
 
 ## 复现
 

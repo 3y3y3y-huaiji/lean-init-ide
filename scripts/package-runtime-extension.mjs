@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { constants, gzipSync } from 'node:zlib';
+import { constants, zstdCompressSync } from 'node:zlib';
 
 const args = new Map();
 const argv = process.argv.slice(2);
@@ -76,11 +76,14 @@ mkdirSync(outDir, { recursive: true });
 const chunks = [];
 for (let start = 0, index = 0; start < pack.length; start += chunkBytes, index += 1) {
   const raw = pack.subarray(start, Math.min(pack.length, start + chunkBytes));
-  const chunkName = `${name}-${String(index).padStart(2, '0')}.pack.gz`;
-  const compressed = gzipSync(raw, { level: constants.Z_BEST_COMPRESSION });
+  const chunkName = `${name}-${String(index).padStart(2, '0')}.pack.gz.bin`;
+  const compressed = zstdCompressSync(raw, {
+    params: { [constants.ZSTD_c_compressionLevel]: 19 },
+  });
   writeFileSync(path.join(outDir, chunkName), compressed);
   chunks.push({
     path: chunkName,
+    encoding: 'zstd',
     offset: start,
     uncompressedBytes: raw.length,
     uncompressedSha256: sha256(raw),

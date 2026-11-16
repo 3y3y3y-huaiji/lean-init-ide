@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gunzipSync } from 'node:zlib';
+import { zstdDecompressSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const script = 'scripts/package-runtime-extension.mjs';
@@ -64,7 +64,7 @@ describe('package-runtime-extension', () => {
     expect(index.chunks.length).toBeGreaterThan(1);
 
     const pack = Buffer.concat(
-      index.chunks.map((chunk) => gunzipSync(readFileSync(join(outDir, chunk.path)))),
+      index.chunks.map((chunk) => zstdDecompressSync(readFileSync(join(outDir, chunk.path)))),
     );
     expect(pack.length).toBe(index.totalBytes);
     for (const file of index.files) {

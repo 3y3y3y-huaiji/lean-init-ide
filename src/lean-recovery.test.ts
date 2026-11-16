@@ -9,6 +9,7 @@ import {
   nextAutoRestartDelayMs,
   shouldPreserveDiagnosticsOnCrash,
   shouldShowRunPassed,
+  supportsLeanRuntime,
 } from './lean-recovery';
 
 describe('isAssetRelatedError', () => {
@@ -30,6 +31,15 @@ describe('isAssetRelatedError', () => {
     expect(isAssetRelatedError('Invalid params')).toBe(false);
     expect(isAssetRelatedError('LSP initialize returned null')).toBe(false);
     expect(isAssetRelatedError('Type mismatch')).toBe(false);
+  });
+});
+
+describe('supportsLeanRuntime', () => {
+  it('要求 crossOriginIsolated 与 SharedArrayBuffer 同时存在', () => {
+    expect(supportsLeanRuntime({ crossOriginIsolated: true, SharedArrayBuffer })).toBe(true);
+    expect(supportsLeanRuntime({ crossOriginIsolated: false, SharedArrayBuffer })).toBe(false);
+    expect(supportsLeanRuntime({ crossOriginIsolated: true })).toBe(false);
+    expect(supportsLeanRuntime({ SharedArrayBuffer })).toBe(false);
   });
 });
 

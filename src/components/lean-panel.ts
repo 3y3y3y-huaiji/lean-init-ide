@@ -27,6 +27,7 @@ import {
   nextAutoRestartDelayMs,
   shouldPreserveDiagnosticsOnCrash,
   shouldShowRunPassed,
+  supportsLeanRuntime,
 } from '../lean-recovery';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
@@ -132,6 +133,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const loadFailureTitleEl = host.querySelector<HTMLElement>('[data-role="load-failure-title"]');
   const loadFailureDetailEl = host.querySelector<HTMLElement>('[data-role="load-failure-detail"]');
   const loadFailureErrorEl = host.querySelector<HTMLElement>('[data-role="load-failure-error"]');
+  const loadFailureActionsEl = host.querySelector<HTMLElement>(
+    '[data-role="load-failure-actions"]',
+  );
   const retryLoadEl = host.querySelector<HTMLButtonElement>('[data-role="retry-load"]');
   const sourceButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-source]')];
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
@@ -774,16 +778,27 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (loadFailureEl) loadFailureEl.hidden = true;
   };
 
-  const showLoadFailure = (message: string) => {
+  const showLoadFailure = (message: string, compatibility = false) => {
     if (!loadFailureEl || !loadFailureTitleEl || !loadFailureDetailEl || !loadFailureErrorEl)
       return;
-    const assetRelated = isAssetRelatedError(message);
-    loadFailureTitleEl.textContent = assetRelated ? t.loadFailureTitle : t.startFailureTitle;
-    loadFailureDetailEl.textContent = assetRelated ? t.loadFailureDetail : '';
-    loadFailureDetailEl.hidden = !assetRelated;
-    loadFailureErrorEl.textContent = lastAssetFallback
-      ? `${message}\n${t.assetFallbackLabel(lastAssetFallback.name, lastAssetFallback.message)}`
-      : message;
+    const assetRelated = !compatibility && isAssetRelatedError(message);
+    loadFailureTitleEl.textContent = compatibility
+      ? t.compatibilityTitle
+      : assetRelated
+        ? t.loadFailureTitle
+        : t.startFailureTitle;
+    loadFailureDetailEl.textContent = compatibility
+      ? t.compatibilityDetail
+      : assetRelated
+        ? t.loadFailureDetail
+        : '';
+    loadFailureDetailEl.hidden = !compatibility && !assetRelated;
+    loadFailureErrorEl.textContent = compatibility
+      ? message
+      : lastAssetFallback
+        ? `${message}\n${t.assetFallbackLabel(lastAssetFallback.name, lastAssetFallback.message)}`
+        : message;
+    if (loadFailureActionsEl) loadFailureActionsEl.hidden = compatibility;
     loadFailureEl.hidden = false;
   };
 
@@ -1280,6 +1295,15 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const start = (): Promise<boolean> => {
     cancelAutoRecover();
     if (startInflight) return startInflight;
+    // 部分安卓 WebView / 应用内浏览器没有 cross-origin isolation 或 SharedArrayBuffer。
+    // 在进入 LSP 之前直接给出兼容性说明，避免反复启动、反复报错。
+    if (!supportsLeanRuntime()) {
+      const message = t.compatibilityError;
+      lastStartError = message;
+      setStatus(t.statusFailure(message), 'error');
+      showLoadFailure(message, true);
+      return Promise.resolve(false);
+    }
     startInflight = runStart();
     return startInflight;
   };

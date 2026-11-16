@@ -1,0 +1,83 @@
+name: Deploy · 应用
+run-name: Deploy · ${{ github.ref_name }}
+
+# PR CI（static / test / build / e2e / audit / actionlint）已经在合并前跑过；
+# main 上只做构建、部署和线上冒烟，不再重复整条 CI。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: 部署
+    # 只在 main 且显式开启 CD 时执行；配好 Secrets 与 CD_ENABLED 之前自动跳过。
+    if: github.ref == 'refs/heads/main' && vars.CD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.18.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 认证失败时 wrangler 只回一句 9106，看不出是 token 值坏了还是权限不够。
+      - name: 诊断部署凭据
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "token 长度: ${#TOKEN}"
+          case "$TOKEN" in
+            *[[:space:]]*) echo "token 含空白字符，多半是复制时带了换行或空格"; exit 1 ;;
+            *) echo "token 无空白字符" ;;
+          esac
+          echo "account id 长度: ${#ACCOUNT}"
+          code=$(curl -s -o /tmp/probe.json -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/pages/projects")
+          echo "API 状态码: $code"
+          head -c 400 /tmp/probe.json
+          echo
+          [ "$code" = "200" ] || exit 1
+      # 必须用完整 build：build:web 会跳过约 102 MB 兜底副本，丢掉 SW 的第三级回退。
+      - name: 缓存 Lean 资产
+        uses: actions/cache@v6
+        with:
+          path: public/wasm-lean4
+          key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
+      - run: pnpm run build
+      - run: pnpm run verify:build
+      - name: 推送到 Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm dlx wrangler@4 pages deploy dist --project-name=lean-init-ide --branch=main
+      # 部署是原子的，但自定义域传播需要几秒，失败重试而不是立刻判定发布失败。
+      # 打 pages.dev 而不是主域：CI 的机房 IP 会被 zone 的机器人规则拦成 403，
+      # 那是安全策略生效，不代表产物有问题。
+      - name: 线上冒烟
+        env:
+          LEAN_SITE_ORIGIN: https://lean-init-ide.pages.dev
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if node scripts/smoke.mjs; then
+              exit 0
+            fi
+            echo "第 ${attempt} 次冒烟未通过，10 秒后重试"
+            sleep 10
+          done
+          echo "冒烟连续失败，请按 README 的回滚步骤处理"
+          exit 1

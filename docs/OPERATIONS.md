@@ -5,17 +5,17 @@ GitHub Actions 的职责与触发条件见 [CI](CI.md)。
 
 ## 部署与冒烟
 
-部署由 GitHub Actions 负责，**CI 全绿才会上线**：
+PR CI 负责门禁，合并到 `main` 后由 `Deploy · 应用` 直接构建、部署和冒烟，不重复跑检查：
 
 ```
-static / test / build / e2e / audit / actionlint  →  deploy  →  smoke
+PR CI（static / test / build / e2e / audit / actionlint） → merge main → Deploy · 应用（build + deploy + smoke）
 ```
 
-`deploy` job 只在 `main` 分支、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
+`Deploy · 应用` 只在 push `main`、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
 它跑完整 `pnpm run build`（含约 102 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
 仍失败则整条流水线标红。运行时资产由 `Runtime · Lean 4.35 wasm32` 的 publish，或维护者用
-`pnpm run upload:assets` 上传；应用 CI 不写 R2。换 `cacheKey` 后先传资产、再部署页面。
+`pnpm run upload:assets` 上传；应用 CI 与 Deploy 都不写 R2。换 `cacheKey` 后先传资产、再部署页面。
 
 ### 首次启用
 

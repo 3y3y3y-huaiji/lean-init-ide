@@ -126,12 +126,19 @@ for (const module of modules) {
 }
 
 // 原始 Batteries.lean 通常 import 了 Tactic/Lean 模块；用保留下来的模块重建一个根。
+// 注意两点：
+// 1. Lean 的 import 只接受点号分隔（Batteries.Classes.Cast），斜杠会被解析成
+//    `import Batteries` 加一个非法 token，导致去找不存在的 Batteries.olean。
+// 2. 4.35 的 Batteries 源文件全部是 `module` 文件，根也写成 module + public import，
+//    这样 writeModule 才会同时产出 .ir（build-oleans 与打包都要求它有 .ir）。
 selected.delete('Batteries');
-const rootImports = [...selected].sort().map((module) => `import ${module}`);
+const rootImports = [...selected]
+  .sort()
+  .map((module) => `public import ${module.replaceAll('/', '.')}`);
 mkdirSync(outSrc, { recursive: true });
 writeFileSync(
   join(outSrc, 'Batteries.lean'),
-  `${rootImports.join('\n')}\n\n/- Lean-free Batteries subset for the browser runtime. -/\n`,
+  `module\n\n${rootImports.join('\n')}\n\n/- Lean-free Batteries subset for the browser runtime. -/\n`,
 );
 selected.add('Batteries');
 

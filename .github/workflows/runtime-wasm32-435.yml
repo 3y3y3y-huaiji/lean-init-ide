@@ -449,26 +449,6 @@ jobs:
         timeout-minutes: 300
         run: |
           set +e
-          # 诊断 A：单独 import 一个 Batteries 模块（module 文件 / 非 module 文件各一个）。
-          mkdir -p work/probe
-          probe() {
-            local name="$1"
-            node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-              work/dist/lean.mjs work/probe work/batteries-olean32 -- \
-              -j1 -R /src -o "/src/$name.olean" "/src/$name.lean"
-            echo "PROBE $name exit=$?"
-          }
-          printf 'import Batteries/Classes/RatCast\nexample : 1 = 1 := rfl\n' > work/probe/P1.lean
-          probe P1
-          printf 'import Batteries/Data/Vector/Monadic\nexample : 1 = 1 := rfl\n' > work/probe/P2.lean
-          probe P2
-          # 诊断 B：先放一个空的 Batteries.olean，再编译真正的根。
-          mkdir -p work/stub
-          printf '/- stub -/\n' > work/stub/Batteries.lean
-          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
-            work/dist/lean.mjs work/stub work/batteries-olean32 -- \
-            -j1 -R /src -o /lean/lib/lean/Batteries.olean /src/Batteries.lean
-          echo "PROBE stub-olean exit=$?"
           node wasm-llvm/producer/lean-browser/scripts/build-oleans.mjs \
             "$GITHUB_WORKSPACE/work/dist/lean.mjs" \
             "$GITHUB_WORKSPACE/work" \
@@ -477,17 +457,10 @@ jobs:
             3 Init Std Batteries
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo '--- 诊断：生成的 Batteries.lean 前 20 行 ---'
-            head -n 20 work/batteries-filtered/Batteries.lean
-            echo '--- 诊断：根文件 import 统计 ---'
-            echo "imports=$(grep -c '^import ' work/batteries-filtered/Batteries.lean)"
-            grep -n '^import Batteries$' work/batteries-filtered/Batteries.lean || echo '根文件没有自引用 import Batteries'
-            echo '--- 诊断：deps.txt 的 Batteries 行 ---'
-            grep '^Batteries:' work/deps.txt | cut -c1-400
+            echo '--- 诊断：生成的 Batteries.lean 前 8 行 ---'
+            head -n 8 work/batteries-filtered/Batteries.lean
             echo '--- 诊断：outDir 根级文件 ---'
             ls -l work/batteries-olean32 | head -n 15
-            echo '--- 诊断：子集中是否有模块 import Batteries ---'
-            grep -rn '^import Batteries$' work/batteries-filtered --include='*.lean' | head -n 5 || true
             echo '--- 诊断：失败日志 ---'
             head -n 40 work/Batteries.olean-fail.log 2>/dev/null || true
           else

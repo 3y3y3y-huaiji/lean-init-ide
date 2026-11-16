@@ -161,6 +161,11 @@ export const createSession = ({
     });
 
   const dispatch = (message: LspMessage): void => {
+    if (process.env.LEAN_WASM_DIAG_DEBUG) {
+      console.error(
+        `[diag] recv method=${message.method ?? '<response>'} id=${String(message.id ?? '-')}`,
+      );
+    }
     for (let i = 0; i < waiters.length; i += 1) {
       const waiter = waiters[i];
       if (waiter && waiter.match(message)) {

@@ -514,42 +514,37 @@ jobs:
       # watchdog 模式的 didOpen 会 Process.spawn（wasm 不支持），所以按 SDK 的做法直接起文件 worker。
       - name: LSP 诊断链路（--worker，publishDiagnostics）
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           LEAN_WASM_DIAG_DEBUG: '1'
         run: |
-          LIB=work/olean32
-          MODULE=""
-          if [ -f work/mathlib-slice.json ]; then
-            TARGET="$(node -e 'process.stdout.write(require("./work/mathlib-slice.json").target)')"
-            REL="$(printf '%s' "$TARGET" | tr '.' '/')"
-            if [ -f "work/mathlib-lib/$REL.olean" ]; then
-              LIB=work/mathlib-lib
-              MODULE="$TARGET"
-            else
-              echo "::warning::$TARGET 没编完，诊断链路退化为 Init"
-            fi
-          fi
-          echo "lib=$LIB module=${MODULE:-<Init>}"
+          # 先跑 Init（快，验证链路），再跑 Mathlib（慢，验证真实依赖）。
           # --module 只在真的编出目标 olean 时才传；空字符串会被参数校验拒绝。
           diag() {
-            local lean="$1"
-            local extra=(--lean "$lean" --lib "$LIB" --mode worker)
-            if [ -n "$MODULE" ]; then extra+=(--module "$MODULE"); fi
+            local lean="$1" lib="$2" module="$3" timeout="$4"
+            local extra=(--lean "$lean" --lib "$lib" --mode worker --timeout "$timeout")
+            if [ -n "$module" ]; then extra+=(--module "$module"); fi
             node scripts/wasm64-lsp-diagnostics.ts "${extra[@]}"
           }
           set +e
-          if [ -f work/dist/lean-adapted.mjs ]; then
-            echo "glue=lean-adapted.mjs"
-            diag work/dist/lean-adapted.mjs
-            plain=$?
-            if [ "$plain" -ne 0 ] && [ -f work/dist/lean-adapted-proxy.mjs ]; then
-              echo "retry with lean-adapted-proxy.mjs"
-              diag work/dist/lean-adapted-proxy.mjs
+          if [ -f work/dist/lean-adapted.mjs ]; then GLUE=work/dist/lean-adapted.mjs; else GLUE=work/dist/lean.mjs; fi
+          echo "glue=$GLUE"
+          diag "$GLUE" work/olean32 "" 300000
+          init_status=$?
+          if [ "$init_status" -ne 0 ] && [ -f work/dist/lean-adapted-proxy.mjs ]; then
+            echo "retry with lean-adapted-proxy.mjs"
+            GLUE=work/dist/lean-adapted-proxy.mjs
+            diag "$GLUE" work/olean32 "" 300000
+            init_status=$?
+          fi
+          if [ "$init_status" -eq 0 ] && [ -f work/mathlib-slice.json ]; then
+            TARGET="$(node -e 'process.stdout.write(require("./work/mathlib-slice.json").target)')"
+            REL="$(printf '%s' "$TARGET" | tr '.' '/')"
+            if [ -f "work/mathlib-lib/$REL.olean" ]; then
+              diag "$GLUE" work/mathlib-lib "$TARGET" 900000
+            else
+              echo "::warning::$TARGET 没编完，跳过 Mathlib 诊断"
             fi
-          else
-            echo "glue=lean.mjs（未适配，只验证帧收发）"
-            diag work/dist/lean.mjs
           fi
 
       - name: 打包 npm（lean4-wasm64）

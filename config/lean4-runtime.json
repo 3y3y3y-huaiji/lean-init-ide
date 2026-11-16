@@ -211,9 +211,7 @@
       "id": "batteries",
       "label": "Batteries",
       "prefix": "Batteries",
-      "requires": [
-        "std"
-      ],
+      "requires": ["std"],
       "assets": [
         {
           "name": "lean-batteries-00.pack.gz.bin",

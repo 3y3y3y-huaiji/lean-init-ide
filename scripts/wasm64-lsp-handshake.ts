@@ -115,6 +115,9 @@ const main = async (): Promise<void> => {
     return;
   }
   process.stderr.write('[handshake] ok\n');
+  // Emscripten 的 _proc_exit 会把 process.exitCode 置成 1（server 读到 EOF 是正常退出），
+  // 这里显式覆盖，避免「握手成功但步骤失败」。
+  process.exit(0);
 };
 
 if (isMainModule(import.meta.url, process.argv[1])) runCli(main);

@@ -436,6 +436,8 @@ const main = async (): Promise<void> => {
       `[diag] mode=${options.mode} module=${options.moduleName ?? '<Init>'} lib=${options.libDir}`,
     );
     console.log('[diag] ok');
+    // Emscripten 的 _proc_exit 可能把 process.exitCode 留成 1，成功时显式覆盖。
+    process.exitCode = 0;
   } catch (error) {
     console.error(`[diag] failed: ${(error as Error).message}`);
     process.exitCode = 1;

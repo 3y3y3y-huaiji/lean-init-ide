@@ -83,6 +83,7 @@ fd1.stream_ops = {
   ...fd1.stream_ops,
   write(_stream: unknown, buffer: Uint8Array, offset: number, length: number): number {
     const chunk = Uint8Array.from(buffer.subarray(offset, offset + length));
+    if (process.env.LEAN_WASM_DIAG_DEBUG) port.postMessage({ debug: `fd1 write ${length}` });
     port.postMessage({ stdout: chunk });
     return length;
   },

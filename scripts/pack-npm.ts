@@ -68,7 +68,8 @@ const main = (): void => {
     dist: requireString(parsed, 'dist'),
     out: optionalString(parsed, 'out') ?? 'work/npm',
     version: requireString(parsed, 'version'),
-    name: optionalString(parsed, 'name') ?? process.env.NPM_PACKAGE_NAME ?? 'lean4-wasm64',
+    name:
+      optionalString(parsed, 'name') ?? (process.env.NPM_PACKAGE_NAME?.trim() || 'lean4-wasm64'),
   };
   const sizes = packNpm(options);
   console.log(`package ${options.name}@${options.version}`);

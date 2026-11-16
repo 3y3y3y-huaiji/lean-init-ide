@@ -33,6 +33,13 @@ describe('adaptGlue', () => {
     expect(fdReadSnippet).not.toContain('HEAPU32[(iov+k*8)>>>2]');
   });
 
+  it('等 stdin 时泵 Emscripten 代理队列，否则 dedicated 线程的 stdout 写会死锁', () => {
+    const { fdReadSnippet } = adaptGlue(FIXTURE);
+    expect(fdReadSnippet).toContain('__emscripten_check_mailbox');
+    expect(fdReadSnippet).toContain('!ENVIRONMENT_IS_PTHREAD');
+    expect(fdReadSnippet).toMatch(/Atomics\.wait\(c,0,Atomics\.load\(c,0\),20\)/);
+  });
+
   it('锚点缺失时直接失败，而不是静默产出坏 glue', () => {
     expect(() => adaptGlue('function nope(){}')).toThrowError(/期望命中 1 处/);
   });

@@ -25,7 +25,13 @@ export const FD_READ_SNIPPET = `function _fd_read(fd,iov,iovcnt,pnum){
 if(fd===0&&Module["lspStdin"]){
  iov=Number(iov);iovcnt=Number(iovcnt);pnum=Number(pnum);
  var d=Module["lspStdin"],c=new Int32Array(d.buffer,0,4),input=new Uint8Array(d.buffer,16,d.capacity),range=Math.floor(4294967296/d.capacity)*d.capacity;
- while(Atomics.load(c,0)===Atomics.load(c,1)&&!Atomics.load(c,2))Atomics.wait(c,0,Atomics.load(c,0),100);
+ // 主线程等 stdin 时必须顺手泵一次 Emscripten 的代理队列：
+ // 诊断输出来自 dedicated 线程，_fd_write 会 proxy 回主线程；主线程若直接 Atomics.wait，
+ // 代理永远没机会执行，表现为「帧都读了但一条 publishDiagnostics 都没有」。
+ while(Atomics.load(c,0)===Atomics.load(c,1)&&!Atomics.load(c,2)){
+  Atomics.wait(c,0,Atomics.load(c,0),20);
+  try{if(!ENVIRONMENT_IS_PTHREAD&&typeof __emscripten_check_mailbox==='function')__emscripten_check_mailbox()}catch(_){}
+ }
  growMemViews();var total=0,stop=false;
  for(var k=0;k<iovcnt&&!stop;k++){growMemViews();var ptr=Number(HEAPU64[iov/8]),len=Number(HEAPU64[(iov+8)/8]);iov+=16;
   for(var j=0;j<len;j++){var r=Atomics.load(c,1)>>>0,w=Atomics.load(c,0)>>>0;if(r===w){stop=true;break;}HEAPU8[ptr+j]=input[r%d.capacity];Atomics.store(c,1,(r+1)%range);total++;}

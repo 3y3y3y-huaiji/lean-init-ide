@@ -144,8 +144,13 @@ pnpm run fetch:assets                # 下载并校验到 public/wasm-lean4/
 pnpm run upload:assets -- --dry-run  # 预览将上传的对象
 pnpm run upload:assets               # 上传缺失/变更的对象，经同源网关复核 ETag 与长度
 pnpm run upload:assets -- --verify-only
+pnpm run upload:modelscope -- --verify-only          # 只校验魔搭镜像
+pnpm run upload:modelscope -- --prune --metadata     # 同步资产、清理旧 revision、写数据集卡片
 ```
 
+- `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/` 下的 4.34 历史资产和 `wasm-lean4/4.35.0/`。
+- `--metadata` 会写 `README.md`（模型卡）、`LICENSE`（Apache-2.0）、`.gitattributes` 的 LFS 规则和 `wasm-lean4/4.35.0/SHA256SUMS`。
+- 删除工作区文件不会回收 Git LFS 历史对象；要彻底回收魔搭存储，需要重建数据集或改写历史。
 - `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
 - `--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶。
 

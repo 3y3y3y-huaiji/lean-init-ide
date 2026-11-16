@@ -83,6 +83,8 @@ export type LeanPanelOptions = {
   draftKey?: string;
   /** 启动与下载进度，供课程页在不可见面板外显示。 */
   onProgress?: (progress: LeanPanelProgress) => void;
+  /** 课程代码依赖的扩展包；启动前自动挂载，用户无需手动开库。 */
+  requiredExtensions?: RuntimeExtensionId[];
 };
 
 export type LeanPanel = {
@@ -1017,11 +1019,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   // 以及已选库，回到编辑器页时自动恢复。刷新页面不算“切换页面”，避免覆盖
   // 用户关掉 auto-start 的选择。
   const savedSession = readRuntimeSession();
-  const savedExtensionIds = resolveExtensionIds(
-    (savedSession?.extensions ?? []).filter(
+  const savedExtensionIds = resolveExtensionIds([
+    ...(savedSession?.extensions ?? []).filter(
       (id): id is RuntimeExtensionId => id === 'std' || id === 'batteries',
     ),
-  );
+    // 课程声明的依赖必须参与首次启动，否则 didOpen 时 extensionPacks 还缺模块。
+    ...(options.requiredExtensions ?? []),
+  ]);
   const isReloadNavigation = (): boolean => {
     try {
       const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];

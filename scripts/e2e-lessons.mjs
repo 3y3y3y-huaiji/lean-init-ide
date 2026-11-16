@@ -42,6 +42,11 @@ const SLUGS = [
   'code-sum',
   'math-axioms',
   'math-mathlib',
+  'eng-hashmap',
+  'eng-bitvec',
+  'eng-rbmap',
+  'eng-array-bounds',
+  'eng-state-machine',
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

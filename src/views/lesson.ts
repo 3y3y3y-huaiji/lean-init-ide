@@ -91,7 +91,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
   const body = renderBlocks(page, t.runInEditor, t.goalLabel);
 
   const trackOf = (lesson: LessonPage): LessonTrack => lesson.track ?? 'intro';
-  const toc = (['intro', 'math'] as const)
+  const toc = (['intro', 'math', 'eng'] as const)
     .map((track) => {
       const entries = t.lessons
         .map((lesson, i) => ({ lesson, i }))
@@ -376,6 +376,8 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
             // 用户再点同一块时就变成「重复声明」。面板本身是 sr-only，空文档不影响阅读。
             code: '',
             locale,
+            // 工程实战课的代码依赖 Std 与 Batteries，提前声明，避免用户点运行时才发现缺模块。
+            ...(page.track === 'eng' ? { requiredExtensions: ['std', 'batteries'] as const } : {}),
             // 低内存设备与省流模式都不自动下载 102MB，让用户先确认。
             autoStart,
             onProgress: (progress) => reportProgress?.(progress),

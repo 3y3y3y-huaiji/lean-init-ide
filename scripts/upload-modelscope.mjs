@@ -12,6 +12,7 @@
  *   --dry-run             只校验本地文件并打印目标 URL
  *   --verify-only         跳过上传，只校验远端 Range/CORS
  *   --prune               上传前删掉仓库根目录下旧版本目录（如 14ea5ec/）
+ *   --metadata            同步数据集卡片、LICENSE、.gitattributes 与 SHA256SUMS
  *   --keep                保留下载的临时仓库目录
  *
  * 仓库需先在 modelscope.cn 创建为公开仓库；token 在「个人中心 → 访问令牌」生成。
@@ -66,6 +67,7 @@ const gitUsername = 'oauth2';
 const dryRun = args.has('dry-run');
 const verifyOnly = args.has('verify-only');
 const prune = args.has('prune');
+const metadata = args.has('metadata');
 const keep = args.has('keep');
 
 const assetDir = join(root, 'public', 'wasm-lean4');
@@ -224,7 +226,107 @@ const verifyRemote = async () => {
   }
 };
 
-const upload = () => {
+const describeAsset = (asset) => {
+  if (asset.name === 'lean.wasm.gz.bin') {
+    const size = asset.uncompressedBytes?.toLocaleString('en-US') ?? '?';
+    return `zstd 压缩的 Lean wasm（解压后 ${size} 字节）`;
+  }
+  if (asset.name === 'lean.mjs') return 'Emscripten glue';
+  if (asset.name === 'lean-init.index.json') return 'Init olean 分片索引';
+  if (asset.name.startsWith('lean-init-') && asset.name.endsWith('.pack.gz.bin')) {
+    return 'Init olean pack';
+  }
+  if (asset.name === 'producer-receipt.json') return '构建回执';
+  if (asset.name === 'runner-worker.js') return 'Worker 入口';
+  return '';
+};
+
+const writeMetadata = async (work) => {
+  if (!metadata) return;
+  const assetRows = manifest.assets
+    .map(
+      (asset) =>
+        `| \`${asset.name}\` | ${asset.bytes.toLocaleString('en-US')} | ${describeAsset(asset)} |`,
+    )
+    .join('\n');
+  const card = `---
+license: Apache-2.0
+language:
+  - en
+tags:
+  - lean4
+  - wasm
+  - webassembly
+  - runtime
+  - education
+pretty_name: Lean Init IDE runtime assets
+size_categories:
+  - "100M<n<1B"
+---
+
+# Lean Init IDE runtime assets
+
+浏览器端 Lean Init IDE 的 WebAssembly 运行时资产。默认运行时只包含 ${manifest.runtime}，
+不包含 Std / Batteries / Lean 编译器 / Lake / Mathlib；语言服务器在 Web Worker 中运行。
+
+- 项目：https://github.com/3y3y3y-huaiji/lean-init-ide
+- 在线使用：https://criticalthinking.de5.net
+- 上游构建：seo-rii/wasm-llvm（producer/lean-browser） + Lean v4.35.0
+
+## 目录
+
+| 目录 | 运行时 | 状态 |
+| --- | --- | --- |
+| \`${rootDir}/\` | ${manifest.runtime} | 当前生产版本 |
+| \`wasm-lean4/\` | Lean 4.34.1 Init | 历史版本 / 回滚用 |
+
+## 当前版本资产
+
+| 文件 | 字节 | 说明 |
+| --- | ---: | --- |
+${assetRows}
+
+完整性校验见 \`${rootDir}/SHA256SUMS\`。应用侧清单是主仓库的 \`config/lean4-runtime.json\`。
+
+## 使用
+
+\`\`\`text
+https://modelscope.cn/${repoPrefix}/${repo}/resolve/master/${rootDir}/<name>
+\`\`\`
+
+## 完整性
+
+- 所有交付字节都是 zstd；上游 gzip 在 GitHub Release，不在此镜像重复存放
+- 每个文件在 \`SHA256SUMS\` 中固定 SHA-256
+- 资产只追加新版本目录；已有版本的字节不原地替换
+
+## 许可证
+
+- Lean 4.35.0：Apache-2.0
+- wasm-llvm / producer：Apache-2.0 AND MIT
+- 本数据集中的构建产物按 Apache-2.0 分发，见 \`LICENSE\`
+
+## 维护
+
+- 新运行时版本使用新的 \`wasm-lean4/<version>/\` 目录
+- 旧版本目录保留用于回滚；重复 revision 目录（如 \`14ea5ec/\`）由 \`--prune\` 清理
+- 删除目录不会回收 Git LFS 历史对象；如需彻底回收存储，需要重建数据集或改写历史
+`;
+  writeFileSync(join(work, 'README.md'), card);
+
+  const licenseResponse = await fetch('https://www.apache.org/licenses/LICENSE-2.0.txt', {
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!licenseResponse.ok) throw new Error(`LICENSE HTTP ${licenseResponse.status}`);
+  writeFileSync(join(work, 'LICENSE'), await licenseResponse.text());
+
+  mkdirSync(join(work, rootDir), { recursive: true });
+  const sums = `${manifest.assets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n')}\n`;
+  writeFileSync(join(work, rootDir, 'SHA256SUMS'), sums);
+};
+
+const upload = async () => {
   if (!token) fail('上传需要 MODELSCOPE_TOKEN');
   const work = mkdtempSync(join(tmpdir(), 'modelscope-upload-'));
   try {
@@ -279,13 +381,22 @@ const upload = () => {
 
     const attributes = join(work, '.gitattributes');
     const existing = existsSync(attributes) ? readFileSync(attributes, 'utf8') : '';
-    const lfsRule = '*.bin filter=lfs diff=lfs merge=lfs -text';
-    if (!existing.includes(lfsRule)) {
-      writeFileSync(
-        attributes,
-        `${existing}${existing.endsWith('\n') || !existing ? '' : '\n'}${lfsRule}\n`,
-      );
+    const lfsRules = [
+      '*.bin filter=lfs diff=lfs merge=lfs -text',
+      '*.gz filter=lfs diff=lfs merge=lfs -text',
+      '*.json filter=lfs diff=lfs merge=lfs -text',
+      '*.wasm filter=lfs diff=lfs merge=lfs -text',
+      '*.pack filter=lfs diff=lfs merge=lfs -text',
+    ];
+    let attributesText = existing;
+    for (const rule of lfsRules) {
+      if (!attributesText.includes(rule)) {
+        attributesText = `${attributesText}${attributesText.endsWith('\n') || !attributesText ? '' : '\n'}${rule}\n`;
+      }
     }
+    if (attributesText !== existing) writeFileSync(attributes, attributesText);
+
+    await writeMetadata(work);
 
     const target = join(work, rootDir);
     mkdirSync(target, { recursive: true });
@@ -295,7 +406,14 @@ const upload = () => {
 
     execFileSync('git', ['add', '-A'], { cwd: work, stdio: 'pipe' });
     try {
-      execFileSync('git', ['commit', '-m', `assets: ${rootDir}`], { cwd: work, stdio: 'pipe' });
+      execFileSync(
+        'git',
+        ['commit', '-m', `assets: ${rootDir}${metadata ? ' + dataset card' : ''}`],
+        {
+          cwd: work,
+          stdio: 'pipe',
+        },
+      );
     } catch {
       console.log('modelscope: 没有新变更需要提交');
     }
@@ -323,7 +441,7 @@ const main = async () => {
     for (const asset of manifest.assets) console.log(`  ${remoteUrl(asset.name)}`);
     return;
   }
-  if (!verifyOnly) upload();
+  if (!verifyOnly) await upload();
   try {
     await verifyRemote();
   } catch (error) {

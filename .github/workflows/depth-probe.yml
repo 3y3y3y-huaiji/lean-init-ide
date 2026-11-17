@@ -8,6 +8,14 @@ name: Depth probe
 on:
   push:
     branches: [spike/wasm64-recursion-depth]
+    # 文档与规范改动用不着重新下载 emsdk、跑浏览器探针。
+    paths:
+      - 'scripts/depth-probe/**'
+      - 'scripts/lib/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.spike.json'
+      - '.github/workflows/depth-probe.yml'
   workflow_dispatch:
     inputs:
       variants:

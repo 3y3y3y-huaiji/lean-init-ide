@@ -83,6 +83,18 @@ git commit --allow-empty -m "chore(wasm64): 复核 WHNF 尾调用 [whnf-audit]"
 git push origin spike/wasm64-recursion-depth
 ```
 
+wasm64 构建走 `.github/workflows/spike-wasm64.yml`，按代价分两层：
+
+- `smoke`：每次 push 都跑 `--version`、Init 编译和 Init 的 LSP good/bad，缓存热时目标 10 分钟；Init LSP 失败会让 job 直接变红。
+- `deep`：Mathlib 裁切、官方 olean、数学库 LSP、release/npm。只在 nightly、`workflow_dispatch` 选 `deep`，或提交信息带 `[wasm64-deep]` 时跑。分支上的日常迭代用提交标记触发，不依赖 schedule（它只读默认分支的 workflow）：
+
+```bash
+git commit --allow-empty -m "chore(wasm64): 跑一轮 Mathlib 深水区 [wasm64-deep]"
+git push origin spike/wasm64-recursion-depth
+```
+
+LSP 等待不再靠总超时：`wasm64-lsp-diagnostics.ts` 和浏览器 harness 都有无进展看门狗，任何消息或输出都会重置计时，默认静默 120 秒（Mathlib 180 秒）即失败；worker 退出或页面 `pageerror` 立即失败。只有网络/缓存类错误（诊断脚本退出码 3）重试一次，超时（退出码 4）不重试。
+
 本地只跑静态检查：
 
 ```bash

@@ -245,28 +245,36 @@ const runLspDoc = async (
   const decoder = new FrameDecoder();
   const worker = new Worker('/lsp-worker.mjs', { type: 'module' });
 
+  // 无进展看门狗：任何消息或输出都算进展并重新计时。Mathlib 加载 import 时
+  // 可能长时间没有 publishDiagnostics，但 stderr / progress 通知会持续出现。
+  const idleMs = config.moduleName ? 180_000 : 120_000;
+
   const waitMessage = <T extends LspMessage>(
     match: (msg: LspMessage) => boolean,
     label: string,
-    timeoutMs: number,
   ): Promise<T> =>
     new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(new Error(`${name}: ${label} 超时 (${timeoutMs}ms)`));
-      }, timeoutMs);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const arm = () => {
+        if (timer !== undefined) clearTimeout(timer);
+        timer = setTimeout(() => {
+          cleanup();
+          reject(new Error(`${name}: ${label} ${idleMs}ms 内没有任何消息或输出`));
+        }, idleMs);
+      };
       const onError = (event: ErrorEvent) => {
         cleanup();
         reject(new Error(`${name}: worker error ${event.message}`));
       };
       const onMessage = (event: MessageEvent<Record<string, unknown>>) => {
+        arm();
         const msg = event.data;
         if (typeof msg.failure === 'string') {
           cleanup();
           reject(new Error(`${name}: worker failure ${msg.failure}`));
           return;
         }
-        if (typeof msg.exit === 'number' && msg.exit !== 0) {
+        if (typeof msg.exit === 'number') {
           cleanup();
           reject(new Error(`${name}: lean exited with ${msg.exit}`));
           return;
@@ -296,12 +304,13 @@ const runLspDoc = async (
         }
       };
       const cleanup = () => {
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
       };
       worker.addEventListener('message', onMessage);
       worker.addEventListener('error', onError);
+      arm();
     });
 
   const readyPromise = new Promise<number>((resolve, reject) => {
@@ -367,17 +376,20 @@ const runLspDoc = async (
     }, 30_000);
 
     try {
-      const timeoutMs = config.moduleName ? 600_000 : 180_000;
-      const deadline = performance.now() + timeoutMs;
+      // 总预算只是兜底，真正决定失败时机的是无进展看门狗：正常推进的请求不会
+      // 因为“总耗时超过 N 秒”被杀掉，卡死的进程也不会拖满整段预算。
+      const hardCapMs = config.moduleName ? 900_000 : 300_000;
+      const deadline = performance.now() + hardCapMs;
       for (;;) {
-        const remaining = Math.max(1_000, Math.round(deadline - performance.now()));
+        if (performance.now() > deadline) {
+          throw new Error(`${name}: 超过总预算 ${hardCapMs}ms 仍未拿到诊断`);
+        }
         const msg = await waitMessage<LspMessage>(
           (frame) =>
             (frame.method === 'textDocument/publishDiagnostics' &&
               String(frame.params?.uri ?? '').endsWith(uri)) ||
             (waitUntilFinal && frame.method === '$/lean/ileanInfoFinal'),
           'publishDiagnostics',
-          remaining,
         );
         if (msg.method === '$/lean/ileanInfoFinal') {
           return {

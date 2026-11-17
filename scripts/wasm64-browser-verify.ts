@@ -141,14 +141,23 @@ const browser = await chromium.launch({
 const runMode = async (mode: string): Promise<ProbeResult> => {
   const page = await browser.newPage();
   page.on('console', (message) => console.log(`[${mode}:${message.type()}] ${message.text()}`));
-  page.on('pageerror', (error) => console.log(`[${mode}:pageerror] ${error.message}`));
+  // 未捕获异常意味着页面逻辑已经坏了；继续等 __probeResult 只会白耗预算。
+  const pageError = new Promise<never>((_, reject) => {
+    page.once('pageerror', (error) => reject(new Error(`${mode}: pageerror ${error.message}`)));
+  });
   const query = new URLSearchParams({ mode });
   if (cli.manifest) query.set('manifest', cli.manifest);
   if (cli.moduleName) query.set('module', cli.moduleName);
   if (cli.goodCode) query.set('good', cli.goodCode);
   await page.goto(`${origin}/?${query.toString()}`, { waitUntil: 'load', timeout: 60_000 });
   // 用字符串表达式轮询与取值，避免把 TS 编译后的函数序列化进页面。
-  await page.waitForFunction('window.__probeResult !== undefined', undefined, { timeout: 900_000 });
+  // 页面内的无进展看门狗会先失败；这里的超时只是进程级兜底。
+  await Promise.race([
+    page.waitForFunction('window.__probeResult !== undefined', undefined, {
+      timeout: cli.moduleName ? 900_000 : 300_000,
+    }),
+    pageError,
+  ]);
   const result = (await page.evaluate('window.__probeResult')) as ProbeResult;
   await page.close();
   return result;

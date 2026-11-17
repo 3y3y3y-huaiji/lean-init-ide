@@ -68,7 +68,18 @@ describe('parseDiagOptions', () => {
     expect(options.mode).toBe('worker');
     expect(options.moduleName).toBeUndefined();
     expect(options.timeoutMs).toBe(300_000);
+    expect(options.idleTimeoutMs).toBe(120_000);
     expect(options.jobs).toBe(4);
+  });
+
+  it('接受 --idle-timeout 并拒绝非正数', () => {
+    const { lean, lib } = makePaths();
+    expect(
+      parseDiagOptions(['--lean', lean, '--lib', lib, '--idle-timeout', '60000']).idleTimeoutMs,
+    ).toBe(60_000);
+    expect(() =>
+      parseDiagOptions(['--lean', lean, '--lib', lib, '--idle-timeout', '0']),
+    ).toThrowError(/idle-timeout/);
   });
 
   it('接受 --module、--mode 与 --jobs', () => {

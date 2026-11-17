@@ -121,6 +121,16 @@ interface SessionInput {
   readonly args: string[];
   readonly proxy: boolean;
   readonly timezone: Uint8Array;
+  /** 无进展窗口：超过这么久没收到任何消息/输出就判定卡死，而不是干等总预算。 */
+  readonly idleTimeoutMs: number;
+}
+
+/** 无进展超时：worker 还在但没有任何消息，重试只会把无效等待翻倍。 */
+export class NoProgressError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoProgressError';
+  }
 }
 
 export const createSession = ({
@@ -130,6 +140,7 @@ export const createSession = ({
   args,
   proxy,
   timezone,
+  idleTimeoutMs,
 }: SessionInput): Session => {
   const ringBuffer = new SharedArrayBuffer(16 + RING_BYTES);
   const writer = new RingWriter(ringBuffer, RING_BYTES);
@@ -163,6 +174,27 @@ export const createSession = ({
       waiter.reject(error);
     }
   };
+
+  let idleTimer: NodeJS.Timeout | undefined;
+  const stopIdle = (): void => {
+    if (idleTimer !== undefined) {
+      clearTimeout(idleTimer);
+      idleTimer = undefined;
+    }
+  };
+
+  // 无进展看门狗：worker 卡在 Atomics.wait 时不会有任何消息。每收到一条消息
+  // （stdout 分片、stderr 行、debug 日志）就重新计时；静默满一个窗口立刻失败，
+  // 不再把 15 分钟总预算耗在已经死掉的进程上。
+  const touch = (): void => {
+    if (disposing || fatalError) return;
+    stopIdle();
+    idleTimer = setTimeout(() => {
+      idleTimer = undefined;
+      failWaiters(new NoProgressError(`超过 ${idleTimeoutMs}ms 没有收到任何 LSP 消息或输出`));
+    }, idleTimeoutMs);
+  };
+  touch();
 
   const waitFor = (match: (message: LspMessage) => boolean, label: string, timeoutMs: number) =>
     new Promise<LspMessage>((resolveWait, rejectWait) => {
@@ -207,22 +239,31 @@ export const createSession = ({
   };
 
   worker.on('message', (message: Record<string, unknown>) => {
+    touch();
     if (typeof message.debug === 'string') process.stderr.write(`[debug] ${message.debug}\n`);
     else if (message.stdout instanceof Uint8Array) {
       for (const decoded of decoder.push(message.stdout)) dispatch(decoded as LspMessage);
     } else if (typeof message.stderr === 'string') process.stderr.write(`[lean] ${message.stderr}`);
     else if (typeof message.failure === 'string') {
       console.error(`[worker] ${message.failure}`);
+      stopIdle();
       failWaiters(new Error(`worker 异常: ${message.failure}`));
-    } else if (typeof message.exit === 'number') exited = true;
+    } else if (typeof message.exit === 'number') {
+      exited = true;
+      stopIdle();
+      // 退出码为 0 也算提前结束：诊断还没等到就退出，继续等只会白等。
+      if (!disposing) failWaiters(new Error(`worker 提前退出 code=${message.exit}`));
+    }
   });
   worker.on('error', (error) => {
+    stopIdle();
     console.error(`[worker] ${error.stack ?? error}`);
     failWaiters(error instanceof Error ? error : new Error(String(error)));
   });
   worker.on('exit', (code) => {
     exited = true;
-    if (!disposing && code !== 0) failWaiters(new Error(`worker 异常退出 code=${code}`));
+    stopIdle();
+    if (!disposing) failWaiters(new Error(`worker 提前退出 code=${code}`));
   });
 
   return {
@@ -235,6 +276,7 @@ export const createSession = ({
     stats: () => writer.stats(),
     async dispose() {
       disposing = true;
+      stopIdle();
       // proxy 模式下 main 在 pthread 上，送 EOF 没必要，直接收掉整个 worker。
       if (!proxy) writer.close();
       if (exited) return;
@@ -342,6 +384,7 @@ export interface DiagOptions {
   readonly goodCode?: string;
   readonly mode: 'worker' | 'server';
   readonly timeoutMs: number;
+  readonly idleTimeoutMs: number;
   readonly jobs: number;
 }
 
@@ -369,6 +412,7 @@ const runServerMode = async (
     args: ['-j2', '--server'],
     proxy,
     timezone: readTimezone(),
+    idleTimeoutMs: options.idleTimeoutMs,
   });
   try {
     const init = session.waitFor((message) => message.id === 1, 'initialize 响应', 180_000);
@@ -412,6 +456,7 @@ const runWorkerMode = async (
       args: [`-j${options.jobs}`, '--worker', uri],
       proxy,
       timezone: readTimezone(),
+      idleTimeoutMs: options.idleTimeoutMs,
     });
     try {
       // 按 SDK 的顺序：initialize 与 didOpen 连着发，不等待 initialize 响应。
@@ -449,6 +494,11 @@ const DIAG_SPEC: Record<string, FlagSpec> = {
   },
   mode: { kind: 'string', valueName: 'worker|server' },
   timeout: { kind: 'number', valueName: 'ms' },
+  'idle-timeout': {
+    kind: 'number',
+    valueName: 'ms',
+    description: '多久没有任何消息或输出就判定卡死（默认 120000）',
+  },
   jobs: { kind: 'number', valueName: 'n', description: 'worker 模式的 -j 线程数（默认 4）' },
 };
 
@@ -458,6 +508,10 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
   if (mode !== 'worker' && mode !== 'server')
     throw new CliError(`--mode 只能是 worker 或 server，收到 ${mode}`);
   const timeoutMs = parsed.flags.timeout === undefined ? 300_000 : requireNumber(parsed, 'timeout');
+  const idleTimeoutMs =
+    parsed.flags['idle-timeout'] === undefined ? 120_000 : requireNumber(parsed, 'idle-timeout');
+  if (!Number.isInteger(idleTimeoutMs) || idleTimeoutMs <= 0)
+    throw new CliError(`--idle-timeout 必须是正整数，收到 ${idleTimeoutMs}`);
   const jobs = parsed.flags.jobs === undefined ? 4 : requireNumber(parsed, 'jobs');
   if (!Number.isInteger(jobs) || jobs < 1) throw new CliError(`--jobs 必须是正整数，收到 ${jobs}`);
   const moduleName = optionalString(parsed, 'module');
@@ -469,9 +523,14 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
     ...(goodCode === undefined ? {} : { goodCode }),
     mode,
     timeoutMs,
+    idleTimeoutMs,
     jobs,
   };
 };
+
+/** 只有网络/缓存类错误值得重试；超时重试只会把无效等待翻倍。 */
+const isRetryable = (message: string): boolean =>
+  /ECONN|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|network|download/i.test(message);
 
 const main = async (): Promise<void> => {
   const options = parseDiagOptions(process.argv.slice(2));
@@ -495,8 +554,12 @@ const main = async (): Promise<void> => {
     // Emscripten 的 _proc_exit 可能把 process.exitCode 留成 1，成功时显式覆盖。
     process.exitCode = 0;
   } catch (error) {
-    console.error(`[diag] failed: ${(error as Error).message}`);
-    process.exitCode = 1;
+    const message = (error as Error).message;
+    console.error(`[diag] failed: ${message}`);
+    // CI 靠退出码决定是否重试：4 = 无进展/超时（不重试），3 = 网络/缓存（值得一次重试）。
+    if (error instanceof NoProgressError || message.includes('超时')) process.exitCode = 4;
+    else if (isRetryable(message)) process.exitCode = 3;
+    else process.exitCode = 1;
   } finally {
     clearTimeout(watchdog);
   }

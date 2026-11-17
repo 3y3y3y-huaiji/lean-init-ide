@@ -75,6 +75,8 @@ jobs:
 
   probe:
     needs: lint
+    # 带 [whnf-audit] 的提交只跑审计，避免把同一轮探针再跑一遍。
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[whnf-audit]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -180,6 +182,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.whnf_audit) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[whnf-audit]'))
+    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -234,17 +237,34 @@ jobs:
           import { readFileSync } from 'node:fs';
 
           const lines = readFileSync('work/WHNF.wat', 'utf8').split('\n');
-          const hot = /^(lean_whnf|whnfEasyCases|reduceRec|reduceQuotRec)(___|$)/;
+          // wasm2wat 的平铺格式里函数没有独立收尾行，下一个 `(func $` 就是上一个的结束。
+          // 只认热点环本体：___boxed / ___lam__ / _at___ 里被内联进来的旁支不算。
+          const hot = [
+            /^lean_whnf$/,
+            /Lean_Meta_whnfEasyCases$/,
+            /Lean_Meta_whnfEasyCases___at___00Lean_Meta_whnfImp_spec__4$/,
+            /Lean_Meta_whnfEasyCases___at___00.*Lean_Meta_whnfCore_go_spec__3$/,
+            /Lean_Meta_reduceRec___redArg$/,
+            /Lean_Meta_reduceQuotRec___redArg$/,
+          ];
           const rows = [];
           let name = null;
           let bodyLines = 0;
           let returnCalls = 0;
           let totalReturnCalls = 0;
 
+          const flush = () => {
+            if (name && hot.some((pattern) => pattern.test(name))) {
+              rows.push({ name, bodyLines, returnCalls });
+            }
+            name = null;
+          };
+
           for (const line of lines) {
             if (line.includes('return_call')) totalReturnCalls += 1;
             const start = line.match(/^  \(func \$(\S+)/);
             if (start) {
+              flush();
               name = start[1];
               bodyLines = 0;
               returnCalls = 0;
@@ -252,13 +272,12 @@ jobs:
             if (name === null) continue;
             bodyLines += 1;
             if (line.includes('return_call')) returnCalls += 1;
-            if (line === '  )') {
-              if (hot.test(name)) rows.push({ name, bodyLines, returnCalls });
-              name = null;
-            }
           }
+          flush();
 
-          if (rows.length === 0) throw new Error('WHNF.wat 里没有找到热点函数');
+          if (rows.length < 4) {
+            throw new Error(`只匹配到 ${rows.length} 个热点函数，符号名可能变了`);
+          }
           const withTail = rows.filter((row) => row.returnCalls > 0);
           console.log(`全对象 return_call: ${totalReturnCalls}`);
           for (const row of rows) {

@@ -275,8 +275,12 @@ const runLspDoc = async (
           return;
         }
         if (typeof msg.exit === 'number') {
-          cleanup();
-          reject(new Error(`${name}: lean exited with ${msg.exit}`));
+          // PROXY_TO_PTHREAD 派发完成时也会冒出一条 exit:0，此时真实进程还在跑。
+          // 只有非零退出才是故障；exit:0 但拿不到诊断，交给无进展看门狗兜底。
+          if (msg.exit !== 0) {
+            cleanup();
+            reject(new Error(`${name}: lean exited with ${msg.exit}`));
+          }
           return;
         }
         if (typeof msg.stderr === 'string') {

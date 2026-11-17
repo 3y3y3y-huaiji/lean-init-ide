@@ -7,7 +7,7 @@ const CONFIG = {
   jspi: { fn: '_depth_probe', cap: 1 << 20, expected: (n) => n + 1 },
   tailcall: { fn: '_tail_probe', cap: 1 << 22, expected: (n) => n + 1 },
   asyncify: { fn: '_yield_probe', cap: 1 << 18, expected: (n) => n, async: true },
-  'jspi-yield': { fn: '_yield_probe', cap: 1 << 16, expected: (n) => n },
+  'jspi-yield': { fn: '_yield_probe', cap: 1 << 20, expected: (n) => n },
   // 浏览器级 JSPI 两两对照：resolved 走 V8 已决议快路径，pending 才是真挂起。
   'jspi-resolved': {
     module: 'jspi-suspend',

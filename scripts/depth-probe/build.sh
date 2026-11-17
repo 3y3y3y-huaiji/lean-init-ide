@@ -111,6 +111,11 @@ fi
 build pthread-jspi deep-rec.cpp _depth_probe,_tail_probe -pthread -sJSPI=1 -sPTHREAD_POOL_SIZE=2
 build pthread-baseline deep-rec.cpp _depth_probe,_tail_probe -pthread -sPTHREAD_POOL_SIZE=2
 
+# pthread 栈大小对照：同一段递归放进线程池线程，只改线程栈。
+build pthread-stack-64k pthread-rec.cpp _pthread_probe -pthread -sPTHREAD_POOL_SIZE=2 -sDEFAULT_PTHREAD_STACK_SIZE=65536
+build pthread-stack-8m pthread-rec.cpp _pthread_probe -pthread -sPTHREAD_POOL_SIZE=2 -sDEFAULT_PTHREAD_STACK_SIZE=8388608 -sINITIAL_MEMORY=67108864
+build pthread-stack-32m pthread-rec.cpp _pthread_probe -pthread -sPTHREAD_POOL_SIZE=2 -sDEFAULT_PTHREAD_STACK_SIZE=33554432 -sINITIAL_MEMORY=134217728
+
 node - "$SUMMARY" "$OUT/build-summary.json" <<'NODE'
 const fs = require('node:fs');
 const [tsvPath, jsonPath] = process.argv.slice(2);

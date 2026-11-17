@@ -34,6 +34,7 @@ interface ProbeRow {
   readonly maxDepth?: number;
   readonly firstFail?: number;
   readonly capped?: boolean;
+  readonly stats?: { readonly calls: number; readonly pending: number } | null;
   readonly samples?: readonly { n: number; ok: boolean; error: string | null }[];
   readonly error?: string;
 }
@@ -90,7 +91,8 @@ const formatRow = (row: ProbeRow): string => {
   }
   const depth = row.capped ? `>=${row.maxDepth}` : `${row.maxDepth}`;
   const error = row.error ? `  ${row.error.split('\n')[0]}` : '';
-  return `${row.name.padEnd(18)} maxDepth=${depth}${error}`;
+  const stats = row.stats ? `  suspend=${row.stats.pending}/${row.stats.calls}` : '';
+  return `${row.name.padEnd(18)} maxDepth=${depth}${stats}${error}`;
 };
 
 const main = async (): Promise<void> => {
@@ -104,7 +106,8 @@ const main = async (): Promise<void> => {
   expectPositionals(parsed, 0, 'node scripts/depth-probe/run.ts [--out dir]');
   const outDir = resolve(optionalString(parsed, 'out') ?? join(REPO_ROOT, 'work/depth-probe'));
   const variants =
-    optionalString(parsed, 'variants') ?? 'baseline,jspi,tailcall,asyncify,jspi-yield,heapstack';
+    optionalString(parsed, 'variants') ??
+    'baseline,jspi,tailcall,asyncify,jspi-yield,jspi-resolved,jspi-pending,heapstack';
   const chromePath = optionalString(parsed, 'chrome');
   const jsFlags = optionalString(parsed, 'js-flags');
   const timeout = parsed.flags.timeout === undefined ? 600_000 : requireNumber(parsed, 'timeout');

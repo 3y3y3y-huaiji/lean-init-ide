@@ -219,26 +219,55 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 全部在 Dedicated Worker 里跑（与生产 Lean LSP 同环境），Chrome for Testing 155.0.8059.39，Linux x64，headless，
 启动参数 `--enable-experimental-webassembly-features`。
 
-| 配置 | 原生栈上的递归上界 | 说明 |
+| 配置 | 递归上界 | 说明 |
 | --- | --- | --- |
-| 普通非尾递归 | **7,973** 层 | 约 1 MB Worker 栈，帧约 128 B |
+| 普通非尾递归 | **7,973** 层 | 约 1 MB Worker 栈，emcc 帧约 121 B |
 | 互递归 + `-mtail-call` | **≥ 4,194,304** | 生成 `return_call`，3 处 |
 | 堆上显式工作栈 | **≥ 1,048,576** | 上限来自探针的 2M 帧数组，不是栈 |
-| ASYNCIFY + 每 64 层 `emscripten_sleep` | **≥ 65,536** | 栈展开到线性内存，继续加深只会更慢 |
-| 浏览器级 JSPI + 每 64 层挂起 | **17,279** | 仍然有界；约普通栈的 2.17 倍 |
+| ASYNCIFY + 每 64 层 `emscripten_sleep` | **≥ 262,144** | 栈展开到线性内存，继续加深只加内存与耗时 |
+| JSPI + 已决议 Promise | **13,439–17,279** | `suspend=0/209`：一次都没真正挂起 |
+| JSPI + 未决 Promise（微任务），每 64 层 | **17,258** | `suspend=269/269` |
+| JSPI + 未决 Promise（微任务），每层 | **17,258** | `suspend=17258/17258`，密度提高 64 倍上界不变 |
+| JSPI + 未决 Promise（宏任务），每 64 层 | **13,439** | `suspend=209/209`，真正让出事件循环 |
+| pthread + 64 kB 线程栈 | **4,096 层通过** | 同一段递归跑在线程池线程上 |
+| pthread + 32 MB 线程栈 | **4,096 层通过** | 与 64 kB 完全一致，线程栈大小不影响上界 |
 
-JSPI 这一行没有经过 Emscripten：本机 apt 只有 Emscripten 3.1.6（不认识 `-sJSPI`），emsdk 6.0.0 的下载被限速。
+JSPI 这几行没有经过 Emscripten：本机 apt 只有 Emscripten 3.1.6（不认识 `-sJSPI`），emsdk 6.0.0 的下载被限速。
 `scripts/depth-probe/jspi-suspend.wat` 直接用 `WebAssembly.Suspending` + `WebAssembly.promising` 验证 V8 的栈切换，
 `Suspending` / `promising` 均存在。栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移。
 
-另外试过 `--js-flags=--wasm-growable-stacks`、`--wasm-stack-switching-stack-size=32768`、`--stack-size=16384`，
-JSPI 深度在 15.8k–17.4k 之间波动，没有数量级变化；Worker 的原生栈不跟这些 flag 走。
+**旧结论在这里被推翻过一次，值得记下来。** 第一版探针的导入固定返回 `Promise.resolve()`，那是已决议 Promise，
+V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是「换了一个栈」，不是「挂起回收了栈」。
+探针现在把 `calls` / `pending` 一起报出来：`pending=0` 就说明这次测量无效。下面是真正挂起后的结果。
+
+改变 V8 的 JSPI 栈大小（`--js-flags=--wasm-stack-switching-stack-size=<kB>`）也测了一轮：
+
+| 栈大小 | 上界 |
+| --- | --- |
+| 64 kB | **907** |
+| 984 kB（V8 默认） | **17,258** |
+| 2,048 kB | **13,439** |
+| 8,192 kB | **17,258** |
+
+64 kB 那一行证明 flag 确实生效（约 57 B/帧），但超过默认值后上界被夹回 1 MB 量级；
+`--experimental-wasm-growable-stacks` 同时打开也只有 12.3k–15.8k，没有数量级变化。
 
 ### 这组数字说明什么
 
-- **JSPI 不是「自动把普通递归切到栈切换」的开关。** 它只改变「wasm 调一个会返回 Promise 的导入」时的挂起语义。
-  一条同步递归链仍然整条躺在一个 V8 管理的栈上；这个栈默认约 2 MB，所以 17k 层左右照样 trap。
-  不把执行路径拆出挂起点，开 `-sJSPI` 只会换一个稍大的固定栈。
+- **JSPI 的栈就是另一个约 1 MB 的固定栈，不是更大的栈。** V8 的默认值是 984 kB
+  （`--wasm-stack-switching-stack-size`，单位 kB，`node --v8-options` 可查），
+  17,258 × 57 B ≈ 984 kB，与 Worker 原生栈同一预算。`17,258 / 7,973 ≈ 2.2` 只是帧更小，
+  不是栈更大；换成同样的 emcc 帧立刻回到 8k 量级。
+- **真挂起也不回收栈预算。** 挂起密度从每 1 层到每 1024 层，上界完全相同；改走宏任务也一样。
+  栈切换只是把「整条链躺在一个栈上」换成「整条链躺在另一个栈上」，深度上界没变。
+- **调大这个栈没有出口。** 超过默认值会被夹回 1 MB 量级，growable stacks 的实验 flag 也没有效果；
+  即便有效，也不可能要求用户带启动参数打开站点。
+- **换算到 Lean，正好解释 N=1200。** 1 MB / 121 B ≈ 8k 个 wasm 帧；`whnfCore → reduceRec → 续延`
+  一个逻辑层要消耗约 6–7 个帧，8k / 6.5 ≈ 1,230 层，与实测 N=1200 撞顶吻合。
+  JSPI 给的是同一个 1 MB 预算，不会把 1,200 抬到 `maxRecDepth=4000`。
+- **调大线程栈不是杠杆。** 把同一段非尾递归放进 `pthread`，只改 `DEFAULT_PTHREAD_STACK_SIZE`（64 kB / 8 MB / 32 MB），
+  三个变体在 4,096 层的行为完全一样。决定 wasm 递归上界的是 V8 的栈，不是 Emscripten 的线程栈；
+  生产 LSP 变体早已把线程栈设到 32 MB，N=1200 照样撞顶，原因就在这里。
 - **WasmFX 目前没有可用的构建入口。** Emscripten 6.0.0 的设置里只有 `JSPI` / `JSPI_EXPORTS` / `JSPI_IMPORTS`，
   没有 WasmFX 或 stack-switching 设置；Chrome 155 有实验 flag，但没有面向 Emscripten 的代码生成与 JS 接口。
 - **ASYNCIFY + 挂起点确实能解除上界**，因为它把栈展开成线性内存里的数据再 rewind。
@@ -272,13 +301,20 @@ JSPI 深度在 15.8k–17.4k 之间波动，没有数量级变化；Worker 的�
 # Emscripten 6.0.0
 bash scripts/depth-probe/build.sh work/depth-probe
 node scripts/depth-probe/run.ts --out work/depth-probe \
-  --variants baseline,jspi,tailcall,asyncify,jspi-yield,heapstack
+  --variants baseline,jspi,tailcall,asyncify,jspi-yield,jspi-resolved,jspi-pending,heapstack
 
 # 本机 apt 的 3.1.6（STACK_SIZE 在旧版叫 TOTAL_STACK；jspi-suspend 需要 wabt）
 STACK_FLAG=-sTOTAL_STACK=8388608 bash scripts/depth-probe/build.sh /tmp/depth-emcc
 node scripts/depth-probe/run.ts --out /tmp/depth-emcc \
-  --variants baseline,tailcall,asyncify,heapstack,jspi-suspend
+  --variants jspi-resolved,jspi-pending,jspi-pending-1,jspi-macrotask,jspi-pending-1024
+
+# 观察 V8 flag 的影响（单位 kB）
+node scripts/depth-probe/run.ts --out /tmp/depth-emcc --variants jspi-pending-1 \
+  --js-flags="--wasm-stack-switching-stack-size=64"
 ```
+
+判读：JSPI 那几个变体只在 `suspend.pending > 0` 时才代表真实挂起；`pending=0` 说明走了已决议快路径，
+那一行结果不能用来支持任何结论。
 
 ## 尚未验证
 

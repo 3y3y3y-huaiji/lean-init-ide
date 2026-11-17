@@ -6,9 +6,47 @@ const CONFIG = {
   baseline: { fn: '_depth_probe', cap: 1 << 20, expected: (n) => n + 1 },
   jspi: { fn: '_depth_probe', cap: 1 << 20, expected: (n) => n + 1 },
   tailcall: { fn: '_tail_probe', cap: 1 << 22, expected: (n) => n + 1 },
-  asyncify: { fn: '_yield_probe', cap: 1 << 16, expected: (n) => n, async: true },
+  asyncify: { fn: '_yield_probe', cap: 1 << 18, expected: (n) => n, async: true },
   'jspi-yield': { fn: '_yield_probe', cap: 1 << 16, expected: (n) => n },
-  'jspi-suspend': { fn: '_yield_probe', cap: 1 << 16, expected: (n) => n },
+  // 浏览器级 JSPI 两两对照：resolved 走 V8 已决议快路径，pending 才是真挂起。
+  'jspi-resolved': {
+    module: 'jspi-suspend',
+    fn: '_yield_probe',
+    cap: 1 << 20,
+    args: (n) => [n, 64, 0],
+    expected: (n) => n,
+  },
+  'jspi-pending': {
+    module: 'jspi-suspend',
+    fn: '_yield_probe',
+    cap: 1 << 20,
+    args: (n) => [n, 64, 1],
+    expected: (n) => n,
+  },
+  // 每层都挂起：若上界随挂起密度放大，说明切栈确实回收了调用帧。
+  'jspi-pending-1': {
+    module: 'jspi-suspend',
+    fn: '_yield_probe',
+    cap: 1 << 16,
+    args: (n) => [n, 1, 1],
+    expected: (n) => n,
+  },
+  'jspi-pending-1024': {
+    module: 'jspi-suspend',
+    fn: '_yield_probe',
+    cap: 1 << 20,
+    args: (n) => [n, 1024, 1],
+    expected: (n) => n,
+  },
+  // 宏任务挂起：真正让出事件循环，排除「同批微任务里偷偷续跑」的解释。
+  'jspi-macrotask': {
+    module: 'jspi-suspend',
+    fn: '_yield_probe',
+    // 每次挂起都要过宏任务，缩小 cap 以控制耗时；关键是与 17k 这个量级比较。
+    cap: 1 << 15,
+    args: (n) => [n, 64, 2],
+    expected: (n) => n,
+  },
   heapstack: { fn: '_heap_probe', cap: 1 << 20, expected: (n) => n },
   // pthread 变体每个实例会拉起线程池，只取几个固定深度，不做二分。
   'pthread-baseline': {
@@ -23,15 +61,36 @@ const CONFIG = {
     samples: [512, 1200, 2000, 3000],
     expected: (n) => n + 1,
   },
+  // 线程栈大小对照：递归跑在线程池线程上，只改 DEFAULT_PTHREAD_STACK_SIZE。
+  // 栈溢出会 abort 整个 worker，所以用固定样本、逐个变体单独跑。
+  'pthread-stack-64k': {
+    fn: '_pthread_probe',
+    samples: [256, 512, 1024, 2048, 4096],
+    args: (n) => [n, 0],
+    expected: (n) => n + 1,
+  },
+  'pthread-stack-8m': {
+    fn: '_pthread_probe',
+    samples: [256, 512, 1024, 2048, 4096],
+    args: (n) => [n, 0],
+    expected: (n) => n + 1,
+  },
+  'pthread-stack-32m': {
+    fn: '_pthread_probe',
+    samples: [256, 512, 1024, 2048, 4096],
+    args: (n) => [n, 0],
+    expected: (n) => n + 1,
+  },
 };
 
 const factories = new Map();
 
 const load = async (name) => {
   if (!factories.has(name)) {
+    const moduleName = CONFIG[name]?.module ?? name;
     factories.set(
       name,
-      import(`/out/${name}.mjs`).then((mod) => mod.default),
+      import(`/out/${moduleName}.mjs`).then((mod) => mod.default),
     );
   }
   return factories.get(name);
@@ -42,10 +101,13 @@ const attempt = async (name, n) => {
   try {
     const factory = await load(name);
     const instance = await factory({ noInitialRun: true, print: noop, printErr: noop });
+    const args = config.args ? config.args(n) : [n, 1];
     const value = config.async
       ? await instance.ccall('yield_probe', 'number', ['number'], [n], { async: true })
-      : await instance[config.fn](n, 1);
-    return { ok: value === config.expected(n), value };
+      : await instance[config.fn](...args);
+    // stats 只用于证明挂起真的发生了（JSPI 已决议 Promise 会走不切栈的快路径）。
+    const stats = instance.stats ? { ...instance.stats } : null;
+    return { ok: value === config.expected(n), value, stats };
   } catch (error) {
     return { ok: false, error: String(error?.stack ?? error).slice(0, 500) };
   }
@@ -66,7 +128,16 @@ const binarySearch = async (name) => {
       break;
     }
   }
-  if (fail === 0) return { name, maxDepth: ok, capped: true, error: null };
+  if (fail === 0) {
+    const final = ok > 0 ? await attempt(name, ok) : null;
+    return {
+      name,
+      maxDepth: ok,
+      capped: true,
+      error: null,
+      stats: final?.stats ?? null,
+    };
+  }
   while (fail - ok > 1) {
     const mid = Math.floor((ok + fail) / 2);
     const result = await attempt(name, mid);
@@ -76,7 +147,16 @@ const binarySearch = async (name) => {
       lastError = result.error;
     }
   }
-  return { name, maxDepth: ok, firstFail: fail, capped: false, error: lastError };
+  // 终值再跑一次，让 stats 与 maxDepth 对得上。
+  const final = ok > 0 ? await attempt(name, ok) : null;
+  return {
+    name,
+    maxDepth: ok,
+    firstFail: fail,
+    capped: false,
+    error: lastError,
+    stats: final?.stats ?? null,
+  };
 };
 
 const fixedSamples = async (name) => {

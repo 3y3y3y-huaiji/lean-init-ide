@@ -261,9 +261,11 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 - **真挂起也不回收栈预算。** 挂起密度从每 1 层到每 1024 层，上界完全相同；改走宏任务也一样。
   栈切换只是把「整条链躺在一个栈上」换成「整条链躺在另一个栈上」，深度上界没变。
 - **调大这个栈没有出口。** 超过默认值会被夹回 1 MB 量级，growable stacks 的实验 flag 也没有效果；
+  Worker 里的普通 wasm 栈同样不跟 `--js-flags=--stack-size=8192` 走（baseline 仍停在 7,972 层）。
   即便有效，也不可能要求用户带启动参数打开站点。
-- **换算到 Lean，正好解释 N=1200。** 1 MB / 121 B ≈ 8k 个 wasm 帧；`whnfCore → reduceRec → 续延`
-  一个逻辑层要消耗约 6–7 个帧，8k / 6.5 ≈ 1,230 层，与实测 N=1200 撞顶吻合。
+- **换算到 Lean，正好解释 N=1200。** 热点环上每层至少 4 个调用边
+  （`reduceRec → lean_whnf → whnfEasyCases → whnfEasyCases → reduceRec`），且都是大函数，
+  单帧远大于探针里 121 B 的简单帧；1 MB 只够 1,200 层左右，与实测撞顶吻合。
   JSPI 给的是同一个 1 MB 预算，不会把 1,200 抬到 `maxRecDepth=4000`。
 - **调大线程栈不是杠杆。** 把同一段非尾递归放进 `pthread`，只改 `DEFAULT_PTHREAD_STACK_SIZE`（64 kB / 8 MB / 32 MB），
   三个变体在 4,096 层的行为完全一样。决定 wasm 递归上界的是 V8 的栈，不是 Emscripten 的线程栈；
@@ -307,7 +309,13 @@ wasm2wat --enable-all /tmp/WHNF.o -o /tmp/WHNF.wat
 
 源码能直接对上：`whnfImp` 的 `cache useCache e (← whnfImp e'')` 要把递归结果交给 `cache`；
 `reduceRec` 的 `major ← whnf major` 要拿结果继续构造。两处都不是尾位置，编译器没有可压平的对象。
-环上每层约 6–7 个帧，正好是 8k 帧 / 1,200 层。
+按 wat 的调用图，经过 `reduceRec` 的最短环是
+`reduceRec → lean_whnf → whnfEasyCases(whnfImp) → whnfEasyCases(whnfCore) → reduceRec`
+（4 条边）；这几支都是大函数，帧槽远大于探针里的 121 B，1 MB 只够 1,200 层左右。
+
+换优化等级也不是原因：`-O1` 与 `-O2 -fno-inline` 各编一遍，热点环上仍然全是 0 条 `return_call`
+（`lean_whnf` 1,232 / 135 行、`reduceRec` 5,963 / 826 行），说明不是内联把尾位置吃掉了，
+而是源码里本来就没有尾位置。
 
 `@[specialize]` 对照实验：给 `reduceRec`、`reduceQuotRec` 加上 `@[specialize]` 重新生成后，
 `reduceRec` 的 wasm 函数体与原版 **SHA-1 完全相同**（5,585 行），`return_call` 总数仍是 173。

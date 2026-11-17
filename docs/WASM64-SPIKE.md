@@ -223,33 +223,41 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 
 | 配置 | 递归上界 | 说明 |
 | --- | --- | --- |
-| 普通非尾递归 | **7,973** 层 | 约 1 MB Worker 栈，emcc 帧约 121 B |
+| 普通非尾递归 | **7,974** 层 | 约 1 MB Worker 栈，emcc 帧约 121 B |
 | 互递归 + `-mtail-call` | **≥ 4,194,304** | 生成 `return_call`，3 处 |
 | 堆上显式工作栈 | **≥ 1,048,576** | 上限来自探针的 2M 帧数组，不是栈 |
-| ASYNCIFY + 每 64 层 `emscripten_sleep` | **≥ 262,144** | 栈展开到线性内存，继续加深只加内存与耗时 |
-| JSPI + 已决议 Promise | **13,439–17,279** | `suspend=0/209`：一次都没真正挂起 |
+| ASYNCIFY + 每 64 层 `emscripten_sleep` | **24,453** | 真实递归；`ASYNCIFY_DATA` 默认 1 MB，约 40 B/帧 |
+| JSPI + 已决议 Promise | **13,439** | `suspend=0/209`：一次都没真正挂起 |
 | JSPI + 未决 Promise（微任务），每 64 层 | **17,258** | `suspend=269/269` |
 | JSPI + 未决 Promise（微任务），每层 | **17,258** | `suspend=17258/17258`，密度提高 64 倍上界不变 |
 | JSPI + 未决 Promise（宏任务），每 64 层 | **13,439** | `suspend=209/209`，真正让出事件循环 |
-| Emscripten JSPI + 每 64 层 `emscripten_sleep` | **≥ 1,048,576** | emsdk 6.0.0，cap 2^20；见下方胶水层说明 |
-| pthread + 64 kB 线程栈 | **4,096 层通过** | 同一段递归跑在线程池线程上 |
-| pthread + 32 MB 线程栈 | **4,096 层通过** | 与 64 kB 完全一致，线程栈大小不影响上界 |
+| Emscripten JSPI + 每 64 层 `emscripten_sleep` | **15,359** | `-sSTACK_SIZE` 8 MB，emsdk 6.0.0 |
+| Emscripten JSPI，同上但 `-sSTACK_SIZE=1 MB` | **15,359** | 与 8 MB 完全相同：JSPI 栈不来自 wasm 线性栈 |
+| pthread + 64 kB / 8 MB / 32 MB 线程栈 | **≥ 4,096** | 固定样本止步 4,096；探针帧约 16 B，不能反推 Lean |
 
-2026-11-17 在 Actions 上用 emsdk 6.0.0 + HeadlessChrome 157 复测：baseline 7,974，
-tailcall / asyncify / heapstack 以及裸 WAT 的 JSPI 各行都与上表一致。
+2026-11-17 在 Actions（run `44102427140`）上用 emsdk 6.0.0 + HeadlessChrome 157 实测，
+上表就是这一轮的数字；原始输出在 run 的 `depth-probe` artifact 里。
 
 JSPI 这几行没有经过 Emscripten：`scripts/depth-probe/jspi-suspend.wat` 直接用
 `WebAssembly.Suspending` + `WebAssembly.promising` 验证 V8 的栈切换，`Suspending` / `promising` 均存在。
 栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移到「不使用 Emscripten 胶水」的场景。
 
-**Emscripten 胶水路径出现反常结果。** `jspi-yield` 把 `yield-rec.cpp` 编成 `-sJSPI=1`，
-每 64 层 `emscripten_sleep(0)` 一次，cap 提到 2^20 后仍然全部通过（≥1,048,576），
-而裸 WAT 的同类挂起在 17,258 层就撞顶。首轮这个变体在 64 层抛
+**Emscripten JSPI 与裸 WAT 是同一个预算，差异只在帧大小。** `jspi-yield` 把 `yield-rec.cpp`
+编成 `-sJSPI=1`，每 64 层 `emscripten_sleep(0)` 一次，上界 15,359；把 `-sSTACK_SIZE` 从 8 MB
+压到 1 MB 再编一遍（`jspi-yield-1m`），结果**完全相同**。这说明挂起栈是 V8 单独分配的，
+与 wasm 线性栈无关；15,359 与裸 WAT 的 17,258 之差来自 `yield-rec.cpp` 的帧更大（多了局部变量
+与 volatile 写入），不是 Emscripten 把栈换掉了。
+
+首轮这个变体还遇到一个配置坑：挂起时抛
 `SuspendError: trying to suspend without WebAssembly.promising`，原因是 `JSPI_EXPORTS`
 匹配的是 wasm 导出名（默认表里写的是 `main`），必须写 `yield_probe`；写成 C 符号
-`_yield_probe` 不报错，但导出不会被包起来。差异来自胶水层的栈复用还是构建参数（例如
-`-sSTACK_SIZE=8 MB`）参与，尚未定论，因此**不要**把「JSPI 只有 1 MB」直接外推到
-Emscripten 构建。
+`_yield_probe` 不报错，但导出不会被包起来。
+
+**探针自己也会骗人：LLVM 把递归折成了循环。** `rec(n-1)+1` 在 `-O2` 下会被 LLVM 改写成循环
+（`clang -O2 -S` 里 0 条自调用），这时测的是循环迭代而不是栈深。第一版 `yield-rec.cpp` 与
+`pthread-rec.cpp` 都中了这一枪，于是 `asyncify` 一度报出 ≥262,144、`jspi-yield` 一度报出
+≥1,048,576。两个文件补上 `deep-rec.cpp` 那样的 volatile sink 后自调用恢复，数字才回到
+24,453 / 15,359。
 
 **旧结论在这里被推翻过一次，值得记下来。** 第一版探针的导入固定返回 `Promise.resolve()`，那是已决议 Promise，
 V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是「换了一个栈」，不是「挂起回收了栈」。
@@ -271,12 +279,13 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 
 - **裸 WAT 的 JSPI 栈就是另一个约 1 MB 的固定栈，不是更大的栈。** V8 的默认值是 984 kB
   （`--wasm-stack-switching-stack-size`，单位 kB，`node --v8-options` 可查），
-  17,258 × 57 B ≈ 984 kB，与 Worker 原生栈同一预算。`17,258 / 7,973 ≈ 2.2` 只是帧更小，
-  不是栈更大；换成同样的 emcc 帧立刻回到 8k 量级。
+  17,258 × 57 B ≈ 984 kB，与 Worker 原生栈同一预算。`17,258 / 7,974 ≈ 2.2` 只是帧更小，
+  不是栈更大；换成带 sink 的 emcc 帧，上界随帧宽掉到 15,359。
 - **裸 WAT 下真挂起也不回收栈预算。** 挂起密度从每 1 层到每 1024 层，上界完全相同；改走宏任务也一样。
   栈切换只是把「整条链躺在一个栈上」换成「整条链躺在另一个栈上」，深度上界没变。
-- **Emscripten 的 JSPI 胶水路径是另一回事。** 同样的 `emscripten_sleep` 挂起实测能过 1,048,576 层，
-  说明存在一种不受 1 MB 原生栈限制的执行方式；但前提是每 64 层真的挂起一次。
+- **Emscripten 的 JSPI 路径没有额外红利。** `yield-rec.cpp` 在 8 MB 与 1 MB 的 wasm 栈下都是
+  15,359 层，`-sSTACK_SIZE` 完全不参与；JSPI 给的仍是 V8 那个约 1 MB 的挂起栈。
+  15,359 与裸 WAT 的 17,258 只差在每帧大小。而且前提是每 64 层真的挂起一次；
   Lean 的热点环是同步调用，没有这样的挂起点——把 `whnfCore` 拆成可挂起的协程，
   本身就是「续延数据化」的重构，不是换编译开关。
 - **调大这个栈没有出口。** 超过默认值会被夹回 1 MB 量级，growable stacks 的实验 flag 也没有效果；
@@ -285,15 +294,18 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 - **换算到 Lean，正好解释 N=1200。** 热点环上每层至少 4 个调用边
   （`reduceRec → lean_whnf → whnfEasyCases → whnfEasyCases → reduceRec`），且都是大函数，
   单帧远大于探针里 121 B 的简单帧；1 MB 只够 1,200 层左右，与实测撞顶吻合。
-  JSPI 给的是同一个 1 MB 预算（裸 WAT 已证实；Emscripten 胶水路径即便能撑到 1M，
-  Lean 也没有可插入的挂起点），不会把 1,200 抬到 `maxRecDepth=4000`。
-- **调大线程栈不是杠杆。** 把同一段非尾递归放进 `pthread`，只改 `DEFAULT_PTHREAD_STACK_SIZE`（64 kB / 8 MB / 32 MB），
-  三个变体在 4,096 层的行为完全一样。决定 wasm 递归上界的是 V8 的栈，不是 Emscripten 的线程栈；
-  生产 LSP 变体早已把线程栈设到 32 MB，N=1200 照样撞顶，原因就在这里。
+  JSPI 给的是同一个约 1 MB 预算（裸 WAT 与 Emscripten 两条路径都已证实），
+  而且 Lean 没有可插入的挂起点，不会把 1,200 抬到 `maxRecDepth=4000`。
+- **线程栈这组探针没有区分度。** 同一段非尾递归放进 `pthread`，只改
+  `DEFAULT_PTHREAD_STACK_SIZE`（64 kB / 8 MB / 32 MB），三个变体在固定的 4,096 层样本上都通过。
+  C++ 探针的帧只有十几字节，64 kB 就够装 4,096 层；这个规模与 Lean 的大函数帧不在一个量级，
+  所以这组数字只能说明配置生效，不能反推 Lean 的上界，也不再作为「调线程栈无用」的依据。
+  生产 LSP 早已把线程栈设到 32 MB，N=1200 仍撞顶，说明问题在每层帧太贵，不在栈配多大。
 - **WasmFX 目前没有可用的构建入口。** Emscripten 6.0.0 的设置里只有 `JSPI` / `JSPI_EXPORTS` / `JSPI_IMPORTS`，
   没有 WasmFX 或 stack-switching 设置；Chrome 155 有实验 flag，但没有面向 Emscripten 的代码生成与 JS 接口。
-- **ASYNCIFY + 挂起点确实能解除上界**，因为它把栈展开成线性内存里的数据再 rewind。
-  代价是整程序插桩（Lean 规模约 +50% 体积、链接显著变慢，见 Emscripten Issue #26455），
+- **ASYNCIFY + 挂起点只把上界抬到约 3 倍。** 它把栈展开成线性内存里的数据再 rewind，
+  实测 24,453 层就停住——`ASYNCIFY_DATA` 默认 1 MB，约 40 B/帧，展开到一半就放不下。
+  代价还有整程序插桩（Lean 规模约 +50% 体积、链接显著变慢，见 Emscripten Issue #26455），
   而且热点路径必须真的能挂起：Lean 的 elaboration 是同步的，LSP 的异步只到 I/O 边界。
   再加上生产运行时是 `-pthread` 模型，JSPI 文档明确说从不可挂起的栈调挂起导入会直接 trap，
   这不是一个能靠换编译开关落地的方案。
@@ -351,10 +363,10 @@ wasm2wat --enable-all work/WHNF.o -o work/WHNF.wat
 
 ### 下一步的先后顺序
 
-1. 已经排除：裸 WAT 的 JSPI（同 1 MB 预算、挂起不回收）、调大 JSPI 栈 / growable stacks（被夹回 1 MB）、
-   调大 pthread 栈（4,096 层行为不变）、`-mtail-call`（热点环 0 条尾调用）、
-   `@[specialize]`（函数体逐字节相同）。Emscripten JSPI 胶水路径反常（≥1M）待解释，
-   但它不改变「Lean 的同步 elaboration 没有挂起点」这个结论。
+1. 已经排除：裸 WAT 与 Emscripten 两条 JSPI 路径（同为约 1 MB 预算、挂起不回收、与 `-sSTACK_SIZE` 无关）、
+   调大 JSPI 栈 / growable stacks（被夹回 1 MB）、`-mtail-call`（热点环 0 条尾调用）、
+   `@[specialize]`（函数体逐字节相同）、ASYNCIFY（真实递归只有 24,453，且需要可挂起点）。
+   pthread 栈那组因为探针帧太小没有区分度，不构成结论。
 2. 剩下唯一能根治的路径是 **在 Lean 侧把 `whnfCore` 的续延变成数据**（显式工作栈 / 状态机），
    验收条件是 1 MB Worker 栈下 `maxRecDepth=4000` 不 trap。这是重构，不是 patch；
    动手前先在 wasm32 与 wasm64 各跑一次现有课程的全量编译做基线。

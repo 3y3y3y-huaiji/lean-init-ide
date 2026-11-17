@@ -71,10 +71,15 @@ gh run watch
 gh run download <run-id> --name depth-probe
 ```
 
-尾调用审计（下载 Lean 4.36.0-rc2 发行包，约 600 MB）只在手动触发且 `whnf_audit=true` 时运行：
+尾调用审计（下载 Lean 4.36.0-rc2 发行包，约 600 MB）只在手动触发且 `whnf_audit=true` 时运行。
+本地 token 没有 `actions:write` 时 `gh workflow run` 会 403，推一个提交信息里带 `[whnf-audit]`
+的提交即可触发，不用去网页点按钮：
 
 ```bash
 gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth -f whnf_audit=true
+# 或者
+git commit --allow-empty -m "chore(wasm64): 复核 WHNF 尾调用 [whnf-audit]"
+git push origin spike/wasm64-recursion-depth
 ```
 
 本地只跑静态检查：

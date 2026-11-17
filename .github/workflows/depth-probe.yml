@@ -351,7 +351,12 @@ jobs:
       - name: 应用显式工作栈补丁
         run: |
           patch -p1 -d work/lean-src < scripts/patches/lean-whnf-stack.patch
-          grep -c 'whnfCoreGo' work/lean-src/src/Lean/Meta/WHNF.lean
+          # 旧的 Go/Finish 双函数版本已合并成单一状态机；源码里还能搜到它们说明补丁过期。
+          if grep -qE 'whnfCoreGo|whnfCoreFinish' work/lean-src/src/Lean/Meta/WHNF.lean; then
+            echo '补丁仍在用旧的 Go/Finish 双函数，互递归不会被编成尾调用' >&2
+            exit 1
+          fi
+          grep -c 'whnfCoreStep' work/lean-src/src/Lean/Meta/WHNF.lean
 
       - name: 编译补丁后的 WHNF.lean 并生成 wasm 对象
         env:
@@ -366,7 +371,7 @@ jobs:
           wasm2wat --enable-all work/WHNF-stack.o -o work/WHNF-stack.wat
           wc -l work/WHNF-stack.wat
 
-      - name: 断言 whnfCore 不再自调用
+      - name: 断言 whnfCoreStep 不再压原生栈
         run: |
           node --input-type=module - <<'NODE'
           import { readFileSync } from 'node:fs';
@@ -385,20 +390,27 @@ jobs:
             if (current) current.body.push(line);
           }
 
-          const hot = funcs.filter((f) => /whnfCore/i.test(f.name));
+          // 只认状态机本体：`whnfCore` 前缀还会命中一堆内联生成的 ___at___00*_spec__N
+          // 和 matcher 辅助函数，它们不是递归环。
+          const hot = funcs.filter((f) => /whnfCoreStep(_redArg)?$/.test(f.name));
           if (hot.length === 0) {
-            throw new Error('没有找到 whnfCore 函数，符号名可能变了');
+            throw new Error('没有找到 whnfCoreStep 函数，符号名可能变了');
           }
-          const selfCalls = hot.filter((f) =>
-            f.body.some((line) => line.includes(`call $${f.name}`)),
-          );
+          let plainSelf = 0;
+          let tailSelf = 0;
           for (const f of hot) {
             const calls = f.body.filter((line) => line.includes(`call $${f.name}`)).length;
-            console.log(`${f.name}\t${f.body.length} 行\tself_call=${calls}`);
+            const tails = f.body.filter((line) => line.includes(`return_call $${f.name}`)).length;
+            plainSelf += calls;
+            tailSelf += tails;
+            console.log(`${f.name}\t${f.body.length} 行\tcall=${calls}\treturn_call=${tails}`);
           }
-          if (selfCalls.length > 0) {
-            throw new Error(`显式栈版本仍在自调用: ${selfCalls.map((f) => f.name).join(', ')}`);
+          // 自尾调用被 LLVM 编成循环（call=0 / return_call=0 都算消除）；
+          // 只要还有普通 call，每层归约就仍会压 1 MB 原生栈。
+          if (plainSelf > 0) {
+            throw new Error(`显式栈版本仍在普通自调用 ${plainSelf} 处`);
           }
+          console.log(`普通自调用 0 处；return_call ${tailSelf} 处`);
           NODE
 
       - name: 保存实验产物

@@ -1,6 +1,6 @@
 --- a/src/Lean/Meta/WHNF.lean
 +++ b/src/Lean/Meta/WHNF.lean
-@@ -615,78 +615,130 @@
+@@ -615,78 +615,136 @@
    | .letE _ _ _ b nondep => if b.hasLooseBVars || (nondep && !consumeNondep) then e else consumeUnusedLet b consumeNondep
    | _ => e
  
@@ -23,15 +23,24 @@
 +  | app (e : Expr)
 +  | proj (i : Nat) (e : Expr)
 +
-+mutual
-+  /-- 显式工作栈版本的主循环。`reduceRec` / `reduceQuotRec` 的续延改成返回
-+  `Option`，成功后直接尾调用本函数，避免续延闭包里的间接调用把每一层都留在
-+  原生栈上。 -/
-+  private partial def whnfCoreGo (stack : List WhnfFrame) (e : Expr) : MetaM Expr := do
++/-- 机器任务：要么归约一个表达式，要么带着子结果恢复外层帧。 -/
++private inductive WhnfTask where
++  | eval (e : Expr)
++  | resume (r : Expr)
++
++/-- 显式工作栈版本的 `whnfCore`。
++
++`whnfEasyCases` 被内联进来，`reduceRec` / `reduceQuotRec` / `deltaBetaDefinition`
++的续延改成返回 `Option`：成功后再把结果交给同一个函数的 `.resume` 分支。
++这样整个归约环只剩一个自递归函数，尾调用可以被编译成循环，不再依赖
++闭包里的间接调用。 -/
++private partial def whnfCoreStep (stack : List WhnfFrame) (task : WhnfTask) : MetaM Expr := do
++  match task with
++  | .eval e =>
 +    match e with
-+    | .forallE .. | .lam .. | .sort .. | .lit .. => whnfCoreFinish stack e
++    | .forallE .. | .lam .. | .sort .. | .lit .. => whnfCoreStep stack (.resume e)
 +    | .bvar .. => panic! "loose bvar in expression"
-+    | .mdata _ e => whnfCoreGo stack e
++    | .mdata _ e => whnfCoreStep stack (.eval e)
 +    | .fvar fvarId =>
 +      let decl ← fvarId.getDecl
 +      match decl with
@@ -47,7 +56,7 @@
 +        if unfold then
 +          if ctx.trackZetaDelta then
 +            addZetaDeltaFVarId fvarId
-+          whnfCoreGo stack v
++          whnfCoreStep stack (.eval v)
          else
 -          return e
 -      | .app f ..       =>
@@ -69,38 +78,36 @@
 -          go <| f'.betaRev revArgs
 -        else if let some eNew ← whnfDelayedAssigned? f' e then
 -          go eNew
-+          whnfCoreFinish stack e
-+      | _ => whnfCoreFinish stack e
++          whnfCoreStep stack (.resume e)
++      | _ => whnfCoreStep stack (.resume e)
 +    | .mvar mvarId =>
 +      match (← getExprMVarAssignment? mvarId) with
-+      | some v => whnfCoreGo stack v
-+      | none   => whnfCoreFinish stack e
++      | some v => whnfCoreStep stack (.eval v)
++      | none   => whnfCoreStep stack (.resume e)
 +    | .const .. =>
 +      trace[Meta.whnf] e
-+      whnfCoreFinish stack e
++      whnfCoreStep stack (.resume e)
 +    | .letE _ _ v b nondep =>
 +      trace[Meta.whnf] e
 +      let cfg ← getConfig
 +      if cfg.zeta && (!nondep || cfg.zetaHave) then
-+        whnfCoreGo stack <| expandLet b #[v] (zetaHave := cfg.zetaHave)
++        whnfCoreStep stack (.eval (expandLet b #[v] (zetaHave := cfg.zetaHave)))
 +      else if cfg.zetaUnused && !b.hasLooseBVars then
-+        whnfCoreGo stack <| consumeUnusedLet b
++        whnfCoreStep stack (.eval (consumeUnusedLet b))
 +      else
-+        whnfCoreFinish stack e
++        whnfCoreStep stack (.resume e)
 +    | .app .. =>
 +      trace[Meta.whnf] e
-+      whnfCoreGo (.app e :: stack) e.getAppFn
++      whnfCoreStep (.app e :: stack) (.eval e.getAppFn)
 +    | .proj _ i c =>
 +      trace[Meta.whnf] e
 +      match (← getConfig).proj with
-+      | .no => whnfCoreFinish stack e
-+      | .yes => whnfCoreGo (.proj i e :: stack) c
++      | .no => whnfCoreStep stack (.resume e)
++      | .yes => whnfCoreStep (.proj i e :: stack) (.eval c)
 +      -- Remark: If the current transparency setting is `reducible`, we should not increase it to `instances`
-+      | .yesWithDelta => whnfCoreFinish (.proj i e :: stack) (← whnf c)
-+      | .yesWithDeltaI => whnfCoreFinish (.proj i e :: stack) (← whnfAtMostI c)
-+
-+  /-- 子归约结束后恢复外层工作。 -/
-+  private partial def whnfCoreFinish (stack : List WhnfFrame) (r : Expr) : MetaM Expr := do
++      | .yesWithDelta => whnfCoreStep (.proj i e :: stack) (.resume (← whnf c))
++      | .yesWithDeltaI => whnfCoreStep (.proj i e :: stack) (.resume (← whnfAtMostI c))
++  | .resume r =>
 +    match stack with
 +    | [] => return r
 +    | .app e :: stack =>
@@ -119,13 +126,13 @@
 +      -/
 +      if f'.isLambda && (cfg.beta || !f.isLambda) then
 +        let revArgs := e.getAppRevArgs
-+        whnfCoreGo stack <| f'.betaRev revArgs
++        whnfCoreStep stack (.eval (f'.betaRev revArgs))
 +      else if let some eNew ← whnfDelayedAssigned? f' e then
-+        whnfCoreGo stack eNew
++        whnfCoreStep stack (.eval eNew)
 +      else
 +        let e := if f == f' then e else e.updateFn f'
 +        if !cfg.iota then
-+          whnfCoreFinish stack e
++          whnfCoreStep stack (.resume e)
          else
 -          let e := if f == f' then e else e.updateFn f'
 -          unless cfg.iota do return e
@@ -133,32 +140,32 @@
 -          | .reduced eNew => go eNew
 -          | .partialApp   => pure e
 -          | .stuck _      => pure e
-+          | .reduced eNew => whnfCoreGo stack eNew
-+          | .partialApp   => whnfCoreFinish stack e
-+          | .stuck _      => whnfCoreFinish stack e
++          | .reduced eNew => whnfCoreStep stack (.eval eNew)
++          | .partialApp   => whnfCoreStep stack (.resume e)
++          | .stuck _      => whnfCoreStep stack (.resume e)
            | .notMatcher   =>
 -            let .const cname lvls := f'.getAppFn | return e
 -            let some cinfo := (← getEnv).find? cname | return e
-+            let .const cname lvls := f'.getAppFn | whnfCoreFinish stack e
-+            let some cinfo := (← getEnv).find? cname | whnfCoreFinish stack e
++            let .const cname lvls := f'.getAppFn | whnfCoreStep stack (.resume e)
++            let some cinfo := (← getEnv).find? cname | whnfCoreStep stack (.resume e)
              match cinfo with
 -            | .recInfo rec    => reduceRec rec lvls e.getAppArgs (fun _ => return e) (fun e => do recordUnfold cinfo.name; go e)
 -            | .quotInfo rec   => reduceQuotRec rec e.getAppArgs (fun _ => return e) (fun e => do recordUnfold cinfo.name; go e)
 +            | .recInfo rec =>
 +              match (← reduceRec rec lvls e.getAppArgs (fun _ => return none) (fun e => return some e)) with
-+              | some eNew => recordUnfold cinfo.name; whnfCoreGo stack eNew
-+              | none => whnfCoreFinish stack e
++              | some eNew => recordUnfold cinfo.name; whnfCoreStep stack (.eval eNew)
++              | none => whnfCoreStep stack (.resume e)
 +            | .quotInfo rec =>
 +              match (← reduceQuotRec rec e.getAppArgs (fun _ => return none) (fun e => return some e)) with
-+              | some eNew => recordUnfold cinfo.name; whnfCoreGo stack eNew
-+              | none => whnfCoreFinish stack e
++              | some eNew => recordUnfold cinfo.name; whnfCoreStep stack (.eval eNew)
++              | none => whnfCoreStep stack (.resume e)
              | c@(.defnInfo _) => do
                if (← isAuxDef c.name) then
                  recordUnfold c.name
 -                deltaBetaDefinition c lvls e.getAppRevArgs (fun _ => return e) go
 +                match (← deltaBetaDefinition c lvls e.getAppRevArgs (fun _ => return none) (fun e => return some e)) with
-+                | some eNew => whnfCoreGo stack eNew
-+                | none => whnfCoreFinish stack e
++                | some eNew => whnfCoreStep stack (.eval eNew)
++                | none => whnfCoreStep stack (.resume e)
                else
 -                return e
 -            | .axiomInfo val => recordUnfoldAxiom val.name; return e
@@ -175,21 +182,20 @@
 -        -- Remark: If the current transparency setting is `reducible`, we should not increase it to `instances`
 -        | .yesWithDeltaI => k (← whnfAtMostI c)
 -      | _ => unreachable!
-+                whnfCoreFinish stack e
-+            | .axiomInfo val => recordUnfoldAxiom val.name; whnfCoreFinish stack e
-+            | _ => whnfCoreFinish stack e
++                whnfCoreStep stack (.resume e)
++            | .axiomInfo val => recordUnfoldAxiom val.name; whnfCoreStep stack (.resume e)
++            | _ => whnfCoreStep stack (.resume e)
 +    | .proj i e :: stack =>
 +      match (← projectCore? r i) with
-+      | some eNew => whnfCoreGo stack eNew
-+      | none => whnfCoreFinish stack e
-+end
++      | some eNew => whnfCoreStep stack (.eval eNew)
++      | none => whnfCoreStep stack (.resume e)
 +
 +/--
 +Apply beta-reduction, zeta-reduction (i.e., unfold let local-decls), iota-reduction,
 +expand let-expressions, expand assigned meta-variables, unfold aux declarations.
 +-/
 +partial def whnfCore (e : Expr) : MetaM Expr :=
-+  whnfCoreGo [] e
++  whnfCoreStep [] (.eval e)
  
  /--
    Recall that `_sunfold` auxiliary definitions contains the markers: `markSmartUnfoldingMatch` (*) and `markSmartUnfoldingMatchAlt` (**).

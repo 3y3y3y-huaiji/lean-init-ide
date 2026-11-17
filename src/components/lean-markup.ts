@@ -188,11 +188,20 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
   </div>
 `;
 
+export type LeanMarkupOptions = {
+  /**
+   * 挑战详情页自己渲染题目标题，这里关掉面板自带的 H1 区，
+   * 只保留状态、启动与库/面板菜单，避免一页出现两个 H1。
+   */
+  heading?: boolean;
+};
+
 export const renderLeanMarkup = (
   locale: Locale,
   variant: LeanPanelVariant,
   t: Messages['playground'],
   lessonSlug?: string,
+  options: LeanMarkupOptions = {},
 ) => {
   const compact = variant === 'compact';
   const status = `<span class="${pillClass}" data-role="status">${t.statusIdle}</span>`;
@@ -254,9 +263,12 @@ export const renderLeanMarkup = (
     </details>`;
 
   if (!compact) {
+    const heading = options.heading !== false;
     return `
       <section data-ssr-markup="full" class="flex min-h-[calc(100svh-61px)] flex-col max-[900px]:min-h-0">
-        <div
+        ${
+          heading
+            ? `<div
           class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start max-[900px]:gap-3"
         >
           <div class="min-w-0">
@@ -265,7 +277,9 @@ export const renderLeanMarkup = (
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
-        </div>
+        </div>`
+            : `<div class="flex flex-wrap items-center justify-end gap-2 border-b border-line gutter-x py-2">${librariesMenu()}${panelsMenu(false)}${status}${start}</div>`
+        }
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">
           ${

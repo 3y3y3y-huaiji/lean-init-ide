@@ -40,6 +40,17 @@ every possible input at once, and the compiler stops you with a red line the mom
 | Math & verification | Readers with mathematical intuition who want to translate it into Lean | 13 |
 | Engineering | Backend, systems and security engineers verifying real data structures and invariants | 5 |
 
+## Math challenges
+
+If you would rather start from a classic puzzle than lesson one:
+
+- `/zh/challenges` and `/en/challenges` sit beside the courses. Every challenge has its own shareable
+  URL at `/<lang>/challenges/<slug>` and uses the same runtime and Service Worker cache.
+- Each page keeps a live Goal panel plus one-click `rfl` / `intro` / `rw` / `simp` / `omega` tactic
+  buttons. The starter code only depends on Init.
+- Prefer your own editor? Open `/<lang>/playground?challenge=<slug>`; an existing local draft is never
+  overwritten silently.
+
 ## Lessons
 
 ### Getting started (9)

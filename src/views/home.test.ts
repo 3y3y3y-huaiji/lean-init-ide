@@ -28,7 +28,16 @@ describe('首页渲染', () => {
     for (const locale of ['zh', 'en'] as const) {
       const html = renderHome(locale);
       const expected = messagesFor(locale).home.features.length;
-      expect(html.match(/<article/g)?.length, locale).toBe(expected + 4);
+      expect(html.match(/<article/g)?.length, locale).toBe(expected + 5);
+    }
+  });
+
+  it('趣味数学挑战入口与系统课程并列分流', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      const html = renderHome(locale);
+      expect(html).toContain(`href="/${locale}/challenges"`);
+      expect(html).toContain(messagesFor(locale).home.challengesTitle);
+      expect(html).toContain(messagesFor(locale).home.challengesCta);
     }
   });
 

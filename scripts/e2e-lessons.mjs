@@ -5,7 +5,11 @@
  *
  * 依赖 scripts/local-gateway.mjs 已在 LEAN_GATEWAY_PORT（默认 4174）上服务 dist，
  * 与 e2e-lean.mjs 共用同一个网关和浏览器通道；CI 里两个脚本跑在同一个 job。
- * 新增或删除课程时同步下面的 SLUGS（与 src/i18n/zh.ts 保持一致）。
+ * 新增或删除课程时同步下面的 SLUGS（与 src/i18n/zh.ts 保持一致）；
+ * 新增或删除挑战题时同步 CHALLENGE_SLUGS（与 src/challenges.ts 保持一致）。
+ *
+ * 挑战题不只看骨架能否编译：脚本会展开「参考解法」并载入编辑器，
+ * 只有 Lean 对参考解法给出零 error 级诊断、run-ok 重新出现才算通过。
  *
  * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间。工程课会加载
  * Std / Batteries 扩展包，CI 用 LEAN_E2E_WORKERS=1 避免 runner 内存不足。
@@ -50,7 +54,33 @@ const SLUGS = [
   'eng-state-machine',
 ];
 
+const CHALLENGE_SLUGS = [
+  'even-plus-even',
+  'odd-plus-odd',
+  'even-plus-odd',
+  'add-comm',
+  'not-even-and-odd',
+  'double-induction',
+];
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 等 Lean 就绪。低内存设备（CI 容器常被判定为 low）不会自动启动，这里模拟一次
+ * 「启动 Lean」点击；正常档位 400ms 后会自动开始，先等一拍再判断，避免把启动点成停止。
+ */
+const ensureLeanReady = async (page) => {
+  await page.waitForSelector('[data-role="status"]', { timeout: 30_000 });
+  await sleep(1200);
+  const state = await page.evaluate(
+    () => globalThis.document.querySelector('[data-role="status"]')?.dataset.state,
+  );
+  if (state === 'idle') {
+    // 课程页的面板是 sr-only，普通 click 会被正文遮挡；直接派发事件等价于真实点击。
+    await page.locator('[data-role="start"]').first().dispatchEvent('click');
+  }
+  await page.waitForSelector('[data-role="status"][data-state="ready"]', { timeout: 240_000 });
+};
 
 const waitForGateway = async () => {
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -82,7 +112,6 @@ const main = async () => {
     const startedAt = Date.now();
     const prefix = `[w${worker}]`;
     await page.goto(`${origin}/zh/learn/${slug}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('[data-role="status"][data-state="ready"]', { timeout: 240_000 });
 
     const count = await page.locator('button[data-run-index]').count();
     if (count === 0) {
@@ -90,8 +119,28 @@ const main = async () => {
       return;
     }
 
+    // 低内存档下课程页不会自动装配编辑器（sr-only runner 也没有 SSR 标记），
+    // 点第一块代码的「运行」按需加载面板——这同时是真实用户路径。
+    const bootstrapped = (await page.locator('[data-role="status"]').count()) === 0;
+    if (bootstrapped) {
+      // bindLesson 是异步装配的，早到的点击可能丢；以输出块出现为准重试几次。
+      const runButton = page.locator('button[data-run-index]').first();
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await runButton.dispatchEvent('click');
+        const started = await page.evaluate(() => {
+          const output = globalThis.document.querySelector('[data-output="0"]');
+          return Boolean(output && !output.hidden);
+        });
+        if (started) break;
+        await sleep(250);
+      }
+    }
+    await ensureLeanReady(page);
+
     for (let index = 0; index < count; index += 1) {
-      await page.locator('button[data-run-index]').nth(index).click();
+      if (!(bootstrapped && index === 0)) {
+        await page.locator('button[data-run-index]').nth(index).click();
+      }
       await page.waitForFunction(
         (idx) => {
           const el = document.querySelector('[data-output="' + idx + '"]');
@@ -136,6 +185,39 @@ const main = async () => {
     );
   };
 
+  const runChallenge = async (page, slug, worker) => {
+    const startedAt = Date.now();
+    const prefix = `[w${worker}]`;
+    await page.goto(`${origin}/zh/challenges/${slug}`, { waitUntil: 'domcontentloaded' });
+    await ensureLeanReady(page);
+
+    const solution = page.locator('details[data-role="solution"]');
+    if ((await solution.count()) === 0) {
+      failures.push(`challenge/${slug}: 没有参考解法面板`);
+      return;
+    }
+    await solution.locator('summary').click();
+    await solution.locator('[data-role="load-solution"]').click();
+    await page.waitForSelector('[data-role="challenge-panel"][data-mode="solution"]', {
+      timeout: 30_000,
+    });
+    // setCode 会先清掉旧的 run-ok；等它重新出现，说明参考解法的诊断已经结算且零 error。
+    await page
+      .waitForSelector('[data-role="run-ok"][hidden]', { timeout: 10_000 })
+      .catch(() => undefined);
+    await page.waitForSelector('[data-role="run-ok"]:not([hidden])', { timeout: 120_000 });
+    await sleep(200);
+
+    const errors = await page.locator('[data-role="diagnostics"] .text-err').allTextContents();
+    if (errors.length > 0) {
+      failures.push(`challenge/${slug} 参考解法：${errors.map((text) => text.trim()).join(' | ')}`);
+    }
+
+    console.log(
+      `ok   ${prefix} challenge/${slug}（${((Date.now() - startedAt) / 1000).toFixed(1)}s）`,
+    );
+  };
+
   try {
     await Promise.all(
       pages.map(async (page, workerIndex) => {
@@ -146,6 +228,17 @@ const main = async () => {
           } catch (error) {
             failures.push(`${slug}: ${error.message ?? error}`);
             console.error(`fail [w${workerIndex + 1}] ${slug}: ${error.message ?? error}`);
+          }
+        }
+        for (let index = workerIndex; index < CHALLENGE_SLUGS.length; index += workers) {
+          const slug = CHALLENGE_SLUGS[index];
+          try {
+            await runChallenge(page, slug, workerIndex + 1);
+          } catch (error) {
+            failures.push(`challenge/${slug}: ${error.message ?? error}`);
+            console.error(
+              `fail [w${workerIndex + 1}] challenge/${slug}: ${error.message ?? error}`,
+            );
           }
         }
       }),
@@ -159,7 +252,9 @@ const main = async () => {
     for (const failure of failures) console.error(`  - ${failure}`);
     process.exit(1);
   }
-  console.log(`课程代码块全部通过：${SLUGS.length} 节，${workers} 路并行`);
+  console.log(
+    `课程与挑战全部通过：${SLUGS.length} 节课程，${CHALLENGE_SLUGS.length} 道挑战，${workers} 路并行`,
+  );
 };
 
 main().catch((error) => {

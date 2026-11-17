@@ -1,4 +1,5 @@
 import { buttonClass } from './components/ui';
+import { challengeBySlug, CHALLENGES } from './challenges';
 import { messagesFor, type Locale } from './i18n';
 import type { Route } from './router';
 
@@ -27,6 +28,12 @@ export const pageTitle = (route: Route): string => {
       return `${t.privacy.title} · Lean Init IDE`;
     case 'reference':
       return `${t.reference.title} · Lean Init IDE`;
+    case 'challenges':
+      return `${t.challenges.title} · Lean Init IDE`;
+    case 'challenge': {
+      const challenge = challengeBySlug(route.slug) ?? CHALLENGES[0]!;
+      return `${challenge.title[route.locale]} · Lean Init IDE`;
+    }
     case 'notFound':
       return `${t.notFound.title} · Lean Init IDE`;
     default:
@@ -48,6 +55,12 @@ export const pageDescription = (route: Route): string => {
       return t.privacy.intro;
     case 'reference':
       return t.reference.lead;
+    case 'challenges':
+      return t.challenges.lead;
+    case 'challenge': {
+      const challenge = challengeBySlug(route.slug) ?? CHALLENGES[0]!;
+      return challenge.summary[route.locale];
+    }
     default:
       return t.home.lead;
   }

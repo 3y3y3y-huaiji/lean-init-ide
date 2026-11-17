@@ -38,6 +38,8 @@ export type Messages = {
     github: string;
     /** 策略与符号速查页。 */
     reference: string;
+    /** 面向大众数学爱好者的趣味挑战区。 */
+    challenges: string;
   };
   theme: {
     label: string;
@@ -82,6 +84,35 @@ export type Messages = {
     /** 两条学习路径的标题。 */
     pathsTitle: string;
     pathMeta: (count: number) => string;
+    /** 首页与系统课程并列的趣味挑战入口。 */
+    challengesTitle: string;
+    challengesBody: string;
+    challengesCta: string;
+  };
+  challenges: {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    cardCta: string;
+    /** 详情页里包裹 Lean 编辑器的标题，避免与题目本身重复。 */
+    editorTitle: string;
+    detail: {
+      back: string;
+      /** Goal 面板旁的通俗进度：还剩几个待证目标。 */
+      goalsRemaining: (count: number) => string;
+      goalsNone: string;
+      tacticsTitle: string;
+      tacticsHint: string;
+      copyLink: string;
+      copyLinkDone: string;
+      copyLinkFailed: string;
+      hintLabel: string;
+      solutionTitle: string;
+      solutionHint: string;
+      loadSolution: string;
+      openInPlayground: string;
+      starterNote: string;
+    };
   };
   lesson: {
     eyebrow: string;
@@ -144,6 +175,13 @@ export type Messages = {
     /** 反斜杠缩写候选的说明。 */
     abbreviationDetail: string;
     backToLesson: string;
+    /** Playground 通过 ?challenge= 载入挑战题时的题面与草稿提示。 */
+    challengeNoticeTitle: string;
+    challengeNoticeBody: string;
+    challengeNoticeLoad: string;
+    challengeNoticeKeep: string;
+    challengeNoticeKept: string;
+    challengeLoaded: string;
     resetCode: string;
     /** 第一次点击重置后按钮变成的确认态。 */
     resetConfirmAction: string;

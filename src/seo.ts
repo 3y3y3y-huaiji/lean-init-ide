@@ -61,17 +61,21 @@ const VIEW_SOURCE: Record<Route['page'], string | null> = {
   playground: 'src/views/playground.ts',
   reference: 'src/views/reference.ts',
   privacy: 'src/views/privacy.ts',
+  challenges: 'src/views/challenge.ts',
+  challenge: 'src/views/challenge.ts',
   // 404 不进 sitemap，没有对应页面源文件。
   notFound: null,
 };
 
 /**
  * 路由对应的源文件，用于 git log 取真实最后修改日期。
- * 课程正文在语言包里，所以中英文课程各自跟随 i18n/{locale}.ts 的提交时间。
+ * 课程正文在语言包里，所以中英文课程各自跟随 i18n/{locale}.ts 的提交时间；
+ * 挑战题的双语正文在 src/challenges.ts，单题页额外跟随这份数据源。
  */
 export const routeSourceFiles = (route: Route): string[] => {
   const files = [`src/i18n/${route.locale}.ts`];
   const view = VIEW_SOURCE[route.page];
   if (view) files.push(view);
+  if (route.page === 'challenge') files.push('src/challenges.ts');
   return files;
 };

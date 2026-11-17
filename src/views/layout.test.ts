@@ -22,17 +22,24 @@ describe('页面骨架渲染', () => {
     setPath('/zh/learn/first-proof');
   });
 
-  it('导航渲染四项并高亮当前页', () => {
+  it('导航渲染五项并高亮当前页', () => {
     const t = messagesFor('zh');
     const html = renderLayout('zh', 'lesson', '');
 
     expect(html).toContain(t.nav.home);
     expect(html).toContain(t.nav.lesson);
+    expect(html).toContain(t.nav.challenges);
     expect(html).toContain(t.nav.playground);
     expect(html).toContain(t.nav.reference);
     expect(html).toContain(`href="/zh/learn/what-is-lean"`);
+    expect(html).toContain('href="/zh/challenges"');
     expect(html).toContain('href="/zh/reference"');
     expect(html).toContain('bg-accent-soft');
+  });
+
+  it('挑战详情页让导航里的挑战入口保持高亮', () => {
+    const html = renderLayout('zh', 'challenge', '');
+    expect(html).toMatch(/bg-accent-soft[^>]*href="\/zh\/challenges"/);
   });
 
   it('语言切换保留当前路径的其余部分', () => {

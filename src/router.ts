@@ -1,6 +1,15 @@
+import { CHALLENGES } from './challenges';
 import { isLocale, type Locale } from './i18n';
 
-export type Page = 'home' | 'lesson' | 'playground' | 'privacy' | 'reference' | 'notFound';
+export type Page =
+  | 'home'
+  | 'lesson'
+  | 'playground'
+  | 'privacy'
+  | 'reference'
+  | 'challenges'
+  | 'challenge'
+  | 'notFound';
 
 export type Route = {
   page: Page;
@@ -34,6 +43,11 @@ export const resolveRoute = (pathname: string, fallbackLocale: Locale): RouteRes
   if (rest[0] === 'reference')
     return { kind: 'route', route: { page: 'reference', locale: first } };
   if (rest[0] === 'privacy') return { kind: 'route', route: { page: 'privacy', locale: first } };
+  if (rest[0] === 'challenges') {
+    // 挑战区是课程之外的第二条入口，索引页与单题页共用 /challenges 前缀。
+    if (!rest[1]) return { kind: 'route', route: { page: 'challenges', locale: first } };
+    return { kind: 'route', route: { page: 'challenge', locale: first, slug: rest[1] } };
+  }
   if (rest[0] === 'learn') {
     // 目录页没有独立形态，直接落到第一节。
     if (!rest[1]) return { kind: 'redirect', path: `/${first}/learn/${FIRST_LESSON_SLUG}` };
@@ -52,6 +66,10 @@ export const canonicalRoutePath = (route: Route): string => {
       return `/${route.locale}/reference`;
     case 'privacy':
       return `/${route.locale}/privacy`;
+    case 'challenges':
+      return `/${route.locale}/challenges`;
+    case 'challenge':
+      return `/${route.locale}/challenges/${route.slug ?? CHALLENGES[0]!.slug}`;
     default:
       return `/${route.locale}/`;
   }

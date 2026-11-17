@@ -4,6 +4,8 @@ coverage/
 .vite/
 .wrangler/
 public/wasm-lean4/
+# 本地探针与 Lean 构建产物
+/work/
 # 由 src/sw.ts 编译生成
 public/sw.js
 *.log

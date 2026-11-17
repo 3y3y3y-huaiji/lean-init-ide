@@ -213,6 +213,73 @@ oleans 的 githash 检查能过（运行时确实是新版），但前端还是�
 CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -c return_call`，数到 0 直接失败。
 `-fwasm-exceptions` 会影响覆盖度——带 catch/cleanup 的函数不能做尾调用，所以 `return_call` 只出现在没有 landing pad 的函数里，数量比函数总数少是正常的。
 
+## 递归深度探针（2026-11-17）
+
+在动 Lean 构建之前，先用 `scripts/depth-probe/` 的十几行 C++ 把「浏览器到底能撑多深」测出来。
+全部在 Dedicated Worker 里跑（与生产 Lean LSP 同环境），Chrome for Testing 155.0.8059.39，Linux x64，headless，
+启动参数 `--enable-experimental-webassembly-features`。
+
+| 配置 | 原生栈上的递归上界 | 说明 |
+| --- | --- | --- |
+| 普通非尾递归 | **7,973** 层 | 约 1 MB Worker 栈，帧约 128 B |
+| 互递归 + `-mtail-call` | **≥ 4,194,304** | 生成 `return_call`，3 处 |
+| 堆上显式工作栈 | **≥ 1,048,576** | 上限来自探针的 2M 帧数组，不是栈 |
+| ASYNCIFY + 每 64 层 `emscripten_sleep` | **≥ 65,536** | 栈展开到线性内存，继续加深只会更慢 |
+| 浏览器级 JSPI + 每 64 层挂起 | **17,279** | 仍然有界；约普通栈的 2.17 倍 |
+
+JSPI 这一行没有经过 Emscripten：本机 apt 只有 Emscripten 3.1.6（不认识 `-sJSPI`），emsdk 6.0.0 的下载被限速。
+`scripts/depth-probe/jspi-suspend.wat` 直接用 `WebAssembly.Suspending` + `WebAssembly.promising` 验证 V8 的栈切换，
+`Suspending` / `promising` 均存在。栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移。
+
+另外试过 `--js-flags=--wasm-growable-stacks`、`--wasm-stack-switching-stack-size=32768`、`--stack-size=16384`，
+JSPI 深度在 15.8k–17.4k 之间波动，没有数量级变化；Worker 的原生栈不跟这些 flag 走。
+
+### 这组数字说明什么
+
+- **JSPI 不是「自动把普通递归切到栈切换」的开关。** 它只改变「wasm 调一个会返回 Promise 的导入」时的挂起语义。
+  一条同步递归链仍然整条躺在一个 V8 管理的栈上；这个栈默认约 2 MB，所以 17k 层左右照样 trap。
+  不把执行路径拆出挂起点，开 `-sJSPI` 只会换一个稍大的固定栈。
+- **WasmFX 目前没有可用的构建入口。** Emscripten 6.0.0 的设置里只有 `JSPI` / `JSPI_EXPORTS` / `JSPI_IMPORTS`，
+  没有 WasmFX 或 stack-switching 设置；Chrome 155 有实验 flag，但没有面向 Emscripten 的代码生成与 JS 接口。
+- **ASYNCIFY + 挂起点确实能解除上界**，因为它把栈展开成线性内存里的数据再 rewind。
+  代价是整程序插桩（Lean 规模约 +50% 体积、链接显著变慢，见 Emscripten Issue #26455），
+  而且热点路径必须真的能挂起：Lean 的 elaboration 是同步的，LSP 的异步只到 I/O 边界。
+  再加上生产运行时是 `-pthread` 模型，JSPI 文档明确说从不可挂起的栈调挂起导入会直接 trap，
+  这不是一个能靠换编译开关落地的方案。
+- **尾调用只能压平真正的尾位置。** `whnfCore` 的续延是函数参数，C 降低后可能经过 `lean_apply_*`
+  或间接调用，不能保证还是编译器能识别的 `return`；这也解释了为什么只加 `-mtail-call`
+  并没有改变 N=1200 的现象。探针里的互递归能到 4M，是因为它被编译成了直接 `return_call`。
+  这一点必须用产物反汇编确认，不能只看 Lean 源码的尾位置。
+- **堆上工作栈是唯一不依赖浏览器 flag 的路径。** 探针把「结果还要参与外层计算」的续延放进显式数组，
+  原生栈深度恒定为 1。对 Lean 4.36 来说，`src/Lean/Meta/WHNF.lean` 的 `whnfCore` 已经是 Lean 层的 CPS：
+  `whnfEasyCases e fun e => ...`、`reduceRec ... (fun e => go e)`，以及非尾的 `let f' ← go f`。
+  要彻底解决，需要把这些续延变成数据（显式栈 / 状态机），这是一次真正的重构，不是一行 patch。
+
+### 下一步的先后顺序
+
+1. **先做便宜的审计**：在已开启 `-mtail-call` 的 wasm64 产物上 `wasm-dis lean.wasm | grep return_call`，
+   确认 `whnfCore` 热点链里到底有没有尾调用；不要只看 Lean 源码的尾位置。
+2. 如果续延仍是间接调用，先试一个单点改动：给 `reduceRec` / `reduceQuotRec` 加 `@[specialize]`
+   （`whnfEasyCases` 已经是 `@[specialize]`），让 `successK` 在调用点具体化，再看 `return_call` 数量与 N=1200 表现。
+   代价是代码体积和编译时间，不改变语义。
+3. 如果续延链能改成真正的尾调用，这是最小改动；改完仍用本探针同款 Worker 环境测 N=1200 / 4000。
+4. 如果不行，再在 Lean 仓库里做 `whnfCore` 的显式续延栈原型；验收条件是 1 MB Worker 栈下 `maxRecDepth=4000` 不 trap。
+5. 以上任一条通过之前，不要把 JSPI / ASYNCIFY 合进 wasm32 或 wasm64 运行时。
+
+复现：
+
+```bash
+# Emscripten 6.0.0
+bash scripts/depth-probe/build.sh work/depth-probe
+node scripts/depth-probe/run.ts --out work/depth-probe \
+  --variants baseline,jspi,tailcall,asyncify,jspi-yield,heapstack
+
+# 本机 apt 的 3.1.6（STACK_SIZE 在旧版叫 TOTAL_STACK；jspi-suspend 需要 wabt）
+STACK_FLAG=-sTOTAL_STACK=8388608 bash scripts/depth-probe/build.sh /tmp/depth-emcc
+node scripts/depth-probe/run.ts --out /tmp/depth-emcc \
+  --variants baseline,tailcall,asyncify,heapstack,jspi-suspend
+```
+
 ## 尚未验证
 
 - 浏览器内 LSP：浏览器侧目前只验证了 CLI 编译（`--mode=version|compile`），`--worker` 诊断链路已在 Node `worker_threads` 跑通 `Init` 与 `Mathlib.Tactic.Spread`，尚未接入前端 Monaco + 浏览器 Worker 联调

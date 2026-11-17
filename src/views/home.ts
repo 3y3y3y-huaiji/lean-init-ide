@@ -16,6 +16,7 @@ const computeHomeState = (
 
   const introLessons = lessonMsgs.lessons.filter((lesson) => (lesson.track ?? 'intro') === 'intro');
   const mathLessons = lessonMsgs.lessons.filter((lesson) => lesson.track === 'math');
+  const engLessons = lessonMsgs.lessons.filter((lesson) => lesson.track === 'eng');
   const introTarget =
     firstUncompletedLesson(
       introLessons.map((lesson) => lesson.slug),
@@ -28,8 +29,26 @@ const computeHomeState = (
           completed,
         )
       : undefined;
+  const engTarget =
+    engLessons.length > 0
+      ? firstUncompletedLesson(
+          engLessons.map((lesson) => lesson.slug),
+          completed,
+        )
+      : undefined;
 
-  return { t, lessonMsgs, target, cta, introLessons, mathLessons, introTarget, mathTarget };
+  return {
+    t,
+    lessonMsgs,
+    target,
+    cta,
+    introLessons,
+    mathLessons,
+    engLessons,
+    introTarget,
+    mathTarget,
+    engTarget,
+  };
 };
 
 export const renderHome = (
@@ -37,10 +56,24 @@ export const renderHome = (
   visited: ReadonlySet<string> = new Set(),
   completed: ReadonlySet<string> = new Set(),
 ): string => {
-  const { t, lessonMsgs, target, cta, introLessons, mathLessons, introTarget, mathTarget } =
-    computeHomeState(locale, visited, completed);
+  const {
+    t,
+    lessonMsgs,
+    target,
+    cta,
+    introLessons,
+    mathLessons,
+    engLessons,
+    introTarget,
+    mathTarget,
+    engTarget,
+  } = computeHomeState(locale, visited, completed);
 
-  const pathCard = (track: 'intro' | 'math', lessons: typeof introLessons, href: string) => `
+  const pathCard = (
+    track: 'intro' | 'math' | 'eng',
+    lessons: typeof introLessons,
+    href: string,
+  ) => `
     <article class="rounded-2xl border border-line bg-panel p-6">
       <h3 class="mt-0 mb-2 text-[17px] font-bold">${lessonMsgs.tracks[track].title}</h3>
       <p class="mt-0 mb-3 text-sm text-muted">${lessonMsgs.tracks[track].lead}</p>
@@ -62,7 +95,8 @@ export const renderHome = (
     <section class="max-w-[760px]">
       <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
       <h1 class="mt-0 mb-4 text-[clamp(32px,5.4vw,52px)] tracking-[-0.02em]">${t.title}</h1>
-      <p class="mt-0 mb-6.5 max-w-[640px] text-[clamp(15px,1.6vw,18px)] text-muted">${t.lead}</p>
+      <p class="mt-0 mb-3 max-w-[640px] text-[clamp(15px,1.6vw,18px)] text-muted">${t.lead}</p>
+      <p class="mt-0 mb-6.5 max-w-[640px] text-sm leading-relaxed text-muted">${t.heroNote}</p>
       <div class="flex flex-wrap gap-3">
         <a class="${buttonClass}" data-home-cta="primary" href="/${locale}/learn/${target}">${cta}</a>
         <a class="${ghostButtonLgClass}" href="/${locale}/playground">${t.ctaSecondary}</a>
@@ -70,16 +104,17 @@ export const renderHome = (
     </section>
 
     <section class="mt-[clamp(40px,6vw,72px)]">
-      <h2 class="mt-0 mb-4.5 text-sm uppercase tracking-[0.08em] text-muted">${t.featuresTitle}</h2>
-      <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3.5">${features}</div>
-    </section>
-
-    <section class="mt-[clamp(40px,6vw,72px)]">
       <h2 class="mt-0 mb-4.5 text-sm uppercase tracking-[0.08em] text-muted">${t.pathsTitle}</h2>
       <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5">
         ${pathCard('intro', introLessons, introTarget)}
         ${mathTarget ? pathCard('math', mathLessons, mathTarget) : ''}
+        ${engTarget ? pathCard('eng', engLessons, engTarget) : ''}
       </div>
+    </section>
+
+    <section class="mt-[clamp(40px,6vw,72px)]">
+      <h2 class="mt-0 mb-4.5 text-sm uppercase tracking-[0.08em] text-muted">${t.featuresTitle}</h2>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3.5">${features}</div>
     </section>
 
     <section class="mt-[clamp(40px,6vw,72px)]">
@@ -98,7 +133,11 @@ export const hydrateHome = (
   visited: ReadonlySet<string> = new Set(),
   completed: ReadonlySet<string> = new Set(),
 ): void => {
-  const { cta, target, introTarget, mathTarget } = computeHomeState(locale, visited, completed);
+  const { cta, target, introTarget, mathTarget, engTarget } = computeHomeState(
+    locale,
+    visited,
+    completed,
+  );
   const primary = root.querySelector<HTMLAnchorElement>('[data-home-cta="primary"]');
   if (primary) {
     primary.href = `/${locale}/learn/${target}`;
@@ -108,4 +147,6 @@ export const hydrateHome = (
   if (intro) intro.href = `/${locale}/learn/${introTarget}`;
   const math = root.querySelector<HTMLAnchorElement>('[data-home-cta="math"]');
   if (math && mathTarget) math.href = `/${locale}/learn/${mathTarget}`;
+  const eng = root.querySelector<HTMLAnchorElement>('[data-home-cta="eng"]');
+  if (eng && engTarget) eng.href = `/${locale}/learn/${engTarget}`;
 };

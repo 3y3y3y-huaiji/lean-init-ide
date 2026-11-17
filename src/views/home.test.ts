@@ -28,7 +28,7 @@ describe('首页渲染', () => {
     for (const locale of ['zh', 'en'] as const) {
       const html = renderHome(locale);
       const expected = messagesFor(locale).home.features.length;
-      expect(html.match(/<article/g)?.length, locale).toBe(expected + 3);
+      expect(html.match(/<article/g)?.length, locale).toBe(expected + 4);
     }
   });
 
@@ -40,6 +40,18 @@ describe('首页渲染', () => {
       );
       expect(html).toContain(messagesFor(locale).lesson.tracks.math.title);
       expect(html).toContain(`href="/${locale}/learn/${mathLessons[0]!.slug}"`);
+    }
+  });
+
+  it('工程实战路径入口指向第一节工程课', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      const html = renderHome(locale);
+      const engLessons = messagesFor(locale).lesson.lessons.filter(
+        (lesson) => lesson.track === 'eng',
+      );
+      expect(engLessons.length, locale).toBe(5);
+      expect(html).toContain(messagesFor(locale).lesson.tracks.eng.title);
+      expect(html).toContain(`href="/${locale}/learn/${engLessons[0]!.slug}"`);
     }
   });
 

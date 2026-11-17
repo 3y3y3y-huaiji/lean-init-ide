@@ -8,8 +8,8 @@ export type LessonBlock =
   | { kind: 'details'; summary: string; text: string }
   | { kind: 'note'; text: string; tone?: 'info' | 'warn' };
 
-/** 课程路径：入门课与数学/验证课分开组织，但共用同一个路由。 */
-export type LessonTrack = 'intro' | 'math';
+/** 课程路径：入门、数学与工程实战分开组织，但共用同一个路由。 */
+export type LessonTrack = 'intro' | 'math' | 'eng';
 
 /** 一节课程。slug 同时是路由片段与目录锚点。 */
 export type LessonPage = {
@@ -66,6 +66,8 @@ export type Messages = {
     eyebrow: string;
     title: string;
     lead: string;
+    /** 首屏解释形式化证明价值的补充句。 */
+    heroNote: string;
     ctaPrimary: string;
     /** 已有进度时的主按钮文案。 */
     continueCta: string;

@@ -152,6 +152,7 @@ pnpm run upload:modelscope -- --extensions work/extensions --metadata
 ```
 
 - 扩展包不进构建期下载目录（`public/wasm-lean4/`），由编辑器按需拉取；上传脚本通过 `--extensions`（或 `LEAN_EXTENSION_DIR`）定位文件。
+- 浏览器 E2E 需要真实编译 Std / Batteries 课程，CI 的 e2e job 用 `LEAN_FETCH_EXTENSIONS=1 pnpm run fetch:assets` 临时把扩展分片放进 `public/wasm-lean4/`，只供本地网关使用，不进入部署产物。
 - 扩展资产登记在 `config/lean4-runtime.json` 的 `extensions` 数组里，key 位于 `wasm-lean4/<version>/extensions/<id>/`；魔搭镜像仍是扁平目录。
 
 - `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/` 下的 4.34 历史资产和 `wasm-lean4/4.35.0/`。

@@ -35,7 +35,7 @@
 4. **只用一个域名。** 不要引入第二个可访问的 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名会让用户换域名就从零开始下载 102 MB。
 5. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 6. **换行符统一 LF。** 仓库根 `.gitattributes` 已强制，不要用会写入 CRLF 的工具改文件。
-7. **课程内容只能落在 Init 范围内。** 运行时不含 Std / Lean / Lake / Mathlib，引用它们会编译失败。
+7. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时仍不含 Lean / Lake / Mathlib，引用它们会编译失败。
 
 ## 架构边界
 

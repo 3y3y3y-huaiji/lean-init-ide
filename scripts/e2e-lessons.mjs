@@ -7,8 +7,9 @@
  * 与 e2e-lean.mjs 共用同一个网关和浏览器通道；CI 里两个脚本跑在同一个 job。
  * 新增或删除课程时同步下面的 SLUGS（与 src/i18n/zh.ts 保持一致）。
  *
- * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间；CI 用
- * LEAN_E2E_WORKERS=3。同一 context 共享 Service Worker 与运行时缓存。
+ * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间。工程课会加载
+ * Std / Batteries 扩展包，CI 用 LEAN_E2E_WORKERS=1 避免 runner 内存不足。
+ * 同一 context 共享 Service Worker 与运行时缓存。
  */
 import { chromium } from 'playwright-core';
 
@@ -42,6 +43,11 @@ const SLUGS = [
   'code-sum',
   'math-axioms',
   'math-mathlib',
+  'eng-hashmap',
+  'eng-bitvec',
+  'eng-rbmap',
+  'eng-array-bounds',
+  'eng-state-machine',
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -102,6 +108,16 @@ const main = async () => {
       // 运行屏障已经结算；留一点时间接住迟到的诊断，但不必等满 500ms。
       await sleep(200);
 
+      const readOutput = async () =>
+        (await page.locator(`[data-output="${index}"]`).innerText()).trim();
+      let output = await readOutput();
+      // documentSymbol 屏障偶发提前结算，#check / #eval 的信息会晚一拍到达；
+      // 先补等一轮，仍为空才判失败，避免把无关的偶发竞态当成课程错误。
+      if (!output || output.includes('没有错误，也没有输出')) {
+        await sleep(1500);
+        output = await readOutput();
+      }
+
       const errors = await page.locator(`[data-output="${index}"] .text-err`).allTextContents();
       if (errors.length > 0) {
         failures.push(
@@ -110,7 +126,6 @@ const main = async () => {
       }
 
       // 课程里每块都应该有可见结果；#check / #eval 显示「没有输出」说明诊断丢了。
-      const output = (await page.locator(`[data-output="${index}"]`).innerText()).trim();
       if (!output || output.includes('没有错误，也没有输出')) {
         failures.push(`${slug} 第 ${index + 1} 块：没有可见输出`);
       }

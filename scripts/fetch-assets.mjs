@@ -139,7 +139,18 @@ mkdirSync(outDir, { recursive: true });
 let downloaded = 0;
 let reused = 0;
 
-for (const asset of manifest.assets) {
+/**
+ * 扩展包默认不进构建目录：线上由编辑器按需从 R2 拉取。
+ * 浏览器 E2E 需要真实编译 Std / Batteries 课程，CI 里用 LEAN_FETCH_EXTENSIONS=1 临时放进
+ * public/wasm-lean4，让本地网关能像生产 /cdn 一样提供分片；这些文件只进 CI 工件，不参与部署。
+ */
+const extensionAssets =
+  process.env.LEAN_FETCH_EXTENSIONS === '1'
+    ? (manifest.extensions ?? []).flatMap((extension) => extension.assets)
+    : [];
+const assetsToPrepare = [...manifest.assets, ...extensionAssets];
+
+for (const asset of assetsToPrepare) {
   const target = path.join(outDir, asset.name);
   if (isValid(target, asset)) {
     reused += 1;
@@ -166,6 +177,6 @@ for (const asset of manifest.assets) {
 
 const primary = primaryOverride ?? manifest.primary.baseUrl;
 console.log(
-  `\nLean Init runtime ready: ${downloaded} downloaded, ${reused} reused, ${manifest.assets.length} total.` +
+  `\nLean Init runtime ready: ${downloaded} downloaded, ${reused} reused, ${assetsToPrepare.length} total.` +
     `\nprimary: ${manifest.primary.label} (${primary}); fallback: ${manifest.fallback.label}`,
 );

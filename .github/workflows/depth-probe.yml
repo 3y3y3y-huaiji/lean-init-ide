@@ -174,8 +174,12 @@ jobs:
           if-no-files-found: warn
 
   # 重型下载（约 600 MB）只在手动触发时跑，避免每次 push 都占一轮 runner。
+  # 本地 token 没有 actions:write 时 `gh workflow run` 会被 403，因此也认提交信息里的
+  # [whnf-audit] 标记：推一个带该标记的提交即可触发，不用去网页点按钮。
   whnf-audit:
-    if: github.event_name == 'workflow_dispatch' && inputs.whnf_audit
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.whnf_audit) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[whnf-audit]'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

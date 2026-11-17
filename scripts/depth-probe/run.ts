@@ -3,7 +3,7 @@
  *
  * 用法:
  *   node scripts/depth-probe/run.ts --out work/depth-probe \
- *     --variants baseline,jspi,tailcall,asyncify,jspi-yield
+ *     --variants baseline,jspi,jspi-yield,jspi-yield-1m,asyncify
  *   可选 --chrome <路径>（默认走系统 Chrome）、--js-flags <V8 flags>。
  *
  * 只加载 scripts/depth-probe/ 与构建目录，不碰 Lean 运行时。
@@ -108,7 +108,7 @@ const main = async (): Promise<void> => {
   const variants =
     optionalString(parsed, 'variants') ??
     'baseline,jspi,tailcall,asyncify,jspi-yield,jspi-yield-1m,jspi-resolved,jspi-pending,heapstack,' +
-    'pthread-stack-64k,pthread-stack-8m,pthread-stack-32m';
+      'pthread-stack-64k,pthread-stack-8m,pthread-stack-32m';
   const chromePath = optionalString(parsed, 'chrome');
   const jsFlags = optionalString(parsed, 'js-flags');
   const timeout = parsed.flags.timeout === undefined ? 600_000 : requireNumber(parsed, 'timeout');

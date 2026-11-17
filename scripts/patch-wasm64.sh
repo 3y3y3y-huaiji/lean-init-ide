@@ -29,10 +29,12 @@ command -v python3 > /dev/null 2>&1 || PY=python
 # -mtail-call 才让它在尾位置发 return_call / return_call_indirect。
 # 关键是**编译步**必须带：只在 link 加上，.o 里根本没有 return_call，等于没加。
 # CMAKE_* 的值里含空格，必须整体加单引号——build.sh 的 cmake 行没有引号，不包起来会被拆成两个 argv。
+# 优化等级与 wasm32 主线一致：cgen 生成的 C 与 runtime 都用 -O3。
+# wasm32 主线实测 -O3 更快，这里同步；缓存键已并入本脚本，改完会重编。
 sed -i \
   -e "s|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release '-DCMAKE_C_FLAGS=-sMEMORY64=1 -mtail-call' '-DCMAKE_CXX_FLAGS=-sMEMORY64=1 -mtail-call' '-DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1 -mtail-call'|" \
-  -e 's|emcc -c -O2|emcc -sMEMORY64=1 -mtail-call -c -O2|g' \
-  -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -mtail-call -O2 -pthread|g' \
+  -e 's|emcc -c -O2|emcc -sMEMORY64=1 -mtail-call -c -O3|g' \
+  -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -mtail-call -O3 -pthread|g' \
   -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
   -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
   -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \
@@ -53,4 +55,8 @@ text = text.replace('"$BUILD/lib/lean/libleanrt.a"', f'"$BUILD/lib/lean/libleanr
 path.write_text(text)
 PY
 
-grep -n -- 'MEMORY64\|GMP' "$SCRIPT"
+grep -q -- '-O3' "$SCRIPT" || {
+  echo 'build.sh 里没有 -O3，优化等级替换失败' >&2
+  exit 1
+}
+grep -n -- 'MEMORY64\|GMP\|-O3' "$SCRIPT"

@@ -4,7 +4,7 @@ name: Spike wasm64
 # 以及能否直接加载官方 64 位 Init oleans。不要合并到 main。
 on:
   push:
-    branches: [spike/wasm64]
+    branches: [spike/wasm64, spike/wasm64-recursion-depth]
   workflow_dispatch:
 
 permissions:

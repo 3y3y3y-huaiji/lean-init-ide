@@ -18,7 +18,7 @@ pnpm run smoke       # 线上冒烟，发版后跑
 `allowBuilds` 和 `patchedDependencies`。不要再用 npm 生成 `package-lock.json`。
 
 构建机需要 **Node 24+**：`fetch:assets` 会把上游 gzip 重新压成 zstd，用的是 Node 内置的
-`zlib.zstdCompressSync`。CI 的三个 workflow 都已固定 `node-version: 24`。
+`zlib.zstdCompressSync`。CI 的 workflow 都已固定 `node-version: 24`。
 
 改动后必须跑完整门禁，不要只跑 `pnpm test`。
 
@@ -58,6 +58,32 @@ pnpm exec vitest run src/lsp-patches.test.ts
 
 `.github/workflows/ci.yml` 包含五个前置门禁 job：静态检查（`static`）、单元测试（`test`）、构建产物（`build`）、浏览器端到端（`e2e`，依赖 `build`）、依赖审计（`audit`，只审生产依赖），全部通过才触发部署（`deploy`）。
 建议在 GitHub 分支保护里要求这五个 check 全绿才允许合入 `main`。
+
+### 重型实验只在 GitHub Actions 跑
+
+安装 emsdk、下载 Lean 官方发行包、编译 wasm、启动浏览器探针，这些动辄几百 MB 下载或几十分钟构建的实验**不在本地跑**。
+推送工作分支触发 `.github/workflows/depth-probe.yml`，通过 `workflow_dispatch` 输入 `variants` / `js_flags`，
+结果从 `depth-probe` artifact 取：
+
+```bash
+git push origin spike/wasm64-recursion-depth
+gh run watch
+gh run download <run-id> --name depth-probe
+```
+
+尾调用审计（下载 Lean 4.36.0-rc2 发行包，约 600 MB）只在手动触发且 `whnf_audit=true` 时运行：
+
+```bash
+gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth -f whnf_audit=true
+```
+
+本地只跑静态检查：
+
+```bash
+pnpm run format:check:spike
+pnpm run lint:spike
+pnpm run typecheck:spike
+```
 
 ## 贡献约定
 

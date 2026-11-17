@@ -216,8 +216,10 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 ## 递归深度探针（2026-11-17）
 
 在动 Lean 构建之前，先用 `scripts/depth-probe/` 的十几行 C++ 把「浏览器到底能撑多深」测出来。
-全部在 Dedicated Worker 里跑（与生产 Lean LSP 同环境），Chrome for Testing 155.0.8059.39，Linux x64，headless，
-启动参数 `--enable-experimental-webassembly-features`。
+全部在 Dedicated Worker 里跑（与生产 Lean LSP 同环境），GitHub Actions 的 `ubuntu-latest`
+自带 Chrome，headless，启动参数 `--enable-experimental-webassembly-features`；
+具体版本记录在 `browser-results.json` 的 `features.userAgent`。
+重型构建与浏览器探针一律由 `.github/workflows/depth-probe.yml` 执行，本地不跑。
 
 | 配置 | 递归上界 | 说明 |
 | --- | --- | --- |
@@ -232,9 +234,9 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 | pthread + 64 kB 线程栈 | **4,096 层通过** | 同一段递归跑在线程池线程上 |
 | pthread + 32 MB 线程栈 | **4,096 层通过** | 与 64 kB 完全一致，线程栈大小不影响上界 |
 
-JSPI 这几行没有经过 Emscripten：本机 apt 只有 Emscripten 3.1.6（不认识 `-sJSPI`），emsdk 6.0.0 的下载被限速。
-`scripts/depth-probe/jspi-suspend.wat` 直接用 `WebAssembly.Suspending` + `WebAssembly.promising` 验证 V8 的栈切换，
-`Suspending` / `promising` 均存在。栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移。
+JSPI 这几行没有经过 Emscripten：`scripts/depth-probe/jspi-suspend.wat` 直接用
+`WebAssembly.Suspending` + `WebAssembly.promising` 验证 V8 的栈切换，`Suspending` / `promising` 均存在。
+栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移。
 
 **旧结论在这里被推翻过一次，值得记下来。** 第一版探针的导入固定返回 `Promise.resolve()`，那是已决议 Promise，
 V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是「换了一个栈」，不是「挂起回收了栈」。
@@ -289,12 +291,15 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 ### 尾调用审计：热点环里一条都没有
 
 不用全量编 Lean 也能看产物：官方 Linux 4.36.0-rc2 的 `lean` 只把 `src/Lean/Meta/WHNF.lean` 编成 C，
-再用 emcc 3.1.6 加 `-O2 -mtail-call` 编成 wasm 对象，反汇编后数 `return_call`。
+再编成 wasm 对象反汇编数 `return_call`。下表是本机 apt 的 emcc 3.1.6 记录的结果；
+`.github/workflows/depth-probe.yml` 的 `whnf-audit` job 用 emsdk 6.0.0 复核同一组函数
+（行数会略有出入，判定只看热点环是否为 0）。
 
 ```bash
-LEAN_PATH=$DIST/lib/lean $DIST/bin/lean -c /tmp/WHNF.c src/Lean/Meta/WHNF.lean
-emcc -c -O2 -mtail-call -I$DIST/include -o /tmp/WHNF.o /tmp/WHNF.c
-wasm2wat --enable-all /tmp/WHNF.o -o /tmp/WHNF.wat
+# whnf-audit job 里执行的命令
+LEAN_PATH=$DIST/lib/lean $DIST/bin/lean -c work/WHNF.c work/lean-src/src/Lean/Meta/WHNF.lean
+emcc -c -O2 -mtail-call -I$DIST/include -o work/WHNF.o work/WHNF.c
+wasm2wat --enable-all work/WHNF.o -o work/WHNF.wat
 ```
 
 产物里 550 个函数、173 条 `return_call`，但热点环上一条都没有：
@@ -334,26 +339,27 @@ wasm2wat --enable-all /tmp/WHNF.o -o /tmp/WHNF.wat
    乐观估计能把 1,200 抬到 2,000–3,000 量级，但到不了 4,000，不能当最终方案。
 4. 以上任一条落地之前，不要把 JSPI / ASYNCIFY 合进 wasm32 或 wasm64 运行时。
 
-复现：
+复现：重型部分（emsdk 构建、Chrome 探针、Lean 发行包审计）全部在 GitHub Actions 跑，本地不跑。
 
 ```bash
-# Emscripten 6.0.0
-bash scripts/depth-probe/build.sh work/depth-probe
-node scripts/depth-probe/run.ts --out work/depth-probe \
-  --variants baseline,jspi,tailcall,asyncify,jspi-yield,jspi-resolved,jspi-pending,heapstack
+# 推送到工作分支即触发 probe job
+git push origin spike/wasm64-recursion-depth
+gh run watch
+gh run download <run-id> --name depth-probe   # browser-results.json / build-summary.json
 
-# 本机 apt 的 3.1.6（STACK_SIZE 在旧版叫 TOTAL_STACK；jspi-suspend 需要 wabt）
-STACK_FLAG=-sTOTAL_STACK=8388608 bash scripts/depth-probe/build.sh /tmp/depth-emcc
-node scripts/depth-probe/run.ts --out /tmp/depth-emcc \
-  --variants jspi-resolved,jspi-pending,jspi-pending-1,jspi-macrotask,jspi-pending-1024
+# 手动指定变体或 V8 flag
+gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth \
+  -f variants=jspi-pending-1,jspi-macrotask \
+  -f js_flags=--wasm-stack-switching-stack-size=64
 
-# 观察 V8 flag 的影响（单位 kB）
-node scripts/depth-probe/run.ts --out /tmp/depth-emcc --variants jspi-pending-1 \
-  --js-flags="--wasm-stack-switching-stack-size=64"
+# 尾调用审计（下载约 600 MB 发行包）
+gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth -f whnf_audit=true
 ```
 
+本地只跑静态检查：`pnpm run format:check:spike && pnpm run lint:spike && pnpm run typecheck:spike`。
+
 判读：JSPI 那几个变体只在 `suspend.pending > 0` 时才代表真实挂起；`pending=0` 说明走了已决议快路径，
-那一行结果不能用来支持任何结论。
+那一行结果不能用来支持任何结论。workflow 的「校验结果」步骤会在 `pending=0` 时直接失败。
 
 ## 尚未验证
 

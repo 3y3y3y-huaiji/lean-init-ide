@@ -36,6 +36,7 @@
 5. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 6. **换行符统一 LF。** 仓库根 `.gitattributes` 已强制，不要用会写入 CRLF 的工具改文件。
 7. **课程内容只能落在 Init 范围内。** 运行时不含 Std / Lean / Lake / Mathlib，引用它们会编译失败。
+8. **重型实验只在 GitHub Actions 跑，本地不跑。** 安装 emsdk / Lean 官方发行包、编译 wasm、启动浏览器探针这类几百 MB 下载或几十分钟构建的实验，一律推送到工作分支由 workflow 执行，本地只允许跑静态检查（`format:check:spike` / `lint:spike` / `typecheck:spike`）。递归深度探针见 `.github/workflows/depth-probe.yml`，结果从 `depth-probe` artifact 取，不要把 `work/` 下的构建产物提交进仓库。
 
 ## 架构边界
 

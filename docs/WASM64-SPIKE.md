@@ -275,25 +275,56 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
   而且热点路径必须真的能挂起：Lean 的 elaboration 是同步的，LSP 的异步只到 I/O 边界。
   再加上生产运行时是 `-pthread` 模型，JSPI 文档明确说从不可挂起的栈调挂起导入会直接 trap，
   这不是一个能靠换编译开关落地的方案。
-- **尾调用只能压平真正的尾位置。** `whnfCore` 的续延是函数参数，C 降低后可能经过 `lean_apply_*`
-  或间接调用，不能保证还是编译器能识别的 `return`；这也解释了为什么只加 `-mtail-call`
-  并没有改变 N=1200 的现象。探针里的互递归能到 4M，是因为它被编译成了直接 `return_call`。
-  这一点必须用产物反汇编确认，不能只看 Lean 源码的尾位置。
+- **尾调用的前提是真正的尾位置，而热点环里没有。** 见下一节审计：
+  `whnfImp → whnfEasyCases → whnfCore → reduceRec → lean_whnf` 这一圈里 0 条 `return_call`，
+  递归结果都要先交给 `cache` 或后续构造，`-mtail-call` 没有可压平的东西。
+  探针里的互递归能到 4M，是因为它被编译成了直接 `return_call`。
 - **堆上工作栈是唯一不依赖浏览器 flag 的路径。** 探针把「结果还要参与外层计算」的续延放进显式数组，
   原生栈深度恒定为 1。对 Lean 4.36 来说，`src/Lean/Meta/WHNF.lean` 的 `whnfCore` 已经是 Lean 层的 CPS：
   `whnfEasyCases e fun e => ...`、`reduceRec ... (fun e => go e)`，以及非尾的 `let f' ← go f`。
   要彻底解决，需要把这些续延变成数据（显式栈 / 状态机），这是一次真正的重构，不是一行 patch。
 
+### 尾调用审计：热点环里一条都没有
+
+不用全量编 Lean 也能看产物：官方 Linux 4.36.0-rc2 的 `lean` 只把 `src/Lean/Meta/WHNF.lean` 编成 C，
+再用 emcc 3.1.6 加 `-O2 -mtail-call` 编成 wasm 对象，反汇编后数 `return_call`。
+
+```bash
+LEAN_PATH=$DIST/lib/lean $DIST/bin/lean -c /tmp/WHNF.c src/Lean/Meta/WHNF.lean
+emcc -c -O2 -mtail-call -I$DIST/include -o /tmp/WHNF.o /tmp/WHNF.c
+wasm2wat --enable-all /tmp/WHNF.o -o /tmp/WHNF.wat
+```
+
+产物里 550 个函数、173 条 `return_call`，但热点环上一条都没有：
+
+| 函数 | wasm 函数体行数 | `return_call` |
+| --- | --- | --- |
+| `lean_whnf`（`whnfImp` 的 `@[export]`） | 1,072 | 0 |
+| `whnfEasyCases`（`whnfImp` 特化） | 7,370 | 0 |
+| `whnfEasyCases`（`whnfCore` 特化） | 8,355 | 0，自调用 2 次、调 `reduceRec` 1 次，全是普通 `call` |
+| `reduceRec` 实体（`___redArg`） | 5,585 | 0 |
+| `reduceQuotRec` 实体（`___redArg`） | 2,046 | 0 |
+
+源码能直接对上：`whnfImp` 的 `cache useCache e (← whnfImp e'')` 要把递归结果交给 `cache`；
+`reduceRec` 的 `major ← whnf major` 要拿结果继续构造。两处都不是尾位置，编译器没有可压平的对象。
+环上每层约 6–7 个帧，正好是 8k 帧 / 1,200 层。
+
+`@[specialize]` 对照实验：给 `reduceRec`、`reduceQuotRec` 加上 `@[specialize]` 重新生成后，
+`reduceRec` 的 wasm 函数体与原版 **SHA-1 完全相同**（5,585 行），`return_call` 总数仍是 173。
+这两个 `private def` 早就按调用点的续延特化成了 `___redArg`，属性没有新增任何特化。
+**这条改动可以划掉，不要再花一轮全量构建去试。**
+
 ### 下一步的先后顺序
 
-1. **先做便宜的审计**：在已开启 `-mtail-call` 的 wasm64 产物上 `wasm-dis lean.wasm | grep return_call`，
-   确认 `whnfCore` 热点链里到底有没有尾调用；不要只看 Lean 源码的尾位置。
-2. 如果续延仍是间接调用，先试一个单点改动：给 `reduceRec` / `reduceQuotRec` 加 `@[specialize]`
-   （`whnfEasyCases` 已经是 `@[specialize]`），让 `successK` 在调用点具体化，再看 `return_call` 数量与 N=1200 表现。
-   代价是代码体积和编译时间，不改变语义。
-3. 如果续延链能改成真正的尾调用，这是最小改动；改完仍用本探针同款 Worker 环境测 N=1200 / 4000。
-4. 如果不行，再在 Lean 仓库里做 `whnfCore` 的显式续延栈原型；验收条件是 1 MB Worker 栈下 `maxRecDepth=4000` 不 trap。
-5. 以上任一条通过之前，不要把 JSPI / ASYNCIFY 合进 wasm32 或 wasm64 运行时。
+1. 已经排除：JSPI（同 1 MB 预算、挂起不回收）、调大 JSPI 栈 / growable stacks（被夹回 1 MB）、
+   调大 pthread 栈（4,096 层行为不变）、`-mtail-call`（热点环 0 条尾调用）、
+   `@[specialize]`（函数体逐字节相同）。
+2. 剩下唯一能根治的路径是 **在 Lean 侧把 `whnfCore` 的续延变成数据**（显式工作栈 / 状态机），
+   验收条件是 1 MB Worker 栈下 `maxRecDepth=4000` 不 trap。这是重构，不是 patch；
+   动手前先在 wasm32 与 wasm64 各跑一次现有课程的全量编译做基线。
+3. 可选的低风险缓冲：减少每层帧数（去掉 `withTraceNode` 包装、把 `whnfImp` 的 unfold 自递归改成循环），
+   乐观估计能把 1,200 抬到 2,000–3,000 量级，但到不了 4,000，不能当最终方案。
+4. 以上任一条落地之前，不要把 JSPI / ASYNCIFY 合进 wasm32 或 wasm64 运行时。
 
 复现：
 

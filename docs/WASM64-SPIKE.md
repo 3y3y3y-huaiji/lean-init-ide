@@ -226,7 +226,8 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 | 普通非尾递归 | **7,974** 层 | 约 1 MB Worker 栈，emcc 帧约 121 B |
 | 互递归 + `-mtail-call` | **≥ 4,194,304** | 生成 `return_call`，3 处 |
 | 堆上显式工作栈 | **≥ 1,048,576** | 上限来自探针的 2M 帧数组，不是栈 |
-| ASYNCIFY + 每 64 层 `emscripten_sleep` | **24,453** | 真实递归；`ASYNCIFY_STACK_SIZE` 设为 1 MB，约 40 B/帧 |
+| ASYNCIFY + 每 64 层挂起（缓冲区 1 / 8 / 32 MB） | **24,453–24,455** | 三档缓冲区结果相同，上界不在 `ASYNCIFY_STACK_SIZE` |
+| ASYNCIFY + 每 4096 层挂起（缓冲区 1 / 8 / 32 MB） | **8,191** | 低频 yield 几乎等于不挂起（对照组 7,974） |
 | JSPI + 已决议 Promise | **13,439** | `suspend=0/209`：一次都没真正挂起 |
 | JSPI + 未决 Promise（微任务），每 64 层 | **17,258** | `suspend=269/269` |
 | JSPI + 未决 Promise（微任务），每层 | **17,258** | `suspend=17258/17258`，密度提高 64 倍上界不变 |
@@ -287,7 +288,8 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
   15,359 层，`-sSTACK_SIZE` 完全不参与；JSPI 给的仍是 V8 那个约 1 MB 的挂起栈。
   15,359 与裸 WAT 的 17,258 只差在每帧大小。而且前提是每 64 层真的挂起一次；
   Lean 的热点环是同步调用，没有这样的挂起点——把 `whnfCore` 拆成可挂起的协程，
-  本身就是「续延数据化」的重构，不是换编译开关。
+  本身就是「续延数据化」的重构，不是换编译开关。再加上生产运行时是 `-pthread` 模型，
+  JSPI 文档明确说从不可挂起的栈调挂起导入会直接 trap，这条也不是换编译开关能落地的。
 - **调大这个栈没有出口。** 超过默认值会被夹回 1 MB 量级，growable stacks 的实验 flag 也没有效果；
   Worker 里的普通 wasm 栈同样不跟 `--js-flags=--stack-size=8192` 走（baseline 仍停在 7,972 层）。
   即便有效，也不可能要求用户带启动参数打开站点。
@@ -303,12 +305,13 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
   生产 LSP 早已把线程栈设到 32 MB，N=1200 仍撞顶，说明问题在每层帧太贵，不在栈配多大。
 - **WasmFX 目前没有可用的构建入口。** Emscripten 6.0.0 的设置里只有 `JSPI` / `JSPI_EXPORTS` / `JSPI_IMPORTS`，
   没有 WasmFX 或 stack-switching 设置；Chrome 155 有实验 flag，但没有面向 Emscripten 的代码生成与 JS 接口。
-- **ASYNCIFY + 挂起点只把上界抬到约 3 倍。** 它把栈展开成线性内存里的数据再 rewind，
-  实测 24,453 层就停住——`ASYNCIFY_STACK_SIZE` 设为 1 MB，约 40 B/帧，展开到一半就放不下。
-  代价还有整程序插桩（Lean 规模约 +50% 体积、链接显著变慢，见 Emscripten Issue #26455），
-  而且热点路径必须真的能挂起：Lean 的 elaboration 是同步的，LSP 的异步只到 I/O 边界。
-  再加上生产运行时是 `-pthread` 模型，JSPI 文档明确说从不可挂起的栈调挂起导入会直接 trap，
-  这不是一个能靠换编译开关落地的方案。
+- **ASYNCIFY 的 3 倍上界与缓冲区大小无关。** 缓冲区 1 / 8 / 32 MB、每 64 层挂起，三档都是
+  24,453–24,455；把频率降到每 4096 层一次，三档一起掉回 8,191（完全不挂起的对照 7,974）。
+  所以「大缓冲区 + 低频 yield 分段接力」在这版 Emscripten 里不成立：瓶颈在 unwind / rewind
+  本身，不在 `ASYNCIFY_STACK_SIZE`。代价还有整程序插桩（Lean 规模约 +50% 体积、链接显著变慢，
+  见 Emscripten Issue #26455），而且热点路径必须真的能挂起——Lean 的 elaboration 是同步的，
+  LSP 的异步只到 I/O 边界。`-pthread + -sASYNCIFY` 能编过（探针里 `pthread-asyncify` 构建成功），
+  但这不改变上界只有 3 倍的事实。
 - **尾调用的前提是真正的尾位置，而热点环里没有。** 见下一节审计：
   `whnfImp → whnfEasyCases → whnfCore → reduceRec → lean_whnf` 这一圈里 0 条 `return_call`，
   递归结果都要先交给 `cache` 或后续构造，`-mtail-call` 没有可压平的东西。
@@ -365,7 +368,8 @@ wasm2wat --enable-all work/WHNF.o -o work/WHNF.wat
 
 1. 已经排除：裸 WAT 与 Emscripten 两条 JSPI 路径（同为约 1 MB 预算、挂起不回收、与 `-sSTACK_SIZE` 无关）、
    调大 JSPI 栈 / growable stacks（被夹回 1 MB）、`-mtail-call`（热点环 0 条尾调用）、
-   `@[specialize]`（函数体逐字节相同）、ASYNCIFY（真实递归只有 24,453，且需要可挂起点）。
+   `@[specialize]`（函数体逐字节相同）、ASYNCIFY（缓冲区 1 / 8 / 32 MB 与每 64 / 4096 层频率都已实测，
+   3 倍是固定上界，且需要可挂起点）。
    pthread 栈那组因为探针帧太小没有区分度，不构成结论。
 2. 剩下唯一能根治的路径是 **在 Lean 侧把 `whnfCore` 的续延变成数据**（显式工作栈 / 状态机），
    验收条件是 1 MB Worker 栈下 `maxRecDepth=4000` 不 trap。这是重构，不是 patch；

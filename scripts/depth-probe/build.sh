@@ -82,7 +82,9 @@ build tailcall deep-rec.cpp _depth_probe,_tail_probe -mtail-call -DUSE_TAIL_CALL
 
 # 挂起对照组：每 64 层 sleep 一次。ASYNCIFY 会把栈展开到线性内存。
 build asyncify yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify
-build jspi-yield yield-rec.cpp _yield_probe -sJSPI=1 -sJSPI_EXPORTS=_yield_probe -sJSPI_IMPORTS=emscripten_sleep
+# JSPI_EXPORTS 匹配的是 wasm 导出名（同默认表里的 main），不是 C 符号的 _yield_probe；
+# 写成带下划线的名字不会报错，只会在运行期 suspend 时抛 SuspendError。
+build jspi-yield yield-rec.cpp _yield_probe -sJSPI=1 -sJSPI_EXPORTS=yield_probe -sJSPI_IMPORTS=emscripten_sleep
 
 # 堆上工作栈对照组：同样的非尾递归，原生栈深度恒定为 1。
 build heapstack heap-stack.cpp _heap_probe

@@ -7,7 +7,8 @@
 volatile int sink;
 
 __attribute__((noinline)) int rec(int n) {
-  if (n == 0) return 1;
+  if (n == 0)
+    return 1;
   const int inner = rec(n - 1);
   sink = inner;
   return inner + 1;
@@ -19,12 +20,12 @@ struct Arg {
   int result;
 };
 
-void* run(void* raw) {
-  auto* arg = static_cast<Arg*>(raw);
+void *run(void *raw) {
+  auto *arg = static_cast<Arg *>(raw);
   arg->result = rec(arg->n);
   return nullptr;
 }
-}  // namespace
+} // namespace
 
 extern "C" int pthread_probe(int n, int stackMb) {
   pthread_attr_t attr;
@@ -37,7 +38,8 @@ extern "C" int pthread_probe(int n, int stackMb) {
   pthread_t thread;
   const int rc = pthread_create(&thread, &attr, run, &arg);
   pthread_attr_destroy(&attr);
-  if (rc != 0) return -1;
+  if (rc != 0)
+    return -1;
   pthread_join(thread, nullptr);
   return arg.result;
 }

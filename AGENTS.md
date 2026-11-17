@@ -36,7 +36,8 @@
 5. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 6. **换行符统一 LF。** 仓库根 `.gitattributes` 已强制，不要用会写入 CRLF 的工具改文件。
 7. **课程内容只能落在 Init 范围内。** 运行时不含 Std / Lean / Lake / Mathlib，引用它们会编译失败。
-8. **重型实验只在 GitHub Actions 跑，本地不跑。** 安装 emsdk / Lean 官方发行包、编译 wasm、启动浏览器探针这类几百 MB 下载或几十分钟构建的实验，一律推送到工作分支由 workflow 执行，本地只允许跑静态检查（`format:check:spike` / `lint:spike` / `typecheck:spike`）。递归深度探针见 `.github/workflows/depth-probe.yml`，结果从 `depth-probe` artifact 取，不要把 `work/` 下的构建产物提交进仓库。
+8. **重型实验只在 GitHub Actions 跑，本地不跑。** 安装 emsdk / Lean 官方发行包、编译 wasm、启动浏览器探针这类几百 MB 下载或几十分钟构建的实验，一律推送到工作分支由 workflow 执行，本地只允许跑静态检查（`format:check:spike` / `lint:spike` / `typecheck:spike` / `check:cpp`）。递归深度探针见 `.github/workflows/depth-probe.yml`，结果从 `depth-probe` artifact 取，不要把 `work/` 下的构建产物提交进仓库。
+9. **手写 C/C++ 必须过 `pnpm run check:cpp`。** 范围只有仓库内的手写源码（`scripts/**/*.{c,cc,cpp}`），由 `.github/workflows/cpp-gate.yml` 执行：clang-format、`-Wall -Wextra -Werror`、clang-tidy。**不要**把上游 Lean runtime 或 `lean -c` 生成的 C 纳入扫描；上游代码只允许通过 `scripts/patches/` 或 backport 脚本修改，不许手改后直接提交。
 
 ## 架构边界
 
@@ -69,6 +70,7 @@
 pnpm run format:check   # Prettier
 pnpm run lint           # ESLint
 pnpm run typecheck      # 三份 tsconfig：应用 / SW / Functions
+pnpm run check:cpp      # clang-format + clang-tidy + -Wall -Wextra -Werror（仅手写 C/C++）
 pnpm test               # Vitest + 覆盖率阈值
 pnpm run verify:manifest # 资产清单结构 + local 资产字节与哈希
 pnpm run build:web      # 生产构建（跳过 102MB 资产）

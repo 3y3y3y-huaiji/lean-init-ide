@@ -47,6 +47,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 | `pnpm run format:check` | Prettier 格式一致性 |
 | `pnpm run lint` | ESLint（应用、脚本、配置文件） |
 | `pnpm run typecheck` | 三份 tsconfig：应用、Service Worker、Pages Functions |
+| `pnpm run check:cpp` | 手写 C/C++：clang-format、`-Wall -Wextra -Werror`、clang-tidy（`.github/workflows/cpp-gate.yml`） |
 | `pnpm test` | Vitest + 覆盖率阈值 |
 | `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
 | `pnpm run build:web` | 生产构建（跳过 102 MB 资产下载） |
@@ -88,7 +89,16 @@ git push origin spike/wasm64-recursion-depth
 pnpm run format:check:spike
 pnpm run lint:spike
 pnpm run typecheck:spike
+pnpm run check:cpp
 ```
+
+### 手写 C/C++ 的边界
+
+`check:cpp` 只扫仓库内手写的 C/C++（目前是 `scripts/depth-probe/*.cpp`），由 `.github/workflows/cpp-gate.yml` 执行。
+**不扫**上游 Lean runtime，也不扫 `lean -c` 生成的 C：前者有几万行历史写法，后者是机器产物，全量扫只会产出无法收敛的告警。
+上游代码只允许通过 `scripts/patches/` 或 backport 脚本修改。
+
+`yield-rec.cpp` 依赖 `emscripten.h`，不在 `check:cpp` 里编译（只做格式化），改由 `depth-probe` workflow 的 emcc 构建覆盖。
 
 ## 贡献约定
 

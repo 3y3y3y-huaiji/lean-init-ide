@@ -3,7 +3,8 @@ extern "C" {
 volatile int sink;
 
 __attribute__((noinline)) int rec(int n, int seed) {
-  if (n == 0) return seed;
+  if (n == 0)
+    return seed;
   const int inner = rec(n - 1, seed);
   sink = inner;
   return inner + 1;
@@ -18,11 +19,13 @@ __attribute__((noinline)) int rec(int n, int seed) {
 
 __attribute__((noinline)) int odd_step(int n, int acc);
 __attribute__((noinline)) int even_step(int n, int acc) {
-  if (n == 0) return acc;
+  if (n == 0)
+    return acc;
   TAIL_CALL return odd_step(n - 1, acc + 1);
 }
 __attribute__((noinline)) int odd_step(int n, int acc) {
-  if (n == 0) return acc;
+  if (n == 0)
+    return acc;
   TAIL_CALL return even_step(n - 1, acc + 1);
 }
 

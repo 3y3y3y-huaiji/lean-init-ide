@@ -26,6 +26,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:check:spike": "prettier --check \"scripts/**/*.ts\" \"vitest.spike.config.ts\"",
+    "check:cpp": "bash scripts/check-cpp.sh",
     "test": "vitest run --coverage",
     "test:spike": "vitest run --config vitest.spike.config.ts",
     "test:spike:coverage": "vitest run --config vitest.spike.config.ts --coverage",

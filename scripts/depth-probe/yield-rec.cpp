@@ -18,8 +18,10 @@ volatile int sink;
 #endif
 
 __attribute__((noinline)) int yield_rec(int n) {
-  if (n == 0) return 0;
-  if (n % YIELD_INTERVAL == 0) probe_yield();
+  if (n == 0)
+    return 0;
+  if (n % YIELD_INTERVAL == 0)
+    probe_yield();
   const int inner = yield_rec(n - 1);
   sink = inner;
   return inner + 1;

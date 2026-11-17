@@ -77,15 +77,35 @@ export const zh: Messages = {
   challenges: {
     eyebrow: '趣味数学挑战',
     title: '用 Lean 亲手证明 6 道经典数学题',
-    lead: '每道题都从一句人话开始：什么是偶数、为什么交换加法不改变结果、为什么一个数不能同时是奇数又是偶数。选一道开始，Goal 面板会实时告诉你还差几个目标。',
+    lead: '每道题都从一句人话开始：什么是偶数、为什么交换加法不改变结果、为什么一个数不能同时是奇数又是偶数。不需要编程基础，代码里的「--」注释会一步步带你看懂。',
     cardCta: '开始挑战',
     editorTitle: '证明练习',
+    intro: {
+      title: '第一次来？30 秒看懂这一页',
+      body: 'Lean 是一个数学证明检查器：你在编辑器里写证明，它像编译器一样逐步检查每一步是否成立。它不靠试几个例子，而是确认命题对所有情况都成立。你不需要会编程，先读代码里以「--」开头的注释就行。',
+      steps: [
+        {
+          title: '① 先读题面',
+          text: '每道题都先用日常语言说明结论为什么成立；题面本身没有 Lean 代码。',
+        },
+        {
+          title: '② 盯住 Goal 面板',
+          text: '「⊢」后面就是 Lean 等你证明的结论。把光标放进证明里，它会跟着光标实时变化。',
+        },
+        {
+          title: '③ 用策略补上证明',
+          text: '点策略按钮会把名字插进代码，再按注释提示补参数；卡住时可以展开「参考解法」逐步对照。',
+        },
+      ],
+      codeNote:
+        '代码里以「--」开头的灰色行是讲解注释，Lean 会跳过；「sorry」表示这里还没证，是留给你替换的占位符。',
+    },
     detail: {
       back: '← 返回挑战列表',
       goalsRemaining: (count) => `当前还剩 ${count} 个待证目标`,
       goalsNone: '当前没有待证目标：把光标放进证明里，Goal 面板会实时更新',
-      tacticsTitle: '常用策略',
-      tacticsHint: '点一下就把策略片段插到光标处，不记得拼写也没关系。',
+      tacticsTitle: '这道题会用到的策略',
+      tacticsHint: '点策略名会把它插到光标处；下面一句话说明每个策略在做什么。',
       copyLink: '复制本关分享链接',
       copyLinkDone: '链接已复制',
       copyLinkFailed: '复制失败，请从地址栏复制',
@@ -94,7 +114,8 @@ export const zh: Messages = {
       solutionHint: '先自己试，卡住再展开对照。',
       loadSolution: '载入参考解法',
       openInPlayground: '在编辑器中打开',
-      starterNote: '骨架代码已经在编辑器里，把 sorry 换成证明就能通关。',
+      starterNote:
+        '骨架里以「--」开头的行是讲解注释，Lean 会跳过；把 sorry 换成真正的证明就能关闭目标。',
     },
   },
   lesson: {

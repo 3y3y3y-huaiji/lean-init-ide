@@ -66,10 +66,12 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   const lesson = messagesFor(locale).lesson.lessons.find((item) => item.slug === slug);
   const challenge = lesson ? undefined : resolveChallengeParam(location.search);
   const code =
-    lesson?.exercise?.starter ?? challenge?.starter ?? messagesFor(locale).playground.defaultCode;
+    lesson?.exercise?.starter ??
+    challenge?.starter[locale] ??
+    messagesFor(locale).playground.defaultCode;
   const draftKey = draftKeyFor(lesson?.slug);
   const draft = challenge ? readDraft(draftKey) : null;
-  const hasPersonalDraft = Boolean(challenge && draft && draft.code !== challenge.starter);
+  const hasPersonalDraft = Boolean(challenge && draft && draft.code !== challenge.starter[locale]);
 
   // 把 3.5MB Monaco 与 LSP 推迟到页面骨架渲染完再按需加载，不阻塞首屏 H1 绘制。
   const { createLeanPanel } = await import('../components/lean-panel');
@@ -102,7 +104,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   notice
     .querySelector<HTMLButtonElement>('[data-role="challenge-load"]')
     ?.addEventListener('click', () => {
-      panel.setCode(challenge.starter, { focus: true });
+      panel.setCode(challenge.starter[locale], { focus: true });
       if (statusEl) statusEl.textContent = messagesFor(locale).playground.challengeLoaded;
     });
   notice

@@ -112,7 +112,7 @@ describe('playground 页面', () => {
       HTMLElement,
       { code: string; draftKey: string },
     ];
-    expect(options.code).toBe(challenge.starter);
+    expect(options.code).toBe(challenge.starter.zh);
     expect(options.draftKey).toBe('lean:draft:playground');
 
     const notice = document.body.querySelector<HTMLElement>('[data-role="challenge-notice"]')!;
@@ -146,7 +146,7 @@ describe('playground 页面', () => {
     expect(panel.setCode).not.toHaveBeenCalled();
 
     notice.querySelector<HTMLButtonElement>('[data-role="challenge-load"]')!.click();
-    expect(panel.setCode).toHaveBeenCalledWith(challenge.starter, { focus: true });
+    expect(panel.setCode).toHaveBeenCalledWith(challenge.starter.en, { focus: true });
     expect(status.textContent).toBe(messagesFor('en').playground.challengeLoaded);
   });
 

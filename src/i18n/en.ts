@@ -79,17 +79,37 @@ export const en: Messages = {
   challenges: {
     eyebrow: 'Math challenges',
     title: 'Prove six classic puzzles in Lean',
-    lead: 'Every puzzle starts with a plain-language question: what makes a number even, why swapping addends changes nothing, and why nothing can be both odd and even. Pick one and the Goal panel tells you how many targets remain.',
+    lead: 'Every puzzle starts with a plain-language question: what makes a number even, why swapping addends changes nothing, and why nothing can be both odd and even. No programming background is needed—the "--" comments in the code walk you through it.',
     cardCta: 'Start the challenge',
     editorTitle: 'Proof practice',
+    intro: {
+      title: 'First time here? 30 seconds to understand this page',
+      body: 'Lean is a proof checker: you write a proof in the editor and it checks every step, much like a compiler checks code. It does not try a few examples; it confirms the statement holds in every case. You do not need to know programming—start by reading the comments that begin with "--".',
+      steps: [
+        {
+          title: '1. Read the question',
+          text: 'Every challenge explains the result in everyday language first; the question itself contains no Lean code.',
+        },
+        {
+          title: '2. Watch the Goal panel',
+          text: 'Whatever follows “⊢” is what Lean still wants you to prove. Move the cursor through the proof and the goal updates.',
+        },
+        {
+          title: '3. Close the gap with tactics',
+          text: 'A tactic button inserts a name into the code; fill in its arguments as the comments suggest. Stuck? Expand the reference solution and compare step by step.',
+        },
+      ],
+      codeNote:
+        'Grey lines starting with "--" are explanation comments and Lean skips them. "sorry" marks a gap that is still unproved—that is the placeholder you replace.',
+    },
     detail: {
       back: '← Back to all challenges',
       goalsRemaining: (count) => `${count} goal${count === 1 ? '' : 's'} left to prove`,
       goalsNone:
         'No goals right now: put the cursor inside the proof and the Goal panel updates live',
-      tacticsTitle: 'Common tactics',
+      tacticsTitle: 'Tactics for this challenge',
       tacticsHint:
-        'Click to insert a tactic at the cursor; spelling does not need to be memorized.',
+        'Click a tactic name to insert it at the cursor; one line below explains what each one does.',
       copyLink: 'Copy share link',
       copyLinkDone: 'Link copied',
       copyLinkFailed: 'Copy failed—please copy from the address bar',
@@ -98,7 +118,8 @@ export const en: Messages = {
       solutionHint: 'Try it yourself first; expand only when stuck.',
       loadSolution: 'Load reference solution',
       openInPlayground: 'Open in the editor',
-      starterNote: 'The starter code is already in the editor—replace `sorry` with a proof.',
+      starterNote:
+        'Lines starting with "--" are explanation comments that Lean ignores; replace sorry with a real proof to close the goal.',
     },
   },
   lesson: {

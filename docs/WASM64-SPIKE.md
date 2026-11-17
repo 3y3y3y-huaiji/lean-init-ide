@@ -231,12 +231,25 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 | JSPI + 未决 Promise（微任务），每 64 层 | **17,258** | `suspend=269/269` |
 | JSPI + 未决 Promise（微任务），每层 | **17,258** | `suspend=17258/17258`，密度提高 64 倍上界不变 |
 | JSPI + 未决 Promise（宏任务），每 64 层 | **13,439** | `suspend=209/209`，真正让出事件循环 |
+| Emscripten JSPI + 每 64 层 `emscripten_sleep` | **≥ 1,048,576** | emsdk 6.0.0，cap 2^20；见下方胶水层说明 |
 | pthread + 64 kB 线程栈 | **4,096 层通过** | 同一段递归跑在线程池线程上 |
 | pthread + 32 MB 线程栈 | **4,096 层通过** | 与 64 kB 完全一致，线程栈大小不影响上界 |
 
+2026-11-17 在 Actions 上用 emsdk 6.0.0 + HeadlessChrome 157 复测：baseline 7,974，
+tailcall / asyncify / heapstack 以及裸 WAT 的 JSPI 各行都与上表一致。
+
 JSPI 这几行没有经过 Emscripten：`scripts/depth-probe/jspi-suspend.wat` 直接用
 `WebAssembly.Suspending` + `WebAssembly.promising` 验证 V8 的栈切换，`Suspending` / `promising` 均存在。
-栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移。
+栈上界由 V8 决定，不依赖 Emscripten 胶水，所以结论可迁移到「不使用 Emscripten 胶水」的场景。
+
+**Emscripten 胶水路径出现反常结果。** `jspi-yield` 把 `yield-rec.cpp` 编成 `-sJSPI=1`，
+每 64 层 `emscripten_sleep(0)` 一次，cap 提到 2^20 后仍然全部通过（≥1,048,576），
+而裸 WAT 的同类挂起在 17,258 层就撞顶。首轮这个变体在 64 层抛
+`SuspendError: trying to suspend without WebAssembly.promising`，原因是 `JSPI_EXPORTS`
+匹配的是 wasm 导出名（默认表里写的是 `main`），必须写 `yield_probe`；写成 C 符号
+`_yield_probe` 不报错，但导出不会被包起来。差异来自胶水层的栈复用还是构建参数（例如
+`-sSTACK_SIZE=8 MB`）参与，尚未定论，因此**不要**把「JSPI 只有 1 MB」直接外推到
+Emscripten 构建。
 
 **旧结论在这里被推翻过一次，值得记下来。** 第一版探针的导入固定返回 `Promise.resolve()`，那是已决议 Promise，
 V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是「换了一个栈」，不是「挂起回收了栈」。
@@ -256,19 +269,24 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 
 ### 这组数字说明什么
 
-- **JSPI 的栈就是另一个约 1 MB 的固定栈，不是更大的栈。** V8 的默认值是 984 kB
+- **裸 WAT 的 JSPI 栈就是另一个约 1 MB 的固定栈，不是更大的栈。** V8 的默认值是 984 kB
   （`--wasm-stack-switching-stack-size`，单位 kB，`node --v8-options` 可查），
   17,258 × 57 B ≈ 984 kB，与 Worker 原生栈同一预算。`17,258 / 7,973 ≈ 2.2` 只是帧更小，
   不是栈更大；换成同样的 emcc 帧立刻回到 8k 量级。
-- **真挂起也不回收栈预算。** 挂起密度从每 1 层到每 1024 层，上界完全相同；改走宏任务也一样。
+- **裸 WAT 下真挂起也不回收栈预算。** 挂起密度从每 1 层到每 1024 层，上界完全相同；改走宏任务也一样。
   栈切换只是把「整条链躺在一个栈上」换成「整条链躺在另一个栈上」，深度上界没变。
+- **Emscripten 的 JSPI 胶水路径是另一回事。** 同样的 `emscripten_sleep` 挂起实测能过 1,048,576 层，
+  说明存在一种不受 1 MB 原生栈限制的执行方式；但前提是每 64 层真的挂起一次。
+  Lean 的热点环是同步调用，没有这样的挂起点——把 `whnfCore` 拆成可挂起的协程，
+  本身就是「续延数据化」的重构，不是换编译开关。
 - **调大这个栈没有出口。** 超过默认值会被夹回 1 MB 量级，growable stacks 的实验 flag 也没有效果；
   Worker 里的普通 wasm 栈同样不跟 `--js-flags=--stack-size=8192` 走（baseline 仍停在 7,972 层）。
   即便有效，也不可能要求用户带启动参数打开站点。
 - **换算到 Lean，正好解释 N=1200。** 热点环上每层至少 4 个调用边
   （`reduceRec → lean_whnf → whnfEasyCases → whnfEasyCases → reduceRec`），且都是大函数，
   单帧远大于探针里 121 B 的简单帧；1 MB 只够 1,200 层左右，与实测撞顶吻合。
-  JSPI 给的是同一个 1 MB 预算，不会把 1,200 抬到 `maxRecDepth=4000`。
+  JSPI 给的是同一个 1 MB 预算（裸 WAT 已证实；Emscripten 胶水路径即便能撑到 1M，
+  Lean 也没有可插入的挂起点），不会把 1,200 抬到 `maxRecDepth=4000`。
 - **调大线程栈不是杠杆。** 把同一段非尾递归放进 `pthread`，只改 `DEFAULT_PTHREAD_STACK_SIZE`（64 kB / 8 MB / 32 MB），
   三个变体在 4,096 层的行为完全一样。决定 wasm 递归上界的是 V8 的栈，不是 Emscripten 的线程栈；
   生产 LSP 变体早已把线程栈设到 32 MB，N=1200 照样撞顶，原因就在这里。
@@ -291,9 +309,8 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 ### 尾调用审计：热点环里一条都没有
 
 不用全量编 Lean 也能看产物：官方 Linux 4.36.0-rc2 的 `lean` 只把 `src/Lean/Meta/WHNF.lean` 编成 C，
-再编成 wasm 对象反汇编数 `return_call`。下表是本机 apt 的 emcc 3.1.6 记录的结果；
-`.github/workflows/depth-probe.yml` 的 `whnf-audit` job 用 emsdk 6.0.0 复核同一组函数
-（行数会略有出入，判定只看热点环是否为 0）。
+再编成 wasm 对象反汇编数 `return_call`。`.github/workflows/depth-probe.yml` 的 `whnf-audit` job
+用 emsdk 6.0.0 跑下面三条命令，下表就是它的结果（本机 apt 3.1.6 的行数略高，结论相同）。
 
 ```bash
 # whnf-audit job 里执行的命令
@@ -306,11 +323,16 @@ wasm2wat --enable-all work/WHNF.o -o work/WHNF.wat
 
 | 函数 | wasm 函数体行数 | `return_call` |
 | --- | --- | --- |
-| `lean_whnf`（`whnfImp` 的 `@[export]`） | 1,072 | 0 |
-| `whnfEasyCases`（`whnfImp` 特化） | 7,370 | 0 |
-| `whnfEasyCases`（`whnfCore` 特化） | 8,355 | 0，自调用 2 次、调 `reduceRec` 1 次，全是普通 `call` |
-| `reduceRec` 实体（`___redArg`） | 5,585 | 0 |
-| `reduceQuotRec` 实体（`___redArg`） | 2,046 | 0 |
+| `lean_whnf`（`whnfImp` 的 `@[export]`） | 1,024 | 0 |
+| `whnfEasyCases`（`whnfImp` 特化） | 7,117 | 0 |
+| `whnfEasyCases`（`whnfCore` 特化） | 8,026 | 0，自调用 2 次、调 `reduceRec` 1 次，全是普通 `call` |
+| `whnfEasyCases`（未特化） | 5,475 | 0 |
+| `reduceRec` 实体（`___redArg`） | 5,458 | 0 |
+| `reduceQuotRec` 实体（`___redArg`） | 1,989 | 0 |
+
+全对象 550 个函数、173 条 `return_call`，其中 5 条落在 4–11 行的薄包装上
+（`reduceRec` / `reduceQuotRec` 的未特化入口、`deltaBetaDefinition` 与两个生成适配器），
+它们只是尾调 `___redArg` 实体，压不平热点环。
 
 源码能直接对上：`whnfImp` 的 `cache useCache e (← whnfImp e'')` 要把递归结果交给 `cache`；
 `reduceRec` 的 `major ← whnf major` 要拿结果继续构造。两处都不是尾位置，编译器没有可压平的对象。
@@ -329,9 +351,10 @@ wasm2wat --enable-all work/WHNF.o -o work/WHNF.wat
 
 ### 下一步的先后顺序
 
-1. 已经排除：JSPI（同 1 MB 预算、挂起不回收）、调大 JSPI 栈 / growable stacks（被夹回 1 MB）、
+1. 已经排除：裸 WAT 的 JSPI（同 1 MB 预算、挂起不回收）、调大 JSPI 栈 / growable stacks（被夹回 1 MB）、
    调大 pthread 栈（4,096 层行为不变）、`-mtail-call`（热点环 0 条尾调用）、
-   `@[specialize]`（函数体逐字节相同）。
+   `@[specialize]`（函数体逐字节相同）。Emscripten JSPI 胶水路径反常（≥1M）待解释，
+   但它不改变「Lean 的同步 elaboration 没有挂起点」这个结论。
 2. 剩下唯一能根治的路径是 **在 Lean 侧把 `whnfCore` 的续延变成数据**（显式工作栈 / 状态机），
    验收条件是 1 MB Worker 栈下 `maxRecDepth=4000` 不 trap。这是重构，不是 patch；
    动手前先在 wasm32 与 wasm64 各跑一次现有课程的全量编译做基线。

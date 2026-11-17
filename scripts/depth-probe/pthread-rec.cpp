@@ -3,9 +3,14 @@
 #include <pthread.h>
 #include <stddef.h>
 
+// volatile 写入阻止 -O2 把 rec(n-1)+1 折成循环；否则测到的是循环上界，不是栈上界。
+volatile int sink;
+
 __attribute__((noinline)) int rec(int n) {
   if (n == 0) return 1;
-  return rec(n - 1) + 1;
+  const int inner = rec(n - 1);
+  sink = inner;
+  return inner + 1;
 }
 
 namespace {

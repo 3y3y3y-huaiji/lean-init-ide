@@ -1,2 +1,7 @@
+# Pages 的 redirects 先于静态资源匹配：没有这两条时，下面的 /* 规则会把
+# /sitemap.xml 与 /robots.txt 也改写成 index.html。
+/sitemap.xml  /sitemap.xml  200
+/robots.txt   /robots.txt   200
+
 # 前端接管路由，未知路径回落到入口页。
 /*  /index.html  200

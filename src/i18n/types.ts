@@ -98,9 +98,14 @@ export type Messages = {
     editorTitle: string;
     detail: {
       back: string;
+      /** 面向第一次接触 Lean 的读者：解释这是什么、要不要会编程。 */
+      introTitle: string;
+      introBody: string;
       /** Goal 面板旁的通俗进度：还剩几个待证目标。 */
       goalsRemaining: (count: number) => string;
       goalsNone: string;
+      /** 解释 Goal 面板数字的含义。 */
+      goalHelp: string;
       tacticsTitle: string;
       tacticsHint: string;
       copyLink: string;

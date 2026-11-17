@@ -49,8 +49,22 @@ describe('挑战详情渲染', () => {
     expect(html).toContain('data-role="load-solution"');
     expect(html).toContain('data-role="copy-link"');
     expect(html).toContain(`href="/zh/playground?challenge=${challenge.slug}"`);
+    expect(html).toContain(t.detail.introTitle);
+    expect(html).toContain(t.detail.introBody);
+    expect(html).toContain(t.detail.goalHelp);
     expect(html).toContain(t.detail.tacticsTitle);
-    for (const tactic of challenge.tactics) expect(html).toContain(tactic.label);
+    for (const tactic of challenge.tactics) {
+      expect(html).toContain(tactic.label);
+      // 解释必须直接可见，不能只放在 title 悬浮提示里。
+      expect(html).toContain(tactic.tip.zh);
+    }
+  });
+
+  it('英文页面显示英文注释与英文战术解释', () => {
+    const html = renderChallenge('en', challenge.slug);
+    expect(html).toContain(messagesFor('en').challenges.detail.introTitle);
+    for (const tactic of challenge.tactics) expect(html).toContain(tactic.tip.en);
+    expect(html).not.toContain(challenge.tactics[0]!.tip.zh);
   });
 
   it('未知 slug 回退到 404 视图而不是抛错', () => {
@@ -83,7 +97,8 @@ describe('挑战页挂载', () => {
       },
     ];
     expect(host.dataset.role).toBe('challenge-panel');
-    expect(options.code).toBe(challenge.starter);
+    expect(options.code).toBe(challenge.starter.zh);
+    expect(options.code).toContain('-- 任务');
     expect(options.draftKey).toBe(challengeDraftKey(challenge.slug));
     expect(options.draftKey).toBe('lean:draft:challenge-double-induction');
     expect(typeof options.autoStart).toBe('boolean');

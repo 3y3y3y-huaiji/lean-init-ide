@@ -40,21 +40,28 @@ describe('挑战数据源', () => {
     }
   });
 
-  it('骨架留有 sorry，参考解法不含 sorry 且不引入 Mathlib / Lake', () => {
+  it('骨架留有 sorry 与双语注释，参考解法不含 sorry 且不引入 Mathlib / Lake', () => {
     for (const challenge of CHALLENGES) {
-      expect(challenge.starter, challenge.slug).toContain('sorry');
+      for (const locale of ['zh', 'en'] as const) {
+        const starter = challenge.starter[locale];
+        expect(starter, `${challenge.slug}.starter.${locale}`).toContain('sorry');
+        // 小白需要注释解释题目与 Lean 在做什么，不能只有一行符号。
+        expect(starter, `${challenge.slug}.starter.${locale}`).toMatch(/^-- /m);
+        expect(starter, `${challenge.slug}.starter.${locale}`).not.toMatch(/Mathlib|Lake/);
+      }
       expect(challenge.solution, challenge.slug).not.toMatch(/\bsorry\b/);
-      expect(challenge.starter, challenge.slug).not.toMatch(/Mathlib|Lake/);
       expect(challenge.solution, challenge.slug).not.toMatch(/Mathlib|Lake/);
     }
   });
 
-  it('每道题都提供可插入编辑器的快捷策略', () => {
+  it('每道题都提供可插入编辑器、且带双语解释的快捷策略', () => {
     for (const challenge of CHALLENGES) {
       expect(challenge.tactics.length, challenge.slug).toBeGreaterThanOrEqual(3);
       for (const tactic of challenge.tactics) {
         expect(tactic.label.trim().length).toBeGreaterThan(0);
         expect(tactic.insert.length).toBeGreaterThan(0);
+        expect(tactic.tip.zh.trim().length, `${tactic.label}.tip.zh`).toBeGreaterThan(0);
+        expect(tactic.tip.en.trim().length, `${tactic.label}.tip.en`).toBeGreaterThan(0);
       }
     }
   });

@@ -82,10 +82,14 @@ export const zh: Messages = {
     editorTitle: '证明练习',
     detail: {
       back: '← 返回挑战列表',
+      introTitle: '第一次来？Lean 是数学证明检查器',
+      introBody:
+        '你不需要会编程。编辑器里已经放好题目骨架，你要做的是把数学推理补全：把 sorry 换成证明步骤。Lean 会像严格的老师一样逐步检查每一步，有漏洞就会直接指出来。',
       goalsRemaining: (count) => `当前还剩 ${count} 个待证目标`,
-      goalsNone: '当前没有待证目标：把光标放进证明里，Goal 面板会实时更新',
-      tacticsTitle: '常用策略',
-      tacticsHint: '点一下就把策略片段插到光标处，不记得拼写也没关系。',
+      goalsNone: '还没有待证目标：启动 Lean 后把光标放进证明里，这里会显示还差几步。',
+      goalHelp: '这个数字表示 Lean 还在等你证明什么；减到 0，本题就完成了。',
+      tacticsTitle: '常用策略：点一下插入光标处',
+      tacticsHint: '每个按钮都是一次数学推理动作，右边写着它在做什么；不记得拼写也没关系。',
       copyLink: '复制本关分享链接',
       copyLinkDone: '链接已复制',
       copyLinkFailed: '复制失败，请从地址栏复制',
@@ -94,7 +98,7 @@ export const zh: Messages = {
       solutionHint: '先自己试，卡住再展开对照。',
       loadSolution: '载入参考解法',
       openInPlayground: '在编辑器中打开',
-      starterNote: '骨架代码已经在编辑器里，把 sorry 换成证明就能通关。',
+      starterNote: '骨架代码带中文注释，先读一遍再动手；把 sorry 换成证明就能通关。',
     },
   },
   lesson: {

@@ -84,12 +84,17 @@ export const en: Messages = {
     editorTitle: 'Proof practice',
     detail: {
       back: '← Back to all challenges',
+      introTitle: 'New here? Lean is a proof checker',
+      introBody:
+        'No programming experience needed. The starter code is already in the editor; your job is to fill in the mathematical reasoning by replacing sorry with proof steps. Lean checks every step like a strict teacher and points out any gap.',
       goalsRemaining: (count) => `${count} goal${count === 1 ? '' : 's'} left to prove`,
       goalsNone:
-        'No goals right now: put the cursor inside the proof and the Goal panel updates live',
-      tacticsTitle: 'Common tactics',
+        'No goals yet: start Lean, then put the cursor inside the proof to see how many steps remain.',
+      goalHelp:
+        'This number shows what Lean is still waiting for; when it reaches zero, the puzzle is solved.',
+      tacticsTitle: 'Common tactics: click to insert at the cursor',
       tacticsHint:
-        'Click to insert a tactic at the cursor; spelling does not need to be memorized.',
+        'Each button is one mathematical reasoning step, and the text beside it explains what it does. Spelling does not need to be memorized.',
       copyLink: 'Copy share link',
       copyLinkDone: 'Link copied',
       copyLinkFailed: 'Copy failed—please copy from the address bar',
@@ -98,7 +103,8 @@ export const en: Messages = {
       solutionHint: 'Try it yourself first; expand only when stuck.',
       loadSolution: 'Load reference solution',
       openInPlayground: 'Open in the editor',
-      starterNote: 'The starter code is already in the editor—replace `sorry` with a proof.',
+      starterNote:
+        'The starter code includes comments—read them first, then replace `sorry` with a proof.',
     },
   },
   lesson: {

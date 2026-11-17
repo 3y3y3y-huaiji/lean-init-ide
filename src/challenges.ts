@@ -1,8 +1,8 @@
 /**
  * 趣味数学挑战的唯一数据源。
  *
- * 题目本身是双语内容（标题 / 背景 / 提示都带 zh 与 en），不拆进 i18n 语言包：
- * 这样 slug、骨架代码与参考解法只有一份，新增或修改题目时不会出现两种语言题号漂移。
+ * 题目本身是双语内容（标题 / 背景 / 提示 / 骨架代码都带 zh 与 en），不拆进 i18n 语言包：
+ * 这样 slug、代码与参考解法只有一份，新增或修改题目时不会出现两种语言题号漂移。
  * UI 框架文案（按钮、进度、提示标题）仍然走 `src/i18n/`，由 locale-parity 测试守护。
  *
  * 约束：所有代码只使用 Lean 4.35.0 `Init`，不得引入 Mathlib / Lake / Std。
@@ -17,6 +17,8 @@ export type LocalizedText = {
 export type ChallengeTactic = {
   /** 按钮上显示的文案，通常是 Lean 战术名。 */
   label: string;
+  /** 面向小白的通俗解释，直接显示在按钮旁边，不能只靠 title 悬浮提示。 */
+  tip: LocalizedText;
   /** 点击后插入编辑器光标处的片段。 */
   insert: string;
 };
@@ -30,16 +32,96 @@ export type Challenge = {
   /** 面向非程序员的通俗题干背景。 */
   body: LocalizedText;
   hint: LocalizedText;
-  /** 预填到编辑器里的骨架代码。 */
-  starter: string;
+  /** 预填到编辑器里的骨架代码；带双语注释，解释题目与 Lean 在做什么。 */
+  starter: LocalizedText;
   /** 标准参考解法，必须能在 Init 环境下零错误通过。 */
   solution: string;
   /** 编辑器旁的常用策略快捷按钮。 */
   tactics: readonly ChallengeTactic[];
 };
 
-const evenDef = 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k';
-const oddDef = 'def Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1';
+/** 每题都会用到的两个定义；注释随语言切换，避免小白看到陌生符号就卡住。 */
+const evenDefCode = 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k';
+const oddDefCode = 'def Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1';
+
+const evenDef: LocalizedText = {
+  zh: `-- Even n 表示「n 是偶数」：存在一个自然数 k，使 n = 2 * k。
+${evenDefCode}`,
+  en: `-- Even n means “n is even”: there is a natural number k with n = 2 * k.
+${evenDefCode}`,
+};
+
+const oddDef: LocalizedText = {
+  zh: `-- Odd n 表示「n 是奇数」：存在一个自然数 k，使 n = 2 * k + 1。
+${oddDefCode}`,
+  en: `-- Odd n means “n is odd”: there is a natural number k with n = 2 * k + 1.
+${oddDefCode}`,
+};
+
+type TacticKey =
+  | 'rcases'
+  | 'exact'
+  | 'grind'
+  | 'addComm'
+  | 'simp'
+  | 'omega'
+  | 'intro'
+  | 'induction'
+  | 'rfl'
+  | 'rw';
+
+/**
+ * 战术词典：解释「这个按钮在数学上做了什么」，而不是只重复按钮名。
+ * 同一战术在多个题目里复用同一份文案，避免解释漂移。
+ */
+const TACTIC_TIPS: Record<TacticKey, LocalizedText> = {
+  rcases: {
+    zh: '把「存在某个数」或「并且」拆成具体条件，分别起名字。',
+    en: 'Unpack “there exists” or “and” into concrete named conditions.',
+  },
+  exact: {
+    zh: '直接给出一个完全符合目标的对象或证明。',
+    en: 'Hand Lean an object or proof that matches the goal exactly.',
+  },
+  grind: {
+    zh: '把算术与逻辑的小步骤交给 Lean 自动搜索。',
+    en: 'Let Lean search through the small arithmetic and logic steps.',
+  },
+  addComm: {
+    zh: '调用已经证明过的加法交换律：a + b = b + a。',
+    en: 'Invoke the already proven commutativity lemma: a + b = b + a.',
+  },
+  simp: {
+    zh: '用一组现成的化简规则把表达式化到最简。',
+    en: 'Simplify the expression with Lean’s built-in rewrite rules.',
+  },
+  omega: {
+    zh: '专门解决自然数或整数上的线性算术目标。',
+    en: 'Solve linear arithmetic goals over natural numbers and integers.',
+  },
+  intro: {
+    zh: '把「如果……那么……」的前提接进来，作为假设。',
+    en: 'Bring the premise of an “if … then …” goal into scope as an assumption.',
+  },
+  induction: {
+    zh: '按 n 分两步：先证 0 的情况，再假设 n 成立去证 n + 1。',
+    en: 'Split on n: prove the base case 0, then assume n to prove n + 1.',
+  },
+  rfl: {
+    zh: '两边完全一样，按定义就成立。',
+    en: 'Both sides are identical, so it holds by definition.',
+  },
+  rw: {
+    zh: '用一条等式把目标里的某部分替换掉。',
+    en: 'Replace part of the goal with an equation.',
+  },
+};
+
+const tactic = (label: string, key: TacticKey, insert: string): ChallengeTactic => ({
+  label,
+  tip: TACTIC_TIPS[key],
+  insert,
+});
 
 export const CHALLENGES: readonly Challenge[] = [
   {
@@ -57,13 +139,27 @@ export const CHALLENGES: readonly Challenge[] = [
       zh: '先把两个「存在某个 k」拆开，得到 a = 2x、b = 2y。要证明 a + b 是偶数，只需要指出新的 k 是 x + y。',
       en: 'Unpack both “there exists some k” assumptions to get a = 2x and b = 2y. To show a + b is even, you only need to name the new k as x + y.',
     },
-    starter: `${evenDef}
+    starter: {
+      zh: `${evenDef.zh}
 
+-- 任务：已知 a 和 b 都是偶数，证明 a + b 也是偶数。
+-- ha 与 hb 就是题目给的两个条件，可以先从它们入手。
+-- 把下面的 sorry 换成证明步骤；卡住时看「提示」或点上面的策略按钮。
 theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
     Even (a + b) := by
   sorry
 `,
-    solution: `${evenDef}
+      en: `${evenDef.en}
+
+-- Task: given that a and b are even, prove that a + b is even too.
+-- ha and hb are the two assumptions; start by unpacking them.
+-- Replace sorry with proof steps; use the hint or the tactic buttons if stuck.
+theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
+    Even (a + b) := by
+  sorry
+`,
+    },
+    solution: `${evenDefCode}
 
 theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
     Even (a + b) := by
@@ -72,9 +168,9 @@ theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
   exact ⟨x + y, by grind⟩
 `,
     tactics: [
-      { label: 'rcases', insert: 'rcases ' },
-      { label: 'exact', insert: 'exact ' },
-      { label: 'grind', insert: 'grind' },
+      tactic('rcases', 'rcases', 'rcases '),
+      tactic('exact', 'exact', 'exact '),
+      tactic('grind', 'grind', 'grind'),
     ],
   },
   {
@@ -92,15 +188,30 @@ theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
       zh: '奇数写成 2x + 1 与 2y + 1。相加后是 2x + 2y + 2，也就是 2 × (x + y + 1)。',
       en: 'Write the odds as 2x + 1 and 2y + 1. Their sum is 2x + 2y + 2, which is 2 × (x + y + 1).',
     },
-    starter: `${evenDef}
-${oddDef}
+    starter: {
+      zh: `${evenDef.zh}
+${oddDef.zh}
 
+-- 任务：已知 a、b 都是奇数，证明 a + b 是偶数。
+-- 每个奇数都能写成 2k + 1；两个多出来的 1 合起来又能凑成一个 2。
+-- 把 sorry 换成证明步骤，必要时点上面的策略按钮。
 theorem odd_plus_odd (a b : Nat) (ha : Odd a) (hb : Odd b) :
     Even (a + b) := by
   sorry
 `,
-    solution: `${evenDef}
-${oddDef}
+      en: `${evenDef.en}
+${oddDef.en}
+
+-- Task: given odd a and odd b, prove that a + b is even.
+-- Each odd number is 2k + 1; the two spare 1s combine into another 2.
+-- Replace sorry with proof steps; the tactic buttons above can help.
+theorem odd_plus_odd (a b : Nat) (ha : Odd a) (hb : Odd b) :
+    Even (a + b) := by
+  sorry
+`,
+    },
+    solution: `${evenDefCode}
+${oddDefCode}
 
 theorem odd_plus_odd (a b : Nat) (ha : Odd a) (hb : Odd b) :
     Even (a + b) := by
@@ -109,9 +220,9 @@ theorem odd_plus_odd (a b : Nat) (ha : Odd a) (hb : Odd b) :
   exact ⟨x + y + 1, by grind⟩
 `,
     tactics: [
-      { label: 'rcases', insert: 'rcases ' },
-      { label: 'exact', insert: 'exact ' },
-      { label: 'grind', insert: 'grind' },
+      tactic('rcases', 'rcases', 'rcases '),
+      tactic('exact', 'exact', 'exact '),
+      tactic('grind', 'grind', 'grind'),
     ],
   },
   {
@@ -129,15 +240,30 @@ theorem odd_plus_odd (a b : Nat) (ha : Odd a) (hb : Odd b) :
       zh: '偶数写成 2x，奇数写成 2y + 1。相加后要证明它等于 2 × (x + y) + 1。',
       en: 'Write the even number as 2x and the odd number as 2y + 1. After adding, show the result equals 2 × (x + y) + 1.',
     },
-    starter: `${evenDef}
-${oddDef}
+    starter: {
+      zh: `${evenDef.zh}
+${oddDef.zh}
 
+-- 任务：已知 a 是偶数、b 是奇数，证明 a + b 是奇数。
+-- 偶数提供若干个 2，奇数多出一个 1，所以结果一定多出一个 1。
+-- 把 sorry 换成证明步骤，必要时点上面的策略按钮。
 theorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) :
     Odd (a + b) := by
   sorry
 `,
-    solution: `${evenDef}
-${oddDef}
+      en: `${evenDef.en}
+${oddDef.en}
+
+-- Task: given even a and odd b, prove that a + b is odd.
+-- The even number contributes whole 2s while the odd number leaves one extra 1.
+-- Replace sorry with proof steps; the tactic buttons above can help.
+theorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) :
+    Odd (a + b) := by
+  sorry
+`,
+    },
+    solution: `${evenDefCode}
+${oddDefCode}
 
 theorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) :
     Odd (a + b) := by
@@ -146,9 +272,9 @@ theorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) :
   exact ⟨x + y, by grind⟩
 `,
     tactics: [
-      { label: 'rcases', insert: 'rcases ' },
-      { label: 'exact', insert: 'exact ' },
-      { label: 'grind', insert: 'grind' },
+      tactic('rcases', 'rcases', 'rcases '),
+      tactic('exact', 'exact', 'exact '),
+      tactic('grind', 'grind', 'grind'),
     ],
   },
   {
@@ -166,16 +292,27 @@ theorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) :
       zh: '`Nat.add_comm a b` 的类型正是 `a + b = b + a`。用 `rw [Nat.add_comm]` 就能把目标改写成两边相同。',
       en: '`Nat.add_comm a b` has exactly the type `a + b = b + a`. Use `rw [Nat.add_comm]` to turn the goal into two identical sides.',
     },
-    starter: `theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
+    starter: {
+      zh: `-- 任务：对任意自然数 a，证明 a + 2 = 2 + a。
+-- 这是加法交换律的一个特例；Lean 的 Init 里已经有通用的证明。
+-- 想一想：哪一个现成定理可以直接把左右两边换过来？
+theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
   sorry
 `,
+      en: `-- Task: for any natural number a, prove that a + 2 = 2 + a.
+-- This is a special case of commutativity; Lean’s Init already proves the general rule.
+-- Think: which existing theorem can swap the two sides for you?
+theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
+  sorry
+`,
+    },
     solution: `theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
   rw [Nat.add_comm]
 `,
     tactics: [
-      { label: 'rw [Nat.add_comm]', insert: 'rw [Nat.add_comm]' },
-      { label: 'simp', insert: 'simp' },
-      { label: 'omega', insert: 'omega' },
+      tactic('rw [Nat.add_comm]', 'addComm', 'rw [Nat.add_comm]'),
+      tactic('simp', 'simp', 'simp'),
+      tactic('omega', 'omega', 'omega'),
     ],
   },
   {
@@ -193,14 +330,28 @@ theorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) :
       zh: '先用 `intro` 把「同时成立」的假设拿进来，再 `rcases` 拆出两条等式，最后交给 `grind` 处理整数矛盾。',
       en: 'Use `intro` to bring the “both hold” assumption into scope, `rcases` it into the two equations, then hand the arithmetic contradiction to `grind`.',
     },
-    starter: `${evenDef}
-${oddDef}
+    starter: {
+      zh: `${evenDef.zh}
+${oddDef.zh}
 
+-- 任务：证明同一个自然数不可能既是偶数又是奇数。
+-- 记号 ¬ P 读作「P 不成立」；常用做法是先假设 P，再推出矛盾。
+-- 把 sorry 换成证明步骤，必要时点上面的策略按钮。
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   sorry
 `,
-    solution: `${evenDef}
-${oddDef}
+      en: `${evenDef.en}
+${oddDef.en}
+
+-- Task: prove that no natural number can be both even and odd.
+-- ¬ P means “P is false”; a common proof assumes P and derives a contradiction.
+-- Replace sorry with proof steps; the tactic buttons above can help.
+theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
+  sorry
+`,
+    },
+    solution: `${evenDefCode}
+${oddDefCode}
 
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   intro h
@@ -208,9 +359,9 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   grind
 `,
     tactics: [
-      { label: 'intro', insert: 'intro ' },
-      { label: 'rcases', insert: 'rcases ' },
-      { label: 'grind', insert: 'grind' },
+      tactic('intro', 'intro', 'intro '),
+      tactic('rcases', 'rcases', 'rcases '),
+      tactic('grind', 'grind', 'grind'),
     ],
   },
   {
@@ -231,16 +382,31 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
       zh: '对 n 做归纳。n = 0 时两边都是 0；n + 1 时，先展开一步得到 `double n + 2`，再用归纳假设替换 `double n`。',
       en: 'Induct on n. At n = 0 both sides are 0; at n + 1, unfold one step to get `double n + 2`, then replace `double n` with the induction hypothesis.',
     },
-    starter: `-- 翻倍过程：从 0 开始，每走一步加 2
+    starter: {
+      zh: `-- 「翻倍」过程：从 0 开始，每走一步加 2。
 def double : Nat → Nat
   | 0 => 0
   | n + 1 => double n + 2
 
+-- 任务：走 n 步之后，结果正好是 2 * n。
+-- 这种「一步一步」的规律适合用归纳法；可以先点上面的 induction 按钮。
+-- 把 sorry 换成证明步骤。
 theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
   sorry
 `,
-    solution: `-- 翻倍过程：从 0 开始，每走一步加 2
+      en: `-- The “doubling” process: start at 0 and add 2 at every step.
 def double : Nat → Nat
+  | 0 => 0
+  | n + 1 => double n + 2
+
+-- Task: after n steps, the result is exactly 2 * n.
+-- Rules about “one step after another” call for induction; the induction button above can start it.
+-- Replace sorry with proof steps.
+theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
+  sorry
+`,
+    },
+    solution: `def double : Nat → Nat
   | 0 => 0
   | n + 1 => double n + 2
 
@@ -253,10 +419,10 @@ theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
     omega
 `,
     tactics: [
-      { label: 'induction', insert: 'induction n with\n  | zero => rfl\n  | succ n ih =>\n    ' },
-      { label: 'rfl', insert: 'rfl' },
-      { label: 'rw', insert: 'rw [' },
-      { label: 'omega', insert: 'omega' },
+      tactic('induction', 'induction', 'induction n with\n  | zero => rfl\n  | succ n ih =>\n    '),
+      tactic('rfl', 'rfl', 'rfl'),
+      tactic('rw', 'rw', 'rw ['),
+      tactic('omega', 'omega', 'omega'),
     ],
   },
 ];

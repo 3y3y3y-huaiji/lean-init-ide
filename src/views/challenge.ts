@@ -48,6 +48,10 @@ export const renderChallenges = (locale: Locale): string => {
       <h1 class="mt-0 mb-4 text-[clamp(28px,4.4vw,42px)] tracking-[-0.02em]">${t.title}</h1>
       <p class="mt-0 mb-0 max-w-[640px] text-[clamp(15px,1.6vw,18px)] leading-relaxed text-muted">${t.lead}</p>
     </section>
+    <section class="mt-5 max-w-[760px] rounded-xl border border-accent/40 bg-accent-soft px-4 py-3">
+      <p class="m-0 mb-1 text-[13px] font-[650] text-fg">${t.detail.introTitle}</p>
+      <p class="m-0 text-[13px] leading-relaxed text-muted">${t.detail.introBody}</p>
+    </section>
     <section
       data-role="challenge-list"
       class="mt-[clamp(28px,4vw,44px)] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5"
@@ -69,8 +73,11 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
   };
   const tactics = challenge.tactics
     .map(
-      (tactic, index) =>
-        `<button type="button" class="${toolbarButtonClass}" data-tactic-index="${index}">${escapeHtml(tactic.label)}</button>`,
+      (tactic, index) => `
+        <div class="flex items-start gap-2">
+          <button type="button" class="${toolbarButtonClass}" data-tactic-index="${index}">${escapeHtml(tactic.label)}</button>
+          <span class="min-w-0 pt-1 text-[11.5px] leading-snug text-muted">${escapeHtml(tactic.tip[locale])}</span>
+        </div>`,
     )
     .join('');
 
@@ -81,6 +88,11 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
         <p class="m-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
         <h1 class="mt-0 mb-3 text-[clamp(26px,4vw,38px)] tracking-[-0.02em]">${escapeHtml(challenge.title[locale])}</h1>
         <p class="m-0 text-[15px] leading-relaxed text-muted">${escapeHtml(challenge.body[locale])}</p>
+      </div>
+
+      <div class="mt-4 max-w-[760px] rounded-xl border border-accent/40 bg-accent-soft px-4 py-3">
+        <p class="m-0 mb-1 text-[13px] font-[650] text-fg">${detail.introTitle}</p>
+        <p class="m-0 text-[13px] leading-relaxed text-muted">${detail.introBody}</p>
       </div>
 
       <div class="mt-4 flex flex-wrap items-center gap-2">
@@ -95,12 +107,12 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
         ></span>
       </div>
 
-      <div
-        class="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-panel-soft px-3.5 py-2.5"
-      >
-        <span data-role="goal-progress" class="text-[13px] font-[650] text-fg">${detail.goalsNone}</span>
-        <span class="text-[11px] uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</span>
-        <div class="flex flex-wrap items-center gap-1.5" title="${detail.tacticsHint}">${tactics}</div>
+      <div class="mt-6 rounded-xl border border-line bg-panel-soft px-3.5 py-3">
+        <p data-role="goal-progress" class="m-0 text-[14px] font-[650] text-fg">${detail.goalsNone}</p>
+        <p class="mt-1 mb-0 text-[12px] leading-relaxed text-muted">${detail.goalHelp}</p>
+        <p class="mt-3 mb-1 text-[11px] uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</p>
+        <p class="m-0 mb-2 text-[12px] leading-relaxed text-muted">${detail.tacticsHint}</p>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-1.5">${tactics}</div>
       </div>
 
       <div data-role="challenge-panel" class="mt-3">${renderLeanMarkup(
@@ -176,7 +188,7 @@ export const mountChallenge = async (
   const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
   const panel = createLeanPanel(panelHost, {
     variant: 'full',
-    code: challenge.starter,
+    code: challenge.starter[locale],
     locale,
     draftKey: challengeDraftKey(challenge.slug),
     // 与课程页一致：标准设备打开挑战即启动；低内存/省流模式仍需用户手动确认。

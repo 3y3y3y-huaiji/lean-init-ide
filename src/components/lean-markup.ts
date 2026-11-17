@@ -253,11 +253,20 @@ export const renderLeanMarkup = (
           .map(
             (extension) => `
           <div class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
-            <span class="min-w-0 truncate">${extension.label}</span>
+            <label class="flex min-w-0 cursor-pointer items-center gap-1.5" title="${t.libraryDefault}">
+              <input type="checkbox" class="accent-[var(--accent)]" data-library-default="${extension.id}" aria-label="${t.libraryDefault}" />
+              <span class="min-w-0 truncate">${extension.label}</span>
+            </label>
             <button type="button" class="${toolbarButtonClass}" data-library="${extension.id}" data-state="idle">${t.libraryLoad}</button>
           </div>`,
           )
           .join('')}
+        <button
+          type="button"
+          data-role="release-all-libraries"
+          disabled
+          class="${toolbarButtonClass} mt-1 w-full"
+        >${t.libraryReleaseAll}</button>
         <p class="m-0 mt-1 px-1.5 text-[11px] leading-normal text-muted">${t.librariesHint}</p>
       </div>
     </details>`;

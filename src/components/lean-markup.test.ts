@@ -47,6 +47,18 @@ describe('renderLeanMarkup', () => {
     expect(html).toContain('href="/zh/playground"');
   });
 
+  it('库菜单提供启动默认勾选与独立的全部释放按钮', () => {
+    const t = messagesFor('zh').playground;
+    const html = renderLeanMarkup('zh', 'full', t);
+    expect(html).toContain('data-library-default="std"');
+    expect(html).toContain('data-library-default="batteries"');
+    expect(html).toContain(`aria-label="${t.libraryDefault}"`);
+    expect(html).toContain('data-role="release-all-libraries"');
+    expect(html).toContain(t.libraryReleaseAll);
+    // 单个库的释放按钮仍然存在，释放全部是独立控件。
+    expect(html).toContain('data-library="std"');
+  });
+
   it('按诊断级别区分位置与徽章样式', () => {
     expect(diagnosticLocationClass(1)).toContain('text-err');
     expect(diagnosticLocationClass(2)).toContain('text-warn');

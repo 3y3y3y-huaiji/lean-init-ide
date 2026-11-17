@@ -1,5 +1,6 @@
 const AUTO_START_KEY = 'lean:auto-start';
 const RUNTIME_SESSION_KEY = 'lean:runtime-session';
+const DEFAULT_EXTENSIONS_KEY = 'lean:default-extensions';
 
 /**
  * 打开编辑器页时是否自动下载并启动 Lean。
@@ -18,6 +19,31 @@ export const setAutoStart = (value: boolean) => {
     localStorage.setItem(AUTO_START_KEY, String(value));
   } catch {
     // 忽略隐私模式下的写入失败，当前页面仍然生效。
+  }
+};
+
+/**
+ * 启动 Lean 时默认挂载的扩展库。
+ * 放入 localStorage 而不是 sessionStorage：这是跨访问保留的启动偏好；
+ * 是否自动启动仍由 getAutoStart 单独控制。
+ */
+export const getDefaultExtensions = (): string[] => {
+  try {
+    const raw = localStorage.getItem(DEFAULT_EXTENSIONS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === 'string');
+  } catch {
+    return [];
+  }
+};
+
+export const setDefaultExtensions = (ids: Iterable<string>): void => {
+  try {
+    localStorage.setItem(DEFAULT_EXTENSIONS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // 同上：隐私模式下忽略，当前页面仍按内存中的勾选执行。
   }
 };
 

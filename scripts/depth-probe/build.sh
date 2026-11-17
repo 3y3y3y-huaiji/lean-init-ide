@@ -82,6 +82,13 @@ build tailcall deep-rec.cpp _depth_probe,_tail_probe -mtail-call -DUSE_TAIL_CALL
 
 # 挂起对照组：每 64 层 sleep 一次。ASYNCIFY 会把栈展开到线性内存。
 build asyncify yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify
+# 对照：同一段代码完全不挂起，用来判断 asyncify 的 24,453 是不是本来就有的帧预算。
+build yield-noasync yield-rec.cpp _yield_probe -DPROBE_NO_YIELD
+# 挂起密度对照：1 MB 缓冲区，每 4096 层才挂起一次。若「分段接力」成立，应显著超过 24,453。
+build asyncify-1m-4096 yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=4096
+# 缓冲区放大：8 MB / 32 MB，看深度是否随 ASYNCIFY_STACK_SIZE 线性放大。
+build asyncify-8m yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=8388608 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=4096 -sINITIAL_MEMORY=134217728
+build asyncify-32m yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=33554432 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=4096 -sINITIAL_MEMORY=268435456
 # JSPI_EXPORTS 匹配的是 wasm 导出名（同默认表里的 main），不是 C 符号的 _yield_probe；
 # 写成带下划线的名字不会报错，只会在运行期 suspend 时抛 SuspendError。
 build jspi-yield yield-rec.cpp _yield_probe -sJSPI=1 -sJSPI_EXPORTS=yield_probe -sJSPI_IMPORTS=emscripten_sleep
@@ -114,6 +121,8 @@ fi
 # 冲突验证：生产运行时是 -pthread，JSPI 与它不兼容时这里应当失败或告警。
 build pthread-jspi deep-rec.cpp _depth_probe,_tail_probe -pthread -sJSPI=1 -sPTHREAD_POOL_SIZE=2
 build pthread-baseline deep-rec.cpp _depth_probe,_tail_probe -pthread -sPTHREAD_POOL_SIZE=2
+# 冲突验证：ASYNCIFY 与 -pthread 同时开，emcc 是否接受这个组合。
+build pthread-asyncify deep-rec.cpp _depth_probe,_tail_probe -pthread -sASYNCIFY=1 -sPTHREAD_POOL_SIZE=2
 
 # pthread 栈大小对照：同一段递归放进线程池线程，只改线程栈。
 build pthread-stack-64k pthread-rec.cpp _pthread_probe -pthread -sPTHREAD_POOL_SIZE=2 -sDEFAULT_PTHREAD_STACK_SIZE=65536

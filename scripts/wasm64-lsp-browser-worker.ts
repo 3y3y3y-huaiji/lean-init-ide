@@ -147,7 +147,10 @@ self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
         return;
       }
     }
-    workerSelf.postMessage({ exit: code });
+    // PROXY_TO_PTHREAD 下 callMain 只负责派发，返回不代表进程结束；真实退出码统一走
+    // lspProcessExit。若在这里发 exit:0，宿主会把它当成「进程已死」，
+    // 把还在代理队列里的 publishDiagnostics 一起判死。
+    if (code !== 0) workerSelf.postMessage({ failure: `callMain 返回 ${code}` });
   } catch (error: unknown) {
     workerSelf.postMessage({ failure: String((error as Error)?.stack ?? error) });
   }

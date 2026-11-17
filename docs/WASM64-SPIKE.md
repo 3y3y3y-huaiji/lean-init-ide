@@ -389,6 +389,7 @@ gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth \
 
 # 尾调用审计（下载约 600 MB 发行包）
 gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth -f whnf_audit=true
+# 本地 token 没有 actions:write 时改用提交信息标记 [whnf-audit] 后 push
 ```
 
 本地只跑静态检查：`pnpm run format:check:spike && pnpm run lint:spike && pnpm run typecheck:spike`。

@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://criticalthinking.de5.net/sitemap.xml

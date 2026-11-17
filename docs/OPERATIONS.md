@@ -111,7 +111,12 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 本地 e2e 由 `scripts/local-gateway.mjs` 读取同一份 `_headers`，所以 CSP 写错会在 CI 的浏览器测试里暴露，
 不需要等到部署后才发现。
 
-`public/robots.txt` 与 `public/sitemap.xml` 是静态文件；新增课程或路由时要同步 sitemap。
+`sitemap.xml` 与 `robots.txt` 不再保存在 `public/` 里：`scripts/generate-seo.mjs` 在
+`build` / `build:web` 时写入 `dist/`。路由来自 `src/prerender.ts` 的 `allStaticRoutes`
+（课程数据源是 `src/i18n/*.ts`），`lastmod` 取对应源文件的最后一次 git 提交日期，
+浅克隆或无 git 历史时才退到文件 mtime。新增课程或路由不需要再手工改 sitemap。
+`public/_redirects` 必须在 `/* /index.html 200` 之前显式放行这两个文件，
+否则 Pages 的 SPA 回退会把它们改写成 HTML。
 
 ## 部署前一次性配置
 

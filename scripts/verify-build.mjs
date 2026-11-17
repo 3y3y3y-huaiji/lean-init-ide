@@ -117,6 +117,9 @@ if (!(await exists(headersPath))) {
     // 镜像与 GitHub 回退都在页面 / Service Worker 里跨源 fetch；漏放行会静默退回慢源。
     'https://*.modelscope.cn',
     'https://raw.githubusercontent.com',
+    // SEO 文件的类型必须显式声明，避免边缘按默认类型返回。
+    'Content-Type: application/xml; charset=utf-8',
+    'Content-Type: text/plain; charset=utf-8',
   ]) {
     if (!headers.includes(requirement)) fail(`_headers 缺少 "${requirement}"`);
   }
@@ -176,6 +179,79 @@ if (!(await exists(wasmDir))) {
     const size = (await stat(file)).size;
     if (size !== asset.bytes) {
       fail(`dist/wasm-lean4/${asset.name} 为 ${size} 字节，清单要求 ${asset.bytes}`);
+    }
+  }
+}
+
+// 7. SEO 产物：必须真实存在，课程 URL 数量与构建出的课程页一一对应
+const sitemapPath = resolve(dist, 'sitemap.xml');
+const robotsPath = resolve(dist, 'robots.txt');
+
+if (!(await exists(sitemapPath))) {
+  fail('缺少 dist/sitemap.xml，构建时 generate-seo.mjs 未执行');
+}
+if (!(await exists(robotsPath))) {
+  fail('缺少 dist/robots.txt，构建时 generate-seo.mjs 未执行');
+}
+
+if (await exists(sitemapPath)) {
+  const xml = await readFile(sitemapPath, 'utf8');
+  if (!xml.includes('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')) {
+    fail('sitemap.xml 缺少合法的 urlset 声明');
+  }
+
+  const locs = Array.from(xml.matchAll(/<loc>([^<]+)<\/loc>/g), (match) => match[1]);
+  if (locs.length === 0) fail('sitemap.xml 没有任何 <loc>');
+  if (new Set(locs).size !== locs.length) fail('sitemap.xml 存在重复 URL');
+  for (const loc of locs) {
+    if (!loc.startsWith('https://criticalthinking.de5.net/')) {
+      fail(`sitemap.xml 含非本站 URL：${loc}`);
+    }
+  }
+  for (const match of xml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(match[1])) fail(`sitemap.xml 的 lastmod 非法：${match[1]}`);
+  }
+
+  for (const locale of ['zh', 'en']) {
+    const learnDir = resolve(dist, locale, 'learn');
+    if (!(await exists(learnDir))) {
+      fail(`缺少 dist/${locale}/learn/，无法核对 sitemap 课程数量`);
+      continue;
+    }
+    const pages = (await readdir(learnDir)).filter((name) => name.endsWith('.html'));
+    const lessonLocs = locs.filter((loc) => loc.includes(`/${locale}/learn/`));
+    if (lessonLocs.length !== pages.length) {
+      fail(
+        `sitemap.xml 的 ${locale} 课程 URL 有 ${lessonLocs.length} 条，` +
+          `构建出的课程页有 ${pages.length} 个，两者不一致`,
+      );
+    }
+    for (const page of pages) {
+      const slug = page.slice(0, -'.html'.length);
+      if (!locs.includes(`https://criticalthinking.de5.net/${locale}/learn/${slug}`)) {
+        fail(`sitemap.xml 缺少课程 URL /${locale}/learn/${slug}`);
+      }
+    }
+  }
+}
+
+if (await exists(robotsPath)) {
+  const robots = await readFile(robotsPath, 'utf8');
+  if (!robots.includes('User-agent: *')) fail('robots.txt 缺少 User-agent');
+  if (!robots.includes('Sitemap: https://criticalthinking.de5.net/sitemap.xml')) {
+    fail('robots.txt 未声明 sitemap 地址');
+  }
+}
+
+// 8. Pages 的 _redirects 先于静态资源匹配：必须把 SEO 文件放在 SPA 兜底之前
+const redirectsPath = resolve(dist, '_redirects');
+if (!(await exists(redirectsPath))) {
+  fail('缺少 dist/_redirects');
+} else {
+  const redirects = await readFile(redirectsPath, 'utf8');
+  for (const path of ['/sitemap.xml', '/robots.txt']) {
+    if (!new RegExp(`^${path}\\s+${path}\\s+200$`, 'm').test(redirects)) {
+      fail(`_redirects 缺少 ${path} 的 200 直出规则，会被 /* SPA 回退吞掉`);
     }
   }
 }

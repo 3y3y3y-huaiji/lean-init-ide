@@ -145,6 +145,26 @@ await check('Service Worker 可更新', async () => {
   return `200，Cache-Control=${response.headers.get('cache-control') ?? '(缺失)'}`;
 });
 
+await check('SEO 文件直出', async () => {
+  const sitemap = await request(`${origin}/sitemap.xml`);
+  assert(sitemap.status === 200, `sitemap 期望 200，实际 ${sitemap.status}`);
+  const sitemapType = sitemap.headers.get('content-type') ?? '';
+  assert(sitemapType.includes('xml'), `sitemap Content-Type=${sitemapType || '(缺失)'}`);
+  const xml = sitemap.body.toString('utf8');
+  assert(xml.includes('<urlset'), 'sitemap 不是 XML，疑似被 SPA 回退改写成 HTML');
+  assert(xml.includes('/zh/learn/') && xml.includes('/en/learn/'), 'sitemap 缺少中英文课程 URL');
+
+  const robots = await request(`${origin}/robots.txt`);
+  assert(robots.status === 200, `robots 期望 200，实际 ${robots.status}`);
+  const robotsType = robots.headers.get('content-type') ?? '';
+  assert(robotsType.includes('text/plain'), `robots Content-Type=${robotsType || '(缺失)'}`);
+  assert(
+    robots.body.toString('utf8').includes('Sitemap: https://criticalthinking.de5.net/sitemap.xml'),
+    'robots.txt 未声明 sitemap',
+  );
+  return '200，Content-Type 正确，未被 SPA 回退拦截';
+});
+
 await check(`/cdn 分片 Range（${probe.key}）`, async () => {
   const response = await request(`${origin}/cdn/${probe.key}`, {
     headers: { Range: 'bytes=0-15' },

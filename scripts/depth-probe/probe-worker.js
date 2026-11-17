@@ -14,6 +14,9 @@ const CONFIG = {
   // 缓冲区放大，看深度是否随 ASYNCIFY_STACK_SIZE 线性放大。
   'asyncify-8m': { fn: '_yield_probe', cap: 1 << 19, expected: (n) => n, async: true },
   'asyncify-32m': { fn: '_yield_probe', cap: 1 << 19, expected: (n) => n, async: true },
+  // 高频挂起 + 大缓冲区：把「缓冲区上界」和「原生栈上界」分开。
+  'asyncify-8m-64': { fn: '_yield_probe', cap: 1 << 17, expected: (n) => n, async: true },
+  'asyncify-32m-64': { fn: '_yield_probe', cap: 1 << 17, expected: (n) => n, async: true },
   'jspi-yield': { fn: '_yield_probe', cap: 1 << 20, expected: (n) => n },
   'jspi-yield-1m': { fn: '_yield_probe', cap: 1 << 20, expected: (n) => n },
   // 浏览器级 JSPI 两两对照：resolved 走 V8 已决议快路径，pending 才是真挂起。

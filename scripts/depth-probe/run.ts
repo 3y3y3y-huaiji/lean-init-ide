@@ -108,6 +108,7 @@ const main = async (): Promise<void> => {
   const variants =
     optionalString(parsed, 'variants') ??
     'baseline,jspi,tailcall,asyncify,yield-noasync,asyncify-1m-4096,asyncify-8m,asyncify-32m,' +
+      'asyncify-8m-64,asyncify-32m-64,' +
       'jspi-yield,jspi-yield-1m,jspi-resolved,jspi-pending,heapstack,' +
       'pthread-stack-64k,pthread-stack-8m,pthread-stack-32m';
   const chromePath = optionalString(parsed, 'chrome');

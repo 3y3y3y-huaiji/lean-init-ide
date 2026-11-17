@@ -89,6 +89,9 @@ build asyncify-1m-4096 yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_
 # 缓冲区放大：8 MB / 32 MB，看深度是否随 ASYNCIFY_STACK_SIZE 线性放大。
 build asyncify-8m yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=8388608 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=4096 -sINITIAL_MEMORY=134217728
 build asyncify-32m yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=33554432 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=4096 -sINITIAL_MEMORY=268435456
+# 缓冲区 + 高频挂起：缓冲区是否真是上界的唯一变量。
+build asyncify-8m-64 yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=8388608 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=64 -sINITIAL_MEMORY=134217728
+build asyncify-32m-64 yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=33554432 -sEXPORTED_RUNTIME_METHODS=ccall,Asyncify -DYIELD_INTERVAL=64 -sINITIAL_MEMORY=268435456
 # JSPI_EXPORTS 匹配的是 wasm 导出名（同默认表里的 main），不是 C 符号的 _yield_probe；
 # 写成带下划线的名字不会报错，只会在运行期 suspend 时抛 SuspendError。
 build jspi-yield yield-rec.cpp _yield_probe -sJSPI=1 -sJSPI_EXPORTS=yield_probe -sJSPI_IMPORTS=emscripten_sleep

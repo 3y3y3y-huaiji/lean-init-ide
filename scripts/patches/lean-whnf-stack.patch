@@ -1,0 +1,195 @@
+--- a/src/Lean/Meta/WHNF.lean
++++ b/src/Lean/Meta/WHNF.lean
+@@ -615,78 +615,130 @@
+   | .letE _ _ _ b nondep => if b.hasLooseBVars || (nondep && !consumeNondep) then e else consumeUnusedLet b consumeNondep
+   | _ => e
+ 
+-/--
+-Apply beta-reduction, zeta-reduction (i.e., unfold let local-decls), iota-reduction,
+-expand let-expressions, expand assigned meta-variables, unfold aux declarations.
+--/
+-partial def whnfCore (e : Expr) : MetaM Expr :=
+-  go e
+-where
+-  go (e : Expr) : MetaM Expr := do
+-    whnfEasyCases e fun e => do
+-      trace[Meta.whnf] e
+-      match e with
+-      | .const ..  => pure e
+-      | .letE _ _ v b nondep =>
++/-- `whnfCore` 的待处理工作。只有「应用头部」和「投影参数」需要子结果，
++其余分支都是尾调用；把这两类挂起在显式栈上，递归环就不再占原生栈。 -/
++private inductive WhnfFrame where
++  | app (e : Expr)
++  | proj (i : Nat) (e : Expr)
++
++mutual
++  /-- 显式工作栈版本的主循环。`reduceRec` / `reduceQuotRec` 的续延改成返回
++  `Option`，成功后直接尾调用本函数，避免续延闭包里的间接调用把每一层都留在
++  原生栈上。 -/
++  private partial def whnfCoreGo (stack : List WhnfFrame) (e : Expr) : MetaM Expr := do
++    match e with
++    | .forallE .. | .lam .. | .sort .. | .lit .. => whnfCoreFinish stack e
++    | .bvar .. => panic! "loose bvar in expression"
++    | .mdata _ e => whnfCoreGo stack e
++    | .fvar fvarId =>
++      let decl ← fvarId.getDecl
++      match decl with
++      | .ldecl (value := v) (nondep := false) .. =>
+         let cfg ← getConfig
+-        if cfg.zeta && (!nondep || cfg.zetaHave) then
+-          go <| expandLet b #[v] (zetaHave := cfg.zetaHave)
+-        else if cfg.zetaUnused && !b.hasLooseBVars then
+-          go <| consumeUnusedLet b
++        let ctx ← read
++        let unfold :=
++          decl.isImplementationDetail || cfg.zetaDelta || ctx.zetaDeltaSet.contains fvarId
++        if unfold then
++          if ctx.trackZetaDelta then
++            addZetaDeltaFVarId fvarId
++          whnfCoreGo stack v
+         else
+-          return e
+-      | .app f ..       =>
+-        let cfg ← getConfig
+-        let f := f.getAppFn
+-        let f' ← go f
+-        /-
+-        If `f'` is a lambda, then we perform beta-reduction here IF
+-        1- `cfg.beta` is enabled, OR
+-        2- `f` was not a lambda expression. That is, `f` was reduced, and the beta-reduction step is part
+-           of this step. This is similar to allowing beta-reduction while unfolding expressions even if `cfg.beta := false`.
+-
+-        We added case 2 because a failure at `norm_cast`. See test `6123_mod_cast.lean`.
+-        Another possible fix to this test is to set `beta := true` at the `Simp.Config` value at
+-        `NormCast.lean`.
+-        -/
+-        if f'.isLambda && (cfg.beta || !f.isLambda) then
+-          let revArgs := e.getAppRevArgs
+-          go <| f'.betaRev revArgs
+-        else if let some eNew ← whnfDelayedAssigned? f' e then
+-          go eNew
++          whnfCoreFinish stack e
++      | _ => whnfCoreFinish stack e
++    | .mvar mvarId =>
++      match (← getExprMVarAssignment? mvarId) with
++      | some v => whnfCoreGo stack v
++      | none   => whnfCoreFinish stack e
++    | .const .. =>
++      trace[Meta.whnf] e
++      whnfCoreFinish stack e
++    | .letE _ _ v b nondep =>
++      trace[Meta.whnf] e
++      let cfg ← getConfig
++      if cfg.zeta && (!nondep || cfg.zetaHave) then
++        whnfCoreGo stack <| expandLet b #[v] (zetaHave := cfg.zetaHave)
++      else if cfg.zetaUnused && !b.hasLooseBVars then
++        whnfCoreGo stack <| consumeUnusedLet b
++      else
++        whnfCoreFinish stack e
++    | .app .. =>
++      trace[Meta.whnf] e
++      whnfCoreGo (.app e :: stack) e.getAppFn
++    | .proj _ i c =>
++      trace[Meta.whnf] e
++      match (← getConfig).proj with
++      | .no => whnfCoreFinish stack e
++      | .yes => whnfCoreGo (.proj i e :: stack) c
++      -- Remark: If the current transparency setting is `reducible`, we should not increase it to `instances`
++      | .yesWithDelta => whnfCoreFinish (.proj i e :: stack) (← whnf c)
++      | .yesWithDeltaI => whnfCoreFinish (.proj i e :: stack) (← whnfAtMostI c)
++
++  /-- 子归约结束后恢复外层工作。 -/
++  private partial def whnfCoreFinish (stack : List WhnfFrame) (r : Expr) : MetaM Expr := do
++    match stack with
++    | [] => return r
++    | .app e :: stack =>
++      let cfg ← getConfig
++      let f := e.getAppFn
++      let f' := r
++      /-
++      If `f'` is a lambda, then we perform beta-reduction here IF
++      1- `cfg.beta` is enabled, OR
++      2- `f` was not a lambda expression. That is, `f` was reduced, and the beta-reduction step is part
++         of this step. This is similar to allowing beta-reduction while unfolding expressions even if `cfg.beta := false`.
++
++      We added case 2 because a failure at `norm_cast`. See test `6123_mod_cast.lean`.
++      Another possible fix to this test is to set `beta := true` at the `Simp.Config` value at
++      `NormCast.lean`.
++      -/
++      if f'.isLambda && (cfg.beta || !f.isLambda) then
++        let revArgs := e.getAppRevArgs
++        whnfCoreGo stack <| f'.betaRev revArgs
++      else if let some eNew ← whnfDelayedAssigned? f' e then
++        whnfCoreGo stack eNew
++      else
++        let e := if f == f' then e else e.updateFn f'
++        if !cfg.iota then
++          whnfCoreFinish stack e
+         else
+-          let e := if f == f' then e else e.updateFn f'
+-          unless cfg.iota do return e
+           match (← reduceMatcher? e) with
+-          | .reduced eNew => go eNew
+-          | .partialApp   => pure e
+-          | .stuck _      => pure e
++          | .reduced eNew => whnfCoreGo stack eNew
++          | .partialApp   => whnfCoreFinish stack e
++          | .stuck _      => whnfCoreFinish stack e
+           | .notMatcher   =>
+-            let .const cname lvls := f'.getAppFn | return e
+-            let some cinfo := (← getEnv).find? cname | return e
++            let .const cname lvls := f'.getAppFn | whnfCoreFinish stack e
++            let some cinfo := (← getEnv).find? cname | whnfCoreFinish stack e
+             match cinfo with
+-            | .recInfo rec    => reduceRec rec lvls e.getAppArgs (fun _ => return e) (fun e => do recordUnfold cinfo.name; go e)
+-            | .quotInfo rec   => reduceQuotRec rec e.getAppArgs (fun _ => return e) (fun e => do recordUnfold cinfo.name; go e)
++            | .recInfo rec =>
++              match (← reduceRec rec lvls e.getAppArgs (fun _ => return none) (fun e => return some e)) with
++              | some eNew => recordUnfold cinfo.name; whnfCoreGo stack eNew
++              | none => whnfCoreFinish stack e
++            | .quotInfo rec =>
++              match (← reduceQuotRec rec e.getAppArgs (fun _ => return none) (fun e => return some e)) with
++              | some eNew => recordUnfold cinfo.name; whnfCoreGo stack eNew
++              | none => whnfCoreFinish stack e
+             | c@(.defnInfo _) => do
+               if (← isAuxDef c.name) then
+                 recordUnfold c.name
+-                deltaBetaDefinition c lvls e.getAppRevArgs (fun _ => return e) go
++                match (← deltaBetaDefinition c lvls e.getAppRevArgs (fun _ => return none) (fun e => return some e)) with
++                | some eNew => whnfCoreGo stack eNew
++                | none => whnfCoreFinish stack e
+               else
+-                return e
+-            | .axiomInfo val => recordUnfoldAxiom val.name; return e
+-            | _ => return e
+-      | .proj _ i c =>
+-        let k (c : Expr) := do
+-          match (← projectCore? c i) with
+-          | some e => go e
+-          | none => return e
+-        match (← getConfig).proj with
+-        | .no => return e
+-        | .yes => k (← go c)
+-        | .yesWithDelta => k (← whnf c)
+-        -- Remark: If the current transparency setting is `reducible`, we should not increase it to `instances`
+-        | .yesWithDeltaI => k (← whnfAtMostI c)
+-      | _ => unreachable!
++                whnfCoreFinish stack e
++            | .axiomInfo val => recordUnfoldAxiom val.name; whnfCoreFinish stack e
++            | _ => whnfCoreFinish stack e
++    | .proj i e :: stack =>
++      match (← projectCore? r i) with
++      | some eNew => whnfCoreGo stack eNew
++      | none => whnfCoreFinish stack e
++end
++
++/--
++Apply beta-reduction, zeta-reduction (i.e., unfold let local-decls), iota-reduction,
++expand let-expressions, expand assigned meta-variables, unfold aux declarations.
++-/
++partial def whnfCore (e : Expr) : MetaM Expr :=
++  whnfCoreGo [] e
+ 
+ /--
+   Recall that `_sunfold` auxiliary definitions contains the markers: `markSmartUnfoldingMatch` (*) and `markSmartUnfoldingMatchAlt` (**).

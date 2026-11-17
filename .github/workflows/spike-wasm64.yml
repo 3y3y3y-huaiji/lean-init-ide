@@ -10,6 +10,7 @@ on:
       - 'docs/**'
       - '**/*.md'
       - 'scripts/depth-probe/**'
+      - 'scripts/patches/**'
       - 'scripts/check-cpp.sh'
       - '.clang-format'
       - '.clang-tidy'

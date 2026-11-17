@@ -226,7 +226,7 @@ CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -
 | 普通非尾递归 | **7,974** 层 | 约 1 MB Worker 栈，emcc 帧约 121 B |
 | 互递归 + `-mtail-call` | **≥ 4,194,304** | 生成 `return_call`，3 处 |
 | 堆上显式工作栈 | **≥ 1,048,576** | 上限来自探针的 2M 帧数组，不是栈 |
-| ASYNCIFY + 每 64 层 `emscripten_sleep` | **24,453** | 真实递归；`ASYNCIFY_DATA` 默认 1 MB，约 40 B/帧 |
+| ASYNCIFY + 每 64 层 `emscripten_sleep` | **24,453** | 真实递归；`ASYNCIFY_STACK_SIZE` 设为 1 MB，约 40 B/帧 |
 | JSPI + 已决议 Promise | **13,439** | `suspend=0/209`：一次都没真正挂起 |
 | JSPI + 未决 Promise（微任务），每 64 层 | **17,258** | `suspend=269/269` |
 | JSPI + 未决 Promise（微任务），每层 | **17,258** | `suspend=17258/17258`，密度提高 64 倍上界不变 |
@@ -304,7 +304,7 @@ V8 走快路径直接续跑，根本不切栈；当时测到的 17,279 层只是
 - **WasmFX 目前没有可用的构建入口。** Emscripten 6.0.0 的设置里只有 `JSPI` / `JSPI_EXPORTS` / `JSPI_IMPORTS`，
   没有 WasmFX 或 stack-switching 设置；Chrome 155 有实验 flag，但没有面向 Emscripten 的代码生成与 JS 接口。
 - **ASYNCIFY + 挂起点只把上界抬到约 3 倍。** 它把栈展开成线性内存里的数据再 rewind，
-  实测 24,453 层就停住——`ASYNCIFY_DATA` 默认 1 MB，约 40 B/帧，展开到一半就放不下。
+  实测 24,453 层就停住——`ASYNCIFY_STACK_SIZE` 设为 1 MB，约 40 B/帧，展开到一半就放不下。
   代价还有整程序插桩（Lean 规模约 +50% 体积、链接显著变慢，见 Emscripten Issue #26455），
   而且热点路径必须真的能挂起：Lean 的 elaboration 是同步的，LSP 的异步只到 I/O 边界。
   再加上生产运行时是 `-pthread` 模型，JSPI 文档明确说从不可挂起的栈调挂起导入会直接 trap，

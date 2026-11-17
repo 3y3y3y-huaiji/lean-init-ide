@@ -96,6 +96,13 @@ export type Messages = {
     cardCta: string;
     /** 详情页里包裹 Lean 编辑器的标题，避免与题目本身重复。 */
     editorTitle: string;
+    /** 第一次进入挑战区的零基础导览：Lean 是什么、页面怎么玩。 */
+    intro: {
+      title: string;
+      body: string;
+      steps: Array<{ title: string; text: string }>;
+      codeNote: string;
+    };
     detail: {
       back: string;
       /** Goal 面板旁的通俗进度：还剩几个待证目标。 */

@@ -26,6 +26,30 @@ export const challengeDraftKey = (slug: string): string => draftKeyFor(`challeng
 const playgroundLink = (locale: Locale, slug: string): string =>
   `/${locale}/playground?challenge=${encodeURIComponent(slug)}`;
 
+/**
+ * 零基础导览：先说明 Lean 在做什么，再给出「读题 → 看 Goal → 补证明」三步。
+ * 默认展开，避免小白直接面对一块没有任何上下文的编辑器。
+ */
+const renderIntro = (locale: Locale): string => {
+  const t = messagesFor(locale).challenges.intro;
+  const steps = t.steps
+    .map(
+      (step) => `
+        <li class="rounded-lg border border-line bg-panel-soft p-3">
+          <p class="m-0 text-[13px] font-[650]">${escapeHtml(step.title)}</p>
+          <p class="mt-1 mb-0 text-xs leading-relaxed text-muted">${escapeHtml(step.text)}</p>
+        </li>`,
+    )
+    .join('');
+  return `
+    <details data-role="challenge-intro" open class="rounded-2xl border border-line bg-panel p-5">
+      <summary class="cursor-pointer text-sm font-[650]">${escapeHtml(t.title)}</summary>
+      <p class="mt-2 mb-0 max-w-[720px] text-sm leading-relaxed text-muted">${escapeHtml(t.body)}</p>
+      <ol class="m-0 mt-3 grid list-none grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2 p-0">${steps}</ol>
+      <p class="mt-3 mb-0 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-xs leading-relaxed text-fg">${escapeHtml(t.codeNote)}</p>
+    </details>`;
+};
+
 const challengeCard = (locale: Locale, challenge: Challenge, index: number): string => {
   const t = messagesFor(locale).challenges;
   return `
@@ -48,6 +72,7 @@ export const renderChallenges = (locale: Locale): string => {
       <h1 class="mt-0 mb-4 text-[clamp(28px,4.4vw,42px)] tracking-[-0.02em]">${t.title}</h1>
       <p class="mt-0 mb-0 max-w-[640px] text-[clamp(15px,1.6vw,18px)] leading-relaxed text-muted">${t.lead}</p>
     </section>
+    <section class="mt-[clamp(24px,3.4vw,36px)] max-w-[760px]">${renderIntro(locale)}</section>
     <section
       data-role="challenge-list"
       class="mt-[clamp(28px,4vw,44px)] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5"
@@ -69,8 +94,11 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
   };
   const tactics = challenge.tactics
     .map(
-      (tactic, index) =>
-        `<button type="button" class="${toolbarButtonClass}" data-tactic-index="${index}">${escapeHtml(tactic.label)}</button>`,
+      (tactic, index) => `
+        <div class="rounded-lg border border-line bg-panel-soft p-2.5">
+          <button type="button" class="${toolbarButtonClass}" data-tactic-index="${index}">${escapeHtml(tactic.label)}</button>
+          <p class="mt-1.5 mb-0 text-[11.5px] leading-relaxed text-muted">${escapeHtml(tactic.description[locale])}</p>
+        </div>`,
     )
     .join('');
 
@@ -82,6 +110,8 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
         <h1 class="mt-0 mb-3 text-[clamp(26px,4vw,38px)] tracking-[-0.02em]">${escapeHtml(challenge.title[locale])}</h1>
         <p class="m-0 text-[15px] leading-relaxed text-muted">${escapeHtml(challenge.body[locale])}</p>
       </div>
+
+      <div class="mt-4 max-w-[760px]">${renderIntro(locale)}</div>
 
       <div class="mt-4 flex flex-wrap items-center gap-2">
         <a class="${ghostButtonClass}" href="${playgroundLink(locale, challenge.slug)}">${detail.openInPlayground}</a>
@@ -95,13 +125,17 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
         ></span>
       </div>
 
-      <div
-        class="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-panel-soft px-3.5 py-2.5"
+      <section
+        data-role="challenge-tactics"
+        class="mt-6 rounded-xl border border-line bg-panel p-3.5"
       >
-        <span data-role="goal-progress" class="text-[13px] font-[650] text-fg">${detail.goalsNone}</span>
-        <span class="text-[11px] uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</span>
-        <div class="flex flex-wrap items-center gap-1.5" title="${detail.tacticsHint}">${tactics}</div>
-      </div>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span data-role="goal-progress" class="text-[13px] font-[650] text-fg">${detail.goalsNone}</span>
+          <span class="text-[11px] uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</span>
+        </div>
+        <p class="mt-1.5 mb-0 text-xs leading-relaxed text-muted">${detail.tacticsHint}</p>
+        <div class="mt-2.5 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2">${tactics}</div>
+      </section>
 
       <div data-role="challenge-panel" class="mt-3">${renderLeanMarkup(
         locale,
@@ -121,7 +155,7 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
           <p class="mt-2 mb-2 text-sm leading-relaxed text-muted">${detail.solutionHint}</p>
           <button class="${ghostButtonClass}" type="button" data-role="load-solution">${detail.loadSolution}</button>
           <pre class="mt-3 mb-0 overflow-auto rounded-lg border border-line bg-panel-soft p-3 font-mono text-xs leading-[1.65] text-fg"><code>${escapeHtml(
-            challenge.solution,
+            challenge.solution[locale],
           )}</code></pre>
         </details>
       </div>
@@ -176,7 +210,7 @@ export const mountChallenge = async (
   const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
   const panel = createLeanPanel(panelHost, {
     variant: 'full',
-    code: challenge.starter,
+    code: challenge.starter[locale],
     locale,
     draftKey: challengeDraftKey(challenge.slug),
     // 与课程页一致：标准设备打开挑战即启动；低内存/省流模式仍需用户手动确认。
@@ -207,7 +241,7 @@ export const mountChallenge = async (
   root
     .querySelector<HTMLButtonElement>('[data-role="load-solution"]')
     ?.addEventListener('click', () => {
-      panel.setCode(challenge.solution, { focus: true });
+      panel.setCode(challenge.solution[locale], { focus: true });
       // 供 E2E 区分「骨架诊断」与「参考解法诊断」。
       panelHost.dataset.mode = 'solution';
     });

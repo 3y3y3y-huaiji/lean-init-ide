@@ -42,19 +42,71 @@ describe('挑战数据源', () => {
 
   it('骨架留有 sorry，参考解法不含 sorry 且不引入 Mathlib / Lake', () => {
     for (const challenge of CHALLENGES) {
-      expect(challenge.starter, challenge.slug).toContain('sorry');
-      expect(challenge.solution, challenge.slug).not.toMatch(/\bsorry\b/);
-      expect(challenge.starter, challenge.slug).not.toMatch(/Mathlib|Lake/);
-      expect(challenge.solution, challenge.slug).not.toMatch(/Mathlib|Lake/);
+      for (const locale of ['zh', 'en'] as const) {
+        expect(challenge.starter[locale], `${challenge.slug}.starter.${locale}`).toContain('sorry');
+        expect(challenge.solution[locale], `${challenge.slug}.solution.${locale}`).not.toMatch(
+          /\bsorry\b/,
+        );
+        expect(challenge.starter[locale], `${challenge.slug}.starter.${locale}`).not.toMatch(
+          /Mathlib|Lake/,
+        );
+        expect(challenge.solution[locale], `${challenge.slug}.solution.${locale}`).not.toMatch(
+          /Mathlib|Lake/,
+        );
+      }
     }
   });
 
-  it('每道题都提供可插入编辑器的快捷策略', () => {
+  it('骨架与解法都带讲解注释，零基础用户能跟着注释读代码', () => {
+    for (const challenge of CHALLENGES) {
+      for (const locale of ['zh', 'en'] as const) {
+        const starterComments = challenge.starter[locale]
+          .split('\n')
+          .filter((line) => line.trimStart().startsWith('--'));
+        const solutionComments = challenge.solution[locale]
+          .split('\n')
+          .filter((line) => line.trimStart().startsWith('--'));
+        expect(
+          starterComments.length,
+          `${challenge.slug}.starter.${locale}`,
+        ).toBeGreaterThanOrEqual(3);
+        expect(
+          solutionComments.length,
+          `${challenge.slug}.solution.${locale}`,
+        ).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('中英文骨架与解法只有注释不同，证明代码保持一致', () => {
+    const codeOnly = (code: string) =>
+      code
+        .split('\n')
+        .map((line) => line.replace(/--.*$/, '').trim())
+        .filter((line) => line.length > 0)
+        .join('\n');
+    for (const challenge of CHALLENGES) {
+      expect(codeOnly(challenge.starter.zh), `${challenge.slug}.starter`).toBe(
+        codeOnly(challenge.starter.en),
+      );
+      expect(codeOnly(challenge.solution.zh), `${challenge.slug}.solution`).toBe(
+        codeOnly(challenge.solution.en),
+      );
+    }
+  });
+
+  it('每道题都提供可插入编辑器的快捷策略，并附一句白话解释', () => {
     for (const challenge of CHALLENGES) {
       expect(challenge.tactics.length, challenge.slug).toBeGreaterThanOrEqual(3);
       for (const tactic of challenge.tactics) {
         expect(tactic.label.trim().length).toBeGreaterThan(0);
         expect(tactic.insert.length).toBeGreaterThan(0);
+        for (const locale of ['zh', 'en'] as const) {
+          expect(
+            tactic.description[locale].trim().length,
+            `${challenge.slug}.${tactic.label}.${locale}`,
+          ).toBeGreaterThan(0);
+        }
       }
     }
   });

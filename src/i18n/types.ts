@@ -191,10 +191,14 @@ export type Messages = {
     librariesTitle: string;
     librariesHint: string;
     libraryBuiltin: string;
+    /** 库名前的勾选框：勾选后启动 Lean 时自动加载。 */
+    libraryDefault: string;
     libraryLoad: string;
     libraryLoading: (ratio: string) => string;
     libraryLoaded: string;
     libraryRelease: string;
+    /** 一次释放所有已挂载的扩展库。 */
+    libraryReleaseAll: string;
     libraryRestarting: string;
     libraryError: (message: string) => string;
     expand: string;

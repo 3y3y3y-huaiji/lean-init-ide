@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getAutoStart, readRuntimeSession, setAutoStart, writeRuntimeSession } from './settings';
+import {
+  getAutoStart,
+  getDefaultExtensions,
+  readRuntimeSession,
+  setAutoStart,
+  setDefaultExtensions,
+  writeRuntimeSession,
+} from './settings';
 
 describe('auto-start setting', () => {
   beforeEach(() => {
@@ -26,6 +33,28 @@ describe('auto-start setting', () => {
   it('treats unexpected stored values as off', () => {
     localStorage.setItem('lean:auto-start', 'yes');
     expect(getAutoStart()).toBe(false);
+  });
+});
+
+describe('default extension libraries', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('没有记录时返回空数组', () => {
+    expect(getDefaultExtensions()).toEqual([]);
+  });
+
+  it('保存并读取启动默认库', () => {
+    setDefaultExtensions(['std', 'batteries']);
+    expect(getDefaultExtensions()).toEqual(['std', 'batteries']);
+  });
+
+  it('损坏或结构不符的数据视为空', () => {
+    localStorage.setItem('lean:default-extensions', '{not json');
+    expect(getDefaultExtensions()).toEqual([]);
+    localStorage.setItem('lean:default-extensions', JSON.stringify({ std: true }));
+    expect(getDefaultExtensions()).toEqual([]);
+    localStorage.setItem('lean:default-extensions', JSON.stringify(['std', 1, null]));
+    expect(getDefaultExtensions()).toEqual(['std']);
   });
 });
 

@@ -30,7 +30,12 @@ import {
   supportsLeanRuntime,
 } from '../lean-recovery';
 import { anchorImportDiagnostics, LeanSession, type LspDiagnostic } from '../lean-session';
-import { readRuntimeSession, writeRuntimeSession } from '../settings';
+import {
+  getDefaultExtensions,
+  readRuntimeSession,
+  setDefaultExtensions,
+  writeRuntimeSession,
+} from '../settings';
 import {
   loadExtensionPacks,
   resolveExtensionIds,
@@ -1028,13 +1033,15 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   // 以及已选库，回到编辑器页时自动恢复。刷新页面不算“切换页面”，避免覆盖
   // 用户关掉 auto-start 的选择。
   const savedSession = readRuntimeSession();
-  const savedExtensionIds = resolveExtensionIds([
-    ...(savedSession?.extensions ?? []).filter(
-      (id): id is RuntimeExtensionId => id === 'std' || id === 'batteries',
-    ),
-    // 课程声明的依赖必须参与首次启动，否则 didOpen 时 extensionPacks 还缺模块。
-    ...(options.requiredExtensions ?? []),
-  ]);
+  const isRuntimeExtensionId = (id: string): id is RuntimeExtensionId =>
+    runtimeExtensions.some((extension) => extension.id === id);
+  const sessionExtensionIds = (savedSession?.extensions ?? []).filter(isRuntimeExtensionId);
+  const requiredExtensionIds = options.requiredExtensions ?? [];
+  // 勾选框决定每次启动默认挂载哪些库，持久化在 localStorage；上一页的库选择
+  // 仍在 sessionStorage 里，导航回来时与默认值取并集恢复。
+  const defaultExtensions = new Set<RuntimeExtensionId>(
+    getDefaultExtensions().filter(isRuntimeExtensionId),
+  );
   const isReloadNavigation = (): boolean => {
     try {
       const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
@@ -1498,6 +1505,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   // 扩展库开关：下载后重开会话挂载；释放时丢弃 SharedArrayBuffer 引用。
   const libraryButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-library]')];
+  const defaultCheckboxes = [...host.querySelectorAll<HTMLInputElement>('[data-library-default]')];
+  const releaseAllEl = host.querySelector<HTMLButtonElement>('[data-role="release-all-libraries"]');
 
   const syncLibraryButtons = () => {
     for (const button of libraryButtons) {
@@ -1508,7 +1517,34 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       // 加载/重启期间保持可点：新的选择会排队，等当前重启结束后继续执行。
       button.disabled = false;
     }
+    if (releaseAllEl) releaseAllEl.disabled = activeExtensions.size === 0;
   };
+
+  const syncDefaultCheckboxes = () => {
+    for (const input of defaultCheckboxes) {
+      const id = input.dataset.libraryDefault as RuntimeExtensionId;
+      input.checked = defaultExtensions.has(id);
+    }
+  };
+
+  for (const input of defaultCheckboxes) {
+    input.addEventListener('change', () => {
+      const id = input.dataset.libraryDefault as RuntimeExtensionId;
+      if (input.checked) {
+        // 勾选 Batteries 时把依赖的 Std 一起勾上，避免启动时出现未勾选却已挂载。
+        for (const dependency of resolveExtensionIds([id])) defaultExtensions.add(dependency);
+      } else {
+        defaultExtensions.delete(id);
+        // 取消依赖库时，把依赖它的库一起取消。
+        for (const extension of runtimeExtensions) {
+          if (extension.requires.includes(id)) defaultExtensions.delete(extension.id);
+        }
+      }
+      setDefaultExtensions(defaultExtensions);
+      syncDefaultCheckboxes();
+    });
+  }
+  syncDefaultCheckboxes();
 
   const persistRuntimeSession = (active: boolean) => {
     writeRuntimeSession({ active, extensions: [...activeExtensions] });
@@ -1517,10 +1553,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   /**
    * 从上一页恢复已选扩展库。必须赶在会话创建 worker 之前完成，否则 didOpen
    * 拿不到 extensionPacks，页面看起来就像库被重置了。
+   * 上一页选择、启动默认勾选与课程依赖都在启动时重新取，用户刚改过的勾选才能生效。
    */
   const restoreSavedExtensions = (): Promise<void> => {
     if (restorePromise) return restorePromise;
-    if (savedExtensionIds.length === 0) {
+    const ids = resolveExtensionIds([
+      ...sessionExtensionIds,
+      ...defaultExtensions,
+      ...requiredExtensionIds,
+    ]);
+    if (ids.length === 0) {
       restorePromise = Promise.resolve();
       return restorePromise;
     }
@@ -1531,17 +1573,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       for (const button of libraryButtons) button.disabled = true;
       setStatus(t.libraryRestarting, 'loading');
       try {
-        for (const id of savedExtensionIds) {
+        for (const id of ids) {
           if (extensionPackCache.has(id)) continue;
           const packs = await loadExtensionPacks([id]);
           extensionPackCache.set(id, packs);
         }
-        extensionPacks = Object.assign(
-          {},
-          ...savedExtensionIds.map((id) => extensionPackCache.get(id)),
-        );
+        extensionPacks = Object.assign({}, ...ids.map((id) => extensionPackCache.get(id)));
         activeExtensions.clear();
-        for (const id of savedExtensionIds) activeExtensions.add(id);
+        for (const id of ids) activeExtensions.add(id);
         desiredExtensions = new Set(activeExtensions);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1558,6 +1597,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const applyExtensionSelection = async (next: Set<RuntimeExtensionId>) => {
     const previous = new Set(activeExtensions);
     const resolved = resolveExtensionIds(next);
+    const resolvedSet = new Set(resolved);
     const wasActive = session.isReady || session.state === 'starting';
     try {
       for (const id of resolved) {
@@ -1567,6 +1607,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           if (button) button.textContent = t.libraryLoading(`${Math.round(ratio * 100)}%`);
         });
         extensionPackCache.set(id, packs);
+      }
+      // 释放的库必须同时丢掉缓存，否则 SharedArrayBuffer 仍被引用，内存没有真正归还。
+      for (const id of [...extensionPackCache.keys()]) {
+        if (!resolvedSet.has(id)) extensionPackCache.delete(id);
       }
       extensionPacks = Object.assign({}, ...resolved.map((id) => extensionPackCache.get(id)));
       activeExtensions.clear();
@@ -1639,6 +1683,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       enqueueExtensionSelection(next);
     });
   }
+
+  // 单独提供“释放全部”，避免单个库的释放按钮误伤其他已加载的库。
+  releaseAllEl?.addEventListener('click', () => {
+    enqueueExtensionSelection(new Set());
+  });
   syncLibraryButtons();
 
   /**

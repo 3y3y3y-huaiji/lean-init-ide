@@ -15,7 +15,7 @@ OBJ="$WORK/obj"
 DIST="$WORK/dist"
 GMP="$WORK/gmp-install"
 
-emcc -sMEMORY64=1 -O2 -pthread -fwasm-exceptions @"$OBJ/objs.rsp" "$OBJ/symtab.o" \
+emcc -sMEMORY64=1 -mtail-call -O2 -pthread -fwasm-exceptions @"$OBJ/objs.rsp" "$OBJ/symtab.o" \
   "$BUILD/lib/temp/libleanmain.a" "$BUILD/lib/temp/libleanshell.a" \
   "$BUILD/lib/lean/libleancpp.a" "$BUILD/lib/lean/libleanrt.a" "$GMP/lib/libgmp.a" \
   "$BUILD/libuv/src/libuv/libuv.a" \

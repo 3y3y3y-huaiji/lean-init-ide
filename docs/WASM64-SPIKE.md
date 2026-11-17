@@ -176,9 +176,9 @@ workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 | --- | --- |
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
 | Lean 源码与引导包 | `wasm64-src-v6` |
-| runtime（-O2 + GMP） | `wasm64-runtime-v15-<pin+backport hash>` |
+| runtime（-O2 + GMP + tail call） | `wasm64-runtime-v15-<pin+backport+patch hash>` |
 | cgen | `wasm64-cgen-v2-<pin hash>` |
-| objects（-O2 + GMP） | `wasm64-obj-v9-<pin hash>` |
+| objects（-O2 + GMP + tail call） | `wasm64-obj-v9-<pin+patch hash>` |
 | GMP（wasm64 静态库） | `wasm64-gmp-v1` |
 | 官方 64 位 oleans | 不缓存，直接从引导包 `work/lean-*-linux/lib/lean` 复制到 `work/olean32` |
 | Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v3` |
@@ -189,7 +189,29 @@ workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 oleans 的 githash 检查能过（运行时确实是新版），但前端还是旧版，`#eval` 报 `cannot evaluate code because '[anonymous]' uses 'sorry'`。
 换 Lean 版本必须让这几类缓存一起失效。
 
+`<patch hash>` 是 `hashFiles('scripts/patch-wasm64.sh')`，只并入 runtime 与 objects：编译开关（`MEMORY64`、`-mtail-call`）写在那个脚本里，
+而 `stage_objects` 对「比源文件新的 `.o`」直接跳过。不把它算进缓存键，改开关后会复用旧对象、静默链出一个没打开该开关的 wasm。
+
 `work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ir 文件，`work/mathlib-lib` 是同一份官方库加上自己编出来的 Mathlib/Batteries olean。
+
+## tail call（`-mtail-call`）
+
+2026-11-17 起，`scripts/patch-wasm64.sh` 与两个 link 脚本都带 `-mtail-call`，产物用 `return_call` / `return_call_indirect`。
+
+为什么只在这里开、不开到生产 wasm32：
+
+- **wasm64 已经要求 Memory64**，浏览器范围早就被收窄过一次；再叠一个 tail call 不再额外损失兼容性。生产 wasm32 相反——它是宽兼容基线，加了就等于把引擎门槛抬到「支持 tail call」。
+- **尾调用只能压平尾位置的帧**。`docs/WASM32-STACK-SPIKE.md` 记录的爆栈路径是 `Lean.Meta.reduceRec` 这类「递归结果还要当参数用」的非尾递归，`return_call` 对它无能为力；而且默认 `maxRecDepth=1000` 时报的是 Lean 自己的递归上限，不是栈。
+- 已知副作用：V8 会把 tail-caller 的栈帧直接丢掉（见 V8 2023-04-06 的 wasm tail call 博文），所以崩溃栈里看不见这些帧。诊断靠 `lean_log_write` 的 `[LEAN_WASM_ERR]` 前缀，不依赖 JS 栈，影响可控。
+
+三个必须同时满足的点，少一个就等于没开：
+
+1. **编译步**带 `-mtail-call`（`stage_objects` 的 `emcc -c`）。只在 link 带，`.o` 里没有 `return_call`，链接器不会凭空造出来。
+2. **link 步**带 `-mtail-call`，让 wasm-ld / Binaryen 打开 `tail-call` 特性；否则对象里带特性、链接器不认。
+3. **objects 与 runtime 缓存键**包含 `scripts/patch-wasm64.sh`，否则复用的旧 `.o` 会让第 1 点静默失效。
+
+CI 用一个反汇编断言兜第 3 点：`wasm-dis work/dist/lean.wasm | grep -c return_call`，数到 0 直接失败。
+`-fwasm-exceptions` 会影响覆盖度——带 catch/cleanup 的函数不能做尾调用，所以 `return_call` 只出现在没有 landing pad 的函数里，数量比函数总数少是正常的。
 
 ## 尚未验证
 

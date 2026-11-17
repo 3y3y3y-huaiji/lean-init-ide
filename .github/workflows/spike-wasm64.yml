@@ -154,7 +154,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts') }}
+          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh') }}
 
       - name: runtime
         run: |
@@ -246,7 +246,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts') }}
+          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh') }}
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -260,7 +260,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts') }}
+          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh') }}
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -289,7 +289,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts') }}
+          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh') }}
 
       - name: link
         run: |
@@ -299,6 +299,18 @@ jobs:
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
+
+      # -mtail-call 只在**编译步**把尾调用写成 return_call；objects 缓存里如果是旧对象，
+      # link 会静默链出一个没有 return_call 的二进制，开关就变成安慰剂（缓存键已并入
+      # scripts/patch-wasm64.sh，这里再兜一层）。反汇编数一遍，数到 0 就失败。
+      - name: 校验 return_call 真的进了产物
+        run: |
+          source emsdk/emsdk_env.sh
+          DIS="$(command -v wasm-dis || printf '%s\n' "$EMSDK/upstream/bin/wasm-dis")"
+          test -x "$DIS" || { echo "找不到 wasm-dis，无法校验"; exit 1; }
+          total="$("$DIS" work/dist/lean.wasm | grep -c 'return_call' || true)"
+          echo "lean.wasm return_call: $total"
+          test "${total:-0}" -gt 0
 
       # 第二份产物：main 跑在 pthread 上，主线程空出来泵 pthread 消息。
       # FileWorker 的 LSP 输出走 Std.Channel 的专用线程，默认构建下拿不到 publishDiagnostics。

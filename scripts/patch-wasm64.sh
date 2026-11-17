@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# 把 wasm-llvm 的 lean-browser 构建脚本改成 wasm64 + GMP 版本。
+# 把 wasm-llvm 的 lean-browser 构建脚本改成 wasm64 + GMP + tail call 版本。
 # 用法: bash scripts/patch-wasm64.sh <repoRoot>
+#
+# -mtail-call 打开 WebAssembly 尾调用（return_call）。wasm64 本身已经要求 Memory64，
+# 浏览器范围早就被收窄过一次，再叠一个 tail-call 不会额外损失兼容性；
+# 换来的是尾递归函数不再占栈（V8 因为 return_call 直接复用当前帧）。
 #
 # GMP 用 emcc 编成静态库放到 <repoRoot>/work/gmp-install，
 # Lean 的 CMake 通过 GMP_INSTALL_PREFIX 找 include/gmp.h 与 lib/libgmp.a。
@@ -21,10 +25,14 @@ fi
 PY=python3
 command -v python3 > /dev/null 2>&1 || PY=python
 
+# tail call：clang 对 wasm 默认不做兄弟调用优化，尾递归函数照样一层层压栈；
+# -mtail-call 才让它在尾位置发 return_call / return_call_indirect。
+# 关键是**编译步**必须带：只在 link 加上，.o 里根本没有 return_call，等于没加。
+# CMAKE_* 的值里含空格，必须整体加单引号——build.sh 的 cmake 行没有引号，不包起来会被拆成两个 argv。
 sed -i \
-  -e 's|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-sMEMORY64=1 -DCMAKE_CXX_FLAGS=-sMEMORY64=1 -DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1|' \
-  -e 's|emcc -c -O2|emcc -sMEMORY64=1 -c -O2|g' \
-  -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -O2 -pthread|g' \
+  -e "s|-DCMAKE_BUILD_TYPE=Release|-DCMAKE_BUILD_TYPE=Release '-DCMAKE_C_FLAGS=-sMEMORY64=1 -mtail-call' '-DCMAKE_CXX_FLAGS=-sMEMORY64=1 -mtail-call' '-DCMAKE_EXE_LINKER_FLAGS=-sMEMORY64=1 -mtail-call'|" \
+  -e 's|emcc -c -O2|emcc -sMEMORY64=1 -mtail-call -c -O2|g' \
+  -e 's|emcc -O2 -pthread|emcc -sMEMORY64=1 -mtail-call -O2 -pthread|g' \
   -e 's|-sMODULARIZE=1|-sEXCEPTION_STACK_TRACES=1 --profiling-funcs -sMODULARIZE=1|' \
   -e 's|-sINITIAL_MEMORY=268435456|-sINITIAL_MEMORY=2147483648|' \
   -e 's|-sDEFAULT_PTHREAD_STACK_SIZE=8388608|-sDEFAULT_PTHREAD_STACK_SIZE=67108864|' \

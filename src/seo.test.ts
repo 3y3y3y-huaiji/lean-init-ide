@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CHALLENGES } from './challenges';
 import { messagesFor } from './i18n';
 import { SITE_ORIGIN } from './meta';
 import { allStaticRoutes } from './prerender';
@@ -35,11 +36,14 @@ describe('SEO 产物生成', () => {
     for (const locale of ['zh', 'en'] as const) {
       const lessons = messagesFor(locale).lesson.lessons;
       expect(locs).toContain(`${SITE_ORIGIN}/${locale}/`);
-      for (const page of ['playground', 'reference', 'privacy']) {
+      for (const page of ['playground', 'reference', 'privacy', 'challenges']) {
         expect(locs).toContain(`${SITE_ORIGIN}/${locale}/${page}`);
       }
       for (const lesson of lessons) {
         expect(locs).toContain(`${SITE_ORIGIN}/${locale}/learn/${lesson.slug}`);
+      }
+      for (const challenge of CHALLENGES) {
+        expect(locs).toContain(`${SITE_ORIGIN}/${locale}/challenges/${challenge.slug}`);
       }
       lessonCount += lessons.length;
     }
@@ -75,6 +79,11 @@ describe('SEO 产物生成', () => {
     expect(routeSourceFiles({ page: 'playground', locale: 'en' })).toEqual([
       'src/i18n/en.ts',
       'src/views/playground.ts',
+    ]);
+    expect(routeSourceFiles({ page: 'challenge', locale: 'zh', slug: 'add-comm' })).toEqual([
+      'src/i18n/zh.ts',
+      'src/views/challenge.ts',
+      'src/challenges.ts',
     ]);
     expect(routeSourceFiles({ page: 'notFound', locale: 'zh' })).toEqual(['src/i18n/zh.ts']);
   });

@@ -7,6 +7,7 @@ export const en: Messages = {
     playground: 'Playground',
     github: 'GitHub',
     reference: 'Reference',
+    challenges: 'Challenges',
   },
   theme: {
     label: 'Theme',
@@ -70,6 +71,35 @@ export const en: Messages = {
     courseCta: 'Start learning',
     pathsTitle: 'Three learning paths',
     pathMeta: (count) => `${count} lessons`,
+    challengesTitle: 'Math challenges',
+    challengesBody:
+      'Six classic puzzles explained for non-programmers. No setup: open one and prove it in the browser. It sits beside the courses and shares the same Lean runtime.',
+    challengesCta: 'Take a challenge',
+  },
+  challenges: {
+    eyebrow: 'Math challenges',
+    title: 'Prove six classic puzzles in Lean',
+    lead: 'Every puzzle starts with a plain-language question: what makes a number even, why swapping addends changes nothing, and why nothing can be both odd and even. Pick one and the Goal panel tells you how many targets remain.',
+    cardCta: 'Start the challenge',
+    editorTitle: 'Proof practice',
+    detail: {
+      back: '← Back to all challenges',
+      goalsRemaining: (count) => `${count} goal${count === 1 ? '' : 's'} left to prove`,
+      goalsNone:
+        'No goals right now: put the cursor inside the proof and the Goal panel updates live',
+      tacticsTitle: 'Common tactics',
+      tacticsHint:
+        'Click to insert a tactic at the cursor; spelling does not need to be memorized.',
+      copyLink: 'Copy share link',
+      copyLinkDone: 'Link copied',
+      copyLinkFailed: 'Copy failed—please copy from the address bar',
+      hintLabel: 'Hint',
+      solutionTitle: 'Reference solution',
+      solutionHint: 'Try it yourself first; expand only when stuck.',
+      loadSolution: 'Load reference solution',
+      openInPlayground: 'Open in the editor',
+      starterNote: 'The starter code is already in the editor—replace `sorry` with a proof.',
+    },
   },
   lesson: {
     eyebrow: 'Lean 4 basics',
@@ -1917,6 +1947,13 @@ end
     severityInfo: 'Info',
     abbreviationDetail: 'Unicode abbreviation',
     backToLesson: 'Back to lesson',
+    challengeNoticeTitle: 'Opened from a math challenge',
+    challengeNoticeBody:
+      'The puzzle statement is below. If this browser already has an editor draft, it will not be overwritten silently.',
+    challengeNoticeLoad: 'Load this challenge',
+    challengeNoticeKeep: 'Keep my draft',
+    challengeNoticeKept: 'Your draft is preserved. Load the challenge whenever you are ready.',
+    challengeLoaded: 'Loaded the challenge starter code.',
     resetCode: 'Reset exercise',
     resetConfirmAction: 'Confirm reset?',
     exportCode: 'Export .lean',

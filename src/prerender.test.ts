@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CHALLENGES } from './challenges';
 import { messagesFor } from './i18n';
 import {
   allStaticRoutes,
@@ -31,7 +32,7 @@ describe('SSG 预渲染', () => {
   it('覆盖中英文全部公开静态路由并映射正确的输出路径', () => {
     const routes = allStaticRoutes(['zh', 'en']);
     const expectedLessons = messagesFor('zh').lesson.lessons.length;
-    expect(routes.length).toBe(2 * (4 + expectedLessons));
+    expect(routes.length).toBe(2 * (5 + expectedLessons + CHALLENGES.length));
     expect(outputRelPath({ page: 'home', locale: 'zh' })).toBe('zh/index.html');
     expect(outputRelPath({ page: 'playground', locale: 'en' })).toBe('en/playground.html');
     expect(outputRelPath({ page: 'lesson', locale: 'zh', slug: 'what-is-lean' })).toBe(
@@ -39,6 +40,10 @@ describe('SSG 预渲染', () => {
     );
     expect(outputRelPath({ page: 'reference', locale: 'en' })).toBe('en/reference.html');
     expect(outputRelPath({ page: 'privacy', locale: 'zh' })).toBe('zh/privacy.html');
+    expect(outputRelPath({ page: 'challenges', locale: 'zh' })).toBe('zh/challenges.html');
+    expect(outputRelPath({ page: 'challenge', locale: 'en', slug: 'even-plus-even' })).toBe(
+      'en/challenges/even-plus-even.html',
+    );
     expect(outputRelPath({ page: 'notFound', locale: 'zh' })).toBe('index.html');
   });
 

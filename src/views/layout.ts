@@ -11,7 +11,8 @@ import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
 import type { ThemePreference } from '../theme';
 
-export type ActivePage = 'home' | 'lesson' | 'playground' | 'privacy' | 'reference';
+export type ActivePage =
+  'home' | 'lesson' | 'playground' | 'privacy' | 'reference' | 'challenges' | 'challenge';
 
 const REPO_URL = 'https://github.com/3y3y3y-huaiji/lean-init-ide';
 
@@ -49,6 +50,7 @@ export const renderLayout = (
   const navItems: Array<{ page: ActivePage; href: string; label: string }> = [
     { page: 'home', href: `/${locale}/`, label: t.nav.home },
     { page: 'lesson', href: `/${locale}/learn/${FIRST_LESSON_SLUG}`, label: t.nav.lesson },
+    { page: 'challenges', href: `/${locale}/challenges`, label: t.nav.challenges },
     { page: 'playground', href: `/${locale}/playground`, label: t.nav.playground },
     { page: 'reference', href: `/${locale}/reference`, label: t.nav.reference },
   ];
@@ -60,7 +62,12 @@ export const renderLayout = (
 
   const nav = navItems
     .map(
-      (item) => `<a class="${navLink(item.page === active)}" href="${item.href}">${item.label}</a>`,
+      (item) =>
+        `<a class="${navLink(
+          item.page === 'challenges'
+            ? active === 'challenges' || active === 'challenge'
+            : item.page === active,
+        )}" href="${item.href}">${item.label}</a>`,
     )
     .join('');
 

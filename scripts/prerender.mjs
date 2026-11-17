@@ -19,6 +19,8 @@ const preloadsFor = (manifest, route) => {
   if (route.page === 'lesson') keys.push('src/views/lesson.ts');
   else if (route.page === 'playground') keys.push('src/views/playground.ts');
   else if (route.page === 'reference') keys.push('src/views/reference.ts');
+  else if (route.page === 'challenges' || route.page === 'challenge')
+    keys.push('src/views/challenge.ts');
 
   const files = new Set();
   for (const key of keys) {

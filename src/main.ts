@@ -54,6 +54,11 @@ const boot = async (route: Route, root: HTMLElement) => {
         await mountPlayground(root, route.locale);
         break;
       }
+      case 'challenge': {
+        const { mountChallenge } = await import('./views/challenge');
+        await mountChallenge(root, route.locale, route.slug);
+        break;
+      }
       default:
         break;
     }
@@ -82,6 +87,17 @@ const boot = async (route: Route, root: HTMLElement) => {
     case 'reference': {
       const { renderReference } = await import('./views/reference');
       content = renderReference(route.locale);
+      break;
+    }
+    case 'challenges': {
+      const { renderChallenges } = await import('./views/challenge');
+      content = renderChallenges(route.locale);
+      break;
+    }
+    case 'challenge': {
+      const { renderChallenge, mountChallenge } = await import('./views/challenge');
+      content = renderChallenge(route.locale, route.slug);
+      mount = () => mountChallenge(root, route.locale, route.slug);
       break;
     }
     case 'notFound':

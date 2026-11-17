@@ -51,6 +51,17 @@ describe('resolveRoute', () => {
     });
   });
 
+  it('resolves the challenge index and a challenge slug', () => {
+    expect(resolveRoute('/zh/challenges', 'en')).toEqual({
+      kind: 'route',
+      route: { page: 'challenges', locale: 'zh' },
+    });
+    expect(resolveRoute('/en/challenges/even-plus-even', 'zh')).toEqual({
+      kind: 'route',
+      route: { page: 'challenge', locale: 'en', slug: 'even-plus-even' },
+    });
+  });
+
   it('treats unrelated localized paths as not found', () => {
     expect(resolveRoute('/zh/nope', 'en')).toEqual({
       kind: 'route',
@@ -85,6 +96,10 @@ describe('resolveRoute', () => {
     expect(canonicalRoutePath({ page: 'playground', locale: 'zh' })).toBe('/zh/playground');
     expect(canonicalRoutePath({ page: 'reference', locale: 'en' })).toBe('/en/reference');
     expect(canonicalRoutePath({ page: 'privacy', locale: 'zh' })).toBe('/zh/privacy');
+    expect(canonicalRoutePath({ page: 'challenges', locale: 'zh' })).toBe('/zh/challenges');
+    expect(canonicalRoutePath({ page: 'challenge', locale: 'en', slug: 'add-comm' })).toBe(
+      '/en/challenges/add-comm',
+    );
     expect(canonicalRoutePath({ page: 'notFound', locale: 'en' })).toBe('/en/');
   });
 });

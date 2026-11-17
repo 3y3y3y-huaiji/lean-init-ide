@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { challengeBySlug } from '../challenges';
 import { messagesFor } from '../i18n';
 
 const { createLeanPanel } = vi.hoisted(() => ({ createLeanPanel: vi.fn() }));
@@ -14,6 +15,7 @@ describe('playground 页面', () => {
     createLeanPanel.mockReset();
     createLeanPanel.mockReturnValue(makePanel());
     history.replaceState(null, '', '/zh/playground');
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -97,5 +99,65 @@ describe('playground 页面', () => {
     await mountPlayground(document.body, 'en');
 
     expect(createLeanPanel).not.toHaveBeenCalled();
+  });
+
+  it('带 ?challenge= 参数时载入骨架与题面，且没有草稿时不弹出覆盖提示', async () => {
+    const challenge = challengeBySlug('add-comm')!;
+    history.replaceState(null, '', '/zh/playground?challenge=add-comm');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { code: string; draftKey: string },
+    ];
+    expect(options.code).toBe(challenge.starter);
+    expect(options.draftKey).toBe('lean:draft:playground');
+
+    const notice = document.body.querySelector<HTMLElement>('[data-role="challenge-notice"]')!;
+    expect(notice.textContent).toContain(challenge.title.zh);
+    expect(notice.textContent).toContain(challenge.body.zh);
+    expect(notice.querySelector('[data-role="challenge-load"]')).toBeNull();
+    expect(notice.querySelector('[data-role="challenge-keep"]')).toBeNull();
+  });
+
+  it('已有个人草稿时保留草稿，并提供显式载入与继续两种选择', async () => {
+    const challenge = challengeBySlug('add-comm')!;
+    localStorage.setItem(
+      'lean:draft:playground',
+      JSON.stringify({ code: 'theorem my_own_work : True := trivial', updatedAt: 1 }),
+    );
+    history.replaceState(null, '', '/en/playground?challenge=add-comm');
+    document.body.innerHTML = renderPlayground('en');
+
+    await mountPlayground(document.body, 'en');
+
+    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
+    const notice = document.body.querySelector<HTMLElement>('[data-role="challenge-notice"]')!;
+    const status = notice.querySelector<HTMLElement>('[data-role="challenge-notice-status"]')!;
+
+    // 进入页面时不调用 setCode，编辑器仍由 lean-panel 恢复本地草稿。
+    expect(panel.setCode).not.toHaveBeenCalled();
+    expect(notice.textContent).toContain(messagesFor('en').playground.challengeNoticeBody);
+
+    notice.querySelector<HTMLButtonElement>('[data-role="challenge-keep"]')!.click();
+    expect(status.textContent).toBe(messagesFor('en').playground.challengeNoticeKept);
+    expect(panel.setCode).not.toHaveBeenCalled();
+
+    notice.querySelector<HTMLButtonElement>('[data-role="challenge-load"]')!.click();
+    expect(panel.setCode).toHaveBeenCalledWith(challenge.starter, { focus: true });
+    expect(status.textContent).toBe(messagesFor('en').playground.challengeLoaded);
+  });
+
+  it('未知 ?challenge= 参数安静回退到默认 playground', async () => {
+    history.replaceState(null, '', '/zh/playground?challenge=unknown');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const [, options] = createLeanPanel.mock.calls[0] as [HTMLElement, { code: string }];
+    expect(options.code).toBe(messagesFor('zh').playground.defaultCode);
+    expect(document.body.querySelector('[data-role="challenge-notice"]')).toBeNull();
   });
 });

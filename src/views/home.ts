@@ -113,6 +113,14 @@ export const renderHome = (
     </section>
 
     <section class="mt-[clamp(40px,6vw,72px)]">
+      <article class="rounded-2xl border border-line bg-panel p-6">
+        <h2 class="mt-0 mb-2.5 text-[17px] font-bold">${t.challengesTitle}</h2>
+        <p class="mt-0 mb-4 text-sm text-muted">${t.challengesBody}</p>
+        <a class="${buttonClass}" data-home-cta="challenges" href="/${locale}/challenges">${t.challengesCta}</a>
+      </article>
+    </section>
+
+    <section class="mt-[clamp(40px,6vw,72px)]">
       <h2 class="mt-0 mb-4.5 text-sm uppercase tracking-[0.08em] text-muted">${t.featuresTitle}</h2>
       <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-3.5">${features}</div>
     </section>

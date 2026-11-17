@@ -1,7 +1,9 @@
+import { CHALLENGES } from './challenges';
 import { messagesFor, type Locale } from './i18n';
 import { SITE_ORIGIN, swapLocalePath } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { canonicalRoutePath, FIRST_LESSON_SLUG, type Route } from './router';
+import { renderChallenge, renderChallenges } from './views/challenge';
 import { renderHome } from './views/home';
 import { escapeHtml } from './views/html';
 import { renderLayout } from './views/layout';
@@ -28,6 +30,12 @@ export const renderStaticApp = (route: Route): string => {
     case 'reference':
       content = renderReference(route.locale);
       break;
+    case 'challenges':
+      content = renderChallenges(route.locale);
+      break;
+    case 'challenge':
+      content = renderChallenge(route.locale, route.slug);
+      break;
     case 'notFound':
       content = renderNotFound(route.locale);
       break;
@@ -47,8 +55,12 @@ export const allStaticRoutes = (locales: readonly Locale[] = ['zh', 'en']): Rout
     routes.push({ page: 'playground', locale });
     routes.push({ page: 'reference', locale });
     routes.push({ page: 'privacy', locale });
+    routes.push({ page: 'challenges', locale });
     for (const lesson of messagesFor(locale).lesson.lessons) {
       routes.push({ page: 'lesson', locale, slug: lesson.slug });
+    }
+    for (const challenge of CHALLENGES) {
+      routes.push({ page: 'challenge', locale, slug: challenge.slug });
     }
   }
   return routes;
@@ -67,6 +79,10 @@ export const outputRelPath = (route: Route): string => {
       return `${route.locale}/reference.html`;
     case 'privacy':
       return `${route.locale}/privacy.html`;
+    case 'challenges':
+      return `${route.locale}/challenges.html`;
+    case 'challenge':
+      return `${route.locale}/challenges/${route.slug ?? CHALLENGES[0]!.slug}.html`;
     default:
       return 'index.html';
   }

@@ -83,6 +83,8 @@ export type LeanPanelOptions = {
   draftKey?: string;
   /** 启动与下载进度，供课程页在不可见面板外显示。 */
   onProgress?: (progress: LeanPanelProgress) => void;
+  /** Goal 面板文本变化时回调；挑战页用它把 `⊢` 数量翻译成通俗进度。 */
+  onGoal?: (goalText: string) => void;
   /** 课程代码依赖的扩展包；启动前自动挂载，用户无需手动开库。 */
   requiredExtensions?: RuntimeExtensionId[];
 };
@@ -91,6 +93,8 @@ export type LeanPanel = {
   setCode: (code: string, options?: { focus?: boolean }) => void;
   getCode: () => string;
   focus: () => void;
+  /** 在光标处插入策略片段，挑战页的快捷按钮使用。 */
+  insert: (text: string) => void;
   /** 把代码送进语言服务器并等一次诊断结果，供课程页做内联输出。 */
   run: (code: string) => Promise<LspDiagnostic[]>;
   /** 读取当前进度快照，课程页点击运行时先回显已有状态。 */
@@ -111,6 +115,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     lessonSlug,
     draftKey,
     onProgress,
+    onGoal,
   } = options;
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
@@ -149,6 +154,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const retryLoadEl = host.querySelector<HTMLButtonElement>('[data-role="retry-load"]');
   const sourceButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-source]')];
   const goalEl = host.querySelector<HTMLPreElement>('[data-role="goal"]')!;
+  const setGoalText = (text: string) => {
+    goalEl.textContent = text;
+    onGoal?.(text);
+  };
   const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
   const resetEl = host.querySelector<HTMLButtonElement>('[data-role="reset"]');
   const exportEl = host.querySelector<HTMLButtonElement>('[data-role="export"]');
@@ -1305,21 +1314,22 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       const rendered = result?.rendered ? stripGoalFence(result.rendered) : '';
       const text = rendered || (result?.goals ?? []).join('\n\n').trim();
       if (text) {
-        goalEl.textContent = text;
+        setGoalText(text);
         return;
       }
       // 光标停在声明行时 Lean 还没有目标；如果证明体仍是 sorry，别显示成轻松的“没有 Goal”。
       const declaration = findDeclaration(model.getLinesContent(), position.lineNumber - 1);
       const atDeclarationHeader = declaration?.startLine === position.lineNumber - 1;
-      goalEl.textContent =
-        atDeclarationHeader && /\bsorry\b/.test(model.getValue()) ? t.goalHint : t.goalEmpty;
+      setGoalText(
+        atDeclarationHeader && /\bsorry\b/.test(model.getValue()) ? t.goalHint : t.goalEmpty,
+      );
     } catch (error) {
       // 光标移动/新请求已取代这次请求时，迟到的错误不能影响当前面板。
       if (seq !== goalRequestSeq) return;
       const message = error instanceof Error ? error.message : String(error);
       if (isGoalMethodNotFound(error)) {
         goalSupported = false;
-        goalEl.textContent = t.goalUnsupported;
+        setGoalText(t.goalUnsupported);
         log(t.logGoalFailed(message));
         return;
       }
@@ -1368,7 +1378,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     resetRunOk();
     setStatus(memoryTier === 'low' ? t.statusLowMemory : t.statusIdle, 'idle');
     setProgress(0);
-    goalEl.textContent = t.goalPlaceholder;
+    setGoalText(t.goalPlaceholder);
     statementEl.hidden = true;
     startEl.textContent = t.start;
     persistRuntimeSession(false);
@@ -1676,7 +1686,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     setProgress(0);
     hasAssetProgress = false;
     resetRunOk();
-    goalEl.textContent = t.goalPlaceholder;
+    setGoalText(t.goalPlaceholder);
     statementEl.hidden = true;
     // 崩溃或爆栈前已经诊断出来的错误/警告应保留展示，方便用户直接定位问题代码。
     if (!shouldPreserveDiagnosticsOnCrash(lastDiagnostics)) {
@@ -1851,6 +1861,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     },
     getCode: () => model.getValue(),
     focus: () => editor.focus(),
+    insert: (text: string) => {
+      const selection = editor.getSelection();
+      if (!selection) return;
+      editor.executeEdits('challenge-tactic', [{ range: selection, text, forceMoveMarkers: true }]);
+      editor.focus();
+    },
     run,
     getProgress: () => ({ label: progressLabel, kind: progressKind, ratio: progressRatio }),
     restart: async () => {

@@ -107,7 +107,7 @@ const main = async (): Promise<void> => {
   const outDir = resolve(optionalString(parsed, 'out') ?? join(REPO_ROOT, 'work/depth-probe'));
   const variants =
     optionalString(parsed, 'variants') ??
-    'baseline,jspi,tailcall,asyncify,jspi-yield,jspi-resolved,jspi-pending,heapstack';
+    'baseline,jspi,tailcall,asyncify,jspi-yield,jspi-yield-1m,jspi-resolved,jspi-pending,heapstack';
   const chromePath = optionalString(parsed, 'chrome');
   const jsFlags = optionalString(parsed, 'js-flags');
   const timeout = parsed.flags.timeout === undefined ? 600_000 : requireNumber(parsed, 'timeout');

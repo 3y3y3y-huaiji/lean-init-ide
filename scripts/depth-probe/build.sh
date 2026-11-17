@@ -85,6 +85,8 @@ build asyncify yield-rec.cpp _yield_probe -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=104
 # JSPI_EXPORTS 匹配的是 wasm 导出名（同默认表里的 main），不是 C 符号的 _yield_probe；
 # 写成带下划线的名字不会报错，只会在运行期 suspend 时抛 SuspendError。
 build jspi-yield yield-rec.cpp _yield_probe -sJSPI=1 -sJSPI_EXPORTS=yield_probe -sJSPI_IMPORTS=emscripten_sleep
+# 对照：只把线性内存栈从 8 MB 压回 1 MB，用来判断 1M 层上界是不是线性栈在参与。
+build jspi-yield-1m yield-rec.cpp _yield_probe -sJSPI=1 -sJSPI_EXPORTS=yield_probe -sJSPI_IMPORTS=emscripten_sleep -sSTACK_SIZE=1048576
 
 # 堆上工作栈对照组：同样的非尾递归，原生栈深度恒定为 1。
 build heapstack heap-stack.cpp _heap_probe

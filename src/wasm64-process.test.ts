@@ -130,6 +130,7 @@ describe('createWasm64ProcessFactory', () => {
 
       expect(((await rejection) as Error).message).toBe('boom');
       expect(failures).toEqual(['boom']);
+      expect(worker.terminated).toBe(true);
 
       await vi.advanceTimersByTimeAsync(2000);
       expect(failures).toEqual(['boom']);
@@ -196,5 +197,6 @@ describe('createWasm64ProcessFactory', () => {
 
     expect(preventDefault).toHaveBeenCalled();
     expect(failures[0]).toContain('RangeError: Maximum call stack size exceeded');
+    expect(worker.terminated).toBe(true);
   });
 });

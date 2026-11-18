@@ -330,6 +330,9 @@ try {
     if (keyDir && !keyDir.startsWith('wasm-lean4/')) {
       w64Fail(`wasm64 资产 key 必须位于 wasm-lean4/ 前缀下，实际为 ${keyDir}`);
     }
+    if (keyDir && w64.mirror?.prefix && keyDir !== w64.mirror.prefix) {
+      w64Fail(`mirror.prefix 必须与资产 key 目录一致: ${w64.mirror.prefix} != ${keyDir}`);
+    }
     for (const required of [
       'lean-lsp-adapted.mjs',
       'lean-lsp.wasm.zst',

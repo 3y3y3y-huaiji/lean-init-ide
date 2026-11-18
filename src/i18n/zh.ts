@@ -302,6 +302,15 @@ end
     logMemoryBackgroundRelease: (mb) => `页面切入后台（峰值 ${mb} MB），已释放 Lean 引擎内存`,
     logMemoryHardLimit: (mb, limitMb) =>
       `内存达到硬上限（${mb} / ${limitMb} MB），已保护性停止引擎以防标签页崩溃`,
+    runtimeTitle: '运行时',
+    runtimeWasm32: 'wasm32（稳定默认）',
+    runtimeWasm64: 'wasm64（实验性）',
+    runtimeExperimentalWarning:
+      '实验性提醒：默认使用稳定版 wasm32（1 GiB 上限）。wasm64 目前为实验性功能，可能存在不稳定或浏览器兼容性问题，请勿作为生产环境使用，仅建议手动切换试用。',
+    runtimeWasm64Unsupported: '当前浏览器不支持 Memory64，将继续使用 wasm32 运行时',
+    runtimeWasm64AssetNote:
+      '提示：站点当前内置运行包仍为 wasm32；切换到 wasm64（实验）会预先启用高内存上限与实验标记（后续接入 wasm64 远端包后自动切换加载）。',
+    logRuntimeArchSelected: (arch) => `已切换运行时偏好：${arch}`,
   },
   reference: {
     eyebrow: 'Lean 4 · 速查',

@@ -294,6 +294,14 @@ export type Messages = {
     logMemoryImportRecycle: (mb: string) => string;
     logMemoryBackgroundRelease: (mb: string) => string;
     logMemoryHardLimit: (mb: string, limitMb: string) => string;
+    /** 运行时架构手动切换（默认 wasm32，wasm64 仅作实验性试用）。 */
+    runtimeTitle: string;
+    runtimeWasm32: string;
+    runtimeWasm64: string;
+    runtimeExperimentalWarning: string;
+    runtimeWasm64Unsupported: string;
+    runtimeWasm64AssetNote: string;
+    logRuntimeArchSelected: (arch: string) => string;
   };
   privacy: {
     eyebrow: string;

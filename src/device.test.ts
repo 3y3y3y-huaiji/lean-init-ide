@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_BUDGET_BYTES,
+  DEFAULT_RUNTIME_ARCH,
+  WASM32_MEMORY_BYTES,
   WASM64_MEMORY_BUDGET_BYTES,
   cacheBudgetBytes,
   detectMemoryTier,
   probeMemory64Support,
   readMemorySignals,
+  resolveRuntimeMemoryCeiling,
   shouldAutoStart,
   wasm64MaxMemoryBytes,
 } from './device';
@@ -115,5 +118,13 @@ describe('wasm64MaxMemoryBytes & probeMemory64Support', () => {
       probeMemory64Support({ Memory: BadMemory as unknown as typeof WebAssembly.Memory }),
     ).toBe(false);
     expect(probeMemory64Support({ Memory: undefined })).toBeTypeOf('boolean');
+  });
+
+  it('默认架构为 wasm32（1GiB），切换到 wasm64 时按档位返回对应上限', () => {
+    expect(DEFAULT_RUNTIME_ARCH).toBe('wasm32');
+    expect(resolveRuntimeMemoryCeiling('wasm32', 'low')).toBe(WASM32_MEMORY_BYTES);
+    expect(resolveRuntimeMemoryCeiling('wasm32', 'standard')).toBe(1024 * 1024 * 1024);
+    expect(resolveRuntimeMemoryCeiling('wasm64', 'low')).toBe(1536 * 1024 * 1024);
+    expect(resolveRuntimeMemoryCeiling('wasm64', 'standard')).toBe(3072 * 1024 * 1024);
   });
 });

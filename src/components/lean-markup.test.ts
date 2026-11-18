@@ -59,6 +59,16 @@ describe('renderLeanMarkup', () => {
     expect(html).toContain('data-library="std"');
   });
 
+  it('完整变体提供默认 wasm32、实验性 wasm64 手动切换及醒目警告说明', () => {
+    const t = messagesFor('zh').playground;
+    const html = renderLeanMarkup('zh', 'full', t);
+    expect(html).toContain('data-role="runtime-arch"');
+    expect(html).toContain('data-runtime-arch="wasm32"');
+    expect(html).toContain('data-runtime-arch="wasm64"');
+    expect(html).toContain(t.runtimeExperimentalWarning);
+    expect(html).toContain('data-active="true"');
+  });
+
   it('按诊断级别区分位置与徽章样式', () => {
     expect(diagnosticLocationClass(1)).toContain('text-err');
     expect(diagnosticLocationClass(2)).toContain('text-warn');

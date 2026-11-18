@@ -7,7 +7,15 @@ import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { setSourcePreference, type AssetSourcePreference } from '../asset-source';
-import { cacheBudgetBytes, currentMemoryTier, wasm64MaxMemoryBytes } from '../device';
+import {
+  cacheBudgetBytes,
+  currentMemoryTier,
+  DEFAULT_RUNTIME_ARCH,
+  probeMemory64Support,
+  WASM32_MEMORY_BYTES,
+  wasm64MaxMemoryBytes,
+  type LeanRuntimeArch,
+} from '../device';
 import {
   abbreviationSuggestions,
   findAbbreviationQuery,
@@ -38,8 +46,10 @@ import {
 import { createLeanMemoryGuard, sampleBrowserMemoryBytes } from '../lean-memory-guard';
 import {
   getDefaultExtensions,
+  getRuntimeArch,
   readRuntimeSession,
   setDefaultExtensions,
+  setRuntimeArch,
   writeRuntimeSession,
 } from '../settings';
 import {
@@ -131,6 +141,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
   const memoryGuardMaxBytes = wasm64MaxMemoryBytes(memoryTier);
+  // 默认保持稳定的 wasm32；wasm64 目前仅为实验性试用，不支持 Memory64 的浏览器安全回落 wasm32。
+  const memory64Supported = probeMemory64Support();
+  let selectedArch: LeanRuntimeArch =
+    getRuntimeArch() === 'wasm64' && memory64Supported ? 'wasm64' : DEFAULT_RUNTIME_ARCH;
   const draft = draftKey ? readDraft(draftKey) : null;
 
   // 若 SSG 已渲染完整外框且无需动态挂载练习回链，复用原 DOM 保持首屏 H1/布局不被替换。
@@ -395,7 +409,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   // 在点击外部时收起。这里保证同一时刻只开一个，并在点到菜单外时关掉。
   const menuEls = [
     ...host.querySelectorAll<HTMLDetailsElement>(
-      'details[data-role="libraries"], details[data-role="panels"]',
+      'details[data-role="runtime-arch"], details[data-role="libraries"], details[data-role="panels"]',
     ),
   ];
   const closeMenus = (except?: HTMLDetailsElement) => {
@@ -1110,9 +1124,19 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           maxBytes: cacheBudgetBytes(memoryTier),
           maxEntryBytes: cacheBudgetBytes(memoryTier),
         },
-        // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
+        /**
+         * ====================================================================
+         * EXPERIMENTAL: wasm32 / wasm64 运行时双轨开关说明
+         * --------------------------------------------------------------------
+         * 1. 默认始终为稳定的 wasm32（1 GiB 线性内存上限，WASM32_MEMORY_BYTES）。
+         * 2. wasm64 当前仍为实验性功能，可能存在不稳定、内存不释放或兼容性问题，
+         *    切勿作为默认生产配置；目前站点内置资产包仍为 wasm32，用户切换为
+         *    wasm64 时先应用实验标识与高位内存守卫策略，后续接入 wasm64 远端包后
+         *    再按 selectedArch 分流 manifest。
+         * ====================================================================
+         */
         lean4: {
-          maxMemoryBytes: 1024 ** 3,
+          maxMemoryBytes: WASM32_MEMORY_BYTES,
           ...(Object.keys(extensionPacks).length > 0
             ? { extensionPacks: extensionPacks as unknown as Record<string, ArrayBuffer> }
             : {}),
@@ -1615,6 +1639,62 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     });
   }
   syncDefaultCheckboxes();
+
+  /**
+   * ==========================================================================
+   * EXPERIMENTAL: 手动切换 wasm32（默认生产）与 wasm64（实验试用）
+   * --------------------------------------------------------------------------
+   * 切勿默认启用 wasm64；不支持 Memory64 的浏览器禁用 wasm64 选项并给出明确提示。
+   * ==========================================================================
+   */
+  const runtimeArchLabelEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-label"]');
+  const runtimeArchNoteEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-note"]');
+  const runtimeArchButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-runtime-arch]')];
+
+  const syncRuntimeArchUi = () => {
+    if (runtimeArchLabelEl) {
+      runtimeArchLabelEl.textContent = `${t.runtimeTitle}: ${selectedArch === 'wasm64' ? t.runtimeWasm64 : 'wasm32'}`;
+    }
+    for (const button of runtimeArchButtons) {
+      const arch = button.dataset.runtimeArch as LeanRuntimeArch;
+      const active = arch === selectedArch;
+      button.dataset.active = String(active);
+      button.setAttribute('aria-checked', String(active));
+      if (arch === 'wasm64' && !memory64Supported) {
+        button.disabled = true;
+      }
+    }
+    if (runtimeArchNoteEl) {
+      runtimeArchNoteEl.textContent = !memory64Supported
+        ? t.runtimeWasm64Unsupported
+        : selectedArch === 'wasm64'
+          ? t.runtimeWasm64AssetNote
+          : '';
+    }
+  };
+
+  for (const button of runtimeArchButtons) {
+    button.addEventListener('click', () => {
+      const nextArch = button.dataset.runtimeArch as LeanRuntimeArch;
+      if (nextArch === 'wasm64' && !memory64Supported) {
+        log(t.runtimeWasm64Unsupported);
+        syncRuntimeArchUi();
+        return;
+      }
+      if (nextArch === selectedArch) return;
+      selectedArch = nextArch;
+      setRuntimeArch(nextArch);
+      syncRuntimeArchUi();
+      log(t.logRuntimeArchSelected(nextArch === 'wasm64' ? t.runtimeWasm64 : t.runtimeWasm32));
+      if (nextArch === 'wasm64') log(t.runtimeWasm64AssetNote);
+      closeMenus();
+      if (session.isReady || startInflight) {
+        stop();
+        void start();
+      }
+    });
+  }
+  syncRuntimeArchUi();
 
   const persistRuntimeSession = (active: boolean) => {
     writeRuntimeSession({ active, extensions: [...activeExtensions] });

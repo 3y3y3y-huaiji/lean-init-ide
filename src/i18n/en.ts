@@ -316,6 +316,16 @@ end
       `Tab hidden at ${mb} MB peak heap; released Lean engine memory`,
     logMemoryHardLimit: (mb, limitMb) =>
       `Memory reached hard limit (${mb} / ${limitMb} MB); stopped engine to protect tab stability`,
+    runtimeTitle: 'Runtime',
+    runtimeWasm32: 'wasm32 (stable default)',
+    runtimeWasm64: 'wasm64 (experimental)',
+    runtimeExperimentalWarning:
+      'Experimental notice: stable wasm32 (1 GiB limit) is the production default. wasm64 is experimental, may be unstable or unsupported across browsers, and must not be used for production — switch manually only to try it.',
+    runtimeWasm64Unsupported:
+      'Memory64 is not supported in this browser; staying on the stable wasm32 runtime',
+    runtimeWasm64AssetNote:
+      'Note: the bundled runtime pack is still wasm32; selecting experimental wasm64 arms the higher memory guard ceiling and experimental flag.',
+    logRuntimeArchSelected: (arch) => `Runtime preference switched to ${arch}`,
   },
   reference: {
     eyebrow: 'Lean 4 · Reference',

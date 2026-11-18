@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   getAutoStart,
   getDefaultExtensions,
+  getRuntimeArch,
   readRuntimeSession,
   setAutoStart,
   setDefaultExtensions,
+  setRuntimeArch,
   writeRuntimeSession,
 } from './settings';
 
@@ -83,5 +85,24 @@ describe('runtime session state', () => {
     expect(readRuntimeSession()).toBeNull();
     sessionStorage.setItem('lean:runtime-session', JSON.stringify({ extensions: [] }));
     expect(readRuntimeSession()).toBeNull();
+  });
+});
+
+describe('runtime architecture selection', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('默认始终为 wasm32，异常存储值也安全回落为 wasm32', () => {
+    expect(getRuntimeArch()).toBe('wasm32');
+    localStorage.setItem('lean:runtime-arch', 'wasm128');
+    expect(getRuntimeArch()).toBe('wasm32');
+  });
+
+  it('支持显式切换并持久化保存实验性 wasm64 与切回 wasm32', () => {
+    setRuntimeArch('wasm64');
+    expect(localStorage.getItem('lean:runtime-arch')).toBe('wasm64');
+    expect(getRuntimeArch()).toBe('wasm64');
+
+    setRuntimeArch('wasm32');
+    expect(getRuntimeArch()).toBe('wasm32');
   });
 });

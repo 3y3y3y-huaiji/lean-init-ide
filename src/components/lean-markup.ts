@@ -271,6 +271,39 @@ export const renderLeanMarkup = (
       </div>
     </details>`;
 
+  const runtimeMenu = () => `
+    <details class="relative shrink-0" data-role="runtime-arch">
+      <summary class="${ghostButtonClass} cursor-pointer list-none" title="${t.runtimeTitle}">
+        <span data-role="runtime-arch-label">${t.runtimeTitle}: wasm32</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>
+      </summary>
+      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-72 rounded-xl border border-line bg-panel p-2.5">
+        <!-- 实验性提醒：默认走稳定的 wasm32，wasm64 仅作实验试用，不可作生产依赖 -->
+        <div role="note" class="mb-2 rounded-lg border border-warn/45 bg-warn/10 px-2.5 py-2 text-[11px] leading-relaxed text-fg">
+          ${t.runtimeExperimentalWarning}
+        </div>
+        <div class="flex flex-col gap-1" role="radiogroup" aria-label="${t.runtimeTitle}">
+          <button
+            type="button"
+            role="radio"
+            aria-checked="true"
+            data-runtime-arch="wasm32"
+            data-active="true"
+            class="flex w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft data-[active=true]:border-accent data-[active=true]:bg-accent/10 data-[active=true]:font-[650]"
+          >${t.runtimeWasm32}</button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked="false"
+            data-runtime-arch="wasm64"
+            data-active="false"
+            class="flex w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-50 data-[active=true]:border-warn data-[active=true]:bg-warn/10 data-[active=true]:font-[650]"
+          >${t.runtimeWasm64}</button>
+        </div>
+        <p data-role="runtime-arch-note" class="m-0 mt-2 px-1 text-[11px] leading-normal text-muted"></p>
+      </div>
+    </details>`;
+
   if (!compact) {
     const heading = options.heading !== false;
     return `
@@ -285,9 +318,9 @@ export const renderLeanMarkup = (
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
+          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
         </div>`
-            : `<div class="flex flex-wrap items-center justify-end gap-2 border-b border-line gutter-x py-2">${librariesMenu()}${panelsMenu(false)}${status}${start}</div>`
+            : `<div class="flex flex-wrap items-center justify-end gap-2 border-b border-line gutter-x py-2">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>`
         }
         <div class="h-[3px] bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
         <div class="flex flex-wrap items-center gap-2 border-b border-line gutter-x py-2">

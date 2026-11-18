@@ -955,6 +955,25 @@ jobs:
           bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE" --release
           node scripts/adapt-glue.ts work/release-lsp/lean-lsp.mjs work/release-lsp/lean-lsp-adapted.mjs
 
+      - name: 打包实验性 wasm64 运行时资产（Init 64位 + release-lsp）
+        run: |
+          VERSION="$(tr -d '[:space:]' < work/lean4/lean-toolchain | sed -E 's/^leanprover\/lean4:v?//')"
+          node scripts/package-wasm64-runtime.ts \
+            --glue work/release-lsp/lean-lsp-adapted.mjs \
+            --wasm work/release-lsp/lean-lsp.wasm \
+            --wasm-zst work/release-lsp/lean-lsp.wasm.zst \
+            --lib work/olean32 \
+            --out work/wasm64-runtime \
+            --lean-version "$VERSION"
+          ls -lh work/wasm64-runtime
+
+      - name: 保存实验性 wasm64 运行时产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-runtime-release
+          path: work/wasm64-runtime/**
+          if-no-files-found: error
+
       - name: 打包 npm（lean4-wasm64）
         run: |
           corepack enable
@@ -999,3 +1018,77 @@ jobs:
             work/mathlib-modules.txt
             work/mathlib-log/**
           if-no-files-found: warn
+
+  # 将 deep 产出的实验性 wasm64 运行时（Init 64位 + release-lsp）发布到
+  # GitHub Release 与 Cloudflare R2，供主站按手动开关实验试用（默认仍是 wasm32）。
+  publish-wasm64:
+    needs: deep
+    if: >-
+      needs.deep.result == 'success' && (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'deep') ||
+        (github.event_name == 'push' && contains(github.event.head_commit.message, '[wasm64-deep]'))
+      )
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm64-runtime-release
+          path: runtime
+
+      - name: 发布 GitHub Release（runtime-v<lean>-wasm64）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -e 'process.stdout.write(require("./runtime/wasm64-runtime-manifest.json").leanVersion)')"
+          TAG="runtime-v${VERSION}-wasm64"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Lean ${VERSION} wasm64 experimental runtime" \
+              --notes "Experimental wasm64 (Memory64) runtime + 64-bit Init oleans. Opt-in trial only; do not use in production."
+          fi
+          gh release upload "$TAG" runtime/* --clobber
+
+      - name: 上传 R2（wasm-lean4/<ver>-wasm64/，存在 secrets 时执行）
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_REGION: auto
+        run: |
+          set -euo pipefail
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::notice::未配置 R2 secrets，跳过 R2 上传（仅发布 GitHub Release）"
+            exit 0
+          fi
+          command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const { execFileSync } = require("child_process");
+            const manifest = JSON.parse(fs.readFileSync("./runtime/wasm64-runtime-manifest.json", "utf8"));
+            const bucket = process.env.R2_BUCKET || manifest.bucket || "lean4-ide-releases";
+            const endpoint = process.env.R2_ENDPOINT;
+            for (const asset of manifest.assets) {
+              const filePath = path.join("./runtime", asset.source);
+              const stat = fs.statSync(filePath);
+              if (stat.size !== asset.bytes) {
+                throw new Error(`${asset.name} size mismatch: ${stat.size} != ${asset.bytes}`);
+              }
+              console.log(`upload s3://${bucket}/${asset.key} (${asset.bytes} bytes)`);
+              execFileSync("aws", [
+                "--endpoint-url", endpoint,
+                "s3api", "put-object",
+                "--bucket", bucket,
+                "--key", asset.key,
+                "--body", filePath,
+                "--content-type", asset.contentType,
+                "--cache-control", "public,max-age=31536000,immutable",
+                "--metadata", `sha256=${asset.sha256},bytes=${asset.bytes}`,
+              ], { stdio: "inherit" });
+            }
+          '

@@ -263,8 +263,10 @@ const runLspDoc = async (
         }, idleMs);
       };
       const onError = (event: ErrorEvent) => {
+        event.preventDefault();
         cleanup();
-        reject(new Error(`${name}: worker error ${event.message}`));
+        const detail = (event.error as Error | undefined)?.stack ?? event.message;
+        reject(new Error(`${name}: worker error ${detail}`));
       };
       const onMessage = (event: MessageEvent<Record<string, unknown>>) => {
         arm();
@@ -333,8 +335,10 @@ const runLspDoc = async (
     };
     worker.addEventListener('message', onReady);
     worker.addEventListener('error', (event) => {
+      event.preventDefault();
       clearTimeout(timer);
-      reject(new Error(`${name}: worker error ${event.message}`));
+      const detail = (event.error as Error | undefined)?.stack ?? event.message;
+      reject(new Error(`${name}: worker error ${detail}`));
     });
   });
 
@@ -444,7 +448,7 @@ const runLspMode = async (environment: EnvironmentReport, config: QueryConfig): 
   });
 };
 
-const DEPTH_SAMPLES = [1000, 1200, 1500, 2000, 4000] as const;
+const DEPTH_SAMPLES = [500, 800, 1000, 1200, 1500, 2000, 4000] as const;
 
 const buildDepthCode = (n: number): string =>
   [
@@ -465,15 +469,21 @@ const runDepthMode = async (environment: EnvironmentReport, config: QueryConfig)
       const result = await runLspDoc(fileName, buildDepthCode(n), true, config, 5);
       if (result.diagnostics.length === 0) {
         maxPassed = n;
-        log.push(`[depth] N=${n} ok (${result.elapsedMs}ms)`);
+        const line = `[depth] N=${n} ok (${result.elapsedMs}ms)`;
+        console.log(line);
+        log.push(line);
       } else {
         const msg = result.diagnostics.map((d) => String(d.message ?? '')).join('; ');
-        log.push(`[depth] N=${n} diagnostics=${result.diagnostics.length}: ${msg.slice(0, 240)}`);
+        const line = `[depth] N=${n} diagnostics=${result.diagnostics.length}: ${msg.slice(0, 240)}`;
+        console.log(line);
+        log.push(line);
         break;
       }
     } catch (error: unknown) {
-      const detail = String((error as Error)?.message ?? error).slice(0, 240);
-      log.push(`[depth] N=${n} failed: ${detail}`);
+      const detail = String((error as Error)?.message ?? error).slice(0, 800);
+      const line = `[depth] N=${n} failed: ${detail}`;
+      console.log(line);
+      log.push(line);
       break;
     }
   }

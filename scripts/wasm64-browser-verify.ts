@@ -143,7 +143,9 @@ const runMode = async (mode: string): Promise<ProbeResult> => {
   page.on('console', (message) => console.log(`[${mode}:${message.type()}] ${message.text()}`));
   // 未捕获异常意味着页面逻辑已经坏了；继续等 __probeResult 只会白耗预算。
   const pageError = new Promise<never>((_, reject) => {
-    page.once('pageerror', (error) => reject(new Error(`${mode}: pageerror ${error.message}`)));
+    page.once('pageerror', (error) =>
+      reject(new Error(`${mode}: pageerror ${error.stack ?? error.message}`)),
+    );
   });
   const query = new URLSearchParams({ mode });
   if (cli.manifest) query.set('manifest', cli.manifest);

@@ -41,6 +41,14 @@ interface WorkerScope {
 
 const workerSelf = self as unknown as WorkerScope;
 
+// 捕获子 pthread 冒泡到 worker 全局的硬异常（如 RangeError: Maximum call stack size exceeded），
+// 回传给 harness 记录完整调用栈，避免直接触发页面 pageerror 导致后续探针样本中断。
+self.addEventListener('error', (event: ErrorEvent) => {
+  event.preventDefault();
+  const detail = (event.error as Error | undefined)?.stack ?? event.message ?? 'worker error';
+  workerSelf.postMessage({ failure: String(detail) });
+});
+
 const fetchJson = async <T>(url: string): Promise<T> => {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`加载失败 ${url}: ${response.status}`);

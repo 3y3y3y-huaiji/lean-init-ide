@@ -58,7 +58,7 @@ worker 启动时用 `public/vendor/zstddec.mjs` 的同源 wasm 解码，解压�
   文件进程负责文档；每个进程一个 Worker，stdin 走 SharedArrayBuffer 环形缓冲。
 - FileWorker 以退出码 2 请求重启时重放 initialize + didOpen；启动后 15s 内反复退出
   会触发重启风暴保护，避免无限重挂上百 MB 的库。
-- wasm64 只带 Init；需要 Std / Batteries 的课程与扩展库选择会自动使用 wasm32。
+- wasm64 只带 Init；需要 Std / Batteries 的课程会自动回退 wasm32，扩展库选择在 wasm64 下禁用。
 
 ## 目录结构
 

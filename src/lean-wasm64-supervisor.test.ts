@@ -4,6 +4,7 @@ import {
   type LeanProcess,
   type LeanProcessCallbacks,
   type LspMessage,
+  type Wasm64SupervisorOptions,
 } from './lean-wasm64-supervisor';
 
 class FakeProcess implements LeanProcess {
@@ -39,7 +40,7 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 10; i += 1) await Promise.resolve();
 };
 
-const connect = async (options?: { onError?: (message: string) => void }) => {
+const connect = async (options?: Wasm64SupervisorOptions) => {
   const h = harness();
   const server = await createWasm64Supervisor(h.factory, options);
   const received: LspMessage[] = [];
@@ -122,6 +123,63 @@ describe('createWasm64Supervisor', () => {
       text: 'import Init\nexample : True := trivial',
       version: 2,
     });
+  });
+
+  it('文件进程的 initialize 响应只是内部握手，不转发给客户端', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    processes[1]!.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 'lean-browser:init',
+      result: { capabilities: { hoverProvider: true } },
+    });
+
+    expect(received.some((message) => message.id === 'lean-browser:init')).toBe(false);
+  });
+
+  it('时间窗内反复以退出码 2 重启会判定为重启风暴并停止重开', async () => {
+    const onError = vi.fn();
+    const { processes, send } = await connect({
+      onError,
+      now: () => 0,
+      maxRestarts: 2,
+      restartWindowMs: 1000,
+    });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    processes[1]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[2]?.args).toEqual(['-j4', '--worker', URI]);
+
+    processes[2]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[3]?.args).toEqual(['-j4', '--worker', URI]);
+
+    processes[3]!.callbacks.onExit(2);
+    await flush();
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining('restarted 2 times within 1s; giving up'),
+    );
+    expect(processes[3]!.disposed).toBe(true);
+    expect(processes).toHaveLength(4);
+  });
+
+  it('超过 8 MiB UTF-8 的文档在创建进程前就被拒绝', async () => {
+    const onError = vi.fn();
+    const { processes, send } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+
+    await send(openMessage('a'.repeat(8 * 1024 ** 2 + 1)));
+
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('8 MiB (UTF-8)'));
+    expect(processes).toHaveLength(1);
   });
 
   it('非 2 的退出码是致命错误：上报并让未完成请求以错误结算', async () => {

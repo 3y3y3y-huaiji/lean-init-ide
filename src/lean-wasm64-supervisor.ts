@@ -66,6 +66,12 @@ export type LeanProcessFactory = (
 export type Wasm64SupervisorOptions = {
   /** 终态错误（进程崩溃等）；调用方据此走崩溃恢复。 */
   onError?: (message: string) => void;
+  /** 测试注入：重启风暴判定使用的时钟。 */
+  now?: () => number;
+  /** 时间窗内允许的重启次数；超过即视为无法恢复。 */
+  maxRestarts?: number;
+  /** 重启计数的时间窗（毫秒）。 */
+  restartWindowMs?: number;
 };
 
 type ActiveDocument = {
@@ -76,6 +82,9 @@ type ActiveDocument = {
 };
 
 const RESTART_EXIT_CODE = 2;
+const INTERNAL_INIT_ID = 'lean-browser:init';
+const DEFAULT_MAX_RESTARTS = 5;
+const DEFAULT_RESTART_WINDOW_MS = 60_000;
 const MAX_EARLY_REQUESTS = 128;
 const MAX_DOCUMENT_BYTES = 8 * 1024 ** 2;
 
@@ -132,6 +141,10 @@ export const createWasm64Supervisor = async (
   let initializeId: number | string | undefined;
   let initialized = false;
   let nextServerId = 0;
+  const now = options.now ?? Date.now;
+  const maxRestarts = options.maxRestarts ?? DEFAULT_MAX_RESTARTS;
+  const restartWindowMs = options.restartWindowMs ?? DEFAULT_RESTART_WINDOW_MS;
+  let restartTimestamps: number[] = [];
 
   /** 已转发给文件进程、尚未收到响应的请求。 */
   const pending = new Set<number | string>();
@@ -184,6 +197,9 @@ export const createWasm64Supervisor = async (
     closed.fire();
     receive = undefined;
     closed.dispose();
+    readerError.dispose();
+    readerPartial.dispose();
+    writerError.dispose();
   };
 
   const fail = (cause: unknown): void => {
@@ -203,7 +219,11 @@ export const createWasm64Supervisor = async (
       emit({ ...message, id });
       return;
     }
-    if (!message.method && message.id !== undefined) pending.delete(message.id);
+    if (!message.method && message.id !== undefined) {
+      // 文件进程的 initialize 响应只是内部握手；客户端已经收到 bootstrap 的结果。
+      if (message.id === INTERNAL_INIT_ID) return;
+      pending.delete(message.id);
+    }
     emit(message);
   };
 
@@ -257,6 +277,18 @@ export const createWasm64Supervisor = async (
     fileProcess.send(message);
   };
 
+  /**
+   * 重启风暴保护：时间窗内超过上限说明 FileWorker 无法稳定启动，
+   * 继续重开只会不断挂载上百 MB 的库并拖垮标签页。
+   */
+  const allowRestart = (): boolean => {
+    const at = now();
+    restartTimestamps = restartTimestamps.filter((stamp) => at - stamp < restartWindowMs);
+    if (restartTimestamps.length >= maxRestarts) return false;
+    restartTimestamps.push(at);
+    return true;
+  };
+
   const openDocument = async (document: ActiveDocument): Promise<void> => {
     if (!initializeParams)
       throw new Error('Lean LSP must be initialized before opening a document.');
@@ -266,9 +298,10 @@ export const createWasm64Supervisor = async (
       url.host ||
       !url.pathname.endsWith('.lean') ||
       typeof document.text !== 'string' ||
-      document.text.length > MAX_DOCUMENT_BYTES
+      // 环形缓冲按 UTF-8 字节计容量；非 ASCII 文档不能按 UTF-16 长度放行。
+      new TextEncoder().encode(document.text).byteLength > MAX_DOCUMENT_BYTES
     ) {
-      throw new Error('Lean LSP requires a local .lean document of at most 8 MiB.');
+      throw new Error('Lean LSP requires a local .lean document of at most 8 MiB (UTF-8).');
     }
     cancelPending('Lean document process was replaced.');
     fileProcess?.dispose();
@@ -287,6 +320,12 @@ export const createWasm64Supervisor = async (
         fileProcess = undefined;
         if (code === RESTART_EXIT_CODE && active) {
           // FileWorker 在 import / 头部状态变化时请求重启：重开进程并重放 initialize + didOpen。
+          if (!allowRestart()) {
+            fail(
+              `Lean document process restarted ${maxRestarts} times within ${Math.round(restartWindowMs / 1000)}s; giving up.`,
+            );
+            return;
+          }
           const restart = openDocument(active);
           restarting = restart;
           void restart.catch(fail).finally(() => {
@@ -311,7 +350,7 @@ export const createWasm64Supervisor = async (
     if (token !== generation) return;
     process.send({
       jsonrpc: '2.0',
-      id: 'lean-browser:init',
+      id: INTERNAL_INIT_ID,
       method: 'initialize',
       params: initializeParams,
     });

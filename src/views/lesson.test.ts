@@ -8,6 +8,7 @@ import type { LspDiagnostic } from '../components/lean-panel';
 import { lessonsFor, messagesFor } from '../i18n';
 import { markLessonCompleted, markLessonVisited, readCompleted, readProgress } from '../progress';
 import { bindLesson, dropSpuriousRedeclarations, renderLesson } from './lesson';
+import { escapeHtml } from './html';
 
 beforeEach(() => {
   localStorage.clear();
@@ -88,12 +89,19 @@ describe('课程页渲染', () => {
   });
 
   it('正文里的反引号渲染成行内代码，而不是漏出纯文本', () => {
-    const html = renderLesson('zh', 'what-is-lean');
+    const lesson = lessonsOf('zh').find((item) => item.slug === 'what-is-lean')!;
+    const paragraph = lesson.blocks.find(
+      (block) => block.kind === 'p' && /`[^`\n]+`/.test(block.text),
+    );
+    expect(paragraph).toBeDefined();
+    const token = /`([^`\n]+)`/.exec(paragraph!.text)![1]!;
+    const html = renderLesson('zh', lesson.slug);
 
     expect(html).toContain(
-      '<code class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg">const x: number = &quot;abc&quot;</code>',
+      'class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg"',
     );
-    expect(html).not.toContain('`const x: number');
+    expect(html).toContain(`>${escapeHtml(token)}</code>`);
+    expect(html).not.toContain(`\`${token}\``);
   });
 
   it('练习说明里的反引号同样按行内代码渲染', () => {

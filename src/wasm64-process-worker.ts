@@ -10,6 +10,8 @@
 // V8 默认只保留 10 帧；wasm 爆栈需要完整调用环才能定位。
 (Error as ErrorConstructor & { stackTraceLimit?: number }).stackTraceLimit = 200;
 
+import { formatWorkerError } from './wasm64-error';
+
 type FsApi = {
   mkdirTree: (path: string) => void;
   writeFile: (path: string, data: Uint8Array, options?: { canOwn?: boolean }) => void;
@@ -85,17 +87,24 @@ export const unpackLibrary = (
   });
 };
 
-const errorStack = (error: unknown): string => {
-  const candidate = error as { stack?: unknown } | null;
-  return typeof candidate?.stack === 'string' ? candidate.stack : String(error);
-};
+const errorStack = (error: unknown, fallback?: string): string =>
+  formatWorkerError(error, fallback);
 
 let activeLean: LeanModule | null = null;
 
-// pthread 的未捕获异常会冒泡到本 Worker；回传后由监督器统一报错。
+// pthread 的未捕获异常会冒泡到本 Worker；Chrome 会再包一层 ErrorEvent，必须解包后再回传。
 self.addEventListener('error', (event: ErrorEvent) => {
   event.preventDefault();
-  scope.postMessage({ failure: errorStack(event.error ?? event.message) });
+  scope.postMessage({
+    failure: errorStack(event.error ?? event, event.message || 'Lean wasm64 worker failed.'),
+  });
+});
+
+self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  event.preventDefault();
+  scope.postMessage({
+    failure: errorStack(event.reason, 'Lean wasm64 worker unhandled rejection.'),
+  });
 });
 
 const start = async (data: StartMessage): Promise<void> => {

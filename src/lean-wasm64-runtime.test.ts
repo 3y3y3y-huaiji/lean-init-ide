@@ -219,7 +219,7 @@ describe('loadWasm64Runtime', () => {
       entries,
       match: vi.fn(async (key: string) => {
         const bytes = entries.get(key);
-        return bytes ? new Response(bytes) : undefined;
+        return bytes ? new Response(bytes as unknown as BodyInit) : undefined;
       }),
       put: vi.fn(async (key: string, response: Response) => {
         entries.set(key, new Uint8Array(await response.arrayBuffer()));

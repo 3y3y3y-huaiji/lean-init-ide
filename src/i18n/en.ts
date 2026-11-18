@@ -141,6 +141,9 @@ export const en: Messages = {
       openInPlayground: 'Open in the editor',
       starterNote:
         'Lines starting with "--" are explanation comments that Lean ignores; replace sorry with a real proof to close the goal.',
+      feedbackHint: 'Something wrong with this puzzle? Feedback includes the current challenge.',
+      feedbackBug: 'Report a bug',
+      feedbackIssueTitle: (title) => `[Challenge] ${title}`,
     },
   },
   lesson: {
@@ -175,6 +178,10 @@ export const en: Messages = {
       'Keep the named theorem, remove every sorry and leave no errors; the lesson is then marked as completed automatically.',
     requiresHint: (libraries) =>
       `This lesson needs ${libraries}; Lean loads it automatically on start.`,
+    feedbackHint: 'Unclear or spotted a mistake? Feedback includes this lesson automatically.',
+    feedbackClarity: 'Something is unclear',
+    feedbackBug: 'Report a bug',
+    feedbackIssueTitle: (title) => `[Lesson] ${title}`,
     completedCount: (done, total) => `${done} / ${total} completed`,
     running: 'Running…',
     noOutput: 'No errors, no output',

@@ -136,6 +136,10 @@ export type Messages = {
       loadSolution: string;
       openInPlayground: string;
       starterNote: string;
+      /** 挑战详情页底部的反馈入口：自动带上当前挑战。 */
+      feedbackHint: string;
+      feedbackBug: string;
+      feedbackIssueTitle: (title: string) => string;
     };
   };
   lesson: {
@@ -163,6 +167,11 @@ export type Messages = {
     exerciseCompletionHint: string;
     /** 本课依赖哪些扩展库，以及启动时会自动加载。 */
     requiresHint: (libraries: string) => string;
+    /** 课程页底部的反馈入口：自动带上当前课时。 */
+    feedbackHint: string;
+    feedbackClarity: string;
+    feedbackBug: string;
+    feedbackIssueTitle: (title: string) => string;
     /** 目录顶部的完成计数。 */
     completedCount: (done: number, total: number) => string;
     /** 运行中的占位文案。 */

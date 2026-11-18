@@ -137,6 +137,9 @@ export const zh: Messages = {
       openInPlayground: '在编辑器中打开',
       starterNote:
         '骨架里以「--」开头的行是讲解注释，Lean 会跳过；把 sorry 换成真正的证明就能关闭目标。',
+      feedbackHint: '这道题哪里不对劲？反馈会自动带上当前挑战。',
+      feedbackBug: '题目有误',
+      feedbackIssueTitle: (title) => `[挑战] ${title}`,
     },
   },
   lesson: {
@@ -170,6 +173,10 @@ export const zh: Messages = {
     exerciseCompletionHint:
       '保留题目中的定理名、删掉所有 sorry 且没有错误后，本课会自动标记为已完成。',
     requiresHint: (libraries) => `本课需要 ${libraries} 库，启动 Lean 时会自动加载。`,
+    feedbackHint: '没看懂或发现题目有误？反馈会自动带上当前课时。',
+    feedbackClarity: '这课没看懂',
+    feedbackBug: '题目有误',
+    feedbackIssueTitle: (title) => `[课程] ${title}`,
     completedCount: (done, total) => `已完成 ${done} / ${total}`,
     running: '运行中…',
     noOutput: '没有错误，也没有输出',

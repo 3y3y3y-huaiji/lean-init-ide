@@ -4,6 +4,7 @@ import {
   type AssetSourcePreference,
 } from '../asset-source';
 import { ghostButtonClass } from '../components/ui';
+import { REPO_URL } from '../feedback';
 import { localeLabel, messagesFor, otherLocale, rememberLocale, type Locale } from '../i18n';
 import { FIRST_LESSON_SLUG } from '../router';
 import { clearRuntimeCache } from '../runtime-cache';
@@ -13,8 +14,6 @@ import type { ThemePreference } from '../theme';
 
 export type ActivePage =
   'home' | 'lesson' | 'playground' | 'privacy' | 'reference' | 'challenges' | 'challenge';
-
-const REPO_URL = 'https://github.com/3y3y3y-huaiji/lean-init-ide';
 
 const iconAttrs =
   'width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';

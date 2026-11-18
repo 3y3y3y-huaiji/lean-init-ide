@@ -16,6 +16,7 @@ import { renderLeanMarkup } from '../components/lean-markup';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { draftKeyFor } from '../draft';
+import { issueUrl } from '../feedback';
 import { messagesFor, type Locale } from '../i18n';
 import { renderNotFound } from '../page-meta';
 import { escapeHtml } from './html';
@@ -158,6 +159,16 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
             challenge.solution[locale],
           )}</code></pre>
         </details>
+      </div>
+
+      <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+        <span class="mr-1 text-xs text-muted">${escapeHtml(detail.feedbackHint)}</span>
+        <a class="${ghostButtonClass}" target="_blank" rel="noopener noreferrer" href="${escapeHtml(
+          issueUrl('lesson-bug.yml', {
+            title: detail.feedbackIssueTitle(challenge.title[locale]),
+            body: `Challenge: ${challenge.slug}\nPath: /${locale}/challenges/${challenge.slug}\n\n`,
+          }),
+        )}">${escapeHtml(detail.feedbackBug)}</a>
       </div>
     </section>
   `;

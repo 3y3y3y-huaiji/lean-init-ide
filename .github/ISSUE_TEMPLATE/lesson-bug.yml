@@ -1,0 +1,39 @@
+name: 课程问题 / Lesson bug
+description: 题目、代码、运行结果不一致，或某节课的代码块跑不过
+title: '[课程] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。填上课时 slug 后，Agent 可以直接定位到对应课程文件。
+        Thanks — the lesson slug lets an agent jump straight to the right file.
+  - type: input
+    id: lesson
+    attributes:
+      label: 课时 slug / Lesson slug
+      description: 页面 URL 的最后一段，例如 `math-parity`
+      placeholder: math-parity
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 哪里不对 / What is wrong
+      description: 例如「题干让证 A，编辑器里的代码却是 B」，或「点运行后报错」
+      placeholder: 题干写的是……，但 starter 里是……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望看到什么 / What did you expect
+  - type: input
+    id: environment
+    attributes:
+      label: 浏览器与设备 / Browser and device
+      placeholder: Chrome 131 / macOS
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断或截图 / Diagnostics or screenshots
+      description: 可以直接粘贴 Lean 诊断输出，或把截图拖进来

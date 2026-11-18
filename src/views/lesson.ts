@@ -2,6 +2,7 @@ import type { LeanPanel, LeanPanelProgress, LspDiagnostic } from '../components/
 import { anchorImportDiagnostics } from '../lean-session';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
+import { issueUrl } from '../feedback';
 import { lessonsFor, messagesFor, type Locale } from '../i18n';
 import type { LessonLibrary, LessonPage, LessonTrack } from '../i18n/types';
 import { markLessonVisited, readCompleted } from '../progress';
@@ -188,6 +189,19 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       </section>`
     : '';
 
+  const feedbackBody = `Lesson: ${page.slug}\nPath: /${locale}/learn/${page.slug}\n\n`;
+  const feedbackTitle = t.feedbackIssueTitle(page.title);
+  const feedback = `
+    <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+      <span class="mr-1 text-xs text-muted">${escapeHtml(t.feedbackHint)}</span>
+      <a class="${ghostButtonClass}" target="_blank" rel="noopener noreferrer" href="${escapeHtml(
+        issueUrl('clarity-gap.yml', { title: feedbackTitle, body: feedbackBody }),
+      )}">${escapeHtml(t.feedbackClarity)}</a>
+      <a class="${ghostButtonClass}" target="_blank" rel="noopener noreferrer" href="${escapeHtml(
+        issueUrl('lesson-bug.yml', { title: feedbackTitle, body: feedbackBody }),
+      )}">${escapeHtml(t.feedbackBug)}</a>
+    </div>`;
+
   return `
     <div class="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-6 max-[1040px]:grid-cols-1">
       <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1040px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
@@ -208,6 +222,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${body.html}
         ${exercise}
         ${pager}
+        ${feedback}
       </article>
     </div>
     <div data-role="runner" class="sr-only" aria-hidden="true"></div>

@@ -134,6 +134,17 @@ describe('课程页渲染', () => {
     expect(html).toContain(`href="/zh/playground?lesson=${lesson!.slug}"`);
   });
 
+  it('底部反馈入口带上当前课时并指向对应 Issue 模板', () => {
+    const html = renderLesson('zh', 'connectives');
+    const body = encodeURIComponent('Lesson: connectives\nPath: /zh/learn/connectives\n\n');
+
+    expect(html).toContain('issues/new?template=clarity-gap.yml');
+    expect(html).toContain('issues/new?template=lesson-bug.yml');
+    expect(html).toContain(body);
+    expect(html).toContain(messagesFor('zh').lesson.feedbackClarity);
+    expect(html).toContain(messagesFor('zh').lesson.feedbackBug);
+  });
+
   it('不再渲染右侧编辑器栏', () => {
     const html = renderLesson('zh', 'first-proof');
 

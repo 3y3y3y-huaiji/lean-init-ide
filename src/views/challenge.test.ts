@@ -134,6 +134,13 @@ describe('挑战页挂载', () => {
     ).toBe('solution');
   });
 
+  it('底部反馈入口带上当前挑战并指向课程问题模板', () => {
+    const html = renderChallenge('zh', challenge.slug);
+    expect(html).toContain('issues/new?template=lesson-bug.yml');
+    expect(html).toContain(encodeURIComponent(`Challenge: ${challenge.slug}`));
+    expect(html).toContain(messagesFor('zh').challenges.detail.feedbackBug);
+  });
+
   it('复制分享链接成功与失败都有可见反馈', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, 'clipboard', {

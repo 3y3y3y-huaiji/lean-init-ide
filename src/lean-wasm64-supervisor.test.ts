@@ -339,6 +339,45 @@ describe('createWasm64Supervisor', () => {
     expect(onError).toHaveBeenCalledWith('Too many Lean requests before didOpen.');
   });
 
+  it('shutdown 返回 null 并取消未完成请求', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+    await send({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: URI } },
+    });
+
+    await send({ jsonrpc: '2.0', id: 6, method: 'shutdown', params: {} });
+
+    expect(processes[1]!.disposed).toBe(true);
+    expect(received.find((message) => message.id === 5)?.error?.message).toBe(
+      'Lean LSP shut down.',
+    );
+    expect(received.find((message) => message.id === 6)?.result).toBeNull();
+  });
+
+  it('打开文档后，指向其它 URI 的请求直接报错', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    await send({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: 'file:///workspace/Other.lean' } },
+    });
+
+    expect(received.find((message) => message.id === 7)?.error?.message).toBe(
+      'Lean LSP has a different active document.',
+    );
+  });
+
   it('非 2 的退出码是致命错误：上报并让未完成请求以错误结算', async () => {
     const onError = vi.fn();
     const { processes, send, received } = await connect({ onError });

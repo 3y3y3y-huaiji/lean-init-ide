@@ -1,136 +1,84 @@
 # AGENTS.md
 
-面向在本仓库工作的 AI Agent 与协作者。README 讲「这是什么、怎么跑」，这份文件讲「什么不能碰、改完怎么证明没改坏」。
+面向在本仓库工作的 AI Agent 与协作者。README 讲「是什么、怎么跑」；本文件只讲「什么不能碰、改一处要同步哪里、怎么验证」。
 
 ## 项目是什么
 
-浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 里的 Lean 4.35.0 Init 语言服务器。
-没有后端服务，没有构建期编译，全部逻辑在浏览器内完成。
+浏览器里的 Lean 4 学习环境：Monaco 编辑器 + 真正运行在 Web Worker 里的 Lean 4.35.0 Init 语言服务器。没有后端服务，没有构建期编译。
 
 - 线上：<https://criticalthinking.de5.net>（单域名，`lean-init-ide.pages.dev` 仅作回退）
-- 托管：Cloudflare Pages（Git 集成，push `main` 即部署）
+- 托管：Cloudflare Pages，push `main` 即部署
 - 运行时资产：约 102 MB，11 个对象，存放在 R2 桶，经站点同源 `/cdn/` 网关读取
 
-## 开始之前
+## 按任务定位
 
-按顺序读：`README.md`（项目定位与用法）→ `docs/README.md`（文档索引）→ `docs/ARCHITECTURE.md`（分发链路与目录）→ 本文件（硬约束）→ 你要改的那个模块的源码。改 CI、发布或运维时先读 `docs/CI.md` 和 `docs/OPERATIONS.md`。
-
-不要凭猜测修改以下文件。它们的每一个字节都有外部依赖：
-
-| 文件 | 为什么危险 |
+| 你要改什么 | 先读 |
 | --- | --- |
-| `config/lean4-runtime.json` | 字节数与 SHA-256 被构建脚本、Service Worker、上传脚本三方共用，改错即全链路校验失败 |
-| `public/_routes.json` | 决定哪些请求走 Pages Functions，写宽了会让全站请求多一层开销 |
-| `public/_headers` | COOP/COEP 是 wasm 线程模型的前提，缺失会让 SharedArrayBuffer 不可用 |
-| `wrangler.toml` | R2 binding 名必须是 `LEAN_ASSETS`，且 production / preview 必须各写一份 |
-| `scripts/assets/**` | 按字节校验的资产文件，任何格式化都会改变哈希 |
+| 运行时资产、清单 | `config/lean4-runtime.json`；`docs/ARCHITECTURE.md`「运行时分发」；`docs/OPERATIONS.md`「资产维护」 |
+| `/cdn` 网关、缓存、Range | `functions/cdn/`；`src/cdn-range.ts`；`docs/OPERATIONS.md`「访问控制与成本保护」 |
+| 前端、课程、i18n | `src/views/`；`src/i18n/`；`docs/DEVELOPMENT.md` |
+| CI、部署、冒烟 | `docs/CI.md`；`docs/OPERATIONS.md`「部署与冒烟」 |
 
-## 硬约束
+## 强联动文件（R）
 
-违反任意一条都会造成线上故障，且本地 `pnpm run dev` 看不出来。
+改左侧任一文件时，必须检查右侧消费者；只改一处通常会在运行时才暴露。
 
-1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改动这些文件必须同步更新清单里的 `bytes` 与 `sha256`、**更换 `cacheKey`**，并重新上传到 R2。边缘缓存按 URL 缓存一年（`immutable`），不换版本键会让用户继续拿到旧对象。
-2. **`_routes.json` 的 include 只能是 `["/cdn/*", "/api/telemetry"]` 这两个精确路径。** 不要改成通配符或目录：扩大范围会让静态资源请求也进 Functions，首屏变慢。
-3. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`。
-4. **只用一个域名。** 不要引入第二个可访问的 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名会让用户换域名就从零开始下载 102 MB。
-5. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
-6. **换行符统一 LF。** 仓库根 `.gitattributes` 已强制，不要用会写入 CRLF 的工具改文件。
-7. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时仍不含 Lean / Lake / Mathlib，引用它们会编译失败。
+| 单一事实来源 | 必须同步 |
+| --- | --- |
+| `config/lean4-runtime.json` | `src/sw.ts`、`functions/cdn/`、`scripts/fetch-assets.mjs`、`upload-assets.mjs`、`upload-modelscope.mjs`、`verify-manifest.mjs`、`verify-build.mjs`、`probe-sources.mjs`、`smoke.mjs`、`local-gateway.mjs`、`patch-lsp.mjs`、`src/runtime-extensions.ts`、`src/components/lean-markup.ts`、CI 缓存键 `hashFiles(...)` |
+| `config/lean4-wasm64-runtime.json` | `src/sw.ts`、`src/lean-wasm64-*.ts`、`functions/cdn/`、`scripts/verify-*.mjs`、`public/_headers`、`.github/workflows/runtime-wasm32-435.yml` |
+| `src/asset-sources.mjs` | `src/sw.ts`、`src/asset-source.ts`、`src/runtime-extensions.ts`、`src/sw-assemble.ts`、`scripts/fetch-assets.mjs`、`upload-assets.mjs`、`probe-sources.mjs`、`asset-sources.d.mts` 与测试 |
+| `src/cdn-range.ts` | `functions/cdn/[[path]].ts`、`src/cdn-range.test.ts` |
+| `public/_headers` | `scripts/verify-build.mjs`、`scripts/smoke.mjs`、`scripts/local-gateway.mjs`、`index.html` 的内联脚本哈希 |
+| `wrangler.toml` | `functions/cdn/` 的 `LEAN_ASSETS` binding；production / preview 两份 `[[env.*.r2_buckets]]` |
+| `patches/` 或清单哈希 | `pnpm-workspace.yaml` 的 `patchedDependencies`；`pnpm run patch:lsp`；`src/lsp-patches.test.ts` |
 
-## 架构边界
+原则：先改单一事实来源，再沿右列同步。资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`。
 
-| 路径 | 职责 | 不该做的事 |
-| --- | --- | --- |
-| `src/main.ts` | 应用外壳：路由、语言、主题装配 | 不要塞业务逻辑，逻辑放 `views/` 或独立模块 |
-| `src/views/` | 纯字符串渲染 + 事件绑定 | 不要在渲染函数里发请求或读全局状态 |
-| `src/components/lean-panel.ts` | Monaco 与 LSP 的装配层 | 不要把可测的纯逻辑写进来，它被排除在覆盖率之外 |
-| `src/sw.ts` | 资产分片下载与缓存 | 不要在这里写业务逻辑，它只服务资产分发 |
-| `src/asset-sources.mjs` | 资产源解析（Node / SW / Functions 共用） | 不要在任何一侧复制这套逻辑 |
-| `src/asset-source.ts` | 页面侧 `?source=` 强制源开关 | 不要把它做成持久化的用户设置 |
-| `src/telemetry.ts` | 启动链路指标与错误上报 | 不要记录用户代码、cookie、设备指纹；任何失败必须静默 |
-| `src/device.ts` | 设备分档：缓存预算与自动启动 | 不要用它改 wasm 内存上限，1GiB 是导入峰值所需 |
-| `functions/cdn/` | 同源 R2 网关 | 不要放宽白名单，不要移除 Range 处理 |
-| `functions/api/` | 运行指标接收端 | 不要放宽字段校验，不要回显原始请求体 |
-| `scripts/` | 资产运维与门禁脚本 | 不要在脚本里硬编码域名，用 `LEAN_ASSET_ORIGIN` |
+## 硬红线（物理/平台）
 
-**单一事实来源**：资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`。改动时先改这三处，其余模块被动跟随。
+1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改这些文件必须同步 `bytes` 与 `sha256`、更换 `cacheKey`、重新上传 R2；边缘缓存按 URL 缓存一年（`immutable`），不换版本键用户会继续拿到旧对象。
+2. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`，否则 `SharedArrayBuffer` 与 wasm 线程模型不可用。
+3. **只用一个域名。** 不要引入第二个可访问 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名等于让用户重下 102 MB。
+4. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
+5. **CSP 不能删这几项。** `'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入）、`static.cloudflareinsights.com`（Web Analytics）、`connect-src` 里的 `https://*.modelscope.cn`（镜像回退）与 `data:`（zstddec 内嵌 wasm）。
+6. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时不含 Lean / Lake / Mathlib，引用会编译失败。
+7. **遥测不记录用户代码、cookie、设备指纹；任何上报失败必须静默。**
 
-## 改动流程
+## 非显式约束（S）
 
-1. **改前**：确认要动的是哪一层；如果涉及清单、路由、响应头，先读一遍上表的「为什么危险」。
-2. **改后与验证**：**不要在本地硬跑全套重型门禁（全量构建、E2E、完整 CI 等）**，直接推送分支并提 PR，交由 PR 的 GitHub Actions（`CI · 应用`）算力跑完完整检查；本地按需做轻量检查或单点确认即可。
-3. **提交**：一个提交只做一件事；提交信息写清楚「为什么」，不是「改了什么」。
-4. **推送**：PR 的 `CI · 应用`（`static` / `test` / `build` / `e2e` / `audit` / `actionlint`）全绿才合并；合并到 `main` 后由 `Deploy · 应用` 直接构建、部署和冒烟，不重复跑检查。直接 push `main` 时，`Deploy · 应用` 会先复用完整的 `CI · 应用`，CI 不过不会部署；要连 push 本身都拒绝，需开分支保护/规则集。上线由 `Deploy · 应用` 负责（`CD_ENABLED=true` 时生效），不要绕过它去手动传文件。
+- `public/_routes.json` 的 `include` 只允许显式 Functions 路由，当前是 `["/cdn/*", "/api/telemetry"]`。不要改成通配符或目录；新增 Functions 路由时要同步 `scripts/verify-build.mjs`。漏掉 `/api/telemetry` 会让请求落到 SPA fallback 并返回 HTML。
+- `wrangler.toml` 顶层 binding 不落到 production / preview；Git 集成部署读的是 `[[env.*.r2_buckets]]`，两处都要写。
+- Pages 会覆盖静态资源的 `Cache-Control`：`_headers` 里给 `/sw.js` 写的 `no-cache` 实测不生效（`max-age=14400`）。
+- `connect-src` 漏掉魔搭域名会让镜像回退静默失败；Cloudflare Web Analytics 会注入第三方 beacon，并可能同时出现 Pages 与 zone 两个 token。
+- 走代理时 curl 会先写 `200 Connection Established`；解析状态码必须取最后一个真实 HTTP 行。
+- `pnpm audit` 走默认镜像会 405，需要 `--registry=https://registry.npmjs.org`。
+- 课程页的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删，也不要搬到 playground（那里需要看到真实重复声明）。
+- `src/components/lean-panel.ts` 因 rollup 无法解析其类型语法，被排除出 v8 覆盖率；不要把可测纯逻辑塞进装配层。
+- Analytics Engine binding 尚未声明，指标目前只写 Workers Logs；要启用需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`。
 
-## 质量门禁
+## 模块边界
 
-> **优先使用 PR 的 GitHub Actions 算力**：下列完整门禁由 `CI · 应用` 在 PR 上自动执行，无需在本地全部跑一遍；直接提 PR 等待 Actions 全绿即可。
+- `src/main.ts` 只做路由、语言、主题装配；业务逻辑放 `views/` 或独立模块。
+- `src/views/` 只产出字符串并绑定事件；不要在渲染函数里发请求或读全局状态。
+- `src/sw.ts` 只做资产分片下载与缓存，不写业务逻辑。
+- `src/asset-source.ts` 只做页面侧 `?source=` 强制源开关，不要做成持久化的用户设置。
+- `src/device.ts` 不改 wasm 内存上限，1 GiB 是导入峰值所需。
+- `functions/cdn/` 不放宽白名单，不移除 Range 处理；`functions/api/` 不放宽字段校验，不回显原始请求体。
+- `scripts/` 不硬编码域名，用 `LEAN_ASSET_ORIGIN`。
 
-```bash
-pnpm run format:check   # Prettier
-pnpm run lint           # ESLint
-pnpm run typecheck      # 三份 tsconfig：应用 / SW / Functions
-pnpm test               # Vitest + 覆盖率阈值
-pnpm run verify:manifest # 资产清单结构 + local 资产字节与哈希
-pnpm run build:web      # 生产构建（跳过运行时资产下载）
-pnpm run verify:build   # 产物契约
-pnpm run smoke          # 线上冒烟（发版后跑）
-```
+## 改动与验证
 
-覆盖率阈值：全局 78% 语句 / 80% 行；`functions/**` 要求 95%。**降低阈值需要单独说明理由**，不能顺手改。
+- 本地可跑快速检查：`pnpm run format:check`、`pnpm run lint`、`pnpm run typecheck`、目标单测。E2E、全量构建等重型门禁交给 PR 的 GitHub Actions。
+- PR 的 `CI · 应用` 必须全绿：`static` / `test` / `build` / `e2e` / `audit` / `actionlint`。合并 `main` 后由 `Deploy · 应用` 构建、部署和冒烟，不要绕过它手动传文件。详见 `docs/CI.md`。
+- 覆盖率阈值在 `vitest.config.ts`；降低阈值需要单独说明理由。新增纯函数、解析器、状态机必须有单测；触及 `/cdn` 网关或 Range 语义必须有单测；视图断言结构而不是整段 HTML。
+- 一个提交只做一件事；提交信息用 `type(scope): 一句话结论`，正文写「为什么」。类型与 lint 以 `tsconfig` + ESLint 为准；用户可见文案走 `src/i18n/`，中英文同时补齐。
 
-新增代码时按这个标准补测试：
+## 文档联动
 
-- 纯函数、解析器、状态机 → 必须有单测
-- 视图渲染 → 断言结构（选择器、关键文本），不要断言整段 HTML
-- 触及 `/cdn` 网关或 Range 语义 → 必须有单测，这是线上关键路径
-- 只有 Monaco 装配、纯副作用 import、纯类型声明可以不加，并且要在 `vitest.config.ts` 的 exclude 里写明原因
-
-## 代码约定
-
-- TypeScript `strict` + `noUncheckedIndexedAccess`，不要用 `any`，不要用 `@ts-ignore`
-- 注释写「为什么」，不写「做了什么」；中文注释，与现有代码一致
-- 用户可见文案一律走 `src/i18n/`，中英文同时补齐，`locale-parity` 测试会检查键集合一致
-- 样式用 Tailwind 原子类，共享片段放 `src/components/ui.ts`，不要复制同一套按钮类名
-- 新依赖要克制：这个项目的价值之一是不引入后端与重型框架
-
-## 提交信息
-
-`type(scope): 一句话结论`，正文写动机与取舍。
-
-```
-feat(goal): 区分声明目标与光标处状态
-fix(cdn): Range 越界返回 416 而不是 200
-chore(ci): 依赖审计只审生产依赖
-```
-
-允许的 type：`feat` `fix` `refactor` `test` `docs` `chore` `ci` `perf`。
-
-## 已知陷阱
-
-这些坑都实际踩过，别重复排查：
-
-- **`pnpm audit` 在本机跑不了**：华为云镜像不支持 audit 的 POST，返回 405。要加 `--registry=https://registry.npmjs.org`。
-- **`pnpm install` 可能被环境的批量删除保护拦下**：重跑一次补齐缺失项（曾删掉 `@esbuild/win32-x64` 导致 vitest 启动失败）。
-- **不要手改 `node_modules` 里的 `@wasm-idle/lsp`**：pnpm 的文件硬链接到全局 store，原地写入会污染 store；补丁统一放 `patches/`，由 `pnpm-workspace.yaml` 的 `patchedDependencies` 在安装时应用。升级依赖后跑 `pnpm run patch:lsp` 重新生成，不要用 `pnpm patch-commit`（Windows 上会因临时目录清理失败）。
-- **Pages 覆盖静态资源的 `Cache-Control`**：`_headers` 里给 `/sw.js` 写的 `no-cache` 不生效（实测 `max-age=14400`）。
-- **走代理时 curl 会先写 `200 Connection Established`**：解析状态码必须取最后一个真实 HTTP 行，否则一切都被读成 200。
-- **`wrangler.toml` 顶层 binding 不落到 production/preview**：Git 集成部署读的是 `[[env.*.r2_buckets]]`，两处都要写。
-- **指标端点依赖 `_routes.json` 的精确 include**：删掉 `/api/telemetry` 后请求会落到 SPA fallback 并返回 HTML，接收端看起来「没生效」。
-- **Analytics Engine binding 尚未声明**：指标现在只写 Workers Logs；要改数据点需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`，接收端会自动切换。
-- **Cloudflare Web Analytics 会注入第三方 beacon**：上 CSP 时要放行 `static.cloudflareinsights.com`（脚本）与 `cloudflareinsights.com`（上报）；它带 `Cross-Origin-Resource-Policy: cross-origin`，不影响 COEP。页面可能同时有 Pages 与 zone 两个 beacon，重复统计要在面板关掉一个。
-- **课程页会过滤「already declared」假阳性**：`@wasm-idle/lsp` 的 FileWorker 偶发把同一文档精化两次，只声明一次的名字也会被判重复。`src/views/lesson.ts` 的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删掉这段逻辑，也不要把它搬到 playground（那里需要看到真实的重复声明）。
-- **CSP 里有三条不能删**：`'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入模块）与 `static.cloudflareinsights.com`（Web Analytics）；去掉任意一条，Lean 或统计会静默失效。本地 e2e 会读 `public/_headers`，改错会在浏览器测试里暴露。
-- **rollup 解析不了 `lean-panel.ts` 的类型语法**：v8 覆盖率在补算未覆盖文件时会报 `PARSE_ERROR`，故显式排除。
-
-## 文档维护
-
-改了以下任一项，必须同步更新文档，否则下一个 Agent 会按旧信息行动：
-
-- 资产分发链路或清单字段 → `docs/ARCHITECTURE.md` 的「运行时分发」与 `docs/OPERATIONS.md` 的「资产维护」
-- README 的用户可见内容 → 同步 `README.en.md`，两份保持同一结构
-- 指标事件、字段或路由 → `docs/OPERATIONS.md` 的「运行指标与错误上报」
-- 源诊断开关或探活脚本 → `docs/OPERATIONS.md` 的「国内访问与源诊断」
-- 门禁命令或阈值 → `docs/DEVELOPMENT.md` 的「质量门禁」与本文件的命令表
-- 部署方式或域名 → `README.md` 顶部与 `docs/OPERATIONS.md` 的「部署与冒烟」
-- 新增硬约束 → 本文件的「硬约束」
+- 资产分发链路或清单字段 → `docs/ARCHITECTURE.md`「运行时分发」与 `docs/OPERATIONS.md`「资产维护」
+- 指标事件、字段或路由 → `docs/OPERATIONS.md`「运行指标与错误上报」
+- 门禁命令或阈值 → `docs/DEVELOPMENT.md`「质量门禁」
+- 部署方式或域名 → `README.md` 顶部与 `docs/OPERATIONS.md`「部署与冒烟」
+- README 用户可见内容 → 同步 `README.en.md`，两份保持同一结构
+- 新增硬约束 → 本文件「硬红线」

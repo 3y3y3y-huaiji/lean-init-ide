@@ -178,6 +178,43 @@ describe('loadWasm64Runtime', () => {
     ).toBe('/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck1');
   });
 
+  it('单个源超过下载预算时中止，并把超时写进失败汇总', async () => {
+    vi.useFakeTimers();
+    try {
+      const glue = new TextEncoder().encode('glue');
+      const manifest: Wasm64Manifest = {
+        cacheKey: 'timeout',
+        leanVersion: '4.36.0-rc2',
+        runtime: 'test',
+        assets: [
+          {
+            name: WASM64_GLUE,
+            key: `wasm-lean4/4.36.0-rc2-wasm64/${WASM64_GLUE}`,
+            bytes: glue.byteLength,
+            sha256: await sha256Hex(glue),
+          },
+        ],
+      };
+      const fetchImpl = ((_input: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        })) as typeof fetch;
+
+      const loading = loadWasm64Runtime({ manifest, fetchImpl, assetTimeoutMs: 100 });
+      const rejection = loading.catch((error: Error) => error);
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      const error = (await rejection) as Error;
+      expect(error.message).toContain('timeout after 100ms');
+      expect(error.message).toContain('/cdn/');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('国内/海外源排序复用 mirror 与 /cdn/，且绝不在浏览器侧请求 GitHub Release', () => {
     const manifest: Wasm64Manifest = {
       cacheKey: 'ck2',

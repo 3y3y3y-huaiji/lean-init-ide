@@ -221,7 +221,12 @@ export const createWasm64Supervisor = async (
     }
     if (!message.method && message.id !== undefined) {
       // 文件进程的 initialize 响应只是内部握手；客户端已经收到 bootstrap 的结果。
-      if (message.id === INTERNAL_INIT_ID) return;
+      if (message.id === INTERNAL_INIT_ID) {
+        if (message.error) {
+          fail(`Lean document process failed to initialize: ${message.error.message}`);
+        }
+        return;
+      }
       pending.delete(message.id);
     }
     emit(message);

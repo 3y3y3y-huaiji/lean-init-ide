@@ -140,6 +140,24 @@ describe('createWasm64Supervisor', () => {
     expect(received.some((message) => message.id === 'lean-browser:init')).toBe(false);
   });
 
+  it('文件进程 initialize 失败时上报终态错误，而不是静默丢弃', async () => {
+    const onError = vi.fn();
+    const { processes, send } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    processes[1]!.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 'lean-browser:init',
+      error: { code: -32603, message: 'bad params' },
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      'Lean document process failed to initialize: bad params',
+    );
+  });
+
   it('服务端请求 ID 重写后，客户端响应与 $/cancelRequest 都映射回原始 ID', async () => {
     const { processes, send, received } = await connect();
     await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });

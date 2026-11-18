@@ -243,6 +243,27 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
+  # 分支保护里既有的 required check 是「浏览器端到端」。内部 E2E 拆成多个 job 后，
+  # 由这个聚合 job 对外汇报同名结果，避免每次拆分都去改仓库设置。
+  e2e-gate:
+    name: 浏览器端到端
+    needs: [changes, e2e-smoke, e2e-lessons-full, e2e-lessons-changed]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总 E2E 结果
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SMOKE: ${{ needs.e2e-smoke.result }}
+          FULL: ${{ needs.e2e-lessons-full.result }}
+          CHANGED: ${{ needs.e2e-lessons-changed.result }}
+        run: |
+          echo "changes=$CHANGES smoke=$SMOKE full=$FULL changed=$CHANGED"
+          case "$CHANGES $SMOKE $FULL $CHANGED" in
+            *failure*|*cancelled*) echo "E2E 未通过"; exit 1 ;;
+          esac
+          echo "E2E 通过（未触发的档位为 skipped）"
+
   audit:
     name: 依赖审计
     needs: changes

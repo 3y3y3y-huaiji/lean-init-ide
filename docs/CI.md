@@ -11,7 +11,7 @@ Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检
 | [modelscope.yml](../.github/workflows/modelscope.yml) `Runtime · 魔搭镜像` | 手动 | 单独重传或校验魔搭镜像 | ModelScope |
 | [smoke.yml](../.github/workflows/smoke.yml) `Smoke · 线上巡检` | 每天 01:00 UTC、手动 | 首页、COOP/COEP、`sw.js`、`/cdn/` Range、白名单 404 巡检 | 只读 |
 
-> `CI · 应用` 的 job 名：`changes` / `static` / `test` / `build` / `e2e-smoke` / `e2e-lessons-full` / `e2e-lessons-changed` / `audit` / `actionlint`。变更分类跳过的 job 在 PR 上显示为 Skipped，GitHub 按通过处理；配置分支保护时按上面的名字要求。
+> `CI · 应用` 对外的 required check 固定为：`changes` / `static` / `test` / `build` / `浏览器端到端` / `audit` / `actionlint`。其中 `浏览器端到端` 是聚合门禁（`e2e-gate`），内部再拆成 `e2e-smoke` / `e2e-lessons-full` / `e2e-lessons-changed`；内部 job 改名不影响分支保护。变更分类跳过的 job 在 PR 上显示为 Skipped，GitHub 按通过处理。
 
 ## 命名与触发约定
 

@@ -70,6 +70,7 @@ CI 跑下列命令，任一失败即阻断合并（本地仅作按需参考）�
 | 运行时 / 资产 / LSP / 网关 / `config/` / `functions/` / `public/` | 以上全部 + `e2e-smoke` + `e2e-lessons-full`（2 片并行） |
 
 课程增量筛选由 `LEAN_E2E_LESSONS` / `LEAN_E2E_CHALLENGES` 控制；全量课程在单 runner 内仍保持 `LEAN_E2E_WORKERS=1`，避免三套 Init + Std + Batteries 同时驻留导致内存不足，并行度由独立 runner 分片提供。无法可靠缩小范围时（课程目录、加载器、新增/删除课程）会自动回退到全量。
+对外始终由 `e2e-gate`（check 名 `浏览器端到端`）聚合内部 E2E 结果；调整内部分档时不要改这个对外名字。
 新增或删除课程 / 挑战时必须同步 `scripts/e2e-lessons.mjs` 的 `SLUGS` / `CHALLENGE_SLUGS`：`changes` 会核对内容源与清单，不一致直接失败，避免全量跑也漏掉新条目。
 建议在 GitHub 分支保护里要求上述 check 全绿才允许合入 `main`。
 

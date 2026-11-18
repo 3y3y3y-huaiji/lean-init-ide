@@ -23,6 +23,20 @@ export const WASM64_MEMORY_BUDGET_BYTES: Record<MemoryTier, number> = {
   standard: 3072 * MIB,
 };
 
+/**
+ * ============================================================================
+ * EXPERIMENTAL: Lean WebAssembly 运行时架构选择（默认仍为稳定的 wasm32）
+ * ----------------------------------------------------------------------------
+ * 注意：wasm64 目前仍属于实验性特性，可能存在稳定性、内存释放或浏览器兼容性问题，
+ * 切勿将其作为默认或生产运行时使用，仅提供给有需要的用户手动切换试用。
+ * ============================================================================
+ */
+export type LeanRuntimeArch = 'wasm32' | 'wasm64';
+
+export const DEFAULT_RUNTIME_ARCH: LeanRuntimeArch = 'wasm32';
+
+export const WASM32_MEMORY_BYTES = 1024 * MIB;
+
 export type MemorySignals = {
   /** navigator.deviceMemory，单位 GiB；Safari / Firefox 不提供。 */
   deviceMemory?: number;
@@ -47,6 +61,10 @@ export const detectMemoryTier = (signals: MemorySignals): MemoryTier => {
 export const cacheBudgetBytes = (tier: MemoryTier): number => CACHE_BUDGET_BYTES[tier];
 
 export const wasm64MaxMemoryBytes = (tier: MemoryTier): number => WASM64_MEMORY_BUDGET_BYTES[tier];
+
+/** 按用户所选运行时架构计算 Wasm 堆上限：默认 wasm32 固定 1 GiB，实验性 wasm64 按设备分档。 */
+export const resolveRuntimeMemoryCeiling = (arch: LeanRuntimeArch, tier: MemoryTier): number =>
+  arch === 'wasm64' ? wasm64MaxMemoryBytes(tier) : WASM32_MEMORY_BYTES;
 
 type MemoryProbeScope = {
   Memory?: typeof WebAssembly.Memory;

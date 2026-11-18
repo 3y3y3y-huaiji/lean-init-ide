@@ -1,6 +1,31 @@
 const AUTO_START_KEY = 'lean:auto-start';
 const RUNTIME_SESSION_KEY = 'lean:runtime-session';
 const DEFAULT_EXTENSIONS_KEY = 'lean:default-extensions';
+const RUNTIME_ARCH_KEY = 'lean:runtime-arch';
+
+/**
+ * ============================================================================
+ * EXPERIMENTAL OPT-IN ONLY: 运行时架构持久化配置
+ * ----------------------------------------------------------------------------
+ * 默认永远回落为稳定的 `wasm32`。`wasm64` 当前为实验性选项，可能不稳定，
+ * 不要作为生产默认配置，仅在用户主动切换试用时写入 localStorage。
+ * ============================================================================
+ */
+export const getRuntimeArch = (): 'wasm32' | 'wasm64' => {
+  try {
+    return localStorage.getItem(RUNTIME_ARCH_KEY) === 'wasm64' ? 'wasm64' : 'wasm32';
+  } catch {
+    return 'wasm32';
+  }
+};
+
+export const setRuntimeArch = (arch: 'wasm32' | 'wasm64'): void => {
+  try {
+    localStorage.setItem(RUNTIME_ARCH_KEY, arch);
+  } catch {
+    // 隐私模式下忽略写入失败，当前会话仍按内存态切换生效。
+  }
+};
 
 /**
  * 打开编辑器页时是否自动下载并启动 Lean。

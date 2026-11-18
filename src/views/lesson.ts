@@ -5,7 +5,7 @@ import { currentMemoryTier, shouldAutoStart } from '../device';
 import { lessonsFor, messagesFor, type Locale } from '../i18n';
 import type { LessonPage, LessonTrack } from '../i18n/types';
 import { markLessonVisited, readCompleted } from '../progress';
-import { escapeHtml } from './html';
+import { escapeHtml, renderInlineCode } from './html';
 
 const codeBlockOpen = 'overflow-hidden rounded-xl border border-line bg-panel-soft';
 
@@ -48,7 +48,7 @@ const renderBlocks = (
   const html = page.blocks
     .map((block) => {
       if (block.kind === 'p') {
-        return `<p class="mt-0 mb-4 text-[15px] leading-[1.75] text-fg">${escapeHtml(block.text)}</p>`;
+        return `<p class="mt-0 mb-4 text-[15px] leading-[1.75] text-fg">${renderInlineCode(block.text)}</p>`;
       }
 
       if (block.kind === 'goal') {
@@ -62,13 +62,13 @@ const renderBlocks = (
       if (block.kind === 'details') {
         return `
           <details class="my-4 rounded-lg border border-line bg-panel-soft px-4 py-3">
-            <summary class="cursor-pointer text-[13px] font-semibold text-fg">${escapeHtml(block.summary)}</summary>
-            <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${escapeHtml(block.text)}</p>
+            <summary class="cursor-pointer text-[13px] font-semibold text-fg">${renderInlineCode(block.summary)}</summary>
+            <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${renderInlineCode(block.text)}</p>
           </details>`;
       }
 
       if (block.kind === 'note') {
-        return `<div class="${noteClass(block.tone)}">${escapeHtml(block.text)}</div>`;
+        return `<div class="${noteClass(block.tone)}">${renderInlineCode(block.text)}</div>`;
       }
 
       const index = codeIndex;
@@ -164,12 +164,12 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
           <h2 class="m-0 text-lg font-bold">${escapeHtml(page.exercise.title)}</h2>
           <span data-role="exercise-status" hidden></span>
         </div>
-        <p class="mt-0 mb-4 text-muted">${escapeHtml(page.exercise.body)}</p>
+        <p class="mt-0 mb-4 text-muted">${renderInlineCode(page.exercise.body)}</p>
         ${
           page.exercise.hint
             ? `<details class="mb-4 rounded-lg border border-line bg-panel px-4 py-3">
                  <summary class="cursor-pointer text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
-                 <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${escapeHtml(page.exercise.hint)}</p>
+                 <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${renderInlineCode(page.exercise.hint)}</p>
                </details>`
             : ''
         }

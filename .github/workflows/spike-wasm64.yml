@@ -1161,7 +1161,8 @@ jobs:
             const { execFileSync } = require("child_process");
             const manifest = JSON.parse(fs.readFileSync("./runtime/wasm64-runtime-manifest.json", "utf8"));
             const repo = process.env.MODELSCOPE_REPO || "HQZMSu/lean4-assets";
-            const user = repo.split("/")[0];
+            // ModelScope 的 Git 认证用户名固定是 oauth2，不是账号名。
+            const user = "oauth2";
             const repoUrl = `https://www.modelscope.cn/datasets/${repo}.git`;
             const prefix = manifest.mirror?.prefix || `wasm-lean4/${manifest.leanVersion}-wasm64`;
             const work = path.resolve("ms-repo");

@@ -1738,6 +1738,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const runtimeArchLabelEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-label"]');
   const runtimeArchNoteEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-note"]');
   const runtimeArchButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-runtime-arch]')];
+  // 扩展库只随 wasm32 提供；课程声明 requires 时 wasm64 无法完成本课。
+  const wasm64BlockedByExtensions = requiredExtensions.length > 0;
 
   const syncRuntimeArchUi = () => {
     if (runtimeArchLabelEl) {
@@ -1748,14 +1750,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       const active = arch === selectedArch;
       button.dataset.active = String(active);
       button.setAttribute('aria-checked', String(active));
-      if (arch === 'wasm64' && !memory64Supported) {
+      if (arch === 'wasm64' && (!memory64Supported || wasm64BlockedByExtensions)) {
         button.disabled = true;
       }
     }
     if (runtimeArchNoteEl) {
       runtimeArchNoteEl.textContent = !memory64Supported
         ? t.runtimeWasm64Unsupported
-        : selectedArch === 'wasm64'
+        : wasm64BlockedByExtensions || selectedArch === 'wasm64'
           ? t.runtimeWasm64NoLibraries
           : '';
     }
@@ -1767,10 +1769,17 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   for (const button of runtimeArchButtons) {
     button.addEventListener('click', () => {
       const nextArch = button.dataset.runtimeArch as LeanRuntimeArch;
-      if (nextArch === 'wasm64' && !memory64Supported) {
-        log(t.runtimeWasm64Unsupported);
-        syncRuntimeArchUi();
-        return;
+      if (nextArch === 'wasm64') {
+        if (!memory64Supported) {
+          log(t.runtimeWasm64Unsupported);
+          syncRuntimeArchUi();
+          return;
+        }
+        if (wasm64BlockedByExtensions) {
+          log(t.runtimeWasm64NoLibraries);
+          syncRuntimeArchUi();
+          return;
+        }
       }
       if (nextArch === selectedArch) return;
       selectedArch = nextArch;

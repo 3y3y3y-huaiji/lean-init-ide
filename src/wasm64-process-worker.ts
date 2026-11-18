@@ -54,12 +54,14 @@ type PackIndex = {
 };
 
 /** 把 pack 里的文件切回单个 olean；跨 chunk 的文件拼成连续副本。 */
-const unpackLibrary = (
+export const unpackLibrary = (
   library: Readonly<Record<string, Uint8Array>>,
 ): Array<{ path: string; bytes: Uint8Array }> => {
   const indexBytes = library['lean-init-64.index.json'];
   if (!indexBytes) throw new Error('wasm64 库索引缺失');
-  const index = JSON.parse(new TextDecoder().decode(indexBytes)) as PackIndex;
+  // TextDecoder.decode 在浏览器里拒绝 SharedArrayBuffer 视图（"must not be shared"），
+  // 而索引与 pack 一样由 SAB 承载；索引只有几百 KB，先复制成普通缓冲再解码。
+  const index = JSON.parse(new TextDecoder().decode(new Uint8Array(indexBytes))) as PackIndex;
   const chunks = index.chunks.map((chunk) => {
     const bytes = library[chunk.path.replace(/\.zst$/, '')];
     if (!bytes || bytes.byteLength !== chunk.uncompressedBytes) {

@@ -2,6 +2,7 @@
  * 实验性 wasm64：LeanProcessFactory 的浏览器实现——每个进程一个 Worker + 共享 stdin 环形缓冲。
  */
 import Wasm64ProcessWorker from './wasm64-process-worker.ts?worker';
+import { formatWorkerError } from './wasm64-error';
 import { FrameDecoder, RING_CONTROL_BYTES, RingWriter, encodeFrame } from './lean-wasm64-frames';
 import type { LoadedWasm64Runtime } from './lean-wasm64-runtime';
 import type { LeanProcessFactory, LspMessage } from './lean-wasm64-supervisor';
@@ -83,7 +84,12 @@ export const createWasm64ProcessFactory =
     };
     worker.onerror = (event: ErrorEvent) => {
       event.preventDefault();
-      fail(event.message || 'Lean wasm64 process worker failed.');
+      fail(
+        formatWorkerError(
+          event.error ?? event,
+          event.message || 'Lean wasm64 process worker failed.',
+        ),
+      );
     };
 
     worker.postMessage({

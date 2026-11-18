@@ -1010,6 +1010,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       track('first_diagnostics', {
         ms: runStartedAt ? performance.now() - runStartedAt : 0,
         count: diagnostics.length,
+        arch: selectedArch,
       });
     }
     diagnosticSeq += 1;

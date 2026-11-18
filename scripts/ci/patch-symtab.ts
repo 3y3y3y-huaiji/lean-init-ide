@@ -21,7 +21,13 @@ export const patchGenSymtab = (source: string): string => {
   let patched = replaceOnce(
     source,
     'order = sorted(names, key=lambda s: s.encode())',
-    `if 'l_IO_getRandomBytes___boxed' not in names:\n    names['l_IO_getRandomBytes___boxed'] = ('w', '${MARKER}')\norder = sorted(names, key=lambda s: s.encode())`,
+    [
+      'if not files or not funcs:',
+      "    raise SystemExit(f'gen-symtab.py: expected .c files and LEAN_EXPORT functions under {root}, got {len(files)} files, {len(funcs)} functions')",
+      "if 'l_IO_getRandomBytes___boxed' not in names:",
+      `    names['l_IO_getRandomBytes___boxed'] = ('w', '${MARKER}')`,
+      'order = sorted(names, key=lambda s: s.encode())',
+    ].join('\n'),
     '注册 IO.getRandomBytes 包装条目',
   );
 

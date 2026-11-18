@@ -317,6 +317,7 @@ const awaitDiagnostics = async (
   label: string,
   timeoutMs: number,
   nudgeLine: number,
+  expectInfo?: string,
 ): Promise<Diagnostic[]> => {
   const collected: Diagnostic[][] = [];
   const started = Date.now();
@@ -347,6 +348,11 @@ const awaitDiagnostics = async (
       if (isIleanFinal(message)) return collected.at(-1) ?? [];
       const diagnostics = diagnosticsOf(message);
       collected.push(diagnostics);
+      if (expectInfo !== undefined) {
+        // 期望 info 诊断时（例如多行 #eval），出错立即失败，否则等到 ileanInfoFinal 收齐全部结果。
+        if (diagnostics.some((d) => (d.severity ?? 1) <= 2)) return diagnostics;
+        continue;
+      }
       if (diagnostics.length > 0) return diagnostics;
     }
   } finally {
@@ -374,10 +380,29 @@ const assertBad = (name: string, diagnostics: readonly Diagnostic[]): void => {
   if (!isTypeMismatch(diagnostics)) throw new Error(`${name} 收到了诊断，但不是预期的类型不匹配`);
 };
 
-const assertGood = (name: string, diagnostics: readonly Diagnostic[]): void => {
+export const isProxyGlue = (leanMjs: string): boolean => /adapted-proxy|lsp-adapted/.test(leanMjs);
+
+export const assertGood = (
+  name: string,
+  diagnostics: readonly Diagnostic[],
+  expectInfo?: string,
+): void => {
   console.log(`[diag] ${name} diagnostics=${diagnostics.length}`);
+  for (const diagnostic of diagnostics) console.log(`  - ${describeDiagnostic(diagnostic)}`);
+  if (expectInfo !== undefined) {
+    const bad = diagnostics.filter((d) => (d.severity ?? 1) <= 2);
+    if (bad.length > 0) {
+      throw new Error(`${name} 出现错误/警告诊断: ${bad.map(describeDiagnostic).join('; ')}`);
+    }
+    const matched = diagnostics.some(
+      (d) => d.severity === 3 && String(d.message ?? '').includes(expectInfo),
+    );
+    if (!matched) {
+      throw new Error(`${name} 未收到包含 "${expectInfo}" 的 info 诊断`);
+    }
+    return;
+  }
   if (diagnostics.length > 0) {
-    for (const diagnostic of diagnostics) console.log(`  - ${describeDiagnostic(diagnostic)}`);
     throw new Error(`${name} 不该有诊断：依赖或 import 有问题`);
   }
 };
@@ -389,6 +414,7 @@ export interface DiagOptions {
   readonly libDir: string;
   readonly moduleName?: string;
   readonly goodCode?: string;
+  readonly expectInfo?: string;
   readonly mode: 'worker' | 'server';
   readonly timeoutMs: number;
   readonly idleTimeoutMs: number;
@@ -409,7 +435,7 @@ const runServerMode = async (
   documents: Record<string, string>,
   exampleLine: number,
 ) => {
-  const proxy = /adapted-proxy/.test(options.leanMjs);
+  const proxy = isProxyGlue(options.leanMjs);
   const session = createSession({
     leanMjs: options.leanMjs,
     libDir: options.libDir,
@@ -477,6 +503,7 @@ export const buildWorkerChildArgs = (options: DiagOptions, doc: DiagDocName): st
   ];
   if (options.moduleName !== undefined) args.push('--module', options.moduleName);
   if (options.goodCode !== undefined) args.push('--good-code', options.goodCode);
+  if (options.expectInfo !== undefined) args.push('--expect-info', options.expectInfo);
   return args;
 };
 
@@ -486,7 +513,7 @@ const runSingleWorkerDoc = async (
   documents: Record<string, string>,
   exampleLine: number,
 ): Promise<void> => {
-  const proxy = /adapted-proxy/.test(options.leanMjs);
+  const proxy = isProxyGlue(options.leanMjs);
   const uri = `file:///workspace/${name}`;
   const session = createSession({
     leanMjs: options.leanMjs,
@@ -502,6 +529,7 @@ const runSingleWorkerDoc = async (
     session.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams });
     openDocument(session, name, uri, documents);
     // Bad 等到非空诊断；Good 等到 ileanInfoFinal（跳过 setupImports 的空通知）。
+    const expectInfo = name === 'Good.lean' ? options.expectInfo : undefined;
     const diagnostics = await awaitDiagnostics(
       session,
       uri,
@@ -509,9 +537,10 @@ const runSingleWorkerDoc = async (
       name,
       options.timeoutMs,
       exampleLine,
+      expectInfo,
     );
     if (name === 'Bad.lean') assertBad(name, diagnostics);
-    else assertGood(name, diagnostics);
+    else assertGood(name, diagnostics, expectInfo);
   } finally {
     await session.dispose();
   }
@@ -571,6 +600,11 @@ const DIAG_SPEC: Record<string, FlagSpec> = {
     valueName: 'LeanCode',
     description: '覆盖 Good.lean 的测试主体，用于验证具体 Mathlib 引理/策略',
   },
+  'expect-info': {
+    kind: 'string',
+    valueName: 'Substring',
+    description: '要求 Good.lean 收到包含该子串的 severity=3 info 诊断（如 #eval 输出）且无报错',
+  },
   mode: { kind: 'string', valueName: 'worker|server' },
   timeout: { kind: 'number', valueName: 'ms' },
   'idle-timeout': {
@@ -604,11 +638,13 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
   }
   const moduleName = optionalString(parsed, 'module');
   const goodCode = optionalString(parsed, 'good-code');
+  const expectInfo = optionalString(parsed, 'expect-info');
   return {
     leanMjs: requireFile(requireString(parsed, 'lean'), 'lean.mjs'),
     libDir: requireDir(requireString(parsed, 'lib'), 'lib'),
     ...(moduleName === undefined ? {} : { moduleName }),
     ...(goodCode === undefined ? {} : { goodCode }),
+    ...(expectInfo === undefined ? {} : { expectInfo }),
     mode,
     timeoutMs,
     idleTimeoutMs,

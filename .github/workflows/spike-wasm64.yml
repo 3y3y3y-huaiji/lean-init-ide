@@ -365,6 +365,8 @@ jobs:
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh link
+          grep -q 'initialize_Init_Data_Random' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
+          grep -q 'l_IO_getRandomBytes___boxed' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
 
       # -mtail-call 只在**编译步**把尾调用写成 return_call；objects 缓存里如果是旧对象，
       # link 会静默链出一个没有 return_call 的二进制，开关就变成安慰剂（缓存键已并入
@@ -498,7 +500,16 @@ jobs:
             status=$?
             set -e
           fi
-          exit "$status"
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          node scripts/wasm64-lsp-diagnostics.ts \
+            --lean "$GLUE" --lib work/olean32 \
+            --doc Good.lean \
+            --good-code $'#eval System.Platform.numBits\n#eval IO.rand 1 10' \
+            --expect-info 64 \
+            --mode worker --timeout 180000 --idle-timeout 120000 --jobs "$JOBS" \
+            2>&1 | tee -a work/init-lsp.log
 
       # 失败立即留证据，不等到最后；后续步骤也不会再跑。
       - name: 失败时上传 Init LSP 日志
@@ -604,6 +615,14 @@ jobs:
             work/emcache
           key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
 
+      # deep 会重新生成 symtab.c 并重链：若不恢复 work/cgen，gen-symtab.py 只能扫到 0 个 C 文件，
+      # 导致 symtab 丢失所有 Init/Std/Lean 符号，线上 #eval 触发 Init.Data.Random 初始化器报错。
+      - name: 恢复 cgen
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
       - name: 恢复 objects（smoke 已显式保存）
         uses: actions/cache@v6
         with:
@@ -627,6 +646,8 @@ jobs:
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh emsdk
           bash producer/lean-browser/scripts/build.sh link
+          grep -q 'initialize_Init_Data_Random' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
+          grep -q 'l_IO_getRandomBytes___boxed' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
 
       - name: 链接 LSP 变体（PROXY_TO_PTHREAD）
         timeout-minutes: 20
@@ -960,6 +981,24 @@ jobs:
           bash scripts/link-wasm64-release.sh "$GITHUB_WORKSPACE"
           bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE" --release
           node scripts/adapt-glue.ts work/release-lsp/lean-lsp.mjs work/release-lsp/lean-lsp-adapted.mjs
+          grep -qa 'initialize_Init_Data_Random' work/release/lean.wasm
+          grep -qa 'initialize_Init_Data_Random' work/release-lsp/lean-lsp.wasm
+          grep -qa 'l_IO_getRandomBytes___boxed' work/release-lsp/lean-lsp.wasm
+
+      - name: 验证 release LSP 产物可执行 #eval（64 位 + Init.Data.Random）
+        timeout-minutes: 10
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          node scripts/wasm64-lsp-diagnostics.ts \
+            --lean work/release-lsp/lean-lsp-adapted.mjs \
+            --lib work/olean32 \
+            --doc Good.lean \
+            --good-code $'#eval System.Platform.numBits\n#eval IO.rand 1 10' \
+            --expect-info 64 \
+            --mode worker --timeout 180000 --idle-timeout 120000 --jobs 4
 
       - name: 打包实验性 wasm64 运行时资产（Init 64位 + release-lsp）
         run: |

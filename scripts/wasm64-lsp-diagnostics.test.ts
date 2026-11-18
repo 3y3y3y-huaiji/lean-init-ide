@@ -4,9 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CliError } from './lib/cli.ts';
 import {
+  assertGood,
   buildDocuments,
   buildWorkerChildArgs,
   describeDiagnostic,
+  isProxyGlue,
   isTypeMismatch,
   parseDiagOptions,
 } from './wasm64-lsp-diagnostics.ts';
@@ -185,5 +187,39 @@ describe('parseDiagOptions', () => {
       '--good-code',
       'example : True := trivial',
     ]);
+  });
+
+  it('支持 --expect-info 校验 #eval info 诊断并拒绝 error/warning', () => {
+    const { lean, lib } = makePaths();
+    const options = parseDiagOptions([
+      '--lean',
+      lean,
+      '--lib',
+      lib,
+      '--good-code',
+      '#eval System.Platform.numBits',
+      '--expect-info',
+      '64',
+    ]);
+    expect(options.expectInfo).toBe('64');
+    expect(buildWorkerChildArgs(options, 'Good.lean')).toContain('--expect-info');
+    expect(() => assertGood('Good.lean', [{ severity: 3, message: '64' }], '64')).not.toThrow();
+    expect(() =>
+      assertGood(
+        'Good.lean',
+        [
+          { severity: 3, message: '64' },
+          { severity: 1, message: "(interpreter) unknown declaration 'x'" },
+        ],
+        '64',
+      ),
+    ).toThrow(/出现错误\/警告诊断/);
+    expect(() => assertGood('Good.lean', [], '64')).toThrow(/未收到包含 "64"/);
+  });
+
+  it('isProxyGlue 识别 lean-adapted-proxy 与 release lean-lsp-adapted', () => {
+    expect(isProxyGlue('work/dist/lean-adapted-proxy.mjs')).toBe(true);
+    expect(isProxyGlue('work/release-lsp/lean-lsp-adapted.mjs')).toBe(true);
+    expect(isProxyGlue('work/dist/lean-adapted.mjs')).toBe(false);
   });
 });

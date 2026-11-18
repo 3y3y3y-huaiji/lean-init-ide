@@ -16,8 +16,9 @@ with open(out, 'w', encoding='utf-8') as o:
 `;
 
 describe('patchGenSymtab', () => {
-  it('注入 IO.getRandomBytes 包装并保持幂等', () => {
+  it('注入 IO.getRandomBytes 包装与非空 cgen 断言并保持幂等', () => {
     const once = patchGenSymtab(SAMPLE_GEN_SYMTAB);
+    expect(once).toContain('if not files or not funcs:');
     expect(once).toContain("if 'l_IO_getRandomBytes___boxed' not in names:");
     expect(once).toContain('lean_io_get_random_bytes');
     expect(once).toContain('lean_unbox_usize(nbytes)');

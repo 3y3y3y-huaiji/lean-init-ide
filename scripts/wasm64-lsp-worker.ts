@@ -4,6 +4,7 @@
 // 阻塞式钩子拿到半帧就卡死；fd_read 还会把 pthread 的读代理回主线程。
 // 共享环形缓冲把 fd 0 直接接在 wasm 内部，主线程与 pthread 都能安全阻塞等待。
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parentPort, workerData } from 'node:worker_threads';
 import { walkLibrary } from './lib/lean-assets.ts';
@@ -43,13 +44,18 @@ const debug = (...items: unknown[]): void => {
 };
 debug('worker start', data.leanMjs);
 
-const moduleUrl = pathToFileURL(data.leanMjs).href;
+const resolvedLeanMjs = resolve(data.leanMjs);
+const moduleUrl = pathToFileURL(resolvedLeanMjs).href;
 const { default: createLean } = (await import(moduleUrl)) as {
   default: (options: Record<string, unknown>) => Promise<LeanModule>;
 };
 
 const lean = await createLean({
   noInitialRun: true,
+  // Emscripten 硬编码了 `new URL("lean-lsp.mjs", import.meta.url)`；不传 mainScriptUrlOrBlob
+  // 时 Node 里的 48 个 pthread 会加载未适配的 lean-lsp.mjs，把 fd0 读代理回主 JS 线程并
+  // 阻塞事件循环。必须显式指向适配后的路径（与浏览器 worker 一致）。
+  mainScriptUrlOrBlob: resolvedLeanMjs,
   lspStdin: data.stdin,
   lspProcessExit: (code: number) => port.postMessage({ exit: code }),
   print: (text: string) => port.postMessage({ stderr: `${text}\n` }),
@@ -88,7 +94,7 @@ for (const fd of [1, 2] as const) {
       const chunk = Uint8Array.from(buffer.subarray(offset, offset + length));
       if (fd === 1) {
         if (process.env.LEAN_WASM_DIAG_DEBUG) port.postMessage({ debug: `fd1 write ${length}` });
-        port.postMessage({ stdout: chunk });
+        port.postMessage({ stdout: chunk }, [chunk.buffer]);
       } else if (length > 0) {
         port.postMessage({ stderr: stderrDecoder.decode(chunk) });
       }

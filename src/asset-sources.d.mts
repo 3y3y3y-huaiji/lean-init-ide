@@ -39,7 +39,7 @@ export interface AssetSourceOptions {
   mirrorFirst?: boolean;
   /** 在 primary 之后插入镜像（Node 构建一般不需要）。 */
   includeMirror?: boolean;
-  /** 诊断用：GitHub raw 排在最前，其它源仍保留做回退。 */
+  /** 诊断用：GitHub 回退源排在最前，其它源仍保留；zstd 资产会被跳过。 */
   githubFirst?: boolean;
 }
 

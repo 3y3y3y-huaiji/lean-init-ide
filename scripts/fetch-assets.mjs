@@ -6,16 +6,17 @@ import { gunzipSync, zstdCompressSync, constants as zlibConstants } from 'node:z
 import { assetSources } from '../src/asset-sources.mjs';
 
 /**
- * Downloads the pinned Lean 4.34.1 Init runtime used by @wasm-idle/lsp.
+ * Downloads the pinned Lean 4.35.0 Init runtime used by @wasm-idle/lsp.
  *
  * The manifest in config/lean4-runtime.json is shared with the Service Worker and
- * Pages Functions: the primary source is the same-origin /cdn/ gateway, GitHub raw
- * is the fallback. Upstream artifacts use `.gz` names while the runtime expects
+ * Pages Functions: the primary source is the same-origin /cdn/ gateway; the
+ * fallback baseUrl points at the GitHub Release and is used here (Node) for
+ * upstream artifacts. Upstream artifacts use `.gz` names while the runtime expects
  * `.gz.bin`. Every file is verified against its pinned byte count and SHA-256.
  *
  * Node cannot fetch a relative /cdn/ URL without an origin. Set LEAN_ASSET_ORIGIN
  * (e.g. https://criticalthinking.de5.net) to use the deployed gateway during builds;
- * otherwise the build goes straight to the GitHub raw fallback.
+ * otherwise the build goes straight to the GitHub Release assets.
  * LEAN_ASSET_BASE_URL overrides the primary source entirely.
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -75,7 +76,7 @@ const verify = (asset, data) => {
 };
 
 /**
- * zstd 资产的原始字节仍在上游 GitHub raw（gzip）。下载后按清单校验上游 gzip，
+ * zstd 资产的原始字节仍在上游 GitHub Release（gzip）。下载后按清单校验上游 gzip，
  * 再解压、以 level 19 重新压缩，最后用交付哈希复核。这样 CI 不需要预上传 R2。
  */
 const fetchUpstream = async (asset) => {

@@ -219,7 +219,7 @@ export const downloadRanges = async (options: DownloadOptions): Promise<ArrayBuf
 
 /**
  * 跨域简单 GET 流式下载：不附带 Range 等非简单请求头，避免魔搭 LFS（cdn-lfs）
- * 与 GitHub Raw 在 OPTIONS 预检返回 403 导致浏览器整段失败并回退慢速通道。
+ * 在 OPTIONS 预检返回 403 导致浏览器整段失败并回退慢速通道。
  */
 export const downloadStream = async (options: StreamDownloadOptions): Promise<ArrayBuffer[]> => {
   const {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 资产源探活：对魔搭镜像 / 同源 /cdn 网关 / GitHub raw 各取 64KiB，
+ * 资产源探活：对魔搭镜像 / 同源 /cdn 网关各取 64KiB，
  * 报告状态码、首字节时间与估算速率。
  *
  * 国内访问问题的根因是部分 Anycast IPv4 被 TLS reset（不是 DNS 解析错误），
@@ -35,7 +35,7 @@ const probe = async (source) => {
   const started = Date.now();
   try {
     const response = await fetch(source.url, {
-      // Range 同时验证三件事：网关支持分片、镜像按块缓存、GitHub raw 不会返回整份。
+      // Range 同时验证两件事：网关支持分片、镜像按块缓存。
       headers: { Range: `bytes=0-${SAMPLE_BYTES - 1}`, 'Accept-Encoding': 'identity' },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

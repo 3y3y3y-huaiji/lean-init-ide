@@ -99,9 +99,10 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 
 - `Content-Security-Policy`：默认只允许同源；脚本额外放行 Cloudflare Web Analytics 的
   `static.cloudflareinsights.com`，并保留 `'wasm-unsafe-eval'`（WebAssembly 编译需要）。
-  `connect-src` 还要放行魔搭镜像（`modelscope.cn` 及其 `*.modelscope.cn` 重定向域名）和
-  `raw.githubusercontent.com`，否则 Service Worker 的跨源分片请求会被 CSP 拦掉，
-  表现为镜像与 GitHub 回退全部失败、只剩同源 R2 慢速下载。
+  `connect-src` 还要放行魔搭镜像（`modelscope.cn` 及其 `*.modelscope.cn` 重定向域名），
+  否则 Service Worker 的跨源分片请求会被 CSP 拦掉，表现为镜像回退失败、只剩同源 R2 慢速下载。
+  `raw.githubusercontent.com` 仍保留在放行列表里（`verify:build` 会检查），但当前清单的回退源是
+  GitHub Release，浏览器侧不会使用它。
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`：关闭摄像头、麦克风、定位、支付与 USB。
 
@@ -201,10 +202,11 @@ pnpm run upload:modelscope -- --extensions work/extensions --metadata
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
 清单里 `encoding: "zstd"` 的资产保留上游 `.gz.bin` 键名，但交付字节是 zstd；`fetch:assets` 会从
-GitHub raw 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩，
+GitHub Release 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩，
 再按 `bytes`/`sha256` 校验交付字节。构建机需要 **Node 24+**（内置 `zlib.zstdCompressSync`）。
-R2 与魔搭镜像上传的是 zstd 字节；GitHub raw 仍是 gzip，因此这类资产不参与 GitHub 回退，
-最后一级回退是同源静态副本。
+R2 与魔搭镜像上传的是 zstd 字节；Release 上的上游仍是 gzip，因此这类资产不参与浏览器回退，
+最后一级回退是同源静态副本。Release 下载没有 CORS 响应头，浏览器无法跨源读取，
+所以清单里的 `fallback` 只用于构建期与 Node 侧。
 
 修改清单里的资产字节数/SHA-256 或 `cacheKey` 后，必须重新生成 LSP 补丁，把交付哈希同步进包内 profile：
 
@@ -257,7 +259,7 @@ beacon（Pages 项目注入 + zone 注入），建议在面板只保留一个，
 代码侧提供两个诊断工具，不改 DNS 也能判断问题在哪一段：
 
 ```bash
-pnpm run probe:sources        # 对魔搭 / 同源网关 / GitHub raw 各取 64KiB，输出 TTFB 与速率
+pnpm run probe:sources        # 对魔搭 / 同源网关各取 64KiB，输出 TTFB 与速率
 LEAN_ASSET_ORIGIN=https://lean-init-ide.pages.dev pnpm run probe:sources
 ```
 
@@ -266,7 +268,8 @@ LEAN_ASSET_ORIGIN=https://lean-init-ide.pages.dev pnpm run probe:sources
 
 - `?source=mirror`：魔搭优先，适合验证国内镜像
 - `?source=cdn`：同源 `/cdn/` 网关优先
-- `?source=github`：GitHub raw 优先
+- `?source=github`：把清单里的 GitHub 回退源排最前；当前 ranged 资产都是 zstd，会跳过回退，
+  实际顺序与默认相同
 
 参数非法或没有参数时恢复默认策略（按 `Accept-Language` 在魔搭与同源网关之间选首选源）。
 选择会写进 CacheStorage 并在后续访问继续生效；用另一个值覆盖，或访问 `?source=reset` 之类的非法值即可清除。
@@ -277,7 +280,7 @@ LEAN_ASSET_ORIGIN=https://lean-init-ide.pages.dev pnpm run probe:sources
 | --- | --- |
 | 页面白屏、没有 `#app` 内容 | `pnpm run verify:build`；确认 `dist/index.html` 引用了入口脚本 |
 | 进度条卡在 0% | 控制台看 `sw.js` 是否注册成功；`/cdn/<key>` 是否返回 206 |
-| 日志里一直回退到 GitHub raw | `/cdn/` 网关异常：binding 是否叫 `LEAN_ASSETS`，production / preview 是否都声明了 |
+| 日志里一直回退到魔搭或同源副本 | `/cdn/` 网关异常：binding 是否叫 `LEAN_ASSETS`，production / preview 是否都声明了 |
 | 诊断一直不出现 | `crossOriginIsolated` 是否为 true；COOP/COEP 是否被中间层剥掉 |
 | 补全、悬停没反应 | 面板日志里 LSP 是否 ready，`initialize` 是否成功 |
 | 本地资产校验失败 | 是否用会转换换行符的工具改过 `scripts/assets/**` |

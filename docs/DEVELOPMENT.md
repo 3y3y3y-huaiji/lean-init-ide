@@ -53,13 +53,14 @@ CI 跑下列命令，任一失败即阻断合并（本地仅作按需参考）�
 | `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
 | `pnpm run build:web` | 生产构建（跳过运行时资产下载） |
 | `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单（`/cdn/*` + `/api/telemetry`）、COOP/COEP、JS 体积预算 |
-| `pnpm run e2e:lessons` | 逐课运行全部代码块，出现 error 级诊断即失败（CI 的 e2e job 内执行） |
+| `pnpm run e2e:lessons` | 逐课运行全部代码块，出现 error 级诊断即失败（CI 的分片 job 内执行） |
 
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
 
-`.github/workflows/ci.yml` 包含五个前置门禁 job：静态检查（`static`）、单元测试（`test`）、构建产物（`build`）、浏览器端到端（`e2e`，依赖 `build`）、依赖审计（`audit`，只审生产依赖），全部通过才触发部署（`deploy`）。
-建议在 GitHub 分支保护里要求这五个 check 全绿才允许合入 `main`。
+`.github/workflows/ci.yml` 包含这些前置门禁 job：静态检查（`static`）、单元测试（`test`）、构建产物（`build`）、浏览器启动冒烟（`e2e-smoke`，依赖 `build`）、课程分片 E2E（`e2e-lessons`，矩阵 2 路，依赖 `build`）、依赖审计（`audit`，只审生产依赖），全部通过才触发部署（`deploy`）。
+浏览器 E2E 拆成三个并行 job 是为了缩短 PR 的最长路径：单 runner 内 `LEAN_E2E_WORKERS` 仍保持 1，避免三套 Init + Std + Batteries 同时驻留导致内存不足；并行度由独立 runner 提供。
+建议在 GitHub 分支保护里要求上述 check 全绿才允许合入 `main`。
 
 ## 贡献约定
 

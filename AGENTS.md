@@ -70,7 +70,7 @@
 ## 改动与验证
 
 - 本地可跑快速检查：`pnpm run format:check`、`pnpm run lint`、`pnpm run typecheck`、目标单测。E2E、全量构建等重型门禁交给 PR 的 GitHub Actions。
-- PR 的 `CI · 应用` 必须全绿：`static` / `test` / `build` / `e2e` / `audit` / `actionlint`。合并 `main` 后由 `Deploy · 应用` 构建、部署和冒烟，不要绕过它手动传文件。详见 `docs/CI.md`。
+- PR 的 `CI · 应用` 必须全绿：`static` / `test` / `build` / `e2e-smoke` / `e2e-lessons` / `audit` / `actionlint`。合并 `main` 后由 `Deploy · 应用` 构建、部署和冒烟，不要绕过它手动传文件。详见 `docs/CI.md`。
 - 覆盖率阈值在 `vitest.config.ts`；降低阈值需要单独说明理由。新增纯函数、解析器、状态机必须有单测；触及 `/cdn` 网关或 Range 语义必须有单测；视图断言结构而不是整段 HTML。
 - 一个提交只做一件事；提交信息用 `type(scope): 一句话结论`，正文写「为什么」。类型与 lint 以 `tsconfig` + ESLint 为准；用户可见文案走 `src/i18n/`，中英文同时补齐。
 

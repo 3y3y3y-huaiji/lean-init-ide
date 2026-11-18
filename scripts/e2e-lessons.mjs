@@ -3,8 +3,7 @@
 /**
  * 逐课运行全部代码块：课程页是用户主路径，单测覆盖不到真实 LSP 的行为。
  *
- * 依赖 scripts/local-gateway.mjs 已在 LEAN_GATEWAY_PORT（默认 4174）上服务 dist，
- * 与 e2e-lean.mjs 共用同一个网关和浏览器通道；CI 里两个脚本跑在同一个 job。
+ * 依赖 scripts/local-gateway.mjs 已在 LEAN_GATEWAY_PORT（默认 4174）上服务 dist。
  * 新增或删除课程时同步下面的 SLUGS（与 src/i18n/zh.ts 保持一致）；
  * 新增或删除挑战题时同步 CHALLENGE_SLUGS（与 src/challenges.ts 保持一致）。
  *
@@ -13,8 +12,10 @@
  *
  * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间。工程课会加载
  * Std / Batteries 扩展包，CI 用 LEAN_E2E_WORKERS=1 避免 runner 内存不足。
+ * 需要进一步提速时用 LEAN_E2E_SHARDS / LEAN_E2E_SHARD 把课程拆到多个 CI runner；
  * 同一 context 共享 Service Worker 与运行时缓存。
  */
+import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const port = Number(process.env.LEAN_GATEWAY_PORT ?? 4174);
@@ -23,6 +24,9 @@ const channel =
   process.env.LEAN_E2E_CHANNEL ?? (process.platform === 'win32' ? 'msedge' : 'chrome');
 const executablePath = process.env.LEAN_E2E_EXECUTABLE || undefined;
 const workers = Math.max(1, Math.min(4, Number(process.env.LEAN_E2E_WORKERS ?? 2) || 2));
+// 分片用于把整批课程拆到多个 CI runner 上并行；本地默认不分片。
+const shards = Math.max(1, Math.min(8, Number(process.env.LEAN_E2E_SHARDS ?? 1) || 1));
+const shard = Math.min(shards, Math.max(1, Number(process.env.LEAN_E2E_SHARD ?? 1) || 1));
 
 const SLUGS = [
   'what-is-lean',
@@ -65,6 +69,10 @@ const CHALLENGE_SLUGS = [
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** 1-based 分片：按取模均匀分配，保证各分片条目数最多相差 1。 */
+export const selectShard = (items, shardIndex, shardCount) =>
+  items.filter((_, index) => index % shardCount === shardIndex - 1);
+
 /**
  * 等 Lean 就绪。低内存设备（CI 容器常被判定为 low）不会自动启动，这里模拟一次
  * 「启动 Lean」点击；正常档位 400ms 后会自动开始，先等一拍再判断，避免把启动点成停止。
@@ -97,6 +105,11 @@ const waitForGateway = async () => {
 
 const main = async () => {
   await waitForGateway();
+  const slugs = selectShard(SLUGS, shard, shards);
+  const challengeSlugs = selectShard(CHALLENGE_SLUGS, shard, shards);
+  console.log(
+    `分片 ${shard}/${shards}：${slugs.length} 节课程，${challengeSlugs.length} 道挑战，${workers} 路并行`,
+  );
   const browser = await chromium.launch({ channel, executablePath, headless: true });
   // 固定海外英文环境：让 Service Worker 走同源 /cdn/ 网关，避免本机中文/中国时区优先命中外部镜像。
   const context = await browser.newContext({
@@ -221,8 +234,8 @@ const main = async () => {
   try {
     await Promise.all(
       pages.map(async (page, workerIndex) => {
-        for (let index = workerIndex; index < SLUGS.length; index += workers) {
-          const slug = SLUGS[index];
+        for (let index = workerIndex; index < slugs.length; index += workers) {
+          const slug = slugs[index];
           try {
             await runLesson(page, slug, workerIndex + 1);
           } catch (error) {
@@ -230,8 +243,8 @@ const main = async () => {
             console.error(`fail [w${workerIndex + 1}] ${slug}: ${error.message ?? error}`);
           }
         }
-        for (let index = workerIndex; index < CHALLENGE_SLUGS.length; index += workers) {
-          const slug = CHALLENGE_SLUGS[index];
+        for (let index = workerIndex; index < challengeSlugs.length; index += workers) {
+          const slug = challengeSlugs[index];
           try {
             await runChallenge(page, slug, workerIndex + 1);
           } catch (error) {
@@ -253,11 +266,14 @@ const main = async () => {
     process.exit(1);
   }
   console.log(
-    `课程与挑战全部通过：${SLUGS.length} 节课程，${CHALLENGE_SLUGS.length} 道挑战，${workers} 路并行`,
+    `课程与挑战全部通过：分片 ${shard}/${shards}，${slugs.length} 节课程，${challengeSlugs.length} 道挑战，${workers} 路并行`,
   );
 };
 
-main().catch((error) => {
-  console.error('E2E lessons error:', error);
-  process.exit(1);
-});
+// 作为脚本执行时才启动浏览器；被单测 import 时只暴露纯函数。
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main().catch((error) => {
+    console.error('E2E lessons error:', error);
+    process.exit(1);
+  });
+}

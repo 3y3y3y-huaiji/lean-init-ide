@@ -444,6 +444,48 @@ const runLspMode = async (environment: EnvironmentReport, config: QueryConfig): 
   });
 };
 
+const DEPTH_SAMPLES = [1000, 1200, 1500, 2000, 4000] as const;
+
+const buildDepthCode = (n: number): string =>
+  [
+    'def f : Nat → Nat',
+    '  | 0 => 0',
+    '  | n + 1 => f n',
+    '',
+    'set_option maxRecDepth 8000 in',
+    `example : f ${n} = 0 := by simp [f]`,
+    '',
+  ].join('\n');
+
+const runDepthMode = async (environment: EnvironmentReport, config: QueryConfig): Promise<void> => {
+  let maxPassed = 0;
+  for (const n of DEPTH_SAMPLES) {
+    const fileName = `Depth${n}.lean`;
+    try {
+      const result = await runLspDoc(fileName, buildDepthCode(n), true, config, 5);
+      if (result.diagnostics.length === 0) {
+        maxPassed = n;
+        log.push(`[depth] N=${n} ok (${result.elapsedMs}ms)`);
+      } else {
+        const msg = result.diagnostics.map((d) => String(d.message ?? '')).join('; ');
+        log.push(`[depth] N=${n} diagnostics=${result.diagnostics.length}: ${msg.slice(0, 240)}`);
+        break;
+      }
+    } catch (error: unknown) {
+      const detail = String((error as Error)?.message ?? error).slice(0, 240);
+      log.push(`[depth] N=${n} failed: ${detail}`);
+      break;
+    }
+  }
+  finish({
+    ok: maxPassed >= 4000,
+    stage: `depth-max-${maxPassed}`,
+    code: maxPassed >= 4000 ? 0 : 1,
+    environment,
+    log,
+  });
+};
+
 const run = async (): Promise<void> => {
   const environment = readEnvironment();
   const config = readQueryConfig();
@@ -455,6 +497,10 @@ const run = async (): Promise<void> => {
   try {
     if (mode === 'lsp') {
       await runLspMode(environment, config);
+      return;
+    }
+    if (mode === 'depth') {
+      await runDepthMode(environment, config);
       return;
     }
     // 用变量持有 URL，避免打包阶段把 /lean.mjs 解析成模块依赖。

@@ -15,7 +15,6 @@ on:
       - 'docs/**'
       - '**/*.md'
       - 'scripts/depth-probe/**'
-      - 'scripts/patches/**'
       - 'scripts/check-cpp.sh'
       - '.clang-format'
       - '.clang-tidy'
@@ -89,7 +88,7 @@ jobs:
           node-version: 24
 
       - name: 安装构建依赖
-        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
 
       - name: 缓存 Emscripten 6.0.0
         uses: actions/cache@v6
@@ -173,6 +172,11 @@ jobs:
           # wasm64 的源码修复（lean.h / CMakeLists / 诊断插桩）统一放在 TS 脚本里，
           # 锚点缺失会让这一步直接失败，不再靠 sed 静默跳过。
           node "$GITHUB_WORKSPACE/scripts/ci/backport-wasm64.ts" "$WASM_LLVM_LEAN_WORK_DIR/lean4"
+          # 显式工作栈版 whnfCore：消除 WHNF 归约环里 whnfCore/whnfEasyCases 的原生栈帧。
+          if ! grep -q 'whnfCoreStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/WHNF.lean"; then
+            patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-whnf-stack.patch"
+          fi
+          grep -q 'whnfCoreStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/WHNF.lean"
 
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
@@ -195,7 +199,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.ts') }}
+          key: wasm64-cgen-v3-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch') }}
 
       - name: cgen
         run: |
@@ -219,7 +223,7 @@ jobs:
           node-version: 24
 
       - name: 安装构建依赖
-        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
 
       - name: 缓存 Emscripten 6.0.0
         uses: actions/cache@v6
@@ -265,7 +269,12 @@ jobs:
           key: wasm64-src-v6
 
       - name: backport 上游 wasm64 修复
-        run: node scripts/ci/backport-wasm64.ts work/lean4
+        run: |
+          node scripts/ci/backport-wasm64.ts work/lean4
+          if ! grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-whnf-stack.patch
+          fi
+          grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -279,13 +288,13 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v2-${{ hashFiles('scripts/pin-lean.ts') }}
+          key: wasm64-cgen-v3-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch') }}
 
       - name: 缓存 objects
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh') }}
+          key: wasm64-obj-v10-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch') }}
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -314,7 +323,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh') }}
+          key: wasm64-obj-v10-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch') }}
 
       - name: link
         run: |
@@ -328,14 +337,17 @@ jobs:
       # -mtail-call 只在**编译步**把尾调用写成 return_call；objects 缓存里如果是旧对象，
       # link 会静默链出一个没有 return_call 的二进制，开关就变成安慰剂（缓存键已并入
       # scripts/patch-wasm64.sh，这里再兜一层）。反汇编数一遍，数到 0 就失败。
-      - name: 校验 return_call 真的进了产物
+      - name: 校验 return_call 与 whnfCoreStep 真的进了产物
         run: |
           source emsdk/emsdk_env.sh
           DIS="$(command -v wasm-dis || printf '%s\n' "$EMSDK/upstream/bin/wasm-dis")"
           test -x "$DIS" || { echo "找不到 wasm-dis，无法校验"; exit 1; }
-          total="$("$DIS" work/dist/lean.wasm | grep -c 'return_call' || true)"
-          echo "lean.wasm return_call: $total"
+          WAT="$("$DIS" work/dist/lean.wasm)"
+          total="$(printf '%s\n' "$WAT" | grep -c 'return_call' || true)"
+          whnf="$(printf '%s\n' "$WAT" | grep -c 'whnfCoreStep' || true)"
+          echo "lean.wasm return_call: $total, whnfCoreStep: $whnf"
           test "${total:-0}" -gt 0
+          test "${whnf:-0}" -gt 0
 
       # 第二份产物：main 跑在 pthread 上，主线程空出来泵 pthread 消息。
       # FileWorker 的 LSP 输出走 Std.Channel 的专用线程，默认构建下拿不到 publishDiagnostics。
@@ -401,6 +413,14 @@ jobs:
         run: |
           cd work/browser
           pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32 --modes version,compile,lsp
+
+      # 测 Chrome 1 MB Worker 栈下 whnfCoreStep 的实际递归上界（N=1000..4000）。
+      - name: 递归深度实测：Chrome Worker（maxRecDepth=8000）
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          cd work/browser
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32 --modes depth
 
       # Init 是 smoke 的硬判据：失败必须让 Job 变红，不重试超时。
       # 只有网络/缓存类错误（退出码 3）值得重试一次；无进展/超时（退出码 4）直接结束。
@@ -485,7 +505,7 @@ jobs:
           node-version: 24
 
       - name: 安装构建依赖
-        run: sudo apt-get update && sudo apt-get install -y cmake zstd
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
 
       - name: 缓存 Emscripten 6.0.0
         uses: actions/cache@v6
@@ -524,7 +544,12 @@ jobs:
           key: wasm64-src-v6
 
       - name: backport 上游 wasm64 修复
-        run: node scripts/ci/backport-wasm64.ts work/lean4
+        run: |
+          node scripts/ci/backport-wasm64.ts work/lean4
+          if ! grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-whnf-stack.patch
+          fi
+          grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -538,7 +563,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v9-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh') }}
+          key: wasm64-obj-v10-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch') }}
 
       - name: 准备 wasm-llvm 并切成 wasm64 + GMP
         run: |

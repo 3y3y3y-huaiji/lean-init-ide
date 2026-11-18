@@ -46,6 +46,7 @@ import {
 } from '../lean-session';
 import { createLeanMemoryGuard, sampleBrowserMemoryBytes } from '../lean-memory-guard';
 import { wasm64Available } from '../lean-wasm64-available';
+import { formatWorkerError } from '../wasm64-error';
 import {
   getDefaultExtensions,
   getRuntimeArch,
@@ -1572,7 +1573,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       window.setTimeout(requestGoal, 800);
       return true;
     } catch (error) {
-      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      const message =
+        error instanceof Error ? `${error.name}: ${error.message}` : formatWorkerError(error);
       lastStartError = message;
       persistRuntimeSession(false);
       // 自动重启第一次失败很常见：旧连接的 pending 请求刚被 reject。保留恢复状态并重试一次，

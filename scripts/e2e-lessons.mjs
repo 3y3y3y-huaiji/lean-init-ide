@@ -13,6 +13,7 @@
  * 默认开两个页面并行跑不同的课，缩短浏览器 E2E 的墙钟时间。工程课会加载
  * Std / Batteries 扩展包，CI 用 LEAN_E2E_WORKERS=1 避免 runner 内存不足。
  * 需要进一步提速时用 LEAN_E2E_SHARDS / LEAN_E2E_SHARD 把课程拆到多个 CI runner；
+ * LEAN_E2E_LESSONS / LEAN_E2E_CHALLENGES 可只跑改动到的条目（CI 增量门禁用）。
  * 同一 context 共享 Service Worker 与运行时缓存。
  */
 import { pathToFileURL } from 'node:url';
@@ -74,6 +75,24 @@ export const selectShard = (items, shardIndex, shardCount) =>
   items.filter((_, index) => index % shardCount === shardIndex - 1);
 
 /**
+ * 增量筛选：`raw` 是逗号分隔的 slug 列表。
+ * 未设置时跑全部；`-` 表示一条都不跑；出现未知 slug 直接报错，避免增量门禁假通过。
+ */
+export const pickSlugs = (all, raw) => {
+  const text = (raw ?? '').trim();
+  if (text === '-') return { slugs: [], unknown: [] };
+  const wanted = text
+    .split(',')
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+  if (wanted.length === 0) return { slugs: all, unknown: [] };
+  return {
+    slugs: all.filter((slug) => wanted.includes(slug)),
+    unknown: wanted.filter((slug) => !all.includes(slug)),
+  };
+};
+
+/**
  * 等 Lean 就绪。低内存设备（CI 容器常被判定为 low）不会自动启动，这里模拟一次
  * 「启动 Lean」点击；正常档位 400ms 后会自动开始，先等一拍再判断，避免把启动点成停止。
  */
@@ -105,8 +124,17 @@ const waitForGateway = async () => {
 
 const main = async () => {
   await waitForGateway();
-  const slugs = selectShard(SLUGS, shard, shards);
-  const challengeSlugs = selectShard(CHALLENGE_SLUGS, shard, shards);
+  const lessons = pickSlugs(SLUGS, process.env.LEAN_E2E_LESSONS);
+  const challenges = pickSlugs(CHALLENGE_SLUGS, process.env.LEAN_E2E_CHALLENGES);
+  const unknown = [...lessons.unknown, ...challenges.unknown];
+  if (unknown.length > 0) {
+    throw new Error(`增量门禁收到未知 slug：${unknown.join(', ')}；请同步 SLUGS / CHALLENGE_SLUGS`);
+  }
+  const slugs = selectShard(lessons.slugs, shard, shards);
+  const challengeSlugs = selectShard(challenges.slugs, shard, shards);
+  if (slugs.length + challengeSlugs.length === 0) {
+    throw new Error('没有需要运行的课程或挑战；检查 LEAN_E2E_LESSONS / LEAN_E2E_SHARD');
+  }
   console.log(
     `分片 ${shard}/${shards}：${slugs.length} 节课程，${challengeSlugs.length} 道挑战，${workers} 路并行`,
   );

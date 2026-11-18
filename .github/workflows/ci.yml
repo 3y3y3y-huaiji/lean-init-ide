@@ -16,8 +16,40 @@ permissions:
   contents: read
 
 jobs:
+  # 先按改动类型分档，后面的重门禁只在需要时启动：
+  # 文档 / 工作流改动直接过，课程内容改动只跑改到的课，运行时改动才全量 E2E。
+  changes:
+    name: 变更分类
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+      workflows: ${{ steps.detect.outputs.workflows }}
+      static: ${{ steps.detect.outputs.static }}
+      test: ${{ steps.detect.outputs.test }}
+      build: ${{ steps.detect.outputs.build }}
+      smoke: ${{ steps.detect.outputs.smoke }}
+      full_lessons: ${{ steps.detect.outputs.full_lessons }}
+      content: ${{ steps.detect.outputs.content }}
+      lessons: ${{ steps.detect.outputs.lessons }}
+      challenges: ${{ steps.detect.outputs.challenges }}
+      lesson_slugs: ${{ steps.detect.outputs.lesson_slugs }}
+      challenge_slugs: ${{ steps.detect.outputs.challenge_slugs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 需要与基线做 diff，必须拿全历史。
+          fetch-depth: 0
+      - name: 分类改动
+        id: detect
+        env:
+          # PR 用基线分支 tip；push 用上一次提交；手动触发交给脚本退回 HEAD^。
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/detect-changes.mjs --base "$BASE"
+
   static:
     name: 静态检查
+    needs: changes
+    if: needs.changes.outputs.static == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,6 +74,8 @@ jobs:
 
   actionlint:
     name: Actions 工作流静态检查
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,6 +85,8 @@ jobs:
 
   test:
     name: 单元测试
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -76,6 +112,8 @@ jobs:
 
   build:
     name: 构建产物
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -102,12 +140,14 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
-  # 浏览器 E2E 拆成三个并行 job：启动冒烟一个、课程按分片并行。
-  # 原来串行跑「冒烟 + 27 节课」是整条 PR 流水线的最长路径；
-  # 拆开后墙钟时间从「冒烟 + 课程」降到两者的最大值。
+  # 浏览器 E2E 按改动分档：
+  # - 运行时 / 资产 / LSP 改动：启动冒烟 + 全量课程（分片并行）
+  # - 仅课程或挑战内容改动：只跑改动到的条目
+  # - 其它应用代码：只跑启动冒烟
   e2e-smoke:
     name: 浏览器端到端（启动与诊断）
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.smoke == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -131,9 +171,11 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
-  e2e-lessons:
-    name: 浏览器端到端（课程 ${{ matrix.shard }}/2）
-    needs: build
+  # 运行时改动才跑全量课程；分两片并行压墙钟。
+  e2e-lessons-full:
+    name: 浏览器端到端（全量课程 ${{ matrix.shard }}/2）
+    needs: [changes, build]
+    if: needs.changes.outputs.full_lessons == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -151,7 +193,7 @@ jobs:
           extensions: '1'
           # 带扩展的资产单独缓存，避免每次从 GitHub / 魔搭重下约 75 MB。
           assets-cache-key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}-extensions
-      - name: 逐课运行全部代码块（分片 ${{ matrix.shard }}/2）
+      - name: 全量运行课程代码块（分片 ${{ matrix.shard }}/2）
         env:
           LEAN_E2E_CHANNEL: chrome
           # 工程课会同时加载 Init + Std + Batteries，三路并行把 runner 内存打爆；
@@ -164,13 +206,48 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-lessons-${{ matrix.shard }}-gateway-log
+          name: e2e-lessons-full-${{ matrix.shard }}-gateway-log
+          path: /tmp/gateway.log
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # 只是改了某几节课 / 挑战题：只跑改动到的条目，不碰运行时。
+  e2e-lessons-changed:
+    name: 浏览器端到端（变更课程）
+    needs: [changes, build]
+    if: needs.changes.outputs.full_lessons != 'true' && needs.changes.outputs.content == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
+      - name: 准备 E2E 环境
+        uses: ./.github/actions/e2e-prepare
+        with:
+          extensions: '1'
+          assets-cache-key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}-extensions
+      - name: 只运行改动到的课程 / 挑战
+        env:
+          LEAN_E2E_CHANNEL: chrome
+          LEAN_E2E_WORKERS: 1
+          # 未改动的类别由分类器输出 `-`，脚本据此跳过。
+          LEAN_E2E_LESSONS: ${{ needs.changes.outputs.lesson_slugs }}
+          LEAN_E2E_CHALLENGES: ${{ needs.changes.outputs.challenge_slugs }}
+        run: node scripts/e2e-lessons.mjs
+      - name: 失败时保留网关日志
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-lessons-changed-gateway-log
           path: /tmp/gateway.log
           retention-days: 3
           if-no-files-found: ignore
 
   audit:
     name: 依赖审计
+    needs: changes
+    # 只有会进构建产物的改动才可能影响依赖面；纯文档 / 纯工作流改动直接跳过。
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

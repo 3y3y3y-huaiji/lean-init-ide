@@ -1,7 +1,7 @@
 name: Deploy · 应用
 run-name: Deploy · ${{ github.ref_name }}
 
-# PR CI（static / test / build / e2e-smoke + e2e-lessons / audit / actionlint）已经在合并前跑过；
+# PR CI（changes 分档后的 static / test / build / e2e-* / audit / actionlint）已经在合并前跑过；
 # main 上只做构建、部署和线上冒烟，不再重复整条 CI。
 on:
   push:

@@ -58,8 +58,19 @@ CI 跑下列命令，任一失败即阻断合并（本地仅作按需参考）�
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
 
-`.github/workflows/ci.yml` 包含这些前置门禁 job：静态检查（`static`）、单元测试（`test`）、构建产物（`build`）、浏览器启动冒烟（`e2e-smoke`，依赖 `build`）、课程分片 E2E（`e2e-lessons`，矩阵 2 路，依赖 `build`）、依赖审计（`audit`，只审生产依赖），全部通过才触发部署（`deploy`）。
-浏览器 E2E 拆成三个并行 job 是为了缩短 PR 的最长路径：单 runner 内 `LEAN_E2E_WORKERS` 仍保持 1，避免三套 Init + Std + Batteries 同时驻留导致内存不足；并行度由独立 runner 提供。
+`.github/workflows/ci.yml` 先用 `changes` job 调 `scripts/detect-changes.mjs` 给改动分档，再按档位启动门禁：
+
+| 改动类型 | 实际执行 |
+| --- | --- |
+| 纯文档 | 只跑 `changes`，其余 job 跳过（跳过视为通过） |
+| 纯工作流 / `.github/**` | `changes` + `actionlint` |
+| 测试文件 | `static` + `test` |
+| 课程 `lessons-zh.ts` / 挑战 `challenges.ts` | `static` + `test` + `build` + `e2e-lessons-changed`（只跑改到的 slug） |
+| 其它应用代码 | `static` + `test` + `build` + `e2e-smoke` |
+| 运行时 / 资产 / LSP / 网关 / `config/` / `functions/` / `public/` | 以上全部 + `e2e-smoke` + `e2e-lessons-full`（2 片并行） |
+
+课程增量筛选由 `LEAN_E2E_LESSONS` / `LEAN_E2E_CHALLENGES` 控制；全量课程在单 runner 内仍保持 `LEAN_E2E_WORKERS=1`，避免三套 Init + Std + Batteries 同时驻留导致内存不足，并行度由独立 runner 分片提供。无法可靠缩小范围时（课程目录、加载器、新增/删除课程）会自动回退到全量。
+新增或删除课程 / 挑战时必须同步 `scripts/e2e-lessons.mjs` 的 `SLUGS` / `CHALLENGE_SLUGS`：`changes` 会核对内容源与清单，不一致直接失败，避免全量跑也漏掉新条目。
 建议在 GitHub 分支保护里要求上述 check 全绿才允许合入 `main`。
 
 ## 贡献约定

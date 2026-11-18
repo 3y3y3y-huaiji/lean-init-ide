@@ -511,6 +511,24 @@ jobs:
             --mode worker --timeout 180000 --idle-timeout 120000 --jobs "$JOBS" \
             2>&1 | tee -a work/init-lsp.log
 
+      - name: 补丁行为等价与深栈回归门禁（unpatched boot vs patched wasm64）
+        timeout-minutes: 15
+        env:
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          BOOT="$(node scripts/ci/boot-dir.ts)"
+          GLUE=work/dist/lean-adapted-proxy.mjs
+          test -f "$GLUE" || GLUE=work/dist/lean-adapted.mjs
+          node scripts/wasm64-patch-equivalence.ts \
+            --boot-lean "$BOOT/bin/lean" \
+            --boot-lib work/olean32 \
+            --wasm-lean work/dist/lean.mjs \
+            --lsp-glue "$GLUE" \
+            --lean4-src work/lean4 \
+            --run-lean wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            --timeout 180000
+
       # 失败立即留证据，不等到最后；后续步骤也不会再跑。
       - name: 失败时上传 Init LSP 日志
         if: failure()

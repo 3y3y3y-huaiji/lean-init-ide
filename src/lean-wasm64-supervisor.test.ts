@@ -153,9 +153,7 @@ describe('createWasm64Supervisor', () => {
       error: { code: -32603, message: 'bad params' },
     });
 
-    expect(onError).toHaveBeenCalledWith(
-      'Lean document process failed to initialize: bad params',
-    );
+    expect(onError).toHaveBeenCalledWith('Lean document process failed to initialize: bad params');
   });
 
   it('服务端请求 ID 重写后，客户端响应与 $/cancelRequest 都映射回原始 ID', async () => {

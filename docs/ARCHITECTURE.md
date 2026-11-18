@@ -33,8 +33,9 @@
 在 Cloudflare 内网读取对象，不需要公网 R2 自定义域、不需要证书/DNS、不需要跨源 CORS。
 
 - **主源**：同源 `/cdn/` 网关，支持 Range；Service Worker 按 4MB 分片并行下载后组装成同源响应。
-- **回退**：网关不可用 → 魔搭镜像（配置且可用时）→ 同源 `dist/wasm-lean4/` 全量请求；
-  非 zstd 小文件可回退到 GitHub Release（4.35 起），zstd 资产不会回退到上游 gzip。
+- **回退**：网关不可用 → 魔搭镜像（配置且可用时）→ 同源 `dist/wasm-lean4/` 全量请求。
+  清单里的 GitHub Release 只服务构建期（`fetch:assets` 拉上游 gzip）：Release 下载不带 CORS
+  响应头，浏览器无法跨源读取，而且 zstd 资产本来就会跳过 fallback。
 - **版本键**：4.35 的对象 key 带 `wasm-lean4/4.35.0/` 前缀；URL 仍带 `?r=<cacheKey>` 绕开旧缓存
   （`config/lean4-runtime.json`）。
 - **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。

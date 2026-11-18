@@ -112,7 +112,8 @@ Page views and Core Web Vitals are collected by Cloudflare Web Analytics.
 - **Cross-origin isolation**: COOP/COEP and SharedArrayBuffer let the wasm threading model run unchanged,
   which is what makes a real compiler possible in the page.
 - **Asset layer**: a Service Worker fetches assets from R2 through the same-origin `/cdn/` gateway in
-  4 MB ranges, verifies each range with SHA-256, and falls back to GitHub raw and a static copy.
+  4 MB ranges, verifies each range with SHA-256, and falls back to the ModelScope mirror and a
+  same-origin static copy.
   `Init` is about 102 MB, `Std` about 75 MB and `Batteries` about 5.7 MB, loaded on demand.
 - **App layer**: a static site; routing, i18n and theming are all client-side, and Pages Functions
   only provide the asset gateway and the telemetry receiver.

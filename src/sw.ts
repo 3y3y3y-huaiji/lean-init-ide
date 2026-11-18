@@ -4,7 +4,7 @@
  * Cloudflare Pages 的静态资源不处理 Range，所以 102MB 的 Lean 运行时按
  * Accept-Language 选择首选源：中文环境先走魔搭（ModelScope）镜像，其他环境
  * 先走站点同源的 /cdn/ 网关（Pages Function → R2 binding）；任一源失败都按
- * 顺序回退到另一个源，最后回退到固定 revision 的 GitHub raw 与同源全量请求。
+ * 顺序回退到另一个源，最后回退到同源全量请求。
  * 每个大文件切成 4MB 分片，按预期字节数校验后合成一个同源响应交还给 Lean 加载器。
  *
  * 资产清单与分发源来自 config/lean4-runtime.json + src/asset-sources.mjs，
@@ -33,11 +33,11 @@ const manifest = manifestJson as unknown as RuntimeManifest;
 
 type RangeAsset = {
   bytes: number;
-  /** 中文环境：魔搭优先，R2 → GitHub 回退。 */
+  /** 中文环境：魔搭优先，R2 → 同源兜底。 */
   domestic: AssetSource[];
-  /** 其他环境：R2 优先，魔搭 → GitHub 回退。 */
+  /** 其他环境：R2 优先，魔搭 → 同源兜底。 */
   overseas: AssetSource[];
-  /** 诊断（?source=github）：GitHub 优先，其余源仍保留做回退。 */
+  /** 诊断（?source=github）：GitHub 回退排最前；zstd 资产会跳过，顺序不变。 */
   github: AssetSource[];
 };
 

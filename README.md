@@ -104,7 +104,7 @@
 - **语言层**：Monaco + `@wasm-idle/lsp`，Lean 4.35.0 跑在 Web Worker 里，LSP 走 postMessage。
 - **跨源隔离**：COOP/COEP 与 SharedArrayBuffer 让 wasm 线程模型原样运行，这是「真编译器」的前提。
 - **资产层**：Service Worker 经站点同源 `/cdn/` 网关从 R2 按 4MB 分片下载，逐块 SHA-256 校验，
-  失败回退 GitHub raw 与静态副本；`Init` 约 102MB，`Std` 约 75MB，`Batteries` 约 5.7MB，按需加载。
+  失败回退魔搭镜像与同源静态副本；`Init` 约 102MB，`Std` 约 75MB，`Batteries` 约 5.7MB，按需加载。
 - **应用层**：静态站点，路由 / i18n / 主题都在前端；Pages Functions 只提供资产网关与指标接收端。
 
 实现细节见 [架构与运行时分发](docs/ARCHITECTURE.md)。

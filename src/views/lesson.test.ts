@@ -91,7 +91,8 @@ describe('课程页渲染', () => {
   it('正文里的反引号渲染成行内代码，而不是漏出纯文本', () => {
     const lesson = lessonsOf('zh').find((item) => item.slug === 'what-is-lean')!;
     const paragraph = lesson.blocks.find(
-      (block) => block.kind === 'p' && /`[^`\n]+`/.test(block.text),
+      (block): block is { kind: 'p'; text: string } =>
+        block.kind === 'p' && /`[^`\n]+`/.test(block.text),
     );
     expect(paragraph).toBeDefined();
     const token = /`([^`\n]+)`/.exec(paragraph!.text)![1]!;

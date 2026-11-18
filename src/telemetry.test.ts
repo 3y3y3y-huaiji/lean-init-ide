@@ -173,6 +173,16 @@ describe('telemetry', () => {
     expect(second.fields.message).toBe('failed');
   });
 
+  it('错误上报可以附带架构等额外字段，且不会覆盖 source', async () => {
+    const { initTelemetry, reportError } = await loadTelemetry();
+    initTelemetry({ sampleRate: 1 });
+    reportError('runtime', new Error('boom'), { arch: 'wasm64', source: 'spoofed' });
+
+    const event = (await readBeaconBody(0)).events[0] as { fields: Record<string, unknown> };
+    expect(event.fields.arch).toBe('wasm64');
+    expect(event.fields.source).toBe('runtime');
+  });
+
   it('非 Error 的错误对象也能转成字符串上报', async () => {
     const { initTelemetry, reportError } = await loadTelemetry();
     initTelemetry({ sampleRate: 1 });

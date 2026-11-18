@@ -501,7 +501,7 @@ end
   privacy: {
     eyebrow: 'Transparency',
     title: 'Privacy notice',
-    updated: 'Last updated: 2026-11-12',
+    updated: 'Last updated: 2026-11-19',
     intro:
       'This is a front-end-only teaching project: Lean runs inside your browser and the code you write is never uploaded. To diagnose startup failures and performance, we collect a small amount of anonymous runtime telemetry.',
     sections: [
@@ -509,7 +509,7 @@ end
         heading: 'What we collect',
         paragraphs: [
           'The page type (home / lesson / playground), interface language and a timestamp.',
-          'Startup stages: whether the service worker registered, which asset source was used, bytes downloaded, download duration, time until the language server is ready, and time to the first diagnostics.',
+          'Startup stages: whether the service worker registered, which asset source was used, bytes downloaded, download duration, the runtime architecture (wasm32 / wasm64), time until the language server is ready, and time to the first diagnostics.',
           'Error summaries: error name, a message truncated to 120 characters, and a stack frame count; never the code in your editor.',
           'A device tier flag: whether the device reports limited memory (derived from navigator.deviceMemory); no model or device identifier is recorded.',
         ],

@@ -824,7 +824,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (!assetTelemetry.started) {
       assetTelemetry.started = true;
       assetTelemetry.startedAt = performance.now();
-      track('assets', { phase: 'first_bytes', source: data.source ?? 'unknown' });
+      track('assets', {
+        phase: 'first_bytes',
+        source: data.source ?? 'unknown',
+        arch: selectedArch,
+      });
     }
     if (downloaded && !assetTelemetry.completed) {
       assetTelemetry.completed = true;
@@ -832,6 +836,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         phase: 'complete',
         bytes: total,
         ms: performance.now() - assetTelemetry.startedAt,
+        arch: selectedArch,
       });
     }
     setStatus(
@@ -1172,11 +1177,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       setProgress(1);
       setStatus(t.statusLspReady, 'ready');
       log(t.logRuntimeReady);
-      track('lsp_ready', { ms: runStartedAt ? performance.now() - runStartedAt : 0 });
+      track('lsp_ready', {
+        ms: runStartedAt ? performance.now() - runStartedAt : 0,
+        arch: selectedArch,
+      });
     } else if (status.state === 'error') {
       const message = status.message ?? 'unknown error';
       log(t.logRuntimeError(message));
-      reportError('runtime', message);
+      reportError('runtime', message, { arch: selectedArch });
       if (engineEverReady) {
         handleRuntimeCrash(message);
       } else {

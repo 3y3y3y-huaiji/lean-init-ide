@@ -124,11 +124,11 @@ export const track = (name: TelemetryEventName, fields?: TelemetryFields): void 
   }
 };
 
-export const reportError = (source: string, error: unknown): void => {
+export const reportError = (source: string, error: unknown, extra?: TelemetryFields): void => {
   if (!enabled || errorCount >= MAX_ERRORS_PER_PAGE) return;
   errorCount += 1;
 
-  const fields: TelemetryFields = { source };
+  const fields: TelemetryFields = { ...extra, source };
   if (error instanceof Error) {
     fields.name = error.name;
     fields.message = error.message;

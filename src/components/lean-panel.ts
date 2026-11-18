@@ -802,7 +802,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       overallTotal?: number;
       message?: string;
       source?: string;
+      arch?: string;
     };
+    // 同源多标签页可能同时使用不同架构；只看当前面板架构的进度与回退。
+    if (data?.arch && data.arch !== selectedArch) return;
     if (data?.type === 'lean-asset-fallback' && data.name) {
       lastAssetFallback = { name: data.name, message: data.message ?? 'unknown error' };
       log(t.statusChunkFallback(data.name, data.message ?? 'unknown error'));

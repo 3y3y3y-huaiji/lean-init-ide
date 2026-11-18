@@ -188,7 +188,7 @@ sw.addEventListener('fetch', (event) => {
         },
         onProgress: (loaded, total, source) =>
           void notify(tracker, is64, name, loaded, total, source.label),
-        onFallback: notifyFallback,
+        onFallback: (name, message) => notifyFallback(is64, name, message),
         fallbackFetch: (request) => fetch(request),
       });
     })(),
@@ -226,11 +226,16 @@ async function notify(
   }
 }
 
-function notifyFallback(name: string, message: string): void {
+function notifyFallback(is64: boolean, name: string, message: string): void {
   void (async () => {
     const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of clients) {
-      (client as WindowClient).postMessage({ type: 'lean-asset-fallback', name, message });
+      (client as WindowClient).postMessage({
+        type: 'lean-asset-fallback',
+        arch: is64 ? 'wasm64' : 'wasm32',
+        name,
+        message,
+      });
     }
   })();
 }

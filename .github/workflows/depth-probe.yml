@@ -9,9 +9,10 @@ on:
   push:
     branches: [spike/wasm64]
     # 文档与规范改动用不着重新下载 emsdk、跑浏览器探针。
+    # 只监听探针真正消费的 WHNF 补丁；kernel/runtime 补丁不会改变探针产物。
     paths:
       - 'scripts/depth-probe/**'
-      - 'scripts/patches/**'
+      - 'scripts/patches/lean-whnf-stack.patch'
       - 'scripts/lib/**'
       - 'package.json'
       - 'pnpm-lock.yaml'

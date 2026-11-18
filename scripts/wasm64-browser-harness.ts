@@ -288,6 +288,11 @@ const runLspDoc = async (
           }
           return;
         }
+        if (typeof msg.memoryBytes === 'number') {
+          const mib = Math.round(msg.memoryBytes / 1048576);
+          log.push(`[${name}] memory=${mib}MB`);
+          return;
+        }
         if (typeof msg.stderr === 'string') {
           const line = msg.stderr.trim();
           if (line) log.push(`[${name}:err] ${line.slice(0, 240)}`);

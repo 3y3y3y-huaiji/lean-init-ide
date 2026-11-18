@@ -10,10 +10,11 @@ const FIXTURE = [
   '_proc_exit(code){if(ENVIRONMENT_IS_PTHREAD)return proxyToMainThread(0,0,1,code);EXITSTATUS=code;',
   'getNewWorker(){if(PThread.unusedWorkers.length==0){',
   'function _fd_read(fd,iov,iovcnt,pnum){return 0}',
+  'function updateMemoryViews(){var b=wasmMemory.buffer;}',
 ].join('\n');
 
 describe('adaptGlue', () => {
-  it('注入全部 7 处补丁', () => {
+  it('注入全部 8 处补丁', () => {
     const { glue } = adaptGlue(FIXTURE);
     expect(glue.startsWith('Error.stackTraceLimit = 200;\n')).toBe(true);
     expect(glue).toContain('lspStdin:Module["lspStdin"]');
@@ -22,6 +23,42 @@ describe('adaptGlue', () => {
     expect(glue).toContain('proxyToMainThread(2,0,1,thread)');
     expect(glue).toContain('Module["lspProcessExit"]?.(code);');
     expect(glue).toContain('Lean LSP exhausted its pthread pool');
+    expect(glue).toContain('Module["onMemoryResize"]?.(_len);');
+  });
+
+  it('updateMemoryViews 补丁仅在 owner 线程去重回调 onMemoryResize 并暴露 wasmMemory', () => {
+    const { glue } = adaptGlue(FIXTURE);
+    const match = /function updateMemoryViews\(\)\{[\s\S]*?var b=wasmMemory\.buffer;\}/.exec(glue);
+    expect(match).not.toBeNull();
+    const resizes: number[] = [];
+    const Module: Record<string, unknown> = {
+      onMemoryResize: (bytes: number) => resizes.push(bytes),
+    };
+    const makeFn = new Function(
+      'ENVIRONMENT_IS_PTHREAD',
+      'wasmMemory',
+      'Module',
+      `${match![0]}; return updateMemoryViews;`,
+    ) as (
+      isPthread: boolean,
+      mem: { buffer: { byteLength: number } },
+      mod: Record<string, unknown>,
+    ) => () => void;
+
+    const ownerMem = { buffer: { byteLength: 512 } };
+    const ownerUpdate = makeFn(false, ownerMem, Module);
+    ownerUpdate();
+    ownerUpdate();
+    expect(Module.wasmMemory).toBe(ownerMem);
+    expect(resizes).toEqual([512]);
+
+    ownerMem.buffer = { byteLength: 1024 };
+    ownerUpdate();
+    expect(resizes).toEqual([512, 1024]);
+
+    const pthreadUpdate = makeFn(true, { buffer: { byteLength: 2048 } }, Module);
+    pthreadUpdate();
+    expect(resizes).toEqual([512, 1024]);
   });
 
   it('memory64 的 fd0 读取用 16 字节 iovec 与 HEAPU64', () => {

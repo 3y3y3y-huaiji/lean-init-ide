@@ -16,7 +16,7 @@ emcc -sMEMORY64=1 -mtail-call -O3 -pthread -fwasm-exceptions @"$OBJ/objs.rsp" "$
   "$BUILD/lib/lean/libleancpp.a" "$BUILD/lib/lean/libleanrt.a" "$GMP/lib/libgmp.a" \
   "$BUILD/libuv/src/libuv/libuv.a" \
   -Wl,--gc-sections \
-  -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=2147483648 -sMAXIMUM_MEMORY=4294967296 \
+  -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912 -sMAXIMUM_MEMORY=4294967296 \
   -sSTACK_SIZE=16777216 -sDEFAULT_PTHREAD_STACK_SIZE=67108864 -sPTHREAD_POOL_SIZE=8 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createLean -sENVIRONMENT=web,worker,node \
   -sINVOKE_RUN=0 -sEXIT_RUNTIME=0 -sFORCE_FILESYSTEM=1 -lnodefs.js \

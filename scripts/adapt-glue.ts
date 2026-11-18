@@ -15,6 +15,17 @@ const replaceOnce = (source: string, from: string, to: string, label: string): s
   return source.replace(from, to);
 };
 
+const replaceRegexOnce = (source: string, pattern: RegExp, to: string, label: string): string => {
+  const global = new RegExp(
+    pattern.source,
+    pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
+  );
+  const matches = source.match(global);
+  const count = matches?.length ?? 0;
+  if (count !== 1) throw new Error(`${label}: 期望命中 1 处，实际 ${count}`);
+  return source.replace(pattern, to);
+};
+
 export interface AdaptResult {
   readonly glue: string;
   /** 补丁 6 注入的 fd0 读取实现（单测用来锁住 memory64 布局）。 */
@@ -108,7 +119,15 @@ export const adaptGlue = (source: string): AdaptResult => {
     'fd0 环形缓冲',
   );
 
-  // 7. V8 默认 Error.stackTraceLimit=10。pthread worker 加载的是这份 glue，
+  // 7. 线性内存扩展通知：仅在主 owner 线程暴露 wasmMemory，并在实际扩容时回调宿主。
+  glue = replaceRegexOnce(
+    glue,
+    /function updateMemoryViews\(\)\s*\{/,
+    'function updateMemoryViews(){if(!ENVIRONMENT_IS_PTHREAD&&typeof wasmMemory!="undefined"&&wasmMemory&&wasmMemory.buffer){Module["wasmMemory"]=wasmMemory;var _len=wasmMemory.buffer.byteLength;if(_len!==Module["_lastMemoryBytes"]){Module["_lastMemoryBytes"]=_len;Module["onMemoryResize"]?.(_len);}}',
+    'onMemoryResize 内存扩展回调',
+  );
+
+  // 8. V8 默认 Error.stackTraceLimit=10。pthread worker 加载的是这份 glue，
   //    每个 realm 的 stackTraceLimit 相互独立；在文件最前面统一抬高，
   //    wasm 爆栈时 pthread 侧才能把 whnfCoreStep 下面的完整递归环回传。
   glue = `Error.stackTraceLimit = 200;\n${glue}`;

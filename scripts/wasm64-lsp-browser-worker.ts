@@ -23,10 +23,12 @@ interface LeanModule {
     getStream: (fd: number) => EmscriptenStream;
   };
   ENV?: Record<string, string>;
+  wasmMemory?: { readonly buffer: ArrayBufferLike };
   callMain: (args: string[]) => number;
 }
 
 interface WorkerStartMessage {
+  readonly type?: 'start';
   readonly leanMjsUrl: string;
   readonly manifestUrl: string;
   readonly libBaseUrl: string;
@@ -36,6 +38,12 @@ interface WorkerStartMessage {
   readonly env?: Readonly<Record<string, string>>;
   readonly timezone: Uint8Array;
 }
+
+interface WorkerPollMessage {
+  readonly type: 'pollMemory';
+}
+
+type WorkerInboundMessage = WorkerStartMessage | WorkerPollMessage;
 
 const CONCURRENCY = 16;
 
@@ -94,8 +102,17 @@ const fetchLibraryAssets = async (
   return results;
 };
 
-self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
+let activeLean: LeanModule | null = null;
+
+self.onmessage = async (event: MessageEvent<WorkerInboundMessage>) => {
   const data = event.data;
+  if (data.type === 'pollMemory') {
+    const memoryBytes = activeLean?.wasmMemory?.buffer.byteLength;
+    if (typeof memoryBytes === 'number') {
+      workerSelf.postMessage({ memoryBytes });
+    }
+    return;
+  }
   try {
     const leanMjsUrl = new URL(data.leanMjsUrl, self.location.href).href;
     const [{ default: createLean }, assets] = await Promise.all([
@@ -111,9 +128,11 @@ self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
       locateFile: (name: string) => new URL(`/${name}`, self.location.href).href,
       lspStdin: data.stdin,
       lspProcessExit: (code: number) => workerSelf.postMessage({ exit: code }),
+      onMemoryResize: (memoryBytes: number) => workerSelf.postMessage({ memoryBytes }),
       print: (text: string) => workerSelf.postMessage({ stderr: `${text}\n` }),
       printErr: (text: string) => workerSelf.postMessage({ stderr: `${text}\n` }),
     });
+    activeLean = lean;
 
     lean.FS.mkdirTree('/lean/bin');
     lean.FS.mkdirTree('/lean/lib/lean');
@@ -157,7 +176,12 @@ self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
     }
 
     lean.FS.chdir('/workspace');
-    workerSelf.postMessage({ ready: true, assets: assets.length });
+    const initialMemoryBytes = lean.wasmMemory?.buffer.byteLength;
+    workerSelf.postMessage({
+      ready: true,
+      assets: assets.length,
+      ...(typeof initialMemoryBytes === 'number' ? { memoryBytes: initialMemoryBytes } : {}),
+    });
 
     let code = 0;
     try {

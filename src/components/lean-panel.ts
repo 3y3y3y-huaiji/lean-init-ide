@@ -7,7 +7,7 @@ import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { setSourcePreference, type AssetSourcePreference } from '../asset-source';
-import { cacheBudgetBytes, currentMemoryTier } from '../device';
+import { cacheBudgetBytes, currentMemoryTier, wasm64MaxMemoryBytes } from '../device';
 import {
   abbreviationSuggestions,
   findAbbreviationQuery,
@@ -29,6 +29,7 @@ import {
   shouldShowRunPassed,
 } from '../lean-recovery';
 import { LeanSession, type LspDiagnostic } from '../lean-session';
+import { createLeanMemoryGuard, sampleBrowserMemoryBytes } from '../lean-memory-guard';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
 import { getResolvedTheme, onResolvedThemeChange } from '../theme';
@@ -103,6 +104,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   } = options;
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
+  const memoryGuardMaxBytes = wasm64MaxMemoryBytes(memoryTier);
   const draft = draftKey ? readDraft(draftKey) : null;
 
   // 若 SSG 已渲染完整外框且无需动态挂载练习回链，复用原 DOM 保持首屏 H1/布局不被替换。
@@ -528,6 +530,40 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let lastAssetFallback: { name: string; message: string } | null = null;
   let freshHandled = false;
 
+  const formatMb = (bytes: number): string => Math.round(bytes / (1024 * 1024)).toString();
+  const memoryGuard = createLeanMemoryGuard({
+    maxBytes: memoryGuardMaxBytes,
+    sampleMemoryBytes: () => sampleBrowserMemoryBytes(),
+    onPollError: (error) => {
+      log(t.logRuntimeError(error instanceof Error ? error.message : String(error)));
+    },
+    onRecycle: ({ peakBytes, reason }) => {
+      const mb = formatMb(peakBytes);
+      if (reason === 'background-hidden') {
+        if (!session.isReady) return;
+        log(t.logMemoryBackgroundRelease(mb));
+        stop();
+        return;
+      }
+      if (!session.isReady || fileProcessing || startInflight) return;
+      log(t.logMemorySoftRecycle(mb));
+      stop();
+      void start();
+    },
+    onHardLimit: ({ bytes, maxBytes }) => {
+      const mb = formatMb(bytes);
+      const limitMb = formatMb(maxBytes);
+      log(t.logMemoryHardLimit(mb, limitMb));
+      reportError('memory-limit', `${mb}/${limitMb} MB`);
+      stop();
+      setStatus(t.statusMemoryLimit, 'error');
+    },
+  });
+  const onVisibilityChange = () => {
+    memoryGuard.setVisible(document.visibilityState !== 'hidden');
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
   const emitProgress = () =>
     onProgress?.({ label: progressLabel, kind: progressKind, ratio: progressRatio });
 
@@ -841,7 +877,15 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         },
         // Init 导入后堆约 370 MiB，但导入峰值更高，1 GiB 才稳。
         lean4: { maxMemoryBytes: 1024 ** 3 },
-        createWorker: () => new LeanWorker(),
+        createWorker: () => {
+          const worker = new LeanWorker();
+          worker.addEventListener('message', (event: MessageEvent<{ memoryBytes?: unknown }>) => {
+            if (typeof event.data?.memoryBytes === 'number') {
+              memoryGuard.reportBytes(event.data.memoryBytes, 'event');
+            }
+          });
+          return worker;
+        },
         onStatus: (status) => {
           if (status.state === 'loading') {
             // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。
@@ -874,6 +918,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       const wasProcessing = fileProcessing;
       fileProcessing = params.processingCount > 0;
       if (fileProcessing) {
+        memoryGuard.setProcessing(true);
         resetRunOk();
         if (session.isReady && diagnosticSeq > 0) {
           setStatus(t.statusChecking, 'ready');
@@ -895,6 +940,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           scheduleRunPassedCheck(warningCount, latency, 150);
         }
       }
+      memoryGuard.setProcessing(false);
     },
     onLog: log,
     // #check 的信息可能比 documentSymbol 晚几十毫秒，留一个静默窗口避免丢输出。
@@ -1116,6 +1162,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const stop = () => {
     cancelAutoStart();
     cancelAutoRecover();
+    memoryGuard.reset();
     window.clearTimeout(debounceTimer);
     window.clearTimeout(goalTimer);
     session.stop();
@@ -1255,7 +1302,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     lastCrashMessage = message;
     lastCrashedCode = currentCode;
     fileProcessing = false;
-
+    memoryGuard.reset();
     cancelAutoRecover();
     session.stop();
     engineEverReady = false;
@@ -1420,7 +1467,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     window.clearTimeout(draftTimer);
     window.clearTimeout(debounceTimer);
     window.clearTimeout(goalTimer);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
     navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage);
+    memoryGuard.dispose();
     saveDraftNow();
     session.stop();
     stopThemeSync();

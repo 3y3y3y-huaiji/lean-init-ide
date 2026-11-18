@@ -5,6 +5,7 @@ import {
   computeDiagnosticsLatencyMs,
   decideCrashRecovery,
   isAssetRelatedError,
+  isOutOfMemoryError,
   isStackOverflowError,
   nextAutoRestartDelayMs,
   shouldPreserveDiagnosticsOnCrash,
@@ -106,6 +107,24 @@ describe('decideCrashRecovery', () => {
         lastCrashAt: 10_000,
         message: 'Lean worker exited unexpectedly (code 1)',
         sameCodeAsLastCrash: true,
+      }),
+    ).toBe('manual');
+  });
+
+  it('OOM 崩溃识别为不可恢复并转交手动重启，防止重启后再次挤爆内存', () => {
+    expect(isOutOfMemoryError('RangeError: WebAssembly.Memory(): could not allocate memory')).toBe(
+      true,
+    );
+    expect(isOutOfMemoryError('Cannot enlarge memory arrays')).toBe(true);
+    expect(isOutOfMemoryError('Lean out of memory')).toBe(true);
+    expect(isOutOfMemoryError('Lean worker exited unexpectedly (code 1)')).toBe(false);
+
+    expect(
+      decideCrashRecovery({
+        variant: 'full',
+        now: 100_000,
+        lastCrashAt: 0,
+        message: 'RangeError: WebAssembly.Memory(): could not allocate memory',
       }),
     ).toBe('manual');
   });

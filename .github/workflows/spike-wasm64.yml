@@ -383,10 +383,11 @@ jobs:
           source emsdk/emsdk_env.sh
           bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
 
-      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收）
+      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收 / 内存扩容通知）
         run: |
           node scripts/adapt-glue.ts work/dist/lean.mjs work/dist/lean-adapted.mjs
           node scripts/adapt-glue.ts work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
+          grep -q 'onMemoryResize' work/dist/lean-adapted-proxy.mjs
 
       - name: 使用官方 64 位 oleans（GMP 编码）
         run: |
@@ -623,10 +624,11 @@ jobs:
           source emsdk/emsdk_env.sh
           bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
 
-      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收）
+      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收 / 内存扩容通知）
         run: |
           node scripts/adapt-glue.ts work/dist/lean.mjs work/dist/lean-adapted.mjs
           node scripts/adapt-glue.ts work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
+          grep -q 'onMemoryResize' work/dist/lean-adapted-proxy.mjs
 
       - name: 重建官方 64 位 oleans
         run: |
@@ -946,6 +948,8 @@ jobs:
         run: |
           source emsdk/emsdk_env.sh
           bash scripts/link-wasm64-release.sh "$GITHUB_WORKSPACE"
+          bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE" --release
+          node scripts/adapt-glue.ts work/release-lsp/lean-lsp.mjs work/release-lsp/lean-lsp-adapted.mjs
 
       - name: 打包 npm（lean4-wasm64）
         run: |
@@ -983,6 +987,7 @@ jobs:
           name: wasm64-deep
           path: |
             work/release/**
+            work/release-lsp/**
             work/npm/*.tgz
             work/*.log
             work/*.olean-fail.log

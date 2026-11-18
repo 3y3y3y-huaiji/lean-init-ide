@@ -11,11 +11,16 @@ const ASSET_ERROR_RE =
 const STACK_OVERFLOW_RE =
   /maximum call stack|call stack size exceeded|stack overflow|runtimeerror:\s*unreachable/i;
 
+const OOM_ERROR_RE =
+  /out of memory|cannot enlarge memory|could not allocate memory|memory access out of bounds|memory limit reached|failed to allocate/i;
+
 export type CrashRecoveryDecision = 'ignore' | 'auto' | 'manual';
 
 export const isAssetRelatedError = (message: string): boolean => ASSET_ERROR_RE.test(message);
 
 export const isStackOverflowError = (message: string): boolean => STACK_OVERFLOW_RE.test(message);
+
+export const isOutOfMemoryError = (message: string): boolean => OOM_ERROR_RE.test(message);
 
 export const shouldPreserveDiagnosticsOnCrash = (diagnostics: ReadonlyArray<unknown>): boolean =>
   diagnostics.length > 0;
@@ -34,7 +39,10 @@ export const decideCrashRecovery = (options: {
   if (variant !== 'full') {
     return 'manual';
   }
-  if (sameCodeAsLastCrash || (message ? isStackOverflowError(message) : false)) {
+  if (
+    sameCodeAsLastCrash ||
+    (message ? isStackOverflowError(message) || isOutOfMemoryError(message) : false)
+  ) {
     return 'manual';
   }
   if (lastCrashAt === 0 || now - lastCrashAt > AUTO_RESTART_COOLDOWN_MS) {

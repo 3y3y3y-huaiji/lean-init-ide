@@ -9,7 +9,7 @@ name: Spike wasm64
 #         手动 dispatch(mode=deep) 或提交信息带 [wasm64-deep] 时跑。
 on:
   push:
-    branches: [spike/wasm64, spike/wasm64-recursion-depth]
+    branches: [spike/wasm64]
     # 文档、C/C++ 探针与门禁改动不影响 wasm64 产物，别让它们触发一小时构建。
     paths-ignore:
       - 'docs/**'

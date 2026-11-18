@@ -382,17 +382,17 @@ wasm2wat --enable-all work/WHNF.o -o work/WHNF.wat
 
 ```bash
 # 推送到工作分支即触发 probe job
-git push origin spike/wasm64-recursion-depth
+git push origin spike/wasm64
 gh run watch
 gh run download <run-id> --name depth-probe   # browser-results.json / build-summary.json
 
 # 手动指定变体或 V8 flag
-gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth \
+gh workflow run depth-probe.yml --ref spike/wasm64 \
   -f variants=jspi-pending-1,jspi-macrotask \
   -f js_flags=--wasm-stack-switching-stack-size=64
 
 # 尾调用审计（下载约 600 MB 发行包）
-gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth -f whnf_audit=true
+gh workflow run depth-probe.yml --ref spike/wasm64 -f whnf_audit=true
 # 本地 token 没有 actions:write 时改用提交信息标记 [whnf-audit] 后 push
 ```
 

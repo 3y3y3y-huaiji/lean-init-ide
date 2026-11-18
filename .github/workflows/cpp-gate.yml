@@ -7,7 +7,7 @@ name: CPP Gate
 # 需要真正编译 wasm 的探针（yield-rec.cpp 依赖 emscripten.h）由 depth-probe workflow 覆盖。
 on:
   push:
-    branches: [main, spike/wasm64-recursion-depth]
+    branches: [main, spike/wasm64]
     paths:
       - 'scripts/**/*.cpp'
       - 'scripts/**/*.cc'

@@ -1,13 +1,13 @@
 name: Depth probe
 
-# 仅用于 spike/wasm64-recursion-depth 分支：用十几行 C++ demo 测浏览器 wasm 递归上界，
+# 仅用于 spike/wasm64 分支：用十几行 C++ demo 测浏览器 wasm 递归上界，
 # 并复核 Lean WHNF 热点环里有没有尾调用。
 #
 # 重型工具链（emsdk、Lean 官方发行包、浏览器探针）一律在 runner 上跑：
 # 本地只做静态检查，不下载工具链、不编译 wasm、不起浏览器。
 on:
   push:
-    branches: [spike/wasm64-recursion-depth]
+    branches: [spike/wasm64]
     # 文档与规范改动用不着重新下载 emsdk、跑浏览器探针。
     paths:
       - 'scripts/depth-probe/**'

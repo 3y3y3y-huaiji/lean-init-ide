@@ -67,7 +67,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 结果从 `depth-probe` artifact 取：
 
 ```bash
-git push origin spike/wasm64-recursion-depth
+git push origin spike/wasm64
 gh run watch
 gh run download <run-id> --name depth-probe
 ```
@@ -77,10 +77,10 @@ gh run download <run-id> --name depth-probe
 的提交即可触发，不用去网页点按钮：
 
 ```bash
-gh workflow run depth-probe.yml --ref spike/wasm64-recursion-depth -f whnf_audit=true
+gh workflow run depth-probe.yml --ref spike/wasm64 -f whnf_audit=true
 # 或者
 git commit --allow-empty -m "chore(wasm64): 复核 WHNF 尾调用 [whnf-audit]"
-git push origin spike/wasm64-recursion-depth
+git push origin spike/wasm64
 ```
 
 wasm64 构建走 `.github/workflows/spike-wasm64.yml`，按代价分两层：
@@ -90,7 +90,7 @@ wasm64 构建走 `.github/workflows/spike-wasm64.yml`，按代价分两层：
 
 ```bash
 git commit --allow-empty -m "chore(wasm64): 跑一轮 Mathlib 深水区 [wasm64-deep]"
-git push origin spike/wasm64-recursion-depth
+git push origin spike/wasm64
 ```
 
 LSP 等待不再靠总超时：`wasm64-lsp-diagnostics.ts` 和浏览器 harness 都有无进展看门狗，任何消息或输出都会重置计时，默认静默 120 秒（Mathlib 180 秒）即失败；worker 退出或页面 `pageerror` 立即失败。只有网络/缓存类错误（诊断脚本退出码 3）重试一次，超时（退出码 4）不重试。

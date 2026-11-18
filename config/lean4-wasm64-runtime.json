@@ -3,7 +3,7 @@
   "experimental": true,
   "arch": "wasm64",
   "leanVersion": "4.36.0-rc2",
-  "cacheKey": "w64-0f64b1ce",
+  "cacheKey": "w64-8205512c",
   "runtime": "Lean 4.36.0-rc2 Init (wasm64 experimental)",
   "bucket": "lean4-ide-releases",
   "primary": {
@@ -24,21 +24,21 @@
       "name": "lean-lsp-adapted.mjs",
       "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs",
       "source": "lean-lsp-adapted.mjs",
-      "bytes": 111462,
-      "sha256": "c9ffb77f69de69a2f993ef7c7f42d9054eddfe1ff242d4d2b51e29be30920987",
+      "bytes": 111484,
+      "sha256": "146cbeba24309cd8574e6e15132d24675f2f41ab03f34e601ee75f8a6f083716",
       "contentType": "text/javascript"
     },
     {
       "name": "lean-lsp.wasm.zst",
       "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-lsp.wasm.zst",
       "source": "lean-lsp.wasm.zst",
-      "bytes": 7901799,
-      "sha256": "7a82722ca23f7755d939b0469167cce97399fad6390d05c4f3ba6e940b0255d6",
+      "bytes": 11373279,
+      "sha256": "5b0d646fb075fb05ad7bd96e17d30a695cd54190ab13f557df4a611d3770ec4b",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
-      "uncompressedBytes": 73921403,
-      "uncompressedSha256": "30d3e533aa04b89e6bb9de332916112cbfc5197a2528d3b6b5d89e4830f1ca0a"
+      "uncompressedBytes": 119432545,
+      "uncompressedSha256": "59eb0ea1e76b14737bcca478122dfa5b1a61c8894ce60de853543fcaa58bbf22"
     },
     {
       "name": "lean-init-64.index.json",

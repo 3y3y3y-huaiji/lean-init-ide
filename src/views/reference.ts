@@ -22,8 +22,10 @@ export const renderReference = (locale: Locale): string => {
       (item) => `
       <div class="flex items-center gap-3 rounded-xl border border-line bg-panel px-3 py-2">
         <span class="w-10 shrink-0 text-center font-mono text-lg text-fg">${escapeHtml(item.symbol)}</span>
-        <code class="shrink-0 font-mono text-xs text-accent">${escapeHtml(item.abbreviation)}</code>
-        <span class="min-w-0 text-xs leading-snug text-muted">${escapeHtml(item.meaning)}</span>
+        <div class="min-w-0 flex-1">
+          <code class="block font-mono text-xs text-accent">${escapeHtml(item.abbreviation)}</code>
+          <p class="mb-0 mt-0.5 break-words text-xs leading-snug text-muted">${escapeHtml(item.meaning)}</p>
+        </div>
       </div>`,
     )
     .join('');

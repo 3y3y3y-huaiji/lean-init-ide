@@ -147,8 +147,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const memoryGuardMaxBytes = wasm64MaxMemoryBytes(memoryTier);
   // 默认保持稳定的 wasm32；wasm64 目前仅为实验性试用，不支持 Memory64 的浏览器安全回落 wasm32。
   const memory64Supported = probeMemory64Support();
+  const wasm64Published = wasm64Available();
   let selectedArch: LeanRuntimeArch =
-    getRuntimeArch() === 'wasm64' && memory64Supported ? 'wasm64' : DEFAULT_RUNTIME_ARCH;
+    getRuntimeArch() === 'wasm64' && memory64Supported && wasm64Published
+      ? 'wasm64'
+      : DEFAULT_RUNTIME_ARCH;
   // 扩展库只随 wasm32 提供：课程声明了 requires 时，先把实验性 wasm64 退回稳定版，
   // 否则用户会在启动后直接看到 unknown module prefix。
   const autoStableFromWasm64 = requiredExtensions.length > 0 && selectedArch === 'wasm64';
@@ -1759,16 +1762,21 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       const active = arch === selectedArch;
       button.dataset.active = String(active);
       button.setAttribute('aria-checked', String(active));
-      if (arch === 'wasm64' && (!memory64Supported || wasm64BlockedByExtensions)) {
+      if (
+        arch === 'wasm64' &&
+        (!memory64Supported || wasm64BlockedByExtensions || !wasm64Published)
+      ) {
         button.disabled = true;
       }
     }
     if (runtimeArchNoteEl) {
       runtimeArchNoteEl.textContent = !memory64Supported
         ? t.runtimeWasm64Unsupported
-        : wasm64BlockedByExtensions || selectedArch === 'wasm64'
-          ? t.runtimeWasm64NoLibraries
-          : '';
+        : !wasm64Published
+          ? t.runtimeWasm64NotPublished
+          : wasm64BlockedByExtensions || selectedArch === 'wasm64'
+            ? t.runtimeWasm64NoLibraries
+            : '';
     }
     // 运行时切换会改变扩展库可用性，两个菜单必须同步刷新。
     syncDefaultCheckboxes();
@@ -1781,6 +1789,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       if (nextArch === 'wasm64') {
         if (!memory64Supported) {
           log(t.runtimeWasm64Unsupported);
+          syncRuntimeArchUi();
+          return;
+        }
+        if (!wasm64Published) {
+          log(t.runtimeWasm64NotPublished);
           syncRuntimeArchUi();
           return;
         }

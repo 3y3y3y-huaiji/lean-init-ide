@@ -2,6 +2,11 @@
 # 把 wasm-llvm 的 lean-browser 构建脚本改成 wasm64 + GMP + tail call 版本。
 # 用法: bash scripts/patch-wasm64.sh <repoRoot>
 #
+# 这里只改 producer 的 build.sh 开关。Lean 源码补丁（scripts/patches/*.patch）
+# 必须在 build.sh fetch 之后应用：fetch 会对 work/lean4 做 reset --hard，提前打会被冲掉。
+# 显式工作栈的两个补丁（lean-whnf-stack.patch / lean-replace-fn-iterative.patch）
+# 由 .github/workflows/spike-wasm64.yml 在 fetch 步骤末尾按序应用并 grep 校验。
+#
 # -mtail-call 打开 WebAssembly 尾调用（return_call）。wasm64 本身已经要求 Memory64，
 # 浏览器范围早就被收窄过一次，再叠一个 tail-call 不会额外损失兼容性；
 # 换来的是尾递归函数不再占栈（V8 因为 return_call 直接复用当前帧）。

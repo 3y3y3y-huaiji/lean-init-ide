@@ -176,7 +176,7 @@ workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 | --- | --- |
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
 | Lean 源码与引导包 | `wasm64-src-v6` |
-| runtime（-O2 + GMP + tail call） | `wasm64-runtime-v15-<pin+backport+patch hash>` |
+| runtime（-O2 + GMP + tail call） | `wasm64-runtime-v16-<pin+backport+patch hash>` |
 | cgen | `wasm64-cgen-v2-<pin hash>` |
 | objects（-O2 + GMP + tail call） | `wasm64-obj-v9-<pin+patch hash>` |
 | GMP（wasm64 静态库） | `wasm64-gmp-v1` |
@@ -191,6 +191,8 @@ oleans 的 githash 检查能过（运行时确实是新版），但前端还是�
 
 `<patch hash>` 是 `hashFiles('scripts/patch-wasm64.sh')`，只并入 runtime 与 objects：编译开关（`MEMORY64`、`-mtail-call`）写在那个脚本里，
 而 `stage_objects` 对「比源文件新的 `.o`」直接跳过。不把它算进缓存键，改开关后会复用旧对象、静默链出一个没打开该开关的 wasm。
+`scripts/patches/lean-replace-fn-iterative.patch` 修改的是 `src/kernel/replace_fn.cpp`（属于 libleancpp），所以只并入 runtime 键；
+补丁在 workflow 的 fetch 之后应用，fetch 的 `reset --hard` 会冲掉提前打上的源码补丁。
 
 `work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ir 文件，`work/mathlib-lib` 是同一份官方库加上自己编出来的 Mathlib/Batteries olean。
 
@@ -400,6 +402,38 @@ gh workflow run depth-probe.yml --ref spike/wasm64 -f whnf_audit=true
 
 判读：JSPI 那几个变体只在 `suspend.pending > 0` 时才代表真实挂起；`pending=0` 说明走了已决议快路径，
 那一行结果不能用来支持任何结论。workflow 的「校验结果」步骤会在 `pending=0` 时直接失败。
+
+## replace_fn 显式堆栈（2026-11-18）
+
+浏览器 depth 冒烟在 `N=800` 报 `RangeError: Maximum call stack size exceeded`，
+符号化栈是 `Lean_Expr_instantiateLevelParams → lean::replace_fn::apply` 连续自递归。
+`instantiateLevelParams` 在 Lean 侧走 `Expr.replace`（`lean_replace_expr`），
+`replace_fn::apply` 是非尾递归后序遍历，表达式树每深一层就压一个 C++ 帧；
+Memory64 只放大线性内存，不会放大约 1 MB 的 Worker 调用栈。
+
+`scripts/patches/lean-replace-fn-iterative.patch` 把 `replace_fn::apply` 与
+`replace_rec_fn::apply` 改成堆上显式栈的后序遍历，逐节点状态机与递归版一一对应：
+
+- `shared` 在表达式复制进 frame **之前**计算。frame 自己持有的引用会把 rc 从 1 抬到 2，
+  若在 apply 入口再判 `is_shared` / `is_likely_unshared`，所有节点都会被误判成共享，整棵树都写进缓存。
+- 续延用 `optional<expr>` 而不是 `expr`：`expr` 的默认构造会创建一个 dummy 常量。
+- `App` / `Pi` / `Lambda` / `Let` 的子节点顺序与 `offset + 1` 的 binder 深度与递归版一致。
+
+主机侧对照（g++，`ulimit -s 1024`，同一棵 App 链）：
+
+| 版本 | N=5,000 | N=10,000 | N=1,000,000 |
+| --- | --- | --- | --- |
+| 原递归版 | 通过 | SIGSEGV | — |
+| 显式栈版 | 通过 | 通过 | 通过 |
+
+两条路径（`replace(expr, std::function)` 与 `lean_replace_expr(closure)`）在 `N=1,000,000`
+都返回与输入逐指针相同的树（`rec_same=1 fn_same=1`）。
+
+补丁在 `spike-wasm64.yml` 的 fetch 之后应用，并计入 runtime 缓存键；`replace_fn.cpp` 属于 libleancpp，
+只影响 runtime，不影响 cgen / objects。补丁的 `wants_cache` 标记缺失会让 CI 直接失败，不会静默跳过。
+
+如果 depth 在更高档位继续爆栈，先按 `LEAN_WASM_ERR` / Emscripten 异常栈符号化，
+确认下一层是 `Lean_Level_substParams_go`、`whnfImp` 还是 `ReduceRec` 再决定改动范围，不要直接改构建开关。
 
 ## 尚未验证
 

@@ -177,6 +177,12 @@ jobs:
             patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-whnf-stack.patch"
           fi
           grep -q 'whnfCoreStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/WHNF.lean"
+          # 显式堆栈版 replace_fn：Lean 的 Expr.replace（instantiateLevelParams 走这条）
+          # 是后序遍历，深表达式会在 1MB Worker 栈上把 replace_fn::apply 递归打穿。
+          if ! grep -q 'wants_cache' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/kernel/replace_fn.cpp"; then
+            patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-replace-fn-iterative.patch"
+          fi
+          grep -q 'wants_cache' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/kernel/replace_fn.cpp"
 
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
@@ -184,7 +190,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh') }}
+          key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
 
       - name: runtime
         run: |
@@ -278,6 +284,11 @@ jobs:
             patch -p1 -d work/lean4 < scripts/patches/lean-whnf-stack.patch
           fi
           grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean
+          # 显式堆栈版 replace_fn：instantiateLevelParams → Expr.replace 不再递归压栈。
+          if ! grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-replace-fn-iterative.patch
+          fi
+          grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -285,7 +296,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh') }}
+          key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
 
       - name: 恢复 cgen
         uses: actions/cache@v6
@@ -553,6 +564,11 @@ jobs:
             patch -p1 -d work/lean4 < scripts/patches/lean-whnf-stack.patch
           fi
           grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean
+          # 显式堆栈版 replace_fn：instantiateLevelParams → Expr.replace 不再递归压栈。
+          if ! grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-replace-fn-iterative.patch
+          fi
+          grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -560,7 +576,7 @@ jobs:
           path: |
             work/build-wasm
             work/emcache
-          key: wasm64-runtime-v15-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh') }}
+          key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
 
       - name: 恢复 objects（smoke 已显式保存）
         uses: actions/cache@v6

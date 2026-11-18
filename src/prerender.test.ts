@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES } from './challenges';
-import { messagesFor } from './i18n';
+import { LESSON_CATALOG, lessonsFor, messagesFor } from './i18n';
 import {
   allStaticRoutes,
   injectPrerenderedHtml,
@@ -32,7 +32,7 @@ const BASE_TEMPLATE = `<!doctype html>
 describe('SSG 预渲染', () => {
   it('覆盖中英文全部公开静态路由并映射正确的输出路径', () => {
     const routes = allStaticRoutes(['zh', 'en']);
-    const expectedLessons = messagesFor('zh').lesson.lessons.length;
+    const expectedLessons = LESSON_CATALOG.length;
     expect(routes.length).toBe(2 * (5 + expectedLessons + CHALLENGES.length));
     expect(outputRelPath({ page: 'home', locale: 'zh' })).toBe('zh/index.html');
     expect(outputRelPath({ page: 'playground', locale: 'en' })).toBe('en/playground.html');
@@ -65,7 +65,7 @@ describe('SSG 预渲染', () => {
       '<link rel="alternate" hreflang="zh" href="https://criticalthinking.de5.net/zh/learn/what-is-lean" />',
     );
     expect(html).toMatch(/<div id="app">\s*<header/);
-    expect(html).toContain(`>${messagesFor('en').lesson.lessons[0]!.title}</h1>`);
+    expect(html).toContain(`>${lessonsFor('en')[0]!.title}</h1>`);
   });
 
   it('playground 预渲染设置 body data-page=playground 且不含空壳 h1 缺失问题', () => {

@@ -5,7 +5,7 @@
  * 而是复用 src/prerender.ts 的 allStaticRoutes，与预渲染页面保持同一份数据源。
  */
 import { CHALLENGES } from './challenges';
-import { messagesFor } from './i18n';
+import { lessonsFor, messagesFor } from './i18n';
 import { SITE_ORIGIN } from './meta';
 import { FIRST_LESSON_SLUG, type Route } from './router';
 
@@ -62,7 +62,7 @@ export const buildLlmsTxt = (origin: string = SITE_ORIGIN): string => {
   const en = messagesFor('en');
   const zh = messagesFor('zh');
   const lessonLines = (locale: 'en' | 'zh') =>
-    messagesFor(locale).lesson.lessons.map(
+    lessonsFor(locale).map(
       (lesson) => `- [${lesson.title}](${origin}/${locale}/learn/${lesson.slug}): ${lesson.lead}`,
     );
   const challengeLines = (locale: 'en' | 'zh') =>
@@ -152,6 +152,7 @@ export const routeSourceFiles = (route: Route): string[] => {
   const files = [`src/i18n/${route.locale}.ts`];
   const view = VIEW_SOURCE[route.page];
   if (view) files.push(view);
+  if (route.page === 'lesson') files.push(`src/i18n/lessons-${route.locale}.ts`);
   if (route.page === 'challenge') files.push('src/challenges.ts');
   return files;
 };

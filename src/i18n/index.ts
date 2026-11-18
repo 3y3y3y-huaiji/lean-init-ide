@@ -1,44 +1,71 @@
-import type { Messages } from './types';
+import type { LessonPage, Messages } from './types';
 
 export type Locale = 'zh' | 'en';
 
 export const LOCALES: readonly Locale[] = ['zh', 'en'];
-
-const store: Partial<Record<Locale, Messages>> = {};
-const inflight: Partial<Record<Locale, Promise<Messages>>> = {};
+export { LESSON_CATALOG, type LessonCatalogEntry } from './lesson-catalog';
 
 const STORAGE_KEY = 'lean:locale';
 
 export const isLocale = (value: string | undefined): value is Locale =>
   value === 'zh' || value === 'en';
 
-/** 按需加载单个语言包，避免首屏同时下载中英两套课程正文。 */
-export const loadLocale = async (locale: Locale): Promise<Messages> => {
-  const cached = store[locale];
-  if (cached) return cached;
+const createLoader = <T>(
+  loaders: Record<Locale, () => Promise<T>>,
+  missingError: (locale: Locale) => string,
+) => {
+  const store: Partial<Record<Locale, T>> = {};
+  const inflight: Partial<Record<Locale, Promise<T>>> = {};
 
-  const pending = inflight[locale];
-  if (pending) return pending;
+  const load = async (locale: Locale): Promise<T> => {
+    const cached = store[locale];
+    if (cached) return cached;
 
-  const promise = (
-    locale === 'zh' ? import('./zh').then((mod) => mod.zh) : import('./en').then((mod) => mod.en)
-  ).then((messages) => {
-    store[locale] = messages;
-    delete inflight[locale];
-    return messages;
-  });
+    const pending = inflight[locale];
+    if (pending) return pending;
 
-  inflight[locale] = promise;
-  return promise;
+    const promise = loaders[locale]().then((data) => {
+      store[locale] = data;
+      delete inflight[locale];
+      return data;
+    });
+
+    inflight[locale] = promise;
+    return promise;
+  };
+
+  const get = (locale: Locale): T => {
+    const data = store[locale];
+    if (!data) throw new Error(missingError(locale));
+    return data;
+  };
+
+  return { load, get };
 };
 
-export const messagesFor = (locale: Locale): Messages => {
-  const messages = store[locale];
-  if (!messages) {
-    throw new Error(`Locale "${locale}" is not loaded; call await loadLocale("${locale}") first.`);
-  }
-  return messages;
-};
+const localeLoader = createLoader<Messages>(
+  {
+    zh: () => import('./zh').then((mod) => mod.zh),
+    en: () => import('./en').then((mod) => mod.en),
+  },
+  (locale) => `Locale "${locale}" is not loaded; call await loadLocale("${locale}") first.`,
+);
+
+const lessonLoader = createLoader<readonly LessonPage[]>(
+  {
+    zh: () => import('./lessons-zh').then((mod) => mod.lessonsZh),
+    en: () => import('./lessons-en').then((mod) => mod.lessonsEn),
+  },
+  (locale) => `Lessons for "${locale}" are not loaded; call await loadLessons("${locale}") first.`,
+);
+
+/** 按需加载单个轻量语言包（不含 27 节课程正文），避免首屏下载冗余文案。 */
+export const loadLocale = localeLoader.load;
+export const messagesFor = localeLoader.get;
+
+/** 仅在课程页或 ?lesson= 练习时按需加载对应语言的全部课程正文。 */
+export const loadLessons = lessonLoader.load;
+export const lessonsFor = lessonLoader.get;
 
 export const otherLocale = (locale: Locale): Locale => (locale === 'zh' ? 'en' : 'zh');
 

@@ -2,7 +2,7 @@ import { resolveChallengeParam } from '../challenges';
 import { renderLeanMarkup } from '../components/lean-markup';
 import { currentMemoryTier } from '../device';
 import { draftKeyFor, readDraft } from '../draft';
-import { messagesFor, type Locale } from '../i18n';
+import { loadLessons, messagesFor, type Locale } from '../i18n';
 import { getAutoStart } from '../settings';
 import { escapeHtml } from './html';
 
@@ -63,7 +63,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   // 课程页的「练习」按钮会带 ?lesson=<slug> 过来，直接载入该课的 starter；
   // 挑战页则会带 ?challenge=<slug>，两者同时出现时以课程为准。
   const slug = new URLSearchParams(location.search).get('lesson');
-  const lesson = messagesFor(locale).lesson.lessons.find((item) => item.slug === slug);
+  const lesson = slug ? (await loadLessons(locale)).find((item) => item.slug === slug) : undefined;
   const challenge = lesson ? undefined : resolveChallengeParam(location.search);
   const code =
     lesson?.exercise?.starter ??

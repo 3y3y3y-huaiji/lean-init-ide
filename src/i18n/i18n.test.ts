@@ -59,8 +59,9 @@ describe('detectLocale', () => {
   });
 
   it('按需加载语言包并复用并发与已缓存结果', async () => {
-    const { loadLocale, messagesFor } = await import('./index');
+    const { loadLessons, loadLocale, lessonsFor, messagesFor } = await import('./index');
     expect(() => messagesFor('zh')).toThrow();
+    expect(() => lessonsFor('zh')).toThrow();
 
     const [first, second] = await Promise.all([loadLocale('zh'), loadLocale('zh')]);
     expect(first).toBe(second);
@@ -69,5 +70,13 @@ describe('detectLocale', () => {
 
     const enMessages = await loadLocale('en');
     expect(messagesFor('en')).toBe(enMessages);
+
+    const [zhLessonsA, zhLessonsB] = await Promise.all([loadLessons('zh'), loadLessons('zh')]);
+    expect(zhLessonsA).toBe(zhLessonsB);
+    expect(lessonsFor('zh')).toBe(zhLessonsA);
+    expect(await loadLessons('zh')).toBe(zhLessonsA);
+
+    const enLessons = await loadLessons('en');
+    expect(lessonsFor('en')).toBe(enLessons);
   });
 });

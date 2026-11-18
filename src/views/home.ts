@@ -1,5 +1,5 @@
 import { buttonClass, ghostButtonLgClass } from '../components/ui';
-import { messagesFor, type Locale } from '../i18n';
+import { LESSON_CATALOG, messagesFor, type Locale } from '../i18n';
 import { firstUncompletedLesson } from '../progress';
 import { FIRST_LESSON_SLUG } from '../router';
 import { escapeHtml } from './html';
@@ -11,13 +11,13 @@ const computeHomeState = (
 ) => {
   const t = messagesFor(locale).home;
   const lessonMsgs = messagesFor(locale).lesson;
-  const lessonSlugs = lessonMsgs.lessons.map((lesson) => lesson.slug);
+  const lessonSlugs = LESSON_CATALOG.map((lesson) => lesson.slug);
   const target = firstUncompletedLesson(lessonSlugs, completed) ?? FIRST_LESSON_SLUG;
   const cta = visited.size > 0 || completed.size > 0 ? t.continueCta : t.ctaPrimary;
 
-  const introLessons = lessonMsgs.lessons.filter((lesson) => (lesson.track ?? 'intro') === 'intro');
-  const mathLessons = lessonMsgs.lessons.filter((lesson) => lesson.track === 'math');
-  const engLessons = lessonMsgs.lessons.filter((lesson) => lesson.track === 'eng');
+  const introLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'intro');
+  const mathLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'math');
+  const engLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'eng');
   const introTarget =
     firstUncompletedLesson(
       introLessons.map((lesson) => lesson.slug),

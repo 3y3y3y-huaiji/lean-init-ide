@@ -1,6 +1,6 @@
 import { buttonClass } from './components/ui';
 import { challengeBySlug, CHALLENGES } from './challenges';
-import { messagesFor, type Locale } from './i18n';
+import { lessonsFor, messagesFor, type Locale } from './i18n';
 import type { Route } from './router';
 
 export const renderNotFound = (locale: Locale): string => {
@@ -18,8 +18,8 @@ export const pageTitle = (route: Route): string => {
   const t = messagesFor(route.locale);
   switch (route.page) {
     case 'lesson': {
-      const lesson =
-        t.lesson.lessons.find((item) => item.slug === route.slug) ?? t.lesson.lessons[0];
+      const lessons = lessonsFor(route.locale);
+      const lesson = lessons.find((item) => item.slug === route.slug) ?? lessons[0];
       return `${lesson?.title ?? t.lesson.tocTitle} · Lean Init IDE`;
     }
     case 'playground':
@@ -45,8 +45,8 @@ export const pageDescription = (route: Route): string => {
   const t = messagesFor(route.locale);
   switch (route.page) {
     case 'lesson': {
-      const lesson =
-        t.lesson.lessons.find((item) => item.slug === route.slug) ?? t.lesson.lessons[0];
+      const lessons = lessonsFor(route.locale);
+      const lesson = lessons.find((item) => item.slug === route.slug) ?? lessons[0];
       return lesson?.lead ?? t.home.lead;
     }
     case 'playground':

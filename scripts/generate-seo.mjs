@@ -54,7 +54,7 @@ try {
   await build({
     stdin: {
       contents: `
-        export { loadLocale } from './src/i18n/index.ts';
+        export { loadLessons, loadLocale } from './src/i18n/index.ts';
         export { allStaticRoutes } from './src/prerender.ts';
         export { buildAiCatalogJson, buildLlmsTxt, buildRobotsTxt, buildSitemapXml, routeSourceFiles } from './src/seo.ts';
         export { canonicalRoutePath } from './src/router.ts';
@@ -87,7 +87,12 @@ try {
   });
 
   const ssr = await import(pathToFileURL(ssrBundle).href);
-  await Promise.all([ssr.loadLocale('zh'), ssr.loadLocale('en')]);
+  await Promise.all([
+    ssr.loadLocale('zh'),
+    ssr.loadLocale('en'),
+    ssr.loadLessons('zh'),
+    ssr.loadLessons('en'),
+  ]);
 
   const routes = ssr.allStaticRoutes(['zh', 'en']);
   const entries = routes.map((route) => ({

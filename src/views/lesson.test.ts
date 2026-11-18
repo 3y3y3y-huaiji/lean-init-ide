@@ -5,7 +5,7 @@ const { createLeanPanel } = vi.hoisted(() => ({ createLeanPanel: vi.fn() }));
 vi.mock('../components/lean-panel', () => ({ createLeanPanel }));
 
 import type { LspDiagnostic } from '../components/lean-panel';
-import { messagesFor } from '../i18n';
+import { lessonsFor, messagesFor } from '../i18n';
 import { markLessonCompleted, markLessonVisited, readCompleted, readProgress } from '../progress';
 import { bindLesson, dropSpuriousRedeclarations, renderLesson } from './lesson';
 
@@ -22,7 +22,7 @@ const makePanel = () => ({
   restart: vi.fn(async () => true),
 });
 
-const lessonsOf = (locale: 'zh' | 'en') => messagesFor(locale).lesson.lessons;
+const lessonsOf = (locale: 'zh' | 'en') => lessonsFor(locale);
 
 const diagnostic = (message: string): LspDiagnostic => ({
   range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
@@ -115,7 +115,7 @@ describe('课程页渲染', () => {
 
   it('首节没有上一篇，末节没有下一篇', () => {
     const lessonMsgs = messagesFor('zh').lesson;
-    const lessons = lessonMsgs.lessons;
+    const lessons = lessonsOf('zh');
 
     const first = renderLesson('zh', lessons[0]!.slug);
     expect(first).toContain(lessonMsgs.next);
@@ -171,7 +171,7 @@ describe('课程页交互绑定', () => {
     expect(done?.querySelector('span')?.title).toBe(t.completedLabel);
     expect(readCompleted().has('first-proof')).toBe(true);
     expect(document.body.querySelector('[data-role="toc-progress"]')?.textContent).toBe(
-      t.completedCount(1, t.lessons.length),
+      t.completedCount(1, lessonsOf('zh').length),
     );
   });
 

@@ -614,14 +614,16 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     editor.focus();
   });
   // 不用 blur 撤销确认：第二次点击同一按钮时浏览器会先派发 blur，再派发 click，
-  // 状态在 click 前被清掉，确认分支永远走不到。改成点击按钮以外区域才撤销。
-  const onResetPointerDown = (event: PointerEvent) => {
+  // 状态在 click 前被清掉，确认分支永远走不到。改为点击按钮以外区域才撤销。
+  // 监听必须放在冒泡阶段：按钮自身的 click 先执行，确认态的这次点击不会被误清后
+  // 又重新进入「确认重置？」，否则按钮一直发红却永远执行不到重置。
+  const onResetOutsideClick = (event: MouseEvent) => {
     if (!resetArmed) return;
     const target = event.target;
     if (target instanceof Node && resetEl?.contains(target)) return;
     disarmReset();
   };
-  if (resetEl) document.addEventListener('pointerdown', onResetPointerDown, true);
+  if (resetEl) document.addEventListener('click', onResetOutsideClick);
 
   exportEl?.addEventListener('click', () => {
     const blob = new Blob([model.getValue()], { type: 'text/plain;charset=utf-8' });
@@ -2139,7 +2141,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     host.removeEventListener('keydown', acceptSuggestionWithEnter, true);
     document.removeEventListener('pointerdown', onDocumentPointerDown, true);
     document.removeEventListener('keydown', onDocumentKeyDown);
-    document.removeEventListener('pointerdown', onResetPointerDown, true);
+    document.removeEventListener('click', onResetOutsideClick);
     saveDraftNow();
     // 正常导航离开时保留“运行中”，下一个编辑器页据此自动恢复；
     // 刷新页面由 isReloadNavigation 判定，不会触发自动启动。

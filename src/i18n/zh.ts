@@ -152,7 +152,7 @@ export const zh: Messages = {
       },
       math: {
         title: '数学与验证',
-        lead: '从整除、奇偶到集合与算法正确性，用 Lean 把中文数学直觉写成可检查的代码。',
+        lead: '从整除、奇偶到集合与算法正确性，用 Lean 把中学数学直觉写成可检查的代码。',
       },
       eng: {
         title: '工程实战',

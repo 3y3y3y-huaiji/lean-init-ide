@@ -50,6 +50,11 @@ describe('首页渲染', () => {
     }
   });
 
+  it('中文数学路径文案说的是「中学数学直觉」', () => {
+    expect(messagesFor('zh').lesson.tracks.math.lead).toContain('中学数学直觉');
+    expect(messagesFor('zh').lesson.tracks.math.lead).not.toContain('中文数学直觉');
+  });
+
   it('工程实战路径入口指向第一节工程课', () => {
     for (const locale of ['zh', 'en'] as const) {
       const html = renderHome(locale);

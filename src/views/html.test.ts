@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from './html';
+import { escapeHtml, renderInlineCode } from './html';
 
 describe('escapeHtml', () => {
   it('escapes characters that could break out of markup', () => {
@@ -17,5 +17,28 @@ describe('escapeHtml', () => {
     expect(escapeHtml('theorem add_comm (a b : Nat) : a + b = b + a := by')).toBe(
       'theorem add_comm (a b : Nat) : a + b = b + a := by',
     );
+  });
+});
+
+describe('renderInlineCode', () => {
+  it('把成对反引号转成行内代码，并保留周围文本', () => {
+    expect(renderInlineCode('把 `sorry` 换成 `rfl` 即可')).toBe(
+      '把 <code class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg">sorry</code> 换成 <code class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg">rfl</code> 即可',
+    );
+  });
+
+  it('代码内容先转义，不会带出可执行标记', () => {
+    expect(renderInlineCode('`const x: number = "abc"`')).toContain(
+      '<code class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg">const x: number = &quot;abc&quot;</code>',
+    );
+    expect(renderInlineCode('`<script>`')).not.toContain('<script>');
+  });
+
+  it('落单的反引号按普通文本保留', () => {
+    expect(renderInlineCode('这里只有一个 ` 反引号')).toBe('这里只有一个 ` 反引号');
+  });
+
+  it('不跨行配对，避免把两段正文吞进同一个代码块', () => {
+    expect(renderInlineCode('开头 `a\n结尾 b`')).toBe('开头 `a\n结尾 b`');
   });
 });

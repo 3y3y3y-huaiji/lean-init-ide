@@ -87,6 +87,24 @@ describe('课程页渲染', () => {
     expect(html).toContain(t.hintLabel);
   });
 
+  it('正文里的反引号渲染成行内代码，而不是漏出纯文本', () => {
+    const html = renderLesson('zh', 'what-is-lean');
+
+    expect(html).toContain(
+      '<code class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg">const x: number = &quot;abc&quot;</code>',
+    );
+    expect(html).not.toContain('`const x: number');
+  });
+
+  it('练习说明里的反引号同样按行内代码渲染', () => {
+    const lesson = lessonsOf('zh').find((item) => item.exercise?.body.includes('`'));
+    expect(lesson).toBeDefined();
+
+    const html = renderLesson('zh', lesson!.slug);
+    expect(html).not.toContain('`sorry`');
+    expect(html).toContain('>sorry</code>');
+  });
+
   it('窄屏目录把全部课时收进可展开的 details', () => {
     const lessons = lessonsOf('zh');
     const html = renderLesson('zh', lessons[1]!.slug);

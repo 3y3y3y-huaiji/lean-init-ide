@@ -2,8 +2,9 @@ import type { LeanPanel, LeanPanelProgress, LspDiagnostic } from '../components/
 import { anchorImportDiagnostics } from '../lean-session';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
+import { issueUrl } from '../feedback';
 import { lessonsFor, messagesFor, type Locale } from '../i18n';
-import type { LessonPage, LessonTrack } from '../i18n/types';
+import type { LessonLibrary, LessonPage, LessonTrack } from '../i18n/types';
 import { markLessonVisited, readCompleted } from '../progress';
 import { escapeHtml, renderInlineCode } from './html';
 
@@ -34,9 +35,11 @@ const pickLesson = (
 
 /** 课程代码是否真的依赖扩展分包；只有命中的课才值得预加载 Std / Batteries。 */
 const needsExtensionPacks = (page: LessonPage): boolean =>
+  (page.requires?.length ?? 0) > 0 ||
   page.blocks.some(
     (block) => block.kind === 'code' && /import\s+(?:Std|Batteries)\./.test(block.code),
-  );
+  ) ||
+  /import\s+(?:Std|Batteries)\./.test(page.exercise?.starter ?? '');
 
 const renderBlocks = (
   page: LessonPage,
@@ -166,6 +169,15 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         </div>
         <p class="mt-0 mb-4 text-muted">${renderInlineCode(page.exercise.body)}</p>
         ${
+          page.requires?.length
+            ? `<p class="mt-0 mb-4 font-mono text-xs text-accent">${escapeHtml(
+                t.requiresHint(
+                  page.requires.map((id) => (id === 'std' ? 'Std' : 'Batteries')).join(' / '),
+                ),
+              )}</p>`
+            : ''
+        }
+        ${
           page.exercise.hint
             ? `<details class="mb-4 rounded-lg border border-line bg-panel px-4 py-3">
                  <summary class="cursor-pointer text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
@@ -176,6 +188,19 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         <a class="${buttonClass} max-[520px]:w-full" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(page.exercise.cta)}</a>
       </section>`
     : '';
+
+  const feedbackBody = `Lesson: ${page.slug}\nPath: /${locale}/learn/${page.slug}\n\n`;
+  const feedbackTitle = t.feedbackIssueTitle(page.title);
+  const feedback = `
+    <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+      <span class="mr-1 text-xs text-muted">${escapeHtml(t.feedbackHint)}</span>
+      <a class="${ghostButtonClass}" target="_blank" rel="noopener noreferrer" href="${escapeHtml(
+        issueUrl('clarity-gap.yml', { title: feedbackTitle, body: feedbackBody }),
+      )}">${escapeHtml(t.feedbackClarity)}</a>
+      <a class="${ghostButtonClass}" target="_blank" rel="noopener noreferrer" href="${escapeHtml(
+        issueUrl('lesson-bug.yml', { title: feedbackTitle, body: feedbackBody }),
+      )}">${escapeHtml(t.feedbackBug)}</a>
+    </div>`;
 
   return `
     <div class="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-6 max-[1040px]:grid-cols-1">
@@ -197,6 +222,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${body.html}
         ${exercise}
         ${pager}
+        ${feedback}
       </article>
     </div>
     <div data-role="runner" class="sr-only" aria-hidden="true"></div>
@@ -372,6 +398,9 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
 
   const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
   const autoStart = shouldAutoStart(currentMemoryTier(), saveData === true);
+  // 课程元数据优先；没有声明时才按代码里的 import 兜底推断。
+  const requiredExtensions: LessonLibrary[] =
+    page.requires ?? (needsExtensionPacks(page) ? ['std', 'batteries'] : []);
   let reportProgress: ((progress: LeanPanelProgress) => void) | null = null;
   let loadedPanel: LeanPanel | null = null;
   let panelPromise: Promise<LeanPanel> | null = null;
@@ -389,9 +418,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
             locale,
             // 只有真正 import Std / Batteries 的工程课才预加载扩展包：
             // 位运算与数组边界课只用 Init，提前挂载 75MB 的 Std 会白白吃掉内存。
-            ...(needsExtensionPacks(page)
-              ? { requiredExtensions: ['std', 'batteries'] as const }
-              : {}),
+            ...(requiredExtensions.length ? { requiredExtensions } : {}),
             // 低内存设备与省流模式都不自动下载 102MB，让用户先确认。
             autoStart,
             onProgress: (progress) => reportProgress?.(progress),

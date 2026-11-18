@@ -74,6 +74,56 @@ describe('curriculum & route invariants', () => {
     }
   });
 
+  // 课程页说证 A、starter 却是 B，是这轮审计里占比最高的问题。
+  // 规则：starter 里出现、正文代码块里没有的定理名，必须在题干或提示里被点名。
+  it('练习独有的定理名必须出现在题干或提示里，避免文题不符', async () => {
+    const DECLARATION =
+      /\b(?:theorem|lemma|def|structure|inductive|class|abbrev|opaque|instance)\s+([A-Za-z_][A-Za-z0-9_']*)/g;
+
+    for (const locale of LOCALES) {
+      for (const lesson of await loadLessons(locale)) {
+        if (!lesson.exercise) continue;
+        const blockCode = lesson.blocks
+          .flatMap((block) => (block.kind === 'code' ? [block.code] : []))
+          .join('\n');
+        const starterNames = Array.from(
+          lesson.exercise.starter.matchAll(DECLARATION),
+          (match) => match[1]!,
+        );
+        const exerciseOnly = [...new Set(starterNames)].filter(
+          (name) => !new RegExp(`(?<![A-Za-z0-9_'])${name}(?![A-Za-z0-9_'])`).test(blockCode),
+        );
+        if (exerciseOnly.length === 0) continue;
+
+        const text = `${lesson.exercise.body}\n${lesson.exercise.hint ?? ''}`;
+        const mentioned = exerciseOnly.some((name) =>
+          new RegExp(`(?<![A-Za-z0-9_'])${name}(?![A-Za-z0-9_'])`).test(text),
+        );
+        expect(mentioned, `${locale}:${lesson.slug}: ${exerciseOnly.join(', ')}`).toBe(true);
+      }
+    }
+  });
+
+  it('Std / Batteries 依赖必须同时出现在代码与 requires 元数据里', async () => {
+    for (const locale of LOCALES) {
+      for (const lesson of await loadLessons(locale)) {
+        const code = [
+          ...lesson.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : [])),
+          lesson.exercise?.starter ?? '',
+        ].join('\n');
+        const requires = new Set(lesson.requires ?? []);
+        const importsStd = /import\s+Std\./.test(code);
+        const importsBatteries = /import\s+Batteries\./.test(code);
+
+        expect(requires.has('batteries'), `${locale}:${lesson.slug}`).toBe(importsBatteries);
+        if (importsStd || requires.has('std')) {
+          expect(requires.has('std'), `${locale}:${lesson.slug}`).toBe(true);
+          expect(importsStd, `${locale}:${lesson.slug}`).toBe(true);
+        }
+      }
+    }
+  });
+
   it('所有课时路由、canonical 路径与页面元信息均能精确解析而不回退', async () => {
     for (const locale of LOCALES) {
       const lessons = await loadLessons(locale);

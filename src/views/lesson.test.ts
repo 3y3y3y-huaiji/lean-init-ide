@@ -8,6 +8,7 @@ import type { LspDiagnostic } from '../components/lean-panel';
 import { lessonsFor, messagesFor } from '../i18n';
 import { markLessonCompleted, markLessonVisited, readCompleted, readProgress } from '../progress';
 import { bindLesson, dropSpuriousRedeclarations, renderLesson } from './lesson';
+import { escapeHtml } from './html';
 
 beforeEach(() => {
   localStorage.clear();
@@ -88,12 +89,20 @@ describe('课程页渲染', () => {
   });
 
   it('正文里的反引号渲染成行内代码，而不是漏出纯文本', () => {
-    const html = renderLesson('zh', 'what-is-lean');
+    const lesson = lessonsOf('zh').find((item) => item.slug === 'what-is-lean')!;
+    const paragraph = lesson.blocks.find(
+      (block): block is { kind: 'p'; text: string } =>
+        block.kind === 'p' && /`[^`\n]+`/.test(block.text),
+    );
+    expect(paragraph).toBeDefined();
+    const token = /`([^`\n]+)`/.exec(paragraph!.text)![1]!;
+    const html = renderLesson('zh', lesson.slug);
 
     expect(html).toContain(
-      '<code class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg">const x: number = &quot;abc&quot;</code>',
+      'class="rounded bg-panel-soft px-1 py-0.5 font-mono text-[0.92em] leading-normal text-fg"',
     );
-    expect(html).not.toContain('`const x: number');
+    expect(html).toContain(`>${escapeHtml(token)}</code>`);
+    expect(html).not.toContain(`\`${token}\``);
   });
 
   it('练习说明里的反引号同样按行内代码渲染', () => {
@@ -150,6 +159,17 @@ describe('课程页渲染', () => {
 
     const html = renderLesson('zh', lesson!.slug);
     expect(html).toContain(`href="/zh/playground?lesson=${lesson!.slug}"`);
+  });
+
+  it('底部反馈入口带上当前课时并指向对应 Issue 模板', () => {
+    const html = renderLesson('zh', 'connectives');
+    const body = encodeURIComponent('Lesson: connectives\nPath: /zh/learn/connectives\n\n');
+
+    expect(html).toContain('issues/new?template=clarity-gap.yml');
+    expect(html).toContain('issues/new?template=lesson-bug.yml');
+    expect(html).toContain(body);
+    expect(html).toContain(messagesFor('zh').lesson.feedbackClarity);
+    expect(html).toContain(messagesFor('zh').lesson.feedbackBug);
   });
 
   it('不再渲染右侧编辑器栏', () => {

@@ -348,7 +348,7 @@ const main = async () => {
     await page.waitForSelector('[data-role="status"][data-state="ready"]', { timeout: 240_000 });
     await page.evaluate(() => {
       globalThis.__editor.setValue(
-        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  rcases h with ⟨k, rfl⟩\n  exact ⟨k * b, by rw [Nat.mul_assoc]⟩\n',
+        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) : Odd (a + b) := by\n  rcases ha with ⟨x, rfl⟩\n  rcases hb with ⟨y, rfl⟩\n  exact ⟨x + y, by omega⟩\n',
       );
     });
     let completionOk = false;
@@ -380,7 +380,7 @@ const main = async () => {
     if (!crashVisible) throw new Error('崩溃恢复提示没有出现');
     await page.waitForSelector('[data-role="crash"]', { state: 'hidden', timeout: 240_000 });
     const preserved = await page.evaluate(() =>
-      globalThis.__editor.getValue().includes('theorem even_mul'),
+      globalThis.__editor.getValue().includes('theorem even_plus_odd'),
     );
     if (!preserved) throw new Error('崩溃重启后编辑内容丢失');
     console.log(`[${stamp()}] 崩溃自动重启完成，编辑内容保留`);

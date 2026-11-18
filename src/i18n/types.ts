@@ -11,6 +11,9 @@ export type LessonBlock =
 /** 课程路径：入门、数学与工程实战分开组织，但共用同一个路由。 */
 export type LessonTrack = 'intro' | 'math' | 'eng';
 
+/** 课程依赖的扩展分包；与 runtimeExtensions 的 id 保持一致。 */
+export type LessonLibrary = 'std' | 'batteries';
+
 /** 一节课程。slug 同时是路由片段与目录锚点。 */
 export type LessonPage = {
   slug: string;
@@ -20,6 +23,11 @@ export type LessonPage = {
   navTitle: string;
   title: string;
   lead: string;
+  /**
+   * 本课代码依赖的扩展库。课程页与 Playground 据此在启动前自动挂载，
+   * 避免用户看到 `unknown module prefix 'Std'` 才发现要手动开库。
+   */
+  requires?: LessonLibrary[];
   blocks: LessonBlock[];
   exercise?: {
     title: string;
@@ -88,6 +96,15 @@ export type Messages = {
     challengesTitle: string;
     challengesBody: string;
     challengesCta: string;
+    /** 首屏零下载的证明步骤演示：不启动 Lean 也能看懂 Goal 怎么变短。 */
+    demo: {
+      title: string;
+      body: string;
+      steps: Array<{ goal: string; note: string }>;
+      stepLabel: (current: number, total: number) => string;
+      next: string;
+      reset: string;
+    };
   };
   challenges: {
     eyebrow: string;
@@ -119,6 +136,10 @@ export type Messages = {
       loadSolution: string;
       openInPlayground: string;
       starterNote: string;
+      /** 挑战详情页底部的反馈入口：自动带上当前挑战。 */
+      feedbackHint: string;
+      feedbackBug: string;
+      feedbackIssueTitle: (title: string) => string;
     };
   };
   lesson: {
@@ -144,6 +165,13 @@ export type Messages = {
     completedLabel: string;
     /** 练习区的完成条件说明。 */
     exerciseCompletionHint: string;
+    /** 本课依赖哪些扩展库，以及启动时会自动加载。 */
+    requiresHint: (libraries: string) => string;
+    /** 课程页底部的反馈入口：自动带上当前课时。 */
+    feedbackHint: string;
+    feedbackClarity: string;
+    feedbackBug: string;
+    feedbackIssueTitle: (title: string) => string;
     /** 目录顶部的完成计数。 */
     completedCount: (done: number, total: number) => string;
     /** 运行中的占位文案。 */
@@ -168,6 +196,8 @@ export type Messages = {
     goalUnsupported: string;
     /** 光标停在声明行、证明体还有 sorry 时的引导。 */
     goalHint: string;
+    /** 光标停在 sorry 行、Lean 因此返回 no goals 时的解释。 */
+    goalSorryHint: string;
     diagnosticsTitle: string;
     diagnosticsPlaceholder: string;
     /** 诊断批次没有错误时，在诊断面板顶部显示的成功提示。 */
@@ -296,9 +326,18 @@ export type Messages = {
     logMemoryHardLimit: (mb: string, limitMb: string) => string;
     /** 运行时架构手动切换（默认 wasm32，wasm64 仅作实验性试用）。 */
     runtimeTitle: string;
+    /** 折叠菜单标题：实验性运行时、扩展库等高级选项收在这里。 */
+    advancedTitle: string;
     runtimeWasm32: string;
     runtimeWasm64: string;
     runtimeExperimentalWarning: string;
+    /** wasm64 只带 Init，扩展库选项必须置灰。 */
+    runtimeWasm64NoLibraries: string;
+    /** 课程需要 Std/Batteries 时自动切回稳定版运行时的提示。 */
+    logRuntimeAutoStable: string;
+    /** 诊断里出现缺库报错时的一键修复按钮。 */
+    libraryQuickFix: (library: string) => string;
+    libraryQuickFixDone: (library: string) => string;
     runtimeWasm64Unsupported: string;
     runtimeWasm64AssetNote: string;
     runtimeWasm64NotPublished: string;

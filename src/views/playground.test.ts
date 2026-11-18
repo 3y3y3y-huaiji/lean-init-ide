@@ -59,7 +59,7 @@ describe('playground 页面', () => {
     ];
     expect(options.lessonSlug).toBe('math-parity');
     expect(options.draftKey).toContain('math-parity');
-    expect(options.code).toContain('even_mul');
+    expect(options.code).toContain('even_plus_odd');
   });
 
   it('低内存设备即使开启自动启动也强制关闭 autoStart', async () => {

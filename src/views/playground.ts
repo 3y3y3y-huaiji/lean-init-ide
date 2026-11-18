@@ -6,6 +6,13 @@ import { loadLessons, messagesFor, type Locale } from '../i18n';
 import { getAutoStart } from '../settings';
 import { escapeHtml } from './html';
 
+/** 课程元数据没有声明时，从 starter 的 import 里兜底推断所需扩展库。 */
+const inferExtensions = (code: string): Array<'std' | 'batteries'> => {
+  if (/import\s+Batteries\./.test(code)) return ['std', 'batteries'];
+  if (/import\s+Std\./.test(code)) return ['std'];
+  return [];
+};
+
 export const renderPlayground = (locale: Locale = 'zh'): string =>
   `<div data-role="playground">${renderLeanMarkup(locale, 'full', messagesFor(locale).playground)}</div>`;
 
@@ -73,6 +80,10 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   const draft = challenge ? readDraft(draftKey) : null;
   const hasPersonalDraft = Boolean(challenge && draft && draft.code !== challenge.starter[locale]);
 
+  // 课程页带过来的练习如果声明了 requires，跳转后自动挂载对应扩展库；
+  // 没有声明的老课程再按 starter 里的 import 兜底。
+  const requiredExtensions = lesson?.requires ?? inferExtensions(code);
+
   // 把 3.5MB Monaco 与 LSP 推迟到页面骨架渲染完再按需加载，不阻塞首屏 H1 绘制。
   const { createLeanPanel } = await import('../components/lean-panel');
   earlyStartEl?.removeEventListener('click', onEarlyStart);
@@ -87,6 +98,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
     draftKey,
     autoStart: getAutoStart() && currentMemoryTier() !== 'low',
     startImmediately: startRequested,
+    ...(requiredExtensions.length ? { requiredExtensions } : {}),
   });
 
   if (!challenge) return;

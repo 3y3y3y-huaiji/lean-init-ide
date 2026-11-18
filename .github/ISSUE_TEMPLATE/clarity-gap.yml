@@ -1,0 +1,34 @@
+name: 看不懂某段讲解 / Clarity gap
+description: 某句话、某个术语或某一步推导没看懂
+title: '[看不懂] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        不用写得很正式：指出「哪一句」和「卡在哪」就够了。
+        No need to be formal — point at the sentence and where you got stuck.
+  - type: input
+    id: lesson
+    attributes:
+      label: 课时 slug / Lesson slug
+      description: 页面 URL 的最后一段，例如 `connectives`
+      placeholder: connectives
+    validations:
+      required: true
+  - type: textarea
+    id: sentence
+    attributes:
+      label: 哪句话或哪一步没看懂 / Which sentence or step
+      placeholder: 「把 ∧ 当成包裹」这一段……
+    validations:
+      required: true
+  - type: textarea
+    id: confusion
+    attributes:
+      label: 你卡在哪里 / Where you got stuck
+      description: 是不知道某个符号的意思，还是不明白为什么这一步能成立？
+  - type: input
+    id: background
+    attributes:
+      label: 你的背景（可选）/ Your background (optional)
+      placeholder: 高中生 / 后端工程师 / 家长

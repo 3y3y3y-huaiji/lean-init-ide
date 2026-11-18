@@ -10,15 +10,13 @@ Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检
 | [runtime-wasm32-435.yml](../.github/workflows/runtime-wasm32-435.yml) `Runtime · Lean 4.35 wasm32` | `runtime-v*` tag、手动 | 构建 4.35 wasm32 运行时、Init oleans 与 zstd 资产；手动可选发布 R2 / 魔搭 / GitHub Release | artifact；发布时写 R2、魔搭、Release |
 | [modelscope.yml](../.github/workflows/modelscope.yml) `Runtime · 魔搭镜像` | 手动 | 单独重传或校验魔搭镜像 | ModelScope |
 | [smoke.yml](../.github/workflows/smoke.yml) `Smoke · 线上巡检` | 每天 01:00 UTC、手动 | 首页、COOP/COEP、`sw.js`、`/cdn/` Range、白名单 404 巡检 | 只读 |
-| [runtime-wasm32.yml](../.github/workflows/runtime-wasm32.yml) `Runtime · Lean 4.34 wasm32 (legacy)` | 手动 | 4.34 历史构建，保留对照 | artifact |
 
 ## 命名与触发约定
 
 - 应用 CI 只叫 `CI · 应用`，在 PR / 手动触发，并被 `Deploy · 应用` 在 direct push 时复用；运行时构建不要混进来。
 - 应用部署只叫 `Deploy · 应用`，只在 push `main` / 手动触发。PR 合并直接部署；direct push 先跑 CI，CI 不过不部署，不重复跑两份 PR 检查。
-- 运行时工作流统一 `Runtime · Lean <version> wasm32`；旧版本加 `(legacy)`。
+- 运行时工作流统一 `Runtime · Lean <version> wasm32`。
 - 日常主分支不自动发布运行时；只有手动 dispatch 或 `runtime-v*` tag 才发布资产。
-- 4.34 的 `runtime-wasm32.yml` 已改为手动，不再接 `spike/*` 分支 push。
 - `run-name` 写动作（build / deploy / publish / verify），不要依赖 commit message。
 - Std / Batteries 扩展包的 `build_extensions` 开关在 `spike/std-batteries` 分支验证，尚未合并到主工作流；生产默认只加载 Init。
 

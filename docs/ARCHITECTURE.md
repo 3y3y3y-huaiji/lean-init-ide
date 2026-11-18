@@ -37,7 +37,8 @@
   清单里的 GitHub Release 只服务构建期（`fetch:assets` 拉上游 gzip）：Release 下载不带 CORS
   响应头，浏览器无法跨源读取，而且 zstd 资产本来就会跳过 fallback。
 - **版本键**：4.35 的对象 key 带 `wasm-lean4/4.35.0/` 前缀；URL 仍带 `?r=<cacheKey>` 绕开旧缓存
-  （`config/lean4-runtime.json`）。
+  （`config/lean4-runtime.json`）。实验性 wasm64（`config/lean4-wasm64-runtime.json`，前缀 `wasm-lean4/4.36.0-rc2-wasm64/`）
+  共用同一个 `/cdn/` Pages Function 与 R2 / 魔搭分发路径，仅在用户手动切换时加载，默认仍是 wasm32。
 - **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。
 - **单一入口**：`criticalthinking.de5.net` 是 Pages 自定义域，页面与 `/cdn/` 资产共用同一条连接；`*.pages.dev` 仅作回退。
 

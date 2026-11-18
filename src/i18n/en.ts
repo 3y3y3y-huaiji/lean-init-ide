@@ -324,7 +324,10 @@ end
     runtimeWasm64Unsupported:
       'Memory64 is not supported in this browser; staying on the stable wasm32 runtime',
     runtimeWasm64AssetNote:
-      'Note: the bundled runtime pack is still wasm32; selecting experimental wasm64 arms the higher memory guard ceiling and experimental flag.',
+      'Experimental note: wasm64 loads a separate 64-bit Lean 4.36.0-rc2 + Init runtime for manual trial only (not for production). Std / Batteries extension packs are available on wasm32 only.',
+    runtimeWasm64NotPublished:
+      'No published wasm64 runtime assets are configured yet; falling back to stable wasm32',
+    logWasm64Loading: 'Loading experimental wasm64 runtime pack (64-bit Lean 4.36.0-rc2 + Init)…',
     logRuntimeArchSelected: (arch) => `Runtime preference switched to ${arch}`,
   },
   reference: {

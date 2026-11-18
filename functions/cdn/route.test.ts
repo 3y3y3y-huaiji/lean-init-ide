@@ -1,12 +1,14 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import manifest from '../../config/lean4-runtime.json';
+import wasm64Manifest from '../../config/lean4-wasm64-runtime.json';
 import { onRequest } from './[[path]]';
 
 type Asset = { key: string; bytes: number; contentType: string };
 type Ctx = Parameters<typeof onRequest>[0];
 
 const assets = manifest.assets as Asset[];
+const wasm64Assets = wasm64Manifest.assets as Asset[];
 const sample = assets[0]!;
 
 const bodyStream = (length: number) =>
@@ -308,5 +310,16 @@ describe('边缘缓存', () => {
     expect(waitUntil).toHaveBeenCalledTimes(1);
     await waitUntil.mock.calls[0]?.[0];
     expect(cache.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('同一个 /cdn 网关同样放行并切片 wasm64 清单资产', async () => {
+    const wasm64Sample = wasm64Assets[0]!;
+    expect(wasm64Sample.key).toMatch(/^wasm-lean4\/4\.36\.0-rc2-wasm64\//);
+    const get = vi.fn(() => hit(16));
+
+    const response = await call(createEnv(get), { path: wasm64Sample.key, range: 'bytes=0-15' });
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get('Content-Range')).toBe(`bytes 0-15/${wasm64Sample.bytes}`);
   });
 });

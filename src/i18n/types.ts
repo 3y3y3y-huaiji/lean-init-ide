@@ -301,6 +301,8 @@ export type Messages = {
     runtimeExperimentalWarning: string;
     runtimeWasm64Unsupported: string;
     runtimeWasm64AssetNote: string;
+    runtimeWasm64NotPublished: string;
+    logWasm64Loading: string;
     logRuntimeArchSelected: (arch: string) => string;
   };
   privacy: {

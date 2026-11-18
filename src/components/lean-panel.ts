@@ -41,9 +41,11 @@ import {
   anchorImportDiagnostics,
   extractImportLines,
   LeanSession,
+  type LeanSessionServer,
   type LspDiagnostic,
 } from '../lean-session';
 import { createLeanMemoryGuard, sampleBrowserMemoryBytes } from '../lean-memory-guard';
+import { wasm64Available } from '../lean-wasm64-available';
 import {
   getDefaultExtensions,
   getRuntimeArch,
@@ -1110,8 +1112,57 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let pendingSelection: Set<RuntimeExtensionId> | null = null;
   let restorePromise: Promise<void> | null = null;
 
+  /**
+   * wasm32（@wasm-idle/lsp）与实验性 wasm64 共用同一套状态回调：
+   * 首次就绪前报错直接展示；已就绪过的引擎崩溃走自动恢复。
+   */
+  const handleEngineStatus = (status: { state: string; message?: string }): void => {
+    if (status.state === 'loading') {
+      // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。
+      // 首块分片可能几十秒才完成，这里保留 start() 的“加载运行时…”文案，
+      // 不要提前写成“启动 LSP…”让人误以为下载已经结束。
+      if (!hasAssetProgress) setProgress(null);
+    } else if (status.state === 'ready') {
+      engineEverReady = true;
+      setProgress(1);
+      setStatus(t.statusLspReady, 'ready');
+      log(t.logRuntimeReady);
+      track('lsp_ready', { ms: runStartedAt ? performance.now() - runStartedAt : 0 });
+    } else if (status.state === 'error') {
+      const message = status.message ?? 'unknown error';
+      log(t.logRuntimeError(message));
+      reportError('runtime', message);
+      if (engineEverReady) {
+        handleRuntimeCrash(message);
+      } else {
+        setStatus(t.statusError(message), 'error');
+      }
+    }
+  };
+
+  /**
+   * 实验性 wasm64 开关：仅当用户手动选择、浏览器支持 Memory64 且清单里已有已发布资产时启用。
+   * 否则一律回退稳定的 wasm32，并在日志里说明原因，绝不静默切换。
+   */
+  const createWasm64Server = async (): Promise<LeanSessionServer> => {
+    const { createWasm64LanguageServer } = await import('../lean-wasm64-server');
+    handleEngineStatus({ state: 'loading' });
+    log(t.logWasm64Loading);
+    const server = await createWasm64LanguageServer({
+      onMemoryBytes: (bytes) => memoryGuard.reportBytes(bytes, 'event'),
+      onError: (message) => handleEngineStatus({ state: 'error', message }),
+      startupTimeoutMs: 60 * 60_000,
+    });
+    handleEngineStatus({ state: 'ready' });
+    return server;
+  };
+
   const session = new LeanSession({
     createServer: async () => {
+      if (selectedArch === 'wasm64') {
+        if (wasm64Available()) return createWasm64Server();
+        log(t.runtimeWasm64NotPublished);
+      }
       // 运行时约 700KB，按需加载，首屏只留编辑器。
       const { getLean4LanguageServer } = await import('@wasm-idle/lsp/lean4');
       return getLean4LanguageServer({
@@ -1129,10 +1180,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
          * EXPERIMENTAL: wasm32 / wasm64 运行时双轨开关说明
          * --------------------------------------------------------------------
          * 1. 默认始终为稳定的 wasm32（1 GiB 线性内存上限，WASM32_MEMORY_BYTES）。
-         * 2. wasm64 当前仍为实验性功能，可能存在不稳定、内存不释放或兼容性问题，
-         *    切勿作为默认生产配置；目前站点内置资产包仍为 wasm32，用户切换为
-         *    wasm64 时先应用实验标识与高位内存守卫策略，后续接入 wasm64 远端包后
-         *    再按 selectedArch 分流 manifest。
+         * 2. wasm64 目前仍为实验性功能，可能不稳定、内存不释放或存在兼容性问题，
+         *    切勿作为默认生产配置；仅在用户手动选择、浏览器支持 Memory64 且清单已发布
+         *    资产时才走 createWasm64Server（见上），其余情况回退这里的 wasm32。
          * ====================================================================
          */
         lean4: {
@@ -1150,28 +1200,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
           });
           return worker;
         },
-        onStatus: (status) => {
-          if (status.state === 'loading') {
-            // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。
-            // 首块分片可能几十秒才完成，这里保留 start() 的“加载运行时…”文案，
-            // 不要提前写成“启动 LSP…”让人误以为下载已经结束。
-            if (!hasAssetProgress) setProgress(null);
-          } else if (status.state === 'ready') {
-            engineEverReady = true;
-            setProgress(1);
-            setStatus(t.statusLspReady, 'ready');
-            log(t.logRuntimeReady);
-            track('lsp_ready', { ms: runStartedAt ? performance.now() - runStartedAt : 0 });
-          } else if (status.state === 'error') {
-            log(t.logRuntimeError(status.message));
-            reportError('runtime', status.message);
-            if (engineEverReady) {
-              handleRuntimeCrash(status.message);
-            } else {
-              setStatus(t.statusError(status.message), 'error');
-            }
-          }
-        },
+        onStatus: handleEngineStatus,
       });
     },
     createConnection: (server) =>

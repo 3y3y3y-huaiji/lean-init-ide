@@ -297,7 +297,6 @@ Std 与 Batteries 作为独立扩展包按需下载（同样 zstd + SHA-256）�
 | 目录 | 运行时 | 状态 |
 | --- | --- | --- |
 | \`${rootDir}/\` | ${manifest.runtime} | 当前生产版本 |
-| \`wasm-lean4/\` | Lean 4.34.1 Init | 历史版本 / 回滚用 |
 
 ## 当前版本资产
 
@@ -414,6 +413,7 @@ const upload = async () => {
     const lfsRules = [
       '*.bin filter=lfs diff=lfs merge=lfs -text',
       '*.gz filter=lfs diff=lfs merge=lfs -text',
+      '*.zst filter=lfs diff=lfs merge=lfs -text',
       '*.json filter=lfs diff=lfs merge=lfs -text',
       '*.wasm filter=lfs diff=lfs merge=lfs -text',
       '*.pack filter=lfs diff=lfs merge=lfs -text',

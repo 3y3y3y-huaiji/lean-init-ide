@@ -5,8 +5,7 @@
 > `maxRecDepth` 1000、只保留 O3）仍然适用。
 
 分支：`perf/wasm32-runtime`（实验分支，不合并 main）
-工作流：4.34 历史工作流 `.github/workflows/runtime-wasm32.yml`（legacy）；4.35 生产工作流
-`.github/workflows/runtime-wasm32-435.yml`
+工作流：4.35 生产工作流 `.github/workflows/runtime-wasm32-435.yml`（4.34 历史工作流已删除）
 日期：2026-11-16
 
 ## 目标

@@ -61,9 +61,6 @@ if (!(await exists(indexPath))) {
   if (!/<style>[\s\S]+<\/style>/.test(indexHtml)) {
     fail('index.html 缺少内联 <style> 样式');
   }
-  if (indexHtml.includes('https://raw.githubusercontent.com')) {
-    fail('index.html 仍包含未使用的 raw.githubusercontent.com preconnect');
-  }
 }
 for (const rel of [
   'zh/index.html',
@@ -127,8 +124,6 @@ if (!(await exists(headersPath))) {
     "connect-src 'self' data:",
     // 镜像回退在页面 / Service Worker 里跨源 fetch；漏放行会静默退回慢源。
     'https://*.modelscope.cn',
-    // raw 仍保留在 CSP 里供诊断；当前清单的回退源是 GitHub Release。
-    'https://raw.githubusercontent.com',
     // SEO 与智能体文件类型必须显式声明，避免边缘按默认类型返回。
     'Content-Type: application/xml; charset=utf-8',
     'Content-Type: text/plain; charset=utf-8',

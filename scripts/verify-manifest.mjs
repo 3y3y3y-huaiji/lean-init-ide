@@ -221,3 +221,62 @@ const totalBytes = assets.reduce((sum, asset) => sum + asset.bytes, 0);
 console.log(
   `资产清单校验通过：${assets.length} 个资产，共 ${(totalBytes / 1024 / 1024).toFixed(2)} MiB，cacheKey=${manifest.cacheKey}`,
 );
+
+// 同时校验实验性 wasm64 清单结构（允许 assets 为空表示尚未发布）。
+try {
+  const w64Raw = await readFile(resolve(root, 'config/lean4-wasm64-runtime.json'), 'utf8');
+  const w64 = JSON.parse(w64Raw);
+  const w64Errors = [];
+  if (w64?.arch !== 'wasm64') w64Errors.push('arch 必须是 wasm64');
+  if (!isNonEmptyString(w64?.cacheKey)) w64Errors.push('cacheKey 必须是非空字符串');
+  if (!isNonEmptyString(w64?.primary?.baseUrl) || !w64.primary.baseUrl.startsWith('/')) {
+    w64Errors.push('primary.baseUrl 必须是同源相对路径');
+  }
+  if (w64?.mirror !== undefined && !isHttps(w64.mirror?.baseUrl)) {
+    w64Errors.push('mirror.baseUrl 必须是 https 地址');
+  }
+  if (!Array.isArray(w64?.assets)) {
+    w64Errors.push('assets 必须是数组');
+  } else {
+    const w64Keys = new Set();
+    for (const [index, asset] of w64.assets.entries()) {
+      const label = `wasm64.assets[${index}]`;
+      for (const field of ['name', 'key', 'contentType']) {
+        if (!isNonEmptyString(asset?.[field])) w64Errors.push(`${label}.${field} 必须是非空字符串`);
+      }
+      if (!Number.isSafeInteger(asset?.bytes) || asset.bytes <= 0) {
+        w64Errors.push(`${label}.bytes 必须是正整数`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(asset?.sha256 ?? '')) {
+        w64Errors.push(`${label}.sha256 必须是 64 位小写十六进制`);
+      }
+      if (asset?.encoding === 'zstd') {
+        if (!Number.isSafeInteger(asset?.uncompressedBytes) || asset.uncompressedBytes <= 0) {
+          w64Errors.push(`${label}.uncompressedBytes 必须是正整数`);
+        }
+        if (!/^[0-9a-f]{64}$/.test(asset?.uncompressedSha256 ?? '')) {
+          w64Errors.push(`${label}.uncompressedSha256 必须是 64 位小写十六进制`);
+        }
+      }
+      const key = asset?.key;
+      if (typeof key === 'string') {
+        if (key.startsWith('/') || key.includes('..') || key.includes('\\')) {
+          w64Errors.push(`${label}.key 非法: ${key}`);
+        }
+        if (w64Keys.has(key)) w64Errors.push(`${label}.key 重复: ${key}`);
+        w64Keys.add(key);
+      }
+    }
+  }
+  if (w64Errors.length > 0) {
+    console.error(`wasm64 资产清单校验失败（${w64Errors.length} 项）：`);
+    for (const err of w64Errors) console.error(`  - ${err}`);
+    process.exit(1);
+  }
+  const w64Bytes = w64.assets.reduce((sum, asset) => sum + asset.bytes, 0);
+  console.log(
+    `wasm64 清单校验通过：${w64.assets.length} 个资产，共 ${(w64Bytes / 1024 / 1024).toFixed(2)} MiB，cacheKey=${w64.cacheKey}`,
+  );
+} catch (error) {
+  if (error?.code !== 'ENOENT') throw error;
+}

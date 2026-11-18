@@ -101,8 +101,7 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
   `static.cloudflareinsights.com`，并保留 `'wasm-unsafe-eval'`（WebAssembly 编译需要）。
   `connect-src` 还要放行魔搭镜像（`modelscope.cn` 及其 `*.modelscope.cn` 重定向域名），
   否则 Service Worker 的跨源分片请求会被 CSP 拦掉，表现为镜像回退失败、只剩同源 R2 慢速下载。
-  `raw.githubusercontent.com` 仍保留在放行列表里（`verify:build` 会检查），但当前清单的回退源是
-  GitHub Release，浏览器侧不会使用它。
+  `raw.githubusercontent.com` 已从放行列表移除：浏览器侧不访问 GitHub，GitHub Release 只服务构建期。
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`：关闭摄像头、麦克风、定位、支付与 USB。
 
@@ -161,8 +160,8 @@ pnpm run upload:modelscope -- --extensions work/extensions --metadata
 - 浏览器 E2E 需要真实编译 Std / Batteries 课程，CI 的 e2e job 用 `LEAN_FETCH_EXTENSIONS=1 pnpm run fetch:assets` 临时把扩展分片放进 `public/wasm-lean4/`，只供本地网关使用，不进入部署产物。
 - 扩展资产登记在 `config/lean4-runtime.json` 的 `extensions` 数组里，key 位于 `wasm-lean4/<version>/extensions/<id>/`；魔搭镜像仍是扁平目录。
 
-- `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/` 下的 4.34 历史资产和 `wasm-lean4/4.35.0/`。
-- `--metadata` 会写 `README.md`（模型卡）、`LICENSE`（Apache-2.0）、`.gitattributes` 的 LFS 规则和 `wasm-lean4/4.35.0/SHA256SUMS`。
+- `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/4.35.0/` 与实验性 `wasm-lean4/4.36.0-rc2-wasm64/`。`wasm-lean4/` 根下 4.34 的旧文件以及 R2 桶根目录的 4.34 旧对象已手动删除，当前只保留 4.35.0（稳定默认）与 4.36.0-rc2-wasm64（实验性）。
+- `--metadata` 会写 `README.md`（模型卡）、`LICENSE`（Apache-2.0）、`.gitattributes`（含 `*.zst` / `*.bin` LFS 规则）和 `wasm-lean4/4.35.0/SHA256SUMS`。
 - 删除工作区文件不会回收 Git LFS 历史对象；要彻底回收魔搭存储，需要重建数据集或改写历史。
 - `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
 - `--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶。

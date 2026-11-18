@@ -13,6 +13,7 @@
  * 构建期由 `npm run build:sw` 编译为 public/sw.js，仓库里不保留手写 JS。
  */
 import manifestJson from '../config/lean4-runtime.json';
+import wasm64ManifestJson from '../config/lean4-wasm64-runtime.json';
 import {
   assetSources,
   isSourceMode,
@@ -30,6 +31,7 @@ import { loadRangedAsset } from './sw-assemble';
 import { createAssetNotifyGate, createProgressTracker } from './sw-progress';
 
 const manifest = manifestJson as unknown as RuntimeManifest;
+const wasm64Manifest = wasm64ManifestJson as unknown as RuntimeManifest;
 
 type RangeAsset = {
   bytes: number;
@@ -41,22 +43,36 @@ type RangeAsset = {
   github: AssetSource[];
 };
 
-const RANGE_ASSETS = new Map<string, RangeAsset>(
-  rangedAssets(manifest).map((asset) => [
-    asset.name,
-    {
-      bytes: asset.bytes,
-      domestic: assetSources(manifest, asset, undefined, { mirrorFirst: true }),
-      overseas: assetSources(manifest, asset, undefined, { includeMirror: true }),
-      github: assetSources(manifest, asset, undefined, { githubFirst: true }),
-    },
-  ]),
-);
+const buildRangeAssets = (source: RuntimeManifest): Map<string, RangeAsset> =>
+  new Map<string, RangeAsset>(
+    rangedAssets(source).map((asset) => [
+      asset.name,
+      {
+        bytes: asset.bytes,
+        domestic: assetSources(source, asset, undefined, { mirrorFirst: true }),
+        overseas: assetSources(source, asset, undefined, { includeMirror: true }),
+        github: assetSources(source, asset, undefined, { githubFirst: true }),
+      },
+    ]),
+  );
 
-const RANGE_TOTAL_BYTES = [...RANGE_ASSETS.values()].reduce((sum, asset) => sum + asset.bytes, 0);
+const RANGE_ASSETS = buildRangeAssets(manifest);
+
+/**
+ * 实验性 wasm64 运行时：独立清单、独立路径前缀 /wasm-lean4-64/，
+ * 与稳定的 wasm32 资产互不影响（清单为空时这张表也是空的，行为不变）。
+ */
+const WASM64_PREFIX = '/wasm-lean4-64/';
+const RANGE_ASSETS_64 = buildRangeAssets(wasm64Manifest);
+
+const sumBytes = (assets: Map<string, RangeAsset>): number =>
+  [...assets.values()].reduce((sum, asset) => sum + asset.bytes, 0);
+
+const RANGE_TOTAL_BYTES = sumBytes(RANGE_ASSETS);
 
 // 浏览器按资产发请求；这里累计已下载字节，给页面一个不会回跳的总进度。
 const progressTracker = createProgressTracker(RANGE_TOTAL_BYTES);
+const progressTracker64 = createProgressTracker(sumBytes(RANGE_ASSETS_64));
 
 // 运行时预取同时下载 6 个资产，每个资产再并发分片，所以这里的并发是全局并发的乘数。
 // 4MiB 对齐魔搭 CDN 的缓存块；实测 12–24 条流就到吞吐平台（约 400–500Mbps 链路），
@@ -111,10 +127,14 @@ sw.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== sw.location.origin) return;
-  if (!url.pathname.startsWith('/wasm-lean4/')) return;
 
-  const name = url.pathname.slice('/wasm-lean4/'.length);
-  const asset = RANGE_ASSETS.get(name);
+  const is64 = url.pathname.startsWith(WASM64_PREFIX);
+  if (!is64 && !url.pathname.startsWith('/wasm-lean4/')) return;
+
+  const rangeAssets = is64 ? RANGE_ASSETS_64 : RANGE_ASSETS;
+  const tracker = is64 ? progressTracker64 : progressTracker;
+  const name = url.pathname.slice((is64 ? WASM64_PREFIX : '/wasm-lean4/').length);
+  const asset = rangeAssets.get(name);
   if (!asset) return;
 
   const acceptLanguage = pickClientLanguages(
@@ -166,7 +186,8 @@ sw.addEventListener('fetch', (event) => {
             onProgress: ({ loaded }) => onProgress(loaded, total),
           });
         },
-        onProgress: (loaded, total, source) => void notify(name, loaded, total, source.label),
+        onProgress: (loaded, total, source) =>
+          void notify(tracker, is64, name, loaded, total, source.label),
         onFallback: notifyFallback,
         fallbackFetch: (request) => fetch(request),
       });
@@ -176,17 +197,25 @@ sw.addEventListener('fetch', (event) => {
 
 const shouldNotifyAsset = createAssetNotifyGate(100);
 
-async function notify(name: string, loaded: number, total: number, source: string): Promise<void> {
-  const overall = progressTracker.record(name, loaded);
+async function notify(
+  tracker: ReturnType<typeof createProgressTracker>,
+  is64: boolean,
+  name: string,
+  loaded: number,
+  total: number,
+  source: string,
+): Promise<void> {
+  const overall = tracker.record(name, loaded);
 
   // 分片内进度按资产各自节流；单资产或全局完成消息必须放行，否则进度条可能停在 99%。
   const done = loaded >= total || overall.loaded >= overall.total;
-  if (!shouldNotifyAsset(name, Date.now(), done)) return;
+  if (!shouldNotifyAsset(`${is64 ? '64:' : ''}${name}`, Date.now(), done)) return;
 
   const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of clients) {
     (client as WindowClient).postMessage({
       type: 'lean-asset-progress',
+      arch: is64 ? 'wasm64' : 'wasm32',
       name,
       loaded,
       total,

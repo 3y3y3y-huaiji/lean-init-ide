@@ -1,4 +1,5 @@
 import manifest from '../../config/lean4-runtime.json';
+import wasm64Manifest from '../../config/lean4-wasm64-runtime.json';
 import { parseRangeHeader, type ByteRange } from '../../src/cdn-range';
 
 type RuntimeAsset = { key: string; bytes: number; contentType: string };
@@ -29,6 +30,9 @@ const extensions = (manifest as unknown as { extensions?: Array<{ assets: Runtim
   .extensions;
 const runtimeAssets = [...(manifest.assets as unknown as RuntimeAsset[])];
 for (const extension of extensions ?? []) runtimeAssets.push(...extension.assets);
+// 实验性 wasm64 资产与 wasm32 共用同一个 /cdn/ 网关与 R2 binding，不需要单独的 Worker；
+// 白名单照样只认清单里登记的 key 与精确字节数。
+runtimeAssets.push(...(wasm64Manifest.assets as unknown as RuntimeAsset[]));
 const assets = new Map<string, RuntimeAsset>(runtimeAssets.map((asset) => [asset.key, asset]));
 
 const CACHE_CONTROL = 'public,max-age=31536000,immutable';

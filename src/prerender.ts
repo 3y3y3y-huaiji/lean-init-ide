@@ -14,6 +14,20 @@ import { renderReference } from './views/reference';
 
 export { pageDescription, pageTitle, renderNotFound };
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** 将主样式表内联为 <style>，消除首屏渲染阻塞请求。 */
+export const inlineStylesheet = (html: string, cssHref: string, cssText: string): string => {
+  const escapedHref = escapeRegExp(cssHref);
+  const pattern = new RegExp(
+    `<link\\b(?=[^>]*\\brel=["']stylesheet["'])(?=[^>]*\\bhref=["']${escapedHref}["'])[^>]*>`,
+    'i',
+  );
+  if (!pattern.test(html)) return html;
+  const safeCss = cssText.replaceAll('</style', '<\\/style');
+  return html.replace(pattern, () => `<style>${safeCss}</style>`);
+};
+
 export const renderStaticApp = (route: Route): string => {
   const pathname = canonicalRoutePath(route);
   let content: string;

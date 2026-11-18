@@ -2,6 +2,7 @@ import { buttonClass, ghostButtonLgClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
 import { firstUncompletedLesson } from '../progress';
 import { FIRST_LESSON_SLUG } from '../router';
+import { escapeHtml } from './html';
 
 const computeHomeState = (
   locale: Locale,
@@ -73,13 +74,16 @@ export const renderHome = (
     track: 'intro' | 'math' | 'eng',
     lessons: typeof introLessons,
     href: string,
-  ) => `
+  ) => {
+    const ctaLabel = escapeHtml(`${t.courseCta}: ${lessonMsgs.tracks[track].title}`);
+    return `
     <article class="rounded-2xl border border-line bg-panel p-6">
       <h3 class="mt-0 mb-2 text-[17px] font-bold">${lessonMsgs.tracks[track].title}</h3>
       <p class="mt-0 mb-3 text-sm text-muted">${lessonMsgs.tracks[track].lead}</p>
       <p class="mt-0 mb-4 text-xs uppercase tracking-[0.08em] text-muted">${t.pathMeta(lessons.length)}</p>
-      <a class="${buttonClass}" data-home-cta="${track}" href="/${locale}/learn/${href}">${t.courseCta}</a>
+      <a class="${buttonClass}" data-home-cta="${track}" href="/${locale}/learn/${href}" aria-label="${ctaLabel}">${t.courseCta}</a>
     </article>`;
+  };
 
   const features = t.features
     .map(

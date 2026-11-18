@@ -5,6 +5,7 @@
  * 这些约束一旦破了，表现形式都是「线上打不开」或者「wasm 加载链路断掉」，
  * 而在本地 dev 里完全看不出来，所以必须在构建后立刻检查。
  */
+import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,12 +48,22 @@ if (!(await exists(dist))) {
 
 // 1. 应用入口与预渲染静态页
 const indexPath = resolve(dist, 'index.html');
+let indexHtml = '';
 if (!(await exists(indexPath))) {
   fail('缺少 dist/index.html');
 } else {
-  const html = await readFile(indexPath, 'utf8');
-  if (!html.includes('<div id="app">')) fail('index.html 缺少 #app 挂载点');
-  if (!/<script[^>]+src="\/assets\//.test(html)) fail('index.html 没有引用打包后的入口脚本');
+  indexHtml = await readFile(indexPath, 'utf8');
+  if (!indexHtml.includes('<div id="app">')) fail('index.html 缺少 #app 挂载点');
+  if (!/<script[^>]+src="\/assets\//.test(indexHtml)) fail('index.html 没有引用打包后的入口脚本');
+  if (/<link\b[^>]*rel=["']stylesheet["']/i.test(indexHtml)) {
+    fail('index.html 仍存在阻塞首屏的外部 stylesheet 链接，未内联 CSS');
+  }
+  if (!/<style>[\s\S]+<\/style>/.test(indexHtml)) {
+    fail('index.html 缺少内联 <style> 样式');
+  }
+  if (indexHtml.includes('https://raw.githubusercontent.com')) {
+    fail('index.html 仍包含未使用的 raw.githubusercontent.com preconnect');
+  }
 }
 for (const rel of [
   'zh/index.html',
@@ -117,11 +128,25 @@ if (!(await exists(headersPath))) {
     // 镜像与 GitHub 回退都在页面 / Service Worker 里跨源 fetch；漏放行会静默退回慢源。
     'https://*.modelscope.cn',
     'https://raw.githubusercontent.com',
-    // SEO 文件的类型必须显式声明，避免边缘按默认类型返回。
+    // SEO 与智能体文件类型必须显式声明，避免边缘按默认类型返回。
     'Content-Type: application/xml; charset=utf-8',
     'Content-Type: text/plain; charset=utf-8',
+    'Content-Type: application/json; charset=utf-8',
+    'Strict-Transport-Security: max-age=31536000; includeSubDomains',
   ]) {
     if (!headers.includes(requirement)) fail(`_headers 缺少 "${requirement}"`);
+  }
+
+  const scriptSrcMatch = /script-src\s+([^;\r\n]+)/.exec(headers);
+  const scriptSrc = scriptSrcMatch?.[1] ?? '';
+  if (scriptSrc.includes("'unsafe-inline'")) {
+    fail("_headers 的 script-src 不应保留 'unsafe-inline'");
+  }
+  for (const match of indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+    const hash = `'sha256-${createHash('sha256').update(match[1], 'utf8').digest('base64')}'`;
+    if (!scriptSrc.includes(hash)) {
+      fail(`_headers 的 script-src 缺少内联脚本哈希 ${hash}`);
+    }
   }
 }
 
@@ -243,15 +268,59 @@ if (await exists(robotsPath)) {
   }
 }
 
-// 8. Pages 的 _redirects 先于静态资源匹配：必须把 SEO 文件放在 SPA 兜底之前
+// 7b. 智能体发现文件：llms.txt 与 /.well-known/ai-catalog.json
+const llmsPath = resolve(dist, 'llms.txt');
+if (!(await exists(llmsPath))) {
+  fail('缺少 dist/llms.txt，构建时 generate-seo.mjs 未执行');
+} else {
+  const llms = await readFile(llmsPath, 'utf8');
+  if (!llms.startsWith('# ')) fail('llms.txt 缺少必需的 H1 标题');
+  if (!/\[[^\]]+\]\(https:\/\/criticalthinking\.de5\.net\/[^)]+\)/.test(llms)) {
+    fail('llms.txt 缺少站内 Markdown 链接');
+  }
+}
+
+const aiCatalogPath = resolve(dist, '.well-known', 'ai-catalog.json');
+if (!(await exists(aiCatalogPath))) {
+  fail('缺少 dist/.well-known/ai-catalog.json，构建时 generate-seo.mjs 未执行');
+} else {
+  try {
+    const catalog = JSON.parse(await readFile(aiCatalogPath, 'utf8'));
+    if (typeof catalog.specVersion !== 'string' || !Array.isArray(catalog.entries)) {
+      fail('ai-catalog.json 缺少 specVersion 或 entries 数组');
+    }
+  } catch (error) {
+    fail(`ai-catalog.json 不是合法 JSON：${error.message}`);
+  }
+}
+
+// 8. Pages 的 _redirects 先于静态资源匹配：必须把 SEO 与智能体文件放在 SPA 兜底之前
 const redirectsPath = resolve(dist, '_redirects');
 if (!(await exists(redirectsPath))) {
   fail('缺少 dist/_redirects');
 } else {
   const redirects = await readFile(redirectsPath, 'utf8');
-  for (const path of ['/sitemap.xml', '/robots.txt']) {
-    if (!new RegExp(`^${path}\\s+${path}\\s+200$`, 'm').test(redirects)) {
-      fail(`_redirects 缺少 ${path} 的 200 直出规则，会被 /* SPA 回退吞掉`);
+  const fallbackIndex = redirects.search(/^\/\*\s+\/index\.html\s+200$/m);
+  if (fallbackIndex === -1) {
+    fail('_redirects 缺少 /* /index.html 200 回退规则');
+  }
+  for (const [from, to] of [
+    ['/sitemap.xml', '/sitemap.xml'],
+    ['/robots.txt', '/robots.txt'],
+    ['/llms.txt', '/llms.txt'],
+    ['/.well-known/ai-catalog.json', '/.well-known/ai-catalog.json'],
+    ['/ai-catalog.json', '/.well-known/ai-catalog.json'],
+    ['/.well-known/ard.json', '/.well-known/ai-catalog.json'],
+  ]) {
+    const rule = new RegExp(
+      `^${from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+${to.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+200$`,
+      'm',
+    );
+    const match = rule.exec(redirects);
+    if (!match) {
+      fail(`_redirects 缺少 ${from} -> ${to} 的 200 直出规则，会被 /* SPA 回退吞掉`);
+    } else if (fallbackIndex !== -1 && match.index > fallbackIndex) {
+      fail(`_redirects 中 ${from} 位于 /* 回退之后，无法生效`);
     }
   }
 }

@@ -28,7 +28,9 @@ const boot = async (route: Route, root: HTMLElement) => {
   track('boot', { page: route.page, locale: route.locale });
 
   const ssgPath = document.head.querySelector<HTMLMetaElement>('meta[name="lean-ssg"]')?.content;
-  const canHydrate = Boolean(ssgPath && ssgPath === canonicalRoutePath(route));
+  const canHydrate = Boolean(
+    route.page !== 'notFound' && ssgPath && ssgPath === canonicalRoutePath(route),
+  );
 
   if (canHydrate) {
     // SSG 已预先渲染首屏 DOM，这里只原地补充交互状态，避免替换 #app 导致 LCP 延后或布局抖动。

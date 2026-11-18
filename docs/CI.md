@@ -22,7 +22,7 @@ Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检
 - `run-name` 写动作（build / deploy / publish / verify），不要依赖 commit message。
 - Std / Batteries 扩展包的 `build_extensions` 开关在 `spike/std-batteries` 分支验证，尚未合并到主工作流；生产默认只加载 Init。
 
-> 合并前必须让 PR 的 `CI · 应用` 全绿。直接 push 到 `main` 时，`Deploy · 应用` 会先在 `ci` job 里复用 `CI · 应用`，CI 不过不会部署。要连 push 本身都拒绝，需要额外开分支保护/规则集（Require a pull request before merging）。
+> 合并前必须让 PR 的 `CI · 应用` 全绿。**日常改动无需在本地硬跑全套测试、构建或 E2E**——直接推送分支并提 PR，充分利用 PR 自动触发的 `CI · 应用` Actions 算力完成全套门禁。直接 push 到 `main` 时，`Deploy · 应用` 会先在 `ci` job 里复用 `CI · 应用`，CI 不过不会部署。要连 push 本身都拒绝，需要额外开分支保护/规则集（Require a pull request before merging）。
 
 ## Secrets / Variables
 

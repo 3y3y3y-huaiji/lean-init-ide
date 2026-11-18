@@ -5,6 +5,8 @@ import { SITE_ORIGIN } from './meta';
 import { allStaticRoutes } from './prerender';
 import { canonicalRoutePath } from './router';
 import {
+  buildAiCatalogJson,
+  buildLlmsTxt,
   buildRobotsTxt,
   buildSitemapXml,
   escapeXml,
@@ -86,5 +88,31 @@ describe('SEO 产物生成', () => {
       'src/challenges.ts',
     ]);
     expect(routeSourceFiles({ page: 'notFound', locale: 'zh' })).toEqual(['src/i18n/zh.ts']);
+  });
+
+  it('llms.txt 包含必需的 H1 标题、摘要与中英文页面/课程/挑战链接', () => {
+    const llms = buildLlmsTxt();
+    expect(llms.startsWith('# Lean Init IDE\n')).toBe(true);
+    expect(llms).toContain('\n> ');
+    const links = Array.from(llms.matchAll(/^- \[[^\]]+\]\((https:\/\/[^)]+)\): /gm), (m) => m[1]!);
+    expect(links.length).toBeGreaterThan(50);
+    expect(links).toContain(`${SITE_ORIGIN}/en/`);
+    expect(links).toContain(`${SITE_ORIGIN}/zh/`);
+    expect(links).toContain(`${SITE_ORIGIN}/en/learn/what-is-lean`);
+    expect(links).toContain(`${SITE_ORIGIN}/zh/challenges/${CHALLENGES[0]!.slug}`);
+    expect(llms.endsWith('\n')).toBe(true);
+  });
+
+  it('ai-catalog.json 输出合法的 ARD 清单 JSON', () => {
+    const raw = buildAiCatalogJson();
+    const parsed = JSON.parse(raw) as {
+      specVersion: string;
+      host: { displayName: string; identifier: string; documentationUrl: string };
+      entries: unknown[];
+    };
+    expect(parsed.specVersion).toBe('1.0');
+    expect(parsed.host.identifier).toBe('did:web:criticalthinking.de5.net');
+    expect(parsed.host.documentationUrl).toBe(`${SITE_ORIGIN}/llms.txt`);
+    expect(parsed.entries).toEqual([]);
   });
 });

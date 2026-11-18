@@ -42,6 +42,11 @@ export interface Wasm64RuntimeManifest {
   readonly bucket: string;
   readonly primary: { readonly label: string; readonly baseUrl: string };
   readonly fallback: { readonly label: string; readonly baseUrl: string };
+  readonly mirror?: {
+    readonly label: string;
+    readonly baseUrl: string;
+    readonly prefix?: string;
+  };
   readonly assets: readonly Wasm64AssetEntry[];
 }
 
@@ -54,6 +59,9 @@ export interface PackageWasm64Options {
   readonly leanVersion?: string;
   readonly keyPrefix?: string;
   readonly fallbackBaseUrl?: string;
+  readonly mirrorBaseUrl?: string;
+  readonly mirrorLabel?: string;
+  readonly mirrorPrefix?: string;
   readonly bucket?: string;
   readonly level?: number;
   readonly chunkBytes?: number;
@@ -152,6 +160,11 @@ export const packageWasm64Runtime = (options: PackageWasm64Options): Wasm64Runti
   const cacheSeed = assets.map((asset) => `${asset.name}:${asset.sha256}`).join('\n');
   const cacheKey = `w64-${sha256(Buffer.from(cacheSeed)).slice(0, 8)}`;
 
+  const mirrorBaseUrl =
+    options.mirrorBaseUrl ?? 'https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/';
+  const mirrorLabel = options.mirrorLabel ?? '魔搭镜像（国内）';
+  const mirrorPrefix = (options.mirrorPrefix ?? keyPrefix).replace(/^\/+|\/+$/g, '');
+
   const manifest: Wasm64RuntimeManifest = {
     schemaVersion: 1,
     experimental: true,
@@ -162,6 +175,9 @@ export const packageWasm64Runtime = (options: PackageWasm64Options): Wasm64Runti
     bucket,
     primary: { label: 'Pages Functions (R2)', baseUrl: '/cdn/' },
     fallback: { label: 'GitHub release', baseUrl: fallbackBaseUrl },
+    ...(mirrorBaseUrl
+      ? { mirror: { label: mirrorLabel, baseUrl: mirrorBaseUrl, prefix: mirrorPrefix } }
+      : {}),
     assets,
   };
 
@@ -184,6 +200,9 @@ const SPEC: Record<string, FlagSpec> = {
   'lean-version': { kind: 'string', valueName: 'ver' },
   'key-prefix': { kind: 'string', valueName: 'prefix' },
   'fallback-base': { kind: 'string', valueName: 'url' },
+  'mirror-base': { kind: 'string', valueName: 'url' },
+  'mirror-label': { kind: 'string', valueName: 'label' },
+  'mirror-prefix': { kind: 'string', valueName: 'prefix' },
   bucket: { kind: 'string', valueName: 'name' },
   level: { kind: 'number', valueName: 'n' },
 };
@@ -206,6 +225,9 @@ const main = (): void => {
     leanVersion: optionalString(parsed, 'lean-version'),
     keyPrefix: optionalString(parsed, 'key-prefix'),
     fallbackBaseUrl: optionalString(parsed, 'fallback-base'),
+    mirrorBaseUrl: optionalString(parsed, 'mirror-base'),
+    mirrorLabel: optionalString(parsed, 'mirror-label'),
+    mirrorPrefix: optionalString(parsed, 'mirror-prefix'),
     bucket: optionalString(parsed, 'bucket'),
     level,
   });

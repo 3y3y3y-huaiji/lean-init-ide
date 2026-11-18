@@ -44,6 +44,11 @@ describe('packageWasm64Runtime', () => {
     expect(manifest.experimental).toBe(true);
     expect(manifest.arch).toBe('wasm64');
     expect(manifest.cacheKey).toMatch(/^w64-[0-9a-f]{8}$/);
+    expect(manifest.mirror).toEqual({
+      label: '魔搭镜像（国内）',
+      baseUrl: 'https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/',
+      prefix: 'wasm-lean4/4.36.0-rc2-wasm64',
+    });
     expect(manifest.assets.map((a) => a.name)).toEqual([
       'lean-lsp-adapted.mjs',
       'lean-lsp.wasm.zst',

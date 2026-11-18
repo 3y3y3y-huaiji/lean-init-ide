@@ -124,6 +124,10 @@ await check('安全响应头', async () => {
   );
   assert(csp.includes("frame-ancestors 'none'"), 'CSP 缺少 frame-ancestors');
   assert(
+    (response.headers.get('strict-transport-security') ?? '').includes('max-age=31536000'),
+    `Strict-Transport-Security=${response.headers.get('strict-transport-security') ?? '(缺失)'}`,
+  );
+  assert(
     response.headers.get('referrer-policy') === 'strict-origin-when-cross-origin',
     `Referrer-Policy=${response.headers.get('referrer-policy') ?? '(缺失)'}`,
   );
@@ -131,7 +135,7 @@ await check('安全响应头', async () => {
     (response.headers.get('permissions-policy') ?? '').includes('camera=()'),
     `Permissions-Policy=${response.headers.get('permissions-policy') ?? '(缺失)'}`,
   );
-  return 'CSP / Referrer-Policy / Permissions-Policy 就位';
+  return 'HSTS / CSP / Referrer-Policy / Permissions-Policy 就位';
 });
 
 await check('Service Worker 可更新', async () => {
@@ -162,6 +166,19 @@ await check('SEO 文件直出', async () => {
     robots.body.toString('utf8').includes('Sitemap: https://criticalthinking.de5.net/sitemap.xml'),
     'robots.txt 未声明 sitemap',
   );
+
+  const llms = await request(`${origin}/llms.txt`);
+  assert(llms.status === 200, `llms.txt 期望 200，实际 ${llms.status}`);
+  assert(llms.body.toString('utf8').startsWith('# '), 'llms.txt 缺少 H1 标题，疑似被 SPA 回退拦截');
+
+  const catalog = await request(`${origin}/.well-known/ai-catalog.json`);
+  assert(catalog.status === 200, `ai-catalog.json 期望 200，实际 ${catalog.status}`);
+  const catalogType = catalog.headers.get('content-type') ?? '';
+  assert(
+    catalogType.includes('application/json'),
+    `ai-catalog.json Content-Type=${catalogType || '(缺失)'}`,
+  );
+  JSON.parse(catalog.body.toString('utf8'));
   return '200，Content-Type 正确，未被 SPA 回退拦截';
 });
 

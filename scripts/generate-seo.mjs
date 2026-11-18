@@ -56,7 +56,7 @@ try {
       contents: `
         export { loadLocale } from './src/i18n/index.ts';
         export { allStaticRoutes } from './src/prerender.ts';
-        export { buildRobotsTxt, buildSitemapXml, routeSourceFiles } from './src/seo.ts';
+        export { buildAiCatalogJson, buildLlmsTxt, buildRobotsTxt, buildSitemapXml, routeSourceFiles } from './src/seo.ts';
         export { canonicalRoutePath } from './src/router.ts';
         export { SITE_ORIGIN } from './src/meta.ts';
       `,
@@ -96,11 +96,17 @@ try {
   }));
 
   await mkdir(dist, { recursive: true });
+  const wellKnownDir = resolve(dist, '.well-known');
+  await mkdir(wellKnownDir, { recursive: true });
   const sitemapPath = resolve(dist, 'sitemap.xml');
   const robotsPath = resolve(dist, 'robots.txt');
+  const llmsPath = resolve(dist, 'llms.txt');
+  const aiCatalogPath = resolve(wellKnownDir, 'ai-catalog.json');
   await Promise.all([
     writeFile(sitemapPath, ssr.buildSitemapXml(entries), 'utf8'),
     writeFile(robotsPath, ssr.buildRobotsTxt(), 'utf8'),
+    writeFile(llmsPath, ssr.buildLlmsTxt(), 'utf8'),
+    writeFile(aiCatalogPath, ssr.buildAiCatalogJson(), 'utf8'),
   ]);
 
   // 构建日志里带上数量，便于发现课程数据源与产物不一致。
@@ -108,9 +114,15 @@ try {
   console.log(`SEO 生成完成：${entries.length} 条 URL（含 ${lessons} 节中英文课程）`);
   console.log(`  - ${sitemapPath}`);
   console.log(`  - ${robotsPath}`);
+  console.log(`  - ${llmsPath}`);
+  console.log(`  - ${aiCatalogPath}`);
   if (!(await readFile(sitemapPath, 'utf8')).includes('<urlset')) {
     throw new Error('sitemap.xml 写入后校验失败');
   }
+  if (!(await readFile(llmsPath, 'utf8')).startsWith('# ')) {
+    throw new Error('llms.txt 写入后校验失败');
+  }
+  JSON.parse(await readFile(aiCatalogPath, 'utf8'));
 } finally {
   await rm(tempDir, { recursive: true, force: true });
 }

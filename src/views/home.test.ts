@@ -64,6 +64,21 @@ describe('首页渲染', () => {
     }
   });
 
+  it('三条学习路径卡片的开始按钮各自拥有区分用途的 aria-label', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      document.body.innerHTML = renderHome(locale);
+      const t = messagesFor(locale);
+      const labels = (['intro', 'math', 'eng'] as const).map((track) => {
+        const anchor = document.body.querySelector<HTMLAnchorElement>(`[data-home-cta="${track}"]`);
+        const label = anchor?.getAttribute('aria-label') ?? '';
+        expect(label, `${locale}:${track}`).toContain(t.home.courseCta);
+        expect(label, `${locale}:${track}`).toContain(t.lesson.tracks[track].title);
+        return label;
+      });
+      expect(new Set(labels).size, locale).toBe(3);
+    }
+  });
+
   it('两种语言的标题都出现在页面里', () => {
     expect(renderHome('zh')).toContain(messagesFor('zh').home.title);
     expect(renderHome('en')).toContain(messagesFor('en').home.title);

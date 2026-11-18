@@ -1,11 +1,13 @@
 /**
- * 站点 SEO 产物的唯一构造入口：sitemap.xml 与 robots.txt。
+ * 站点 SEO 与智能体发现产物的唯一构造入口：sitemap.xml、robots.txt、llms.txt 与 ai-catalog.json。
  *
  * 构建期由 scripts/generate-seo.mjs 调用；路由不在这里枚举，
  * 而是复用 src/prerender.ts 的 allStaticRoutes，与预渲染页面保持同一份数据源。
  */
+import { CHALLENGES } from './challenges';
+import { messagesFor } from './i18n';
 import { SITE_ORIGIN } from './meta';
-import type { Route } from './router';
+import { FIRST_LESSON_SLUG, type Route } from './router';
 
 export type SitemapEntry = {
   /** 绝对 URL，由 canonical 路由路径拼上 SITE_ORIGIN。 */
@@ -54,6 +56,80 @@ export const buildRobotsTxt = (origin: string = SITE_ORIGIN): string =>
     `Sitemap: ${origin}/sitemap.xml`,
     '',
   ].join('\n');
+
+/** 生成符合 llmstxt.org 规范的站点摘要与结构化导航索引。 */
+export const buildLlmsTxt = (origin: string = SITE_ORIGIN): string => {
+  const en = messagesFor('en');
+  const zh = messagesFor('zh');
+  const lessonLines = (locale: 'en' | 'zh') =>
+    messagesFor(locale).lesson.lessons.map(
+      (lesson) => `- [${lesson.title}](${origin}/${locale}/learn/${lesson.slug}): ${lesson.lead}`,
+    );
+  const challengeLines = (locale: 'en' | 'zh') =>
+    CHALLENGES.map(
+      (challenge) =>
+        `- [${challenge.title[locale]}](${origin}/${locale}/challenges/${challenge.slug}): ${challenge.summary[locale]}`,
+    );
+
+  return [
+    '# Lean Init IDE',
+    '',
+    `> ${en.home.lead}`,
+    '',
+    '## Core Pages (English)',
+    '',
+    `- [${en.nav.home}](${origin}/en/): ${en.home.title}`,
+    `- [${en.nav.lesson}](${origin}/en/learn/${FIRST_LESSON_SLUG}): ${en.home.courseBody}`,
+    `- [${en.nav.challenges}](${origin}/en/challenges): ${en.challenges.lead}`,
+    `- [${en.nav.playground}](${origin}/en/playground): ${en.playground.hint}`,
+    `- [${en.nav.reference}](${origin}/en/reference): ${en.reference.lead}`,
+    `- [${en.privacy.title}](${origin}/en/privacy): ${en.privacy.intro}`,
+    '',
+    '## 核心页面 (中文)',
+    '',
+    `- [${zh.nav.home}](${origin}/zh/): ${zh.home.title}`,
+    `- [${zh.nav.lesson}](${origin}/zh/learn/${FIRST_LESSON_SLUG}): ${zh.home.courseBody}`,
+    `- [${zh.nav.challenges}](${origin}/zh/challenges): ${zh.challenges.lead}`,
+    `- [${zh.nav.playground}](${origin}/zh/playground): ${zh.playground.hint}`,
+    `- [${zh.nav.reference}](${origin}/zh/reference): ${zh.reference.lead}`,
+    `- [${zh.privacy.title}](${origin}/zh/privacy): ${zh.privacy.intro}`,
+    '',
+    '## Lessons (English)',
+    '',
+    ...lessonLines('en'),
+    '',
+    '## 课程列表 (中文)',
+    '',
+    ...lessonLines('zh'),
+    '',
+    '## Math Challenges (English)',
+    '',
+    ...challengeLines('en'),
+    '',
+    '## 趣味数学挑战 (中文)',
+    '',
+    ...challengeLines('zh'),
+    '',
+  ].join('\n');
+};
+
+/** 生成合法的 ARD 清单（当前站点不对外暴露 MCP/A2A 端点，entries 为空数组）。 */
+export const buildAiCatalogJson = (origin: string = SITE_ORIGIN): string => {
+  const host = new URL(origin).host;
+  return `${JSON.stringify(
+    {
+      specVersion: '1.0',
+      host: {
+        displayName: 'Lean Init IDE',
+        identifier: `did:web:${host}`,
+        documentationUrl: `${origin}/llms.txt`,
+      },
+      entries: [],
+    },
+    null,
+    2,
+  )}\n`;
+};
 
 const VIEW_SOURCE: Record<Route['page'], string | null> = {
   home: 'src/views/home.ts',

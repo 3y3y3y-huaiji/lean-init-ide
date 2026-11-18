@@ -4,6 +4,7 @@ import { messagesFor } from './i18n';
 import {
   allStaticRoutes,
   injectPrerenderedHtml,
+  inlineStylesheet,
   outputRelPath,
   pageDescription,
   pageTitle,
@@ -93,5 +94,21 @@ describe('SSG 预渲染', () => {
 
     expect(renderStaticApp({ page: 'notFound', locale: 'en' })).toContain('/en/');
     expect(renderStaticApp({ page: 'privacy', locale: 'en' })).toContain('/en/');
+  });
+
+  it('inlineStylesheet 内联主样式表并保留 CSS 中的 $ 字符，找不到匹配链接时原样返回', () => {
+    const withCss = `${BASE_TEMPLATE.replace(
+      '</head>',
+      '    <link rel="stylesheet" crossorigin href="/assets/index-abc.css">\n  </head>',
+    )}`;
+    const inlined = inlineStylesheet(
+      withCss,
+      '/assets/index-abc.css',
+      'body{content:"$&";color:red}</style>',
+    );
+    expect(inlined).not.toContain('<link rel="stylesheet"');
+    expect(inlined).toContain('<style>body{content:"$&";color:red}<\\/style></style>');
+
+    expect(inlineStylesheet(BASE_TEMPLATE, '/assets/missing.css', 'a{}')).toBe(BASE_TEMPLATE);
   });
 });

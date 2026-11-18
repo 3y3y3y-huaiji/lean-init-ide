@@ -41,7 +41,7 @@ try {
     stdin: {
       contents: `
         export { loadLocale } from './src/i18n/index.ts';
-        export { allStaticRoutes, injectPrerenderedHtml, outputRelPath } from './src/prerender.ts';
+        export { allStaticRoutes, injectPrerenderedHtml, inlineStylesheet, outputRelPath } from './src/prerender.ts';
       `,
       resolveDir: root,
       loader: 'ts',
@@ -71,7 +71,18 @@ try {
   const ssr = await import(pathToFileURL(ssrBundle).href);
   await Promise.all([ssr.loadLocale('zh'), ssr.loadLocale('en')]);
 
-  const templateHtml = await readFile(templatePath, 'utf8');
+  let templateHtml = await readFile(templatePath, 'utf8');
+  const stylesheetMatch =
+    /<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["'](\/assets\/[^"']+\.css)["'][^>]*>/i.exec(
+      templateHtml,
+    );
+  if (stylesheetMatch?.[1]) {
+    const cssHref = stylesheetMatch[1];
+    const cssText = await readFile(resolve(dist, cssHref.slice(1)), 'utf8');
+    templateHtml = ssr.inlineStylesheet(templateHtml, cssHref, cssText);
+    await writeFile(templatePath, templateHtml, 'utf8');
+  }
+
   let manifest = null;
   try {
     manifest = JSON.parse(await readFile(manifestPath, 'utf8'));

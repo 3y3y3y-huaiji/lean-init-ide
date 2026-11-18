@@ -368,6 +368,7 @@ jobs:
             "$GITHUB_WORKSPACE/work/WHNF-stack.c" \
             "$GITHUB_WORKSPACE/work/lean-src/src/Lean/Meta/WHNF.lean"
           emcc -c -O2 -mtail-call -I"$DIST/include" -o work/WHNF-stack.o work/WHNF-stack.c
+          grep -qE 'LEAN_EXPORT.*__Lean_Meta_whnfCore_go\(' work/WHNF-stack.c
           wasm2wat --enable-all work/WHNF-stack.o -o work/WHNF-stack.wat
           wc -l work/WHNF-stack.wat
 

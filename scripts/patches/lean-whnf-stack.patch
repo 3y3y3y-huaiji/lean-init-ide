@@ -1,6 +1,6 @@
 --- a/src/Lean/Meta/WHNF.lean
 +++ b/src/Lean/Meta/WHNF.lean
-@@ -615,78 +615,136 @@
+@@ -615,78 +615,141 @@
    | .letE _ _ _ b nondep => if b.hasLooseBVars || (nondep && !consumeNondep) then e else consumeUnusedLet b consumeNondep
    | _ => e
  
@@ -195,7 +195,12 @@
 +expand let-expressions, expand assigned meta-variables, unfold aux declarations.
 +-/
 +partial def whnfCore (e : Expr) : MetaM Expr :=
-+  whnfCoreStep [] (.eval e)
++  go e
++where
++  /-- 兼容预编译 `.olean` 跨模块内联后对 `whnfCore.go` 的直接调用。 -/
++  @[noinline]
++  go (e : Expr) : MetaM Expr :=
++    whnfCoreStep [] (.eval e)
  
  /--
    Recall that `_sunfold` auxiliary definitions contains the markers: `markSmartUnfoldingMatch` (*) and `markSmartUnfoldingMatchAlt` (**).

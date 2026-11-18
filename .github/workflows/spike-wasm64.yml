@@ -209,6 +209,9 @@ jobs:
           export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
           export WASM_LLVM_LEAN_JOBS=3
           bash producer/lean-browser/scripts/build.sh cgen
+          WHNF_C="$(find "$WASM_LLVM_LEAN_WORK_DIR/cgen" -name 'WHNF.c' | head -n 1)"
+          test -n "$WHNF_C"
+          grep -qE 'LEAN_EXPORT.*l___private_Lean_Meta_WHNF_0__Lean_Meta_whnfCore_go\(' "$WHNF_C"
 
   # 每次 push 的快速回路：只证明工具链、Init 编译和 Init LSP 没坏。
   smoke:

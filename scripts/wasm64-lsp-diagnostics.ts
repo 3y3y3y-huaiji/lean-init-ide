@@ -249,10 +249,13 @@ export const createSession = ({
       stopIdle();
       failWaiters(new Error(`worker 异常: ${message.failure}`));
     } else if (typeof message.exit === 'number') {
-      exited = true;
-      stopIdle();
-      // 退出码为 0 也算提前结束：诊断还没等到就退出，继续等只会白等。
-      if (!disposing) failWaiters(new Error(`worker 提前退出 code=${message.exit}`));
+      // PROXY_TO_PTHREAD 派发完成时也会冒出一条 exit:0，真实进程仍在 pthread 上跑。
+      // 只有非零退出才是故障；零退出但迟迟没有诊断，交给无进展看门狗兜底。
+      if (message.exit !== 0) {
+        exited = true;
+        stopIdle();
+        if (!disposing) failWaiters(new Error(`worker 异常退出 code=${message.exit}`));
+      }
     }
   });
   worker.on('error', (error) => {

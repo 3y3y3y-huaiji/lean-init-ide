@@ -269,6 +269,38 @@ describe('createWasm64Supervisor', () => {
     expect(processes).toHaveLength(1);
   });
 
+  it('didChange 的增量 range 会应用到重启重放缓冲区', async () => {
+    const { processes, send } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage('line1\nline2\nline3'));
+
+    await send({
+      jsonrpc: '2.0',
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: URI, version: 2 },
+        contentChanges: [
+          {
+            range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } },
+            text: 'LINE2',
+          },
+        ],
+      },
+    });
+
+    processes[1]!.callbacks.onExit(2);
+    await flush();
+
+    const replayed = processes[2]!.sent.find(
+      (message) => message.method === 'textDocument/didOpen',
+    );
+    expect(replayed?.params?.textDocument).toMatchObject({
+      text: 'line1\nLINE2\nline3',
+      version: 2,
+    });
+  });
+
   it('didOpen 之前的请求先排队，打开文档后按顺序重放', async () => {
     const { processes, send } = await connect();
     await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });

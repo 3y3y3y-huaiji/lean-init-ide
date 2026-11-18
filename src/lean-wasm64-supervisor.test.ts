@@ -140,6 +140,43 @@ describe('createWasm64Supervisor', () => {
     expect(received.some((message) => message.id === 'lean-browser:init')).toBe(false);
   });
 
+  it('服务端请求 ID 重写后，客户端响应与 $/cancelRequest 都映射回原始 ID', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+    const file = processes[1]!;
+
+    file.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 7,
+      method: '$/lean/plainGoal',
+      params: {},
+    });
+    const rewritten = received.find((message) => message.method === '$/lean/plainGoal');
+    expect(rewritten?.id).toBe('lean-browser:1');
+
+    await send({
+      jsonrpc: '2.0',
+      method: '$/cancelRequest',
+      params: { id: 'lean-browser:1' },
+    });
+    expect(file.sent.at(-1)).toMatchObject({
+      method: '$/cancelRequest',
+      params: { id: 7 },
+    });
+
+    file.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 8,
+      method: '$/lean/plainGoal',
+      params: {},
+    });
+    const second = received.filter((message) => message.method === '$/lean/plainGoal').at(-1);
+    await send({ jsonrpc: '2.0', id: second!.id!, result: { goals: [] } });
+    expect(file.sent.at(-1)).toMatchObject({ id: 8, result: { goals: [] } });
+  });
+
   it('时间窗内反复以退出码 2 重启会判定为重启风暴并停止重开', async () => {
     const onError = vi.fn();
     const { processes, send } = await connect({

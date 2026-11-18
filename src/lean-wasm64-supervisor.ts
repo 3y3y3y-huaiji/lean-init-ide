@@ -257,6 +257,18 @@ export const createWasm64Supervisor = async (
       }
       return;
     }
+    if (message.method === '$/cancelRequest') {
+      // 服务端请求对客户端用的是重写后的 ID；取消时也要映射回 Lean 进程的原始 ID。
+      const requested = message.params?.id;
+      if (typeof requested === 'string') {
+        const id = serverRequests.get(requested);
+        if (id !== undefined) {
+          serverRequests.delete(requested);
+          fileProcess?.send({ ...message, params: { ...message.params, id } });
+          return;
+        }
+      }
+    }
     if (message.id !== undefined && UNSUPPORTED_METHODS.has(message.method ?? '')) {
       emitError(message.id, -32601, 'This operation requires the native Lean project watchdog.');
       return;

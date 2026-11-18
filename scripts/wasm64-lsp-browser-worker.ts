@@ -3,6 +3,10 @@
  * 由 esbuild 打包为 work/dist/lsp-worker.mjs，供 wasm64-browser-harness.ts 启动。
  */
 
+// V8 默认 Error.stackTraceLimit=10，wasm 爆栈只会留下最顶上 10 帧。
+// depth 探针需要看 whnfCoreStep 下面的完整递归环，200 帧足够覆盖 1MB 栈。
+Error.stackTraceLimit = 200;
+
 interface StreamOps {
   write: (stream: unknown, buffer: Uint8Array, offset: number, length: number) => number;
 }

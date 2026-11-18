@@ -13,8 +13,9 @@ const FIXTURE = [
 ].join('\n');
 
 describe('adaptGlue', () => {
-  it('注入全部 6 处补丁', () => {
+  it('注入全部 7 处补丁', () => {
     const { glue } = adaptGlue(FIXTURE);
+    expect(glue.startsWith('Error.stackTraceLimit = 200;\n')).toBe(true);
     expect(glue).toContain('lspStdin:Module["lspStdin"]');
     expect(glue).toContain('Module["lspStdin"]=msgData.lspStdin;');
     expect(glue).toContain('__emscripten_thread_cleanup];');

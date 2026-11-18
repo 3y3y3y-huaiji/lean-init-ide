@@ -108,6 +108,11 @@ export const adaptGlue = (source: string): AdaptResult => {
     'fd0 环形缓冲',
   );
 
+  // 7. V8 默认 Error.stackTraceLimit=10。pthread worker 加载的是这份 glue，
+  //    每个 realm 的 stackTraceLimit 相互独立；在文件最前面统一抬高，
+  //    wasm 爆栈时 pthread 侧才能把 whnfCoreStep 下面的完整递归环回传。
+  glue = `Error.stackTraceLimit = 200;\n${glue}`;
+
   return { glue, fdReadSnippet: FD_READ_SNIPPET };
 };
 

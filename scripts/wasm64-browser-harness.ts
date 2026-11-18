@@ -7,6 +7,9 @@
  */
 import { FrameDecoder, RING_CONTROL_BYTES, RingWriter, encodeFrame } from './lib/frames.ts';
 
+// compile 模式在页面主线程跑 wasm；V8 默认只保留 10 帧，看不到爆栈的完整调用环。
+Error.stackTraceLimit = 200;
+
 interface EmscriptenFS {
   mkdirTree(path: string): void;
   writeFile(path: string, data: Uint8Array): void;
@@ -480,7 +483,9 @@ const runDepthMode = async (environment: EnvironmentReport, config: QueryConfig)
         break;
       }
     } catch (error: unknown) {
-      const detail = String((error as Error)?.message ?? error).slice(0, 800);
+      // 不截断：worker 侧已把 stackTraceLimit 提到 200，这里再 slice 会刚好把
+      // whnfCoreStep 下面的递归环切掉，等于白跑一轮。
+      const detail = String((error as Error)?.message ?? error);
       const line = `[depth] N=${n} failed: ${detail}`;
       console.log(line);
       log.push(line);

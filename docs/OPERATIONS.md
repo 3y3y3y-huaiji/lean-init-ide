@@ -9,7 +9,7 @@ PR CI 负责常规门禁；合并到 `main` 后由 `Deploy · 应用` 直接构�
 直接 push `main` 时，`Deploy · 应用` 会先复用完整的 `CI · 应用`，通过后才部署：
 
 ```
-PR CI（static / test / build / e2e / audit / actionlint） → merge main → Deploy · 应用（build + deploy + smoke）
+PR CI（changes 分档 → static / test / build / e2e-smoke / e2e-lessons-* / audit / actionlint） → merge main → Deploy · 应用（build + deploy + smoke）
 direct push main → Deploy · 应用（CI · 应用 → build + deploy + smoke）
 ```
 
@@ -157,7 +157,7 @@ pnpm run upload:modelscope -- --extensions work/extensions --metadata
 ```
 
 - 扩展包不进构建期下载目录（`public/wasm-lean4/`），由编辑器按需拉取；上传脚本通过 `--extensions`（或 `LEAN_EXTENSION_DIR`）定位文件。
-- 浏览器 E2E 需要真实编译 Std / Batteries 课程，CI 的 e2e job 用 `LEAN_FETCH_EXTENSIONS=1 pnpm run fetch:assets` 临时把扩展分片放进 `public/wasm-lean4/`，只供本地网关使用，不进入部署产物。
+- 浏览器 E2E 需要真实编译 Std / Batteries 课程，CI 的课程分片 job 用 `LEAN_FETCH_EXTENSIONS=1 pnpm run fetch:assets` 临时把扩展分片放进 `public/wasm-lean4/`，只供本地网关使用，不进入部署产物；这部分资产用独立的 `-extensions` 缓存键，避免每次从远端重下约 75 MB。
 - 扩展资产登记在 `config/lean4-runtime.json` 的 `extensions` 数组里，key 位于 `wasm-lean4/<version>/extensions/<id>/`；魔搭镜像仍是扁平目录。
 
 - `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/4.35.0/` 与实验性 `wasm-lean4/4.36.0-rc2-wasm64/`。`wasm-lean4/` 根下 4.34 的旧文件以及 R2 桶根目录的 4.34 旧对象已手动删除，当前只保留 4.35.0（稳定默认）与 4.36.0-rc2-wasm64（实验性）。

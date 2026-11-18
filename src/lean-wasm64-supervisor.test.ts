@@ -269,6 +269,44 @@ describe('createWasm64Supervisor', () => {
     expect(processes).toHaveLength(1);
   });
 
+  it('didOpen 之前的请求先排队，打开文档后按顺序重放', async () => {
+    const { processes, send } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+
+    await send({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: URI } },
+    });
+    expect(processes).toHaveLength(1);
+
+    await send(openMessage());
+    expect(processes[1]!.sent.map((message) => message.method)).toEqual([
+      'initialize',
+      'textDocument/didOpen',
+      'textDocument/hover',
+    ]);
+  });
+
+  it('didOpen 之前最多排队 128 个请求，超出即终止', async () => {
+    const onError = vi.fn();
+    const { send } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+
+    for (let id = 2; id <= 130; id += 1) {
+      await send({
+        jsonrpc: '2.0',
+        id,
+        method: 'textDocument/hover',
+        params: { textDocument: { uri: URI } },
+      });
+    }
+
+    expect(onError).toHaveBeenCalledWith('Too many Lean requests before didOpen.');
+  });
+
   it('非 2 的退出码是致命错误：上报并让未完成请求以错误结算', async () => {
     const onError = vi.fn();
     const { processes, send, received } = await connect({ onError });

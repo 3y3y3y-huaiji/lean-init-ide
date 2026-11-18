@@ -35,10 +35,9 @@ const tailAsset = manifest.assets.find((asset) => asset.name === 'lean-init-05.p
 const workerAsset = manifest.assets.find((asset) => asset.name === 'runner-worker.js');
 const wasm64Ranged = wasm64Manifest.assets.find((asset) => asset.ranged === true);
 const wasm64Index = wasm64Manifest.assets.find((asset) => asset.name === 'lean-init-64.index.json');
-const wasm64Tail = wasm64Manifest.assets
+const wasm64Packs = wasm64Manifest.assets
   .filter((asset) => /^lean-init-64-\d+\.pack\.zst\.bin$/.test(asset.name))
-  .sort((left, right) => left.name.localeCompare(right.name))
-  .at(-1);
+  .sort((left, right) => left.name.localeCompare(right.name));
 
 const request = async (url, { method = 'GET', headers = {}, body: payload } = {}) => {
   const dir = await mkdtemp(join(tmpdir(), 'lean-smoke-'));
@@ -238,18 +237,23 @@ if (wasm64Ranged) {
   });
 }
 
-if (wasm64Tail) {
-  await check(`/cdn wasm64 尾部分片（${wasm64Tail.key}）`, async () => {
-    const start = wasm64Tail.bytes - 1024;
-    const response = await request(`${origin}/cdn/${wasm64Tail.key}?r=${wasm64Manifest.cacheKey}`, {
-      headers: { Range: `bytes=${start}-${wasm64Tail.bytes - 1}` },
-    });
-    assert(response.status === 206, `期望 206，实际 ${response.status}`);
-    const expected = `bytes ${start}-${wasm64Tail.bytes - 1}/${wasm64Tail.bytes}`;
-    const actual = response.headers.get('content-range');
-    assert(actual === expected, `Content-Range=${actual ?? '(缺失)'}，期望 ${expected}`);
-    assert(response.body.length === 1024, `实际收到 ${response.body.length} 字节`);
-    return '206，尾部分片正确';
+if (wasm64Packs.length > 0) {
+  await check('wasm64 pack 分片齐全', async () => {
+    for (const pack of wasm64Packs) {
+      const start = pack.bytes - 16;
+      const response = await request(`${origin}/cdn/${pack.key}?r=${wasm64Manifest.cacheKey}`, {
+        headers: { Range: `bytes=${start}-${pack.bytes - 1}` },
+      });
+      assert(response.status === 206, `${pack.name} 期望 206，实际 ${response.status}`);
+      const expected = `bytes ${start}-${pack.bytes - 1}/${pack.bytes}`;
+      const actual = response.headers.get('content-range');
+      assert(
+        actual === expected,
+        `${pack.name} Content-Range=${actual ?? '(缺失)'}，期望 ${expected}`,
+      );
+      assert(response.body.length === 16, `${pack.name} 实际收到 ${response.body.length} 字节`);
+    }
+    return `${wasm64Packs.length} 个分片可读`;
   });
 }
 

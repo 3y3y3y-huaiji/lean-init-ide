@@ -20,7 +20,7 @@ pnpm run smoke       # 线上冒烟，发版后跑
 构建机需要 **Node 24+**：`fetch:assets` 会把上游 gzip 重新压成 zstd，用的是 Node 内置的
 `zlib.zstdCompressSync`。CI 的三个 workflow 都已固定 `node-version: 24`。
 
-改动后必须跑完整门禁，不要只跑 `pnpm test`。
+改动后**不要在本地硬跑完整门禁或 E2E**，优先推送分支并提 PR，利用 PR 的 GitHub Actions（`CI · 应用`）算力跑完完整检查；本地仅在需要快速确认时按需运行轻量单测或静态检查即可。
 
 本地环境的坑：`pnpm audit` 要加 `--registry=https://registry.npmjs.org`（镜像站不支持 audit 的 POST）；
 pnpm 首次安装需要下载原生二进制，Windows 杀软可能误报，必要时把 pnpm 安装目录和项目 `node_modules` 加进排除项。
@@ -40,7 +40,9 @@ pnpm exec vitest run src/lsp-patches.test.ts
 
 ## 质量门禁
 
-本地和 CI 跑同一套命令，任一失败即阻断合并：
+> **PR 阶段无需本地跑全套检查**：提 PR 后会由 `.github/workflows/ci.yml`（`CI · 应用`）在 GitHub Actions 上自动执行下列完整门禁与 E2E，合并前等待 Actions 检查全绿即可。
+
+CI 跑下列命令，任一失败即阻断合并（本地仅作按需参考）：
 
 | 命令 | 检查内容 |
 | --- | --- |
@@ -62,7 +64,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 ## 贡献约定
 
 - 改代码前先读 [AGENTS.md](../AGENTS.md) 的硬约束与模块边界；资产清单、源解析、Range 语义各有唯一入口。
-- 提交前跑完整门禁，一个提交只做一件事，提交信息写清楚「为什么」。
+- 改完后直接推送分支并提 PR，交由 GitHub Actions（`CI · 应用`）算力跑完整门禁，不在本地重复跑重型测试或 E2E；一个提交只做一件事，提交信息写清楚「为什么」。
 - 课程内容只能落在 Init 范围内；用户可见文案必须中英文同时补齐。
 
 ## 版本与发布

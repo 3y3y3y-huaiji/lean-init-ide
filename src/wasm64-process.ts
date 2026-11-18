@@ -39,16 +39,17 @@ export const createWasm64ProcessFactory =
       rejectReady = reject;
     });
 
-    const fail = (message: string): void => {
-      if (disposed) return;
-      rejectReady(new Error(message));
-      callbacks.onFailure(message);
-    };
-
     const startupTimer = setTimeout(
       () => fail('Lean wasm64 process startup timed out.'),
       hooks.startupTimeoutMs,
     );
+
+    const fail = (message: string): void => {
+      if (disposed) return;
+      clearTimeout(startupTimer);
+      rejectReady(new Error(message));
+      callbacks.onFailure(message);
+    };
 
     const dispose = (): void => {
       if (disposed) return;

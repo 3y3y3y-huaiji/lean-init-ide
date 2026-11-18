@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_BUDGET_BYTES,
+  WASM64_MEMORY_BUDGET_BYTES,
   cacheBudgetBytes,
   detectMemoryTier,
+  probeMemory64Support,
   readMemorySignals,
   shouldAutoStart,
+  wasm64MaxMemoryBytes,
 } from './device';
 
 describe('detectMemoryTier', () => {
@@ -81,5 +84,36 @@ describe('readMemorySignals', () => {
     });
     expect(signals.deviceMemory).toBe(8);
     expect(signals.coarsePointer).toBeUndefined();
+  });
+});
+
+describe('wasm64MaxMemoryBytes & probeMemory64Support', () => {
+  it('低内存与标准档位返回对应的 wasm64 堆上限', () => {
+    expect(wasm64MaxMemoryBytes('low')).toBe(1536 * 1024 * 1024);
+    expect(wasm64MaxMemoryBytes('standard')).toBe(3072 * 1024 * 1024);
+    expect(WASM64_MEMORY_BUDGET_BYTES.low).toBeLessThan(WASM64_MEMORY_BUDGET_BYTES.standard);
+  });
+
+  it('探测 memory64 shared 能力并安全处理异常与缺失构造器', () => {
+    const received: unknown[] = [];
+    class OkMemory {
+      constructor(desc: unknown) {
+        received.push(desc);
+      }
+    }
+    expect(probeMemory64Support({ Memory: OkMemory as unknown as typeof WebAssembly.Memory })).toBe(
+      true,
+    );
+    expect(received[0]).toMatchObject({ initial: 1, maximum: 16, shared: true, index: 'i64' });
+
+    class BadMemory {
+      constructor() {
+        throw new TypeError('i64 not supported');
+      }
+    }
+    expect(
+      probeMemory64Support({ Memory: BadMemory as unknown as typeof WebAssembly.Memory }),
+    ).toBe(false);
+    expect(probeMemory64Support({ Memory: undefined })).toBeTypeOf('boolean');
   });
 });

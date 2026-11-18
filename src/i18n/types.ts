@@ -289,6 +289,11 @@ export type Messages = {
     logStartFailed: (message: string) => string;
     logStopped: string;
     logLowMemory: string;
+    statusMemoryLimit: string;
+    logMemorySoftRecycle: (mb: string) => string;
+    logMemoryImportRecycle: (mb: string) => string;
+    logMemoryBackgroundRelease: (mb: string) => string;
+    logMemoryHardLimit: (mb: string, limitMb: string) => string;
   };
   privacy: {
     eyebrow: string;

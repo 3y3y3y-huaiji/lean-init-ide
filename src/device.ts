@@ -17,6 +17,12 @@ export const CACHE_BUDGET_BYTES: Record<MemoryTier, number> = {
   standard: 512 * MIB,
 };
 
+/** wasm64 运行时的单实例线性内存上限：按设备内存档位限制，给浏览器标签页留安全余量。 */
+export const WASM64_MEMORY_BUDGET_BYTES: Record<MemoryTier, number> = {
+  low: 1536 * MIB,
+  standard: 3072 * MIB,
+};
+
 export type MemorySignals = {
   /** navigator.deviceMemory，单位 GiB；Safari / Firefox 不提供。 */
   deviceMemory?: number;
@@ -39,6 +45,32 @@ export const detectMemoryTier = (signals: MemorySignals): MemoryTier => {
 };
 
 export const cacheBudgetBytes = (tier: MemoryTier): number => CACHE_BUDGET_BYTES[tier];
+
+export const wasm64MaxMemoryBytes = (tier: MemoryTier): number => WASM64_MEMORY_BUDGET_BYTES[tier];
+
+type MemoryProbeScope = {
+  Memory?: typeof WebAssembly.Memory;
+};
+
+/** 探测当前宿主是否同时支持 wasm64 与共享内存（`index: 'i64', shared: true`）。 */
+export const probeMemory64Support = (scope: MemoryProbeScope = {}): boolean => {
+  const Memory =
+    scope.Memory ?? (typeof WebAssembly === 'undefined' ? undefined : WebAssembly.Memory);
+  if (typeof Memory !== 'function') return false;
+  try {
+    // TS 内置 WebAssembly.MemoryDescriptor 尚未普遍包含 memory64 的 index 字段；
+    // 不支持的引擎会直接抛 TypeError/RangeError，视为不支持 wasm64。
+    new Memory({
+      initial: 1,
+      maximum: 16,
+      shared: true,
+      index: 'i64',
+    } as unknown as WebAssembly.MemoryDescriptor);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** 低内存或用户开了省流模式时都不自动下载，交由用户确认。 */
 export const shouldAutoStart = (tier: MemoryTier, saveData: boolean): boolean =>

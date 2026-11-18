@@ -273,11 +273,13 @@ export const renderLeanMarkup = (
 
   const runtimeMenu = () => `
     <details class="relative shrink-0" data-role="runtime-arch">
-      <summary class="${ghostButtonClass} cursor-pointer list-none" title="${t.runtimeTitle}">
-        <span data-role="runtime-arch-label">${t.runtimeTitle}: wasm32</span>
+      <summary class="${ghostButtonClass} cursor-pointer list-none" title="${t.advancedTitle}">
+        ${t.advancedTitle}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>
       </summary>
       <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-72 rounded-xl border border-line bg-panel p-2.5">
+        <!-- 实验性运行时默认折叠在高级设置里，普通访客只看到稳定的 wasm32 -->
+        <p data-role="runtime-arch-label" class="m-0 mb-1.5 px-1 text-[11px] font-[650] uppercase tracking-[0.06em] text-muted">${t.runtimeTitle}: wasm32</p>
         <!-- 实验性提醒：默认走稳定的 wasm32，wasm64 仅作实验试用，不可作生产依赖 -->
         <div role="note" class="mb-2 rounded-lg border border-warn/45 bg-warn/10 px-2.5 py-2 text-[11px] leading-relaxed text-fg">
           ${t.runtimeExperimentalWarning}

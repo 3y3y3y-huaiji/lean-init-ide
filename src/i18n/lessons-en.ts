@@ -6,11 +6,11 @@ export const lessonsEn: LessonPage[] = [
     track: 'intro',
     navTitle: '01 · A compiler that does math',
     title: 'A compiler that does math homework',
-    lead: 'Forget proofs for a second: think of Lean as a type checker that can read mathematical sentences.',
+    lead: 'Forget proofs for a second: think of Lean as a math referee that never lets anything slide. It checks every step you submit.',
     blocks: [
       {
         kind: 'p',
-        text: 'When you write TypeScript, the compiler rejects `const x: number = "abc"`. Lean does the same thing, except the things it checks are mathematical statements instead of types.',
+        text: 'A teacher might say “this is obvious”. Lean does not accept “obvious”: it asks which definition or lemma you used. One wrong step and it stops you with a red line.',
       },
       {
         kind: 'p',
@@ -19,17 +19,21 @@ export const lessonsEn: LessonPage[] = [
       { kind: 'code', code: '#eval 2 + 3' },
       {
         kind: 'p',
-        text: '`#eval` is `console.log`: it evaluates an expression and shows you the value. `2 + 3` is not a string here; Lean really computes 5.',
+        text: '`#eval` makes Lean compute the expression right there. `2 + 3` is not a string here; Lean really computes 5.',
       },
       { kind: 'code', code: '#check Nat.add' },
       {
         kind: 'p',
-        text: '`#check` is like TypeScript’s `typeof`: it does not run anything, it just tells you the type of a name. `Nat.add` takes two Nats and returns a Nat.',
+        text: '`#check` only asks “what is the type of this name?” without running it. `Nat.add` takes two naturals and returns a natural.',
       },
       { kind: 'code', code: 'example : 2 + 2 = 4 := rfl' },
       {
         kind: 'p',
-        text: '`example : 2 + 2 = 4 := rfl` is a minimal proof. `rfl` means “both sides reduce to exactly the same thing”, so the compiler stamps it and moves on.',
+        text: '`example : 2 + 2 = 4 := rfl` is a minimal proof. `rfl` means both sides simplify to exactly the same thing, so the referee stamps it immediately.',
+      },
+      {
+        kind: 'note',
+        text: 'Why a machine referee: an AI can produce text that looks like a proof while one step quietly swaps concepts. Lean does not read tone; it checks whether each step actually holds. That is what makes it stronger than “looks right”.',
       },
       {
         kind: 'goal',
@@ -123,15 +127,15 @@ export const lessonsEn: LessonPage[] = [
     track: 'intro',
     navTitle: '03 · Write a proof function',
     title: 'Write an if…then… proof function',
-    lead: 'Read “if P then Q” as a function signature: give me a proof of P, I give you a proof of Q.',
+    lead: 'Read “if P then Q” as a chain of reasoning: whenever the premise holds, the conclusion must follow.',
     blocks: [
       {
         kind: 'p',
-        text: 'In TypeScript you write `function f(p: P): Q`. In Lean, `P → Q` is exactly that: a function taking a proof of P and returning a proof of Q. (The textbook name is “propositions as types”; you do not need to remember it yet.)',
+        text: 'The everyday example is “if it rains, the ground gets wet”. Lean’s `P → Q` is exactly that sentence: give it a proof that P holds and it returns a proof that Q holds.',
       },
       {
         kind: 'p',
-        text: 'Below `⊢` is `P → P`, so the referee wants a function. `intro h` takes that function’s argument and puts it in your hand.',
+        text: 'Below `⊢` is `P → P`: the referee wants a chain of reasoning, “assume P, conclude P”. `intro h` takes the premise into your hand.',
       },
       { kind: 'code', code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h' },
       {
@@ -148,7 +152,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: 'Implications compose. Two arrows in a row mean the output of the first function is fed into the second one.',
+        text: 'Implications compose: if rain→wet ground and wet ground→slippery, then rain→slippery. Two arrows in a row mean the conclusion of the first reasoning step feeds the second.',
       },
       {
         kind: 'note',
@@ -167,7 +171,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `(P → Q) → (Q → R) → P → R`, the arrow-only version of `trans_imp`.',
+      body: 'Prove `chain`: `(P → Q) → (Q → R) → P → R`, the arrow-only version of `trans_imp`.',
       hint: 'The goal is all arrows, so `intro` repeatedly to bring `(P → Q)`, `(Q → R)` and `P` into scope; then feed the output of the first premise into the second.',
       cta: 'Try it in the editor',
       starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
@@ -178,15 +182,15 @@ export const lessonsEn: LessonPage[] = [
     track: 'intro',
     navTitle: '04 · Pack and unpack',
     title: 'Pack and unpack: ∧ and ∨',
-    lead: '`∧` is a struct: fill both fields. `∨` is a switch: handle both branches.',
+    lead: '`∧` means both conditions hold; `∨` means at least one does. Everyday “both…and…” and “either…or…” are exactly these.',
     blocks: [
       {
         kind: 'p',
-        text: 'A response struct with required `id` and `name` fields is `P ∧ Q`. A `switch` that can take either branch is `P ∨ Q`: when you receive one, you must handle both possibilities.',
+        text: '“It is both raining and windy today” requires two things, which is `P ∧ Q`. “This weekend we hike or visit the museum” requires at least one, which is `P ∨ Q`.',
       },
       {
         kind: 'p',
-        text: 'Below `⊢` is the conclusion. For `∧`, the referee wants a parcel containing both; for `∨`, handing over one side is enough.',
+        text: 'Below `⊢` is the conclusion. For `∧`, the referee wants two pieces of evidence; for `∨`, handing over one side is enough.',
       },
       {
         kind: 'code',
@@ -194,7 +198,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: 'To prove `P ∧ Q`, give a proof of P and a proof of Q. `⟨hp, hq⟩` is shorthand for `And.intro`, like filling struct fields in order.',
+        text: 'To prove `P ∧ Q`, give a proof of P and a proof of Q. `⟨hp, hq⟩` is shorthand for `And.intro`: both pieces of evidence in one parcel.',
       },
       {
         kind: 'code',
@@ -202,7 +206,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: 'Conversely, if you have `h : P ∧ Q`, then `h.1` gives P and `h.2` gives Q, just like accessing struct fields.',
+        text: 'Conversely, if you have `h : P ∧ Q`, then `h.1` gives P and `h.2` gives Q, like taking the two items out of a parcel.',
       },
       {
         kind: 'goal',
@@ -237,22 +241,22 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove the disjunction version of `(P ∧ Q) → (Q ∧ P)`: `(P ∨ Q) → (Q ∨ P)`, filling in both branches.',
+      body: 'Prove `or_comm_ex`: `(P ∨ Q) → (Q ∨ P)`, filling in both branches.',
       hint: 'Start with `intro h`, then `cases h with` to split into `inl` and `inr`; in each branch, use `Or.inl` or `Or.inr` to move the evidence to the other side.',
       cta: 'Try it in the editor',
-      starter: 'theorem or_and (P Q R : Prop) : (P ∧ Q) ∨ R → P ∨ R := by\n  sorry\n',
+      starter: 'theorem or_comm_ex (P Q : Prop) : P ∨ Q → Q ∨ P := by\n  sorry\n',
     },
   },
   {
     slug: 'induction',
     track: 'intro',
     navTitle: '05 · Dominoes',
-    title: 'Dominoes: why induction is recursion in code',
+    title: 'Dominoes: why “the previous one falls, the next one falls too” topples the row',
     lead: '`n = 0` knocks over the first domino; `n + 1` says “if the previous one fell, the next one must fall too”.',
     blocks: [
       {
         kind: 'p',
-        text: 'When you write a recursive function you always handle a base case `n = 0` and a step case `n + 1`. Mathematical induction is the same pattern, except it proves “P holds for every n” instead of computing a value.',
+        text: 'Imagine a row of dominoes. You only need two facts: the first one will fall; and whenever any one falls, the next one falls too. Then the whole row goes down. Mathematical induction is exactly those two facts.',
       },
       {
         kind: 'p',
@@ -260,7 +264,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'code',
-        code: 'example (a : Nat) : a + 0 = a := rfl\n\nexample (a : Nat) : 0 + a = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp [ih]',
+        code: 'example (a : Nat) : a + 0 = a := rfl\n\nexample (a : Nat) : 0 + a = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp',
       },
       {
         kind: 'p',
@@ -307,7 +311,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove the flipped version of `add_zero`, or replace `simp only` in `add_comm` with plain `simp` and watch the goal close step by step.',
+      body: 'Prove both `add_zero` and `zero_add`: one follows directly from the definition, the other needs induction on `a`.',
       hint: 'Keep the two branches of `induction a with`; the `zero` branch is usually one `simp` or `rfl`, and the `succ` branch must use `ih`.',
       cta: 'Try it in the editor',
       starter:
@@ -317,13 +321,13 @@ export const lessonsEn: LessonPage[] = [
   {
     slug: 'rewrite',
     track: 'intro',
-    navTitle: '06 · Ctrl+H for proofs',
-    title: 'Ctrl+H, but for proofs: how `rw` shortens the goal',
-    lead: '`rw` is find-and-replace for the goal, and every replacement must be backed by a known equality.',
+    navTitle: '06 · Substitution',
+    title: 'Substitution: how `rw` shortens the goal',
+    lead: '`rw` is the substitution you learned in algebra: take a known equality and replace part of the goal with it.',
     blocks: [
       {
         kind: 'p',
-        text: 'In an editor you use Ctrl+H to rename an old function everywhere. `rw` does the same: it takes a known equality and replaces occurrences of the left side with the right side inside the goal.',
+        text: 'When solving `x + 2 = 5` you substitute `x = 3` and get `3 + 2 = 5`. `rw` does exactly that: it takes a known equality and replaces the matching expression in the goal.',
       },
       {
         kind: 'p',
@@ -366,15 +370,15 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: 'One takeaway: `rw` is Ctrl+H with evidence; if the direction is wrong, add `←`.',
+        text: 'One takeaway: `rw` is substitution with evidence; if the direction is wrong, add `←`.',
       },
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Use `rw` to prove `b = a` from `h : a = b`, then try rewriting the associativity equality backwards once.',
+      body: 'Use `rw` to prove `eq_swap`: `b = a` from `h : a = b`, then try rewriting the associativity equality backwards once.',
       hint: '`rw [h]` replaces `a` with `b` in the goal; if nothing moves, check that the left side of the equality matches the expression in the goal exactly.',
       cta: 'Try it in the editor',
-      starter: 'theorem mul_one_rw (a : Nat) : a * 1 = a := by\n  sorry\n',
+      starter: 'theorem eq_swap (a b : Nat) (h : a = b) : b = a := by\n  sorry\n',
     },
   },
   {
@@ -434,7 +438,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `a + 0 = a` with both `simp` and `simp only`, and compare how controllable the two versions feel.',
+      body: 'Prove `add_zero_twice` with both `simp` and `simp only`, and compare how controllable the two versions feel.',
       hint: '`simp` picks rules automatically; `simp only [Nat.add_zero]` allows just that one. A misspelled lemma name produces an “unknown identifier” error.',
       cta: 'Try it in the editor',
       starter: 'theorem add_zero_twice (a : Nat) : a + 0 + 0 = a := by\n  sorry\n',
@@ -501,10 +505,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `∃ n : Nat, n + n = 6`, then prove `(∀ n, P n) → P 3`.',
+      body: 'Prove `exists_six`: `∃ n : Nat, n + n = 6`, then prove `forall_three`: `(∀ n, P n) → P 3`.',
       hint: 'For the existential, pick the witness first (3 works) and then prove the equality. For the universal, `intro` the parameter or call the hypothesis as in `forall_apply`.',
       cta: 'Try it in the editor',
-      starter: 'theorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
+      starter:
+        'theorem exists_six : ∃ n : Nat, n + n = 6 := by\n  sorry\n\ntheorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
     },
   },
   {
@@ -516,7 +521,7 @@ export const lessonsEn: LessonPage[] = [
     blocks: [
       {
         kind: 'p',
-        text: 'A linked list node in backend code is either `nil` or `cons(value, next)`. Lean’s `List Nat` has exactly those two constructors: `[]` and `x :: xs`. So induction on a list always has two branches.',
+        text: 'A mathematical sequence can be defined like this: either the empty sequence, or one element followed by a shorter sequence. Lean’s `List Nat` has exactly those two constructors: `[]` and `x :: xs`. So induction on a list always has two branches.',
       },
       {
         kind: 'p',
@@ -544,7 +549,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: 'A `structure` packs several fields into a new type; the anonymous constructor fills them in declaration order, and dot notation accesses them, much like a TypeScript interface.',
+        text: 'A `structure` packs several fields into a new type; the anonymous constructor fills them in declaration order, and dot notation accesses them. It can also describe mathematical objects such as points and vectors.',
       },
       {
         kind: 'note',
@@ -567,8 +572,8 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `(xs.map (fun x => x + 0)).length = xs.length`, then add a `z` field to `Point` and see how many arguments the constructor needs.',
-      hint: '`induction` on `xs`; the `nil` branch is usually `rfl`, and the `cons` branch uses `simp only` plus `ih`.',
+      body: 'Prove `scale_one`: `p.scale 1 = p`, then add a `z` field to `Point` and see how many arguments the constructor needs.',
+      hint: '`p.scale 1` unfolds to `⟨p.x * 1, p.y * 1⟩`; simplify each field. After adding `z`, the `⟨...⟩` constructor needs one more component.',
       cta: 'Try it in the editor',
       starter:
         'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
@@ -642,7 +647,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Write “even + even is even” in plain Chinese or English first, then translate it sentence by sentence into Lean tactics.',
+      body: 'Write “even + even is even” in plain English first, then translate it sentence by sentence into Lean tactics; prove `even_eight` first, then `even_sum`.',
       hint: '`rcases` both definitions, provide the new witness `x + y`, then finish with `rw` / `ring`.',
       cta: 'Try it in the editor',
       starter:
@@ -706,11 +711,10 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove that if `a ∣ b`, then `a ∣ b * c`.',
+      body: 'Prove `dvd_mul_right`: if `a ∣ b`, then `a ∣ b * c`.',
       hint: '`rcases h with ⟨k, rfl⟩`, hand over the new witness `k * c`, and finish with `ring` or `rfl`.',
       cta: 'Try it in the editor',
-      starter:
-        'theorem dvd_zero (a : Nat) : a ∣ 0 := by\n  sorry\n\ntheorem one_dvd (a : Nat) : 1 ∣ a := by\n  sorry\n',
+      starter: 'theorem dvd_mul_right (a b c : Nat) (h : a ∣ b) : a ∣ b * c := by\n  sorry\n',
     },
   },
   {
@@ -781,11 +785,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove “even + odd is odd”.',
-      hint: '`rcases` both definitions; the witness should be the two `k`s added together plus 1.',
+      body: 'Prove `even_plus_odd`: “even + odd is odd”.',
+      hint: '`rcases` both definitions; the witness should be the two `k`s added together.',
       cta: 'Try it in the editor',
       starter:
-        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  sorry\n',
+        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) : Odd (a + b) := by\n  sorry\n',
     },
   },
   {
@@ -848,11 +852,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `IsGcd a b d → IsGcd b a d`: the spec still holds after swapping the two numbers.',
+      body: 'Prove `gcd_swap`: `IsGcd a b d → IsGcd b a d`, i.e. the spec still holds after swapping the two numbers.',
       hint: '`rcases hd` into three parts and rebuild with `constructor`; when you swap the arguments of `∣`, the lemma applications must swap too.',
       cta: 'Try it in the editor',
       starter:
-        'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem two_dvd_gcd (a b : Nat) (ha : 2 ∣ a) (hb : 2 ∣ b) : 2 ∣ Nat.gcd a b := by\n  sorry\n',
+        'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_swap (a b d : Nat) (hd : IsGcd a b d) : IsGcd b a d := by\n  sorry\n',
     },
   },
   {
@@ -915,7 +919,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove that 6 is not prime.',
+      body: 'Prove `not_prime_six`: 6 is not prime.',
       hint: 'Follow `not_prime_four`: assume `Prime 6`, find divisor 2 or 3, then use `grind` to show it is neither 1 nor 6.',
       cta: 'Try it in the editor',
       starter:
@@ -982,11 +986,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `A ⊆ A`, then prove `A ⊆ A ∪ B`.',
+      body: 'Prove `subset_self` (`A ⊆ A`) and `subset_union_left` (`A ⊆ A ∪ B`).',
       hint: 'Unfold `Subset` and `intro x hx`, then `exact hx`, or use `Or.inl hx` to enter the left side of the union.',
       cta: 'Try it in the editor',
       starter:
-        'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetInter {α : Type} (A B : Set α) : Set α := fun x => A x ∧ B x\n\ntheorem inter_subset_left {α : Type} (A B : Set α) : Subset (SetInter A B) A := by\n  sorry\n',
+        'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetUnion {α : Type} (A B : Set α) : Set α := fun x => A x ∨ B x\n\ntheorem subset_self {α : Type} (A : Set α) : Subset A A := by\n  sorry\n\ntheorem subset_union_left {α : Type} (A B : Set α) : Subset A (SetUnion A B) := by\n  sorry\n',
     },
   },
   {
@@ -998,7 +1002,7 @@ export const lessonsEn: LessonPage[] = [
     blocks: [
       {
         kind: 'p',
-        text: 'A hash table fears two things: two keys landing in the same bucket (not injective), or a bucket that no key ever reaches (not surjective). Injectivity and surjectivity are quality guarantees for functions.',
+        text: 'Picture a classroom where every person needs a chair and no chair can hold two people. Injectivity prevents collisions (two people squeezed into one chair); surjectivity prevents misses (every chair occupied); both together make a perfect one-to-one pairing.',
       },
       {
         kind: 'p',
@@ -1049,11 +1053,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove that the identity function `fun x => x` is bijective.',
+      body: 'Prove `bijective_id`: the identity function `fun x => x` is bijective.',
       hint: 'Both directions follow directly from the definitions: `intro a b h` then `exact h` for injectivity; for surjectivity, use the target value itself as the witness.',
       cta: 'Try it in the editor',
       starter:
-        'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
+        'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  sorry\n',
     },
   },
   {
@@ -1108,11 +1112,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove that “congruent modulo 2” is reflexive, symmetric and transitive.',
-      hint: 'Define `r x y` as `x % 2 = y % 2`; use `rfl`, `h.symm` and `h1.trans h2` for the three properties.',
+      body: 'Prove `mod_two_equiv`: “congruent modulo 2” is reflexive, symmetric and transitive.',
+      hint: 'Define `ModTwo x y` as `x % 2 = y % 2`; use `rfl`, `h.symm` and `h1.trans h2` for the three properties.',
       cta: 'Try it in the editor',
       starter:
-        'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_equiv {α : Type} : IsEquivalence (SameLength (α := α)) := by\n  sorry\n',
+        'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef ModTwo (x y : Nat) : Prop := x % 2 = y % 2\n\ntheorem mod_two_equiv : IsEquivalence ModTwo := by\n  sorry\n',
     },
   },
   {
@@ -1167,11 +1171,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Use strong induction to prove `fib n ≤ 2 ^ n`, and notice where each of the two hypotheses is used.',
+      body: 'Use strong induction to prove `fib_lt_two_pow`: `fib n ≤ 2 ^ n`, and notice where each of the two hypotheses is used.',
       hint: 'Unfold `fib (k + 2)`, then apply the strong hypothesis to `k` and to `k + 1`; finish with `Nat.pow_succ` or `omega`.',
       cta: 'Try it in the editor',
       starter:
-        'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
+        'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  sorry\n',
     },
   },
   {
@@ -1293,8 +1297,8 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `sum (xs ++ ys) = sum xs + sum ys`.',
-      hint: '`induction` on `xs`; in the cons branch `simp [sum, ih]`, then finish with `grind` or `omega` if anything remains.',
+      body: 'Using the already proved `sum_append`, prove `sum_swap`: `sum (xs ++ ys) = sum ys + sum xs`.',
+      hint: 'First `rw [sum_append]`, then swap the two terms on the right with `Nat.add_comm`. `sum_append` is already proved above, so do not reprove it.',
       cta: 'Try it in the editor',
       starter:
         'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
@@ -1345,8 +1349,8 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Replace the `sorry` in `cheat` with a real proof, or use `#print axioms` to find which lesson theorem depends on an axiom.',
-      hint: '`1 = 2` is false and cannot be proved; focus on the `sorryAx` line in `#print axioms cheat`, and on where Lean reports an error after you remove `sorry`.',
+      body: 'Use `#print axioms` on `my_em`: keep `sorry` first to see `sorryAx`, then replace it with a real proof.',
+      hint: '`my_em` is the law of excluded middle; replace `sorry` with `Classical.em P`, then run `#print axioms my_em` to see the axiom list.',
       cta: 'Try it in the editor',
       starter: 'theorem my_em (P : Prop) : P ∨ ¬ P := by\n  sorry\n\n#print axioms my_em\n',
     },
@@ -1399,8 +1403,8 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Rewrite the course’s `Even` definition in Mathlib style, and list three lemmas you would look up next in Mathlib.',
-      hint: 'Install elan, create a project with `lake new`, and add `require mathlib` to the lakefile; the first build is slow, but afterwards the whole library is available.',
+      body: 'Prove `even_four`, then use `#check` to compare `List.mem_append` and `Nat.gcd_dvd_left` with their local Mathlib names.',
+      hint: 'The witness for `even_four` is 2; `#check` only looks up names and creates no goal.',
       cta: 'Try it in the editor',
       starter:
         'theorem even_four : ∃ k, 4 = 2 * k := by\n  sorry\n\n#check List.mem_append\n#check Nat.gcd_dvd_left\n',
@@ -1412,6 +1416,7 @@ export const lessonsEn: LessonPage[] = [
     navTitle: '23 · HashMap membership',
     title: 'No more KeyNotFound: compile-time HashMap membership',
     lead: 'Turn “this key is definitely present” from a comment into a proof the compiler checks.',
+    requires: ['std'],
     blocks: [
       {
         kind: 'p',
@@ -1486,7 +1491,7 @@ export const lessonsEn: LessonPage[] = [
       hint: 'Use `simp [HashMap.mem_insert]` for membership and plain `simp` for the lookup. The two theorems do not say the same thing.',
       cta: 'Try it in the editor',
       starter:
-        'import Std.Data.HashMap\n\nopen Std\n\ntheorem mem_after_insert (m : HashMap Nat Nat) (k v : Nat) :\n    k ∈ m.insert k v := by\n  sorry\n',
+        'import Std.Data.HashMap\n\nopen Std\n\ntheorem mem_after_insert (m : HashMap Nat Nat) (k v : Nat) :\n    k ∈ m.insert k v := by\n  sorry\n\ntheorem lookup_after_insert (m : HashMap Nat Nat) (k v : Nat) :\n    (m.insert k v)[k]? = some v := by\n  sorry\n',
     },
   },
   {
@@ -1551,7 +1556,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove that 32-bit addition does not wrap when `a.toNat + b.toNat < 2^32`.',
+      body: 'Prove `no_overflow`: 32-bit addition does not wrap when `a.toNat + b.toNat < 2^32`.',
       hint: '`rw [UInt32.toNat_add, Nat.mod_eq_of_lt h]`; first check that the direction of `h` matches what `Nat.mod_eq_of_lt` expects.',
       cta: 'Try it in the editor',
       starter:
@@ -1564,6 +1569,7 @@ export const lessonsEn: LessonPage[] = [
     navTitle: '25 · Ordered TreeMap',
     title: 'Not a toy list: ordered TreeMap in practice',
     lead: 'An industrial `O(log n)` ordered map, with a theorem that insertion then lookup is correct.',
+    requires: ['std'],
     blocks: [
       {
         kind: 'p',
@@ -1618,7 +1624,7 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove that a `TreeMap` lookup immediately after insertion returns the inserted value.',
+      body: 'Prove `lookup_after_insert`: a `TreeMap` lookup immediately after insertion returns the inserted value.',
       hint: 'Plain `simp` should do it; if you get stuck, `#check TreeMap.getElem?_insert` to see the insert rule.',
       cta: 'Try it in the editor',
       starter:
@@ -1690,6 +1696,7 @@ export const lessonsEn: LessonPage[] = [
     navTitle: '27 · Ledger conservation',
     title: 'State machines and ledger conservation',
     lead: 'Build a tiny ledger with `structure` and `HashMap`, then prove that every legal transfer conserves the total balance.',
+    requires: ['std'],
     blocks: [
       {
         kind: 'p',

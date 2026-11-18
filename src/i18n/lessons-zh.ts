@@ -6,11 +6,11 @@ export const lessonsZh: LessonPage[] = [
     track: 'intro',
     navTitle: '01 · 会做数学题的编译器',
     title: '会做数学题的编译器',
-    lead: '先别管证明，把它当成一个能读懂数学句子的 TypeScript 类型检查器。',
+    lead: '先别管证明，把它当成一个绝不放水的数学裁判：你交上去的每一步，它都逐条核对。',
     blocks: [
       {
         kind: 'p',
-        text: '你写 TypeScript 时，编译器会拦住 `const x: number = "abc"`。Lean 做的是同一件事，只是它检查的对象从类型变成了数学命题。',
+        text: '数学课上老师可能会说「这里显然成立」。Lean 不接受「显然」：它要求你指出用了哪条定义、哪条引理。写错一步，它当场用红线拦住。',
       },
       {
         kind: 'p',
@@ -19,17 +19,21 @@ export const lessonsZh: LessonPage[] = [
       { kind: 'code', code: '#eval 2 + 3' },
       {
         kind: 'p',
-        text: '`#eval` 就是 `console.log`：把表达式算出来给你看。`2 + 3` 不是一段字符串，Lean 真的算出了 5。',
+        text: '`#eval` 让 Lean 当场把表达式算给你看。`2 + 3` 不是一段字符串，Lean 真的算出了 5。',
       },
       { kind: 'code', code: '#check Nat.add' },
       {
         kind: 'p',
-        text: '`#check` 像 TypeScript 的 `typeof`：不运行，只告诉你这个名字的类型。`Nat.add` 的类型是两个 Nat 进、一个 Nat 出。',
+        text: '`#check` 只问「这个名字是什么类型」，不运行它。`Nat.add` 的类型是两个自然数进、一个自然数出。',
       },
       { kind: 'code', code: 'example : 2 + 2 = 4 := rfl' },
       {
         kind: 'p',
-        text: '`example : 2 + 2 = 4 := rfl` 是一个最小证明。`rfl` 的意思是：两边化简完一模一样，编译器直接盖章放行。',
+        text: '`example : 2 + 2 = 4 := rfl` 是一个最小证明。`rfl` 的意思是：两边化简完一模一样，裁判直接盖章放行。',
+      },
+      {
+        kind: 'note',
+        text: '为什么需要机器裁判：AI 能写出一段看起来很像证明的文字，但其中一步可能偷换了概念。Lean 不读语气，只检查每一步是否真的成立——这正是它比「看起来对」强的地方。',
       },
       {
         kind: 'goal',
@@ -123,15 +127,15 @@ export const lessonsZh: LessonPage[] = [
     track: 'intro',
     navTitle: '03 · 写一个证明函数',
     title: '写一个 if…then… 风格的证明函数',
-    lead: '把「如果 P 那么 Q」看成一个函数签名：给我一个 P 的证据，我还你一个 Q 的证据。',
+    lead: '把「如果 P 那么 Q」看成一条推理链：只要前提属实，结论就必须跟着成立。',
     blocks: [
       {
         kind: 'p',
-        text: '写 TypeScript 时你会写 `function f(p: P): Q`。Lean 里的 `P → Q` 就是同一个东西：输入一个 P 的证明，输出一个 Q 的证明。（学名叫「命题即类型」，先不用记。）',
+        text: '生活里最常见的推理是「如果下雨，地就会湿」。Lean 里的 `P → Q` 就是这句话：输入一个「P 成立」的证据，输出一个「Q 成立」的证据。',
       },
       {
         kind: 'p',
-        text: '右侧 `⊢` 下面是 `P → P`，意思是裁判要你交一个函数。`intro h` 就是把这个函数的参数接进手里。',
+        text: '右侧 `⊢` 下面是 `P → P`，意思是裁判要你交一条推理：假设 P 成立，推出 P 成立。`intro h` 就是把前提接进手里。',
       },
       { kind: 'code', code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h' },
       {
@@ -148,7 +152,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: '蕴含可以串起来。两个箭头接在一起，就是把第一个函数的输出喂给第二个函数。',
+        text: '推理可以串起来：如果下雨→地湿，地湿→路滑，那么下雨→路滑。两个箭头接在一起，就是把第一段推理的结论喂给第二段。',
       },
       {
         kind: 'note',
@@ -167,7 +171,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `(P → Q) → (Q → R) → P → R`，也就是把 `trans_imp` 的前提写成箭头形式。',
+      body: '证明 `chain`：`(P → Q) → (Q → R) → P → R`，也就是把 `trans_imp` 的前提写成箭头形式。',
       hint: '目标全是箭头，先连续 `intro`，把 `(P → Q)`、`(Q → R)` 和 `P` 都拿进来；最后把第一个前提的输出喂给第二个前提。',
       cta: '在编辑器中动手',
       starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
@@ -178,15 +182,15 @@ export const lessonsZh: LessonPage[] = [
     track: 'intro',
     navTitle: '04 · 打包与拆包',
     title: '打包与拆包：同时满足（∧）和二选一（∨）',
-    lead: '`∧` 像结构体：两个字段都得填；`∨` 像 switch：必须把两个分支都处理掉。',
+    lead: '`∧` 是「两个都要满足」，`∨` 是「至少满足一个」；生活里的「又……又……」和「要么……要么……」就是它们。',
     blocks: [
       {
         kind: 'p',
-        text: '后端的响应结构体要求 `id` 和 `name` 都有值，这就是 `P ∧ Q`。而一个 `switch` 只可能走其中一个分支，这就是 `P ∨ Q`——你拿到它时，必须两种情况都能处理。',
+        text: '「今天既下雨又刮风」要求两件事都成立，这就是 `P ∧ Q`。「周末去爬山或去博物馆」只要求至少一件成立，这就是 `P ∨ Q`。',
       },
       {
         kind: 'p',
-        text: '右侧 `⊢` 下面是结论。遇到 `∧`，裁判要你交一个「两件都有」的包裹；遇到 `∨`，交其中一件就够。',
+        text: '右侧 `⊢` 下面是结论。遇到 `∧`，裁判要你交两件证据；遇到 `∨`，交其中一件就够。',
       },
       {
         kind: 'code',
@@ -194,7 +198,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: '要证明 `P ∧ Q`，需要同时给出 `P` 的证明和 `Q` 的证明。`⟨hp, hq⟩` 是 `And.intro` 的简写，相当于按顺序填结构体字段。',
+        text: '要证明 `P ∧ Q`，需要同时给出 `P` 的证明和 `Q` 的证明。`⟨hp, hq⟩` 是 `And.intro` 的简写，相当于把两件证据一起交上去。',
       },
       {
         kind: 'code',
@@ -202,7 +206,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: '反过来，手里有 `h : P ∧ Q` 时，`h.1` 给出 `P`，`h.2` 给出 `Q`，就像访问结构体字段。',
+        text: '反过来，手里有 `h : P ∧ Q` 时，`h.1` 给出 `P`，`h.2` 给出 `Q`，就像从包裹里分别取出两件东西。',
       },
       {
         kind: 'goal',
@@ -237,22 +241,22 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `(P ∧ Q) → (Q ∧ P)` 的析取版本：`(P ∨ Q) → (Q ∨ P)`，把两个分支都写完整。',
+      body: '证明 `or_comm_ex`：`(P ∨ Q) → (Q ∨ P)`，把两个分支都写完整。',
       hint: '先 `intro h`，再 `cases h with` 分成 `inl` 和 `inr` 两支；每支只需要用 `Or.inl` 或 `Or.inr` 把证据换到另一边。',
       cta: '在编辑器中动手',
-      starter: 'theorem or_and (P Q R : Prop) : (P ∧ Q) ∨ R → P ∨ R := by\n  sorry\n',
+      starter: 'theorem or_comm_ex (P Q : Prop) : P ∨ Q → Q ∨ P := by\n  sorry\n',
     },
   },
   {
     slug: 'induction',
     track: 'intro',
     navTitle: '05 · 多米诺骨牌',
-    title: '多米诺骨牌：为什么归纳在代码里就是递归',
+    title: '多米诺骨牌：为什么「前一张倒了，下一张也会倒」能推倒整排',
     lead: '`n = 0` 是推倒第一张牌，`n + 1` 是「前一张倒了，下一张必倒」。',
     blocks: [
       {
         kind: 'p',
-        text: '你写递归函数时，一定会写基准情况 `n = 0` 和递推情况 `n + 1`。数学归纳法是同一个套路，只是它证明的是「所有 n 都满足 P」，而不是算出一个值。',
+        text: '书架上有一排多米诺骨牌。你只需要确认两件事：第一张会被推倒；以及任意一张倒下时，下一张一定会跟着倒。这样整排都会倒。数学归纳法就是这两句话。',
       },
       {
         kind: 'p',
@@ -260,7 +264,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'code',
-        code: 'example (a : Nat) : a + 0 = a := rfl\n\nexample (a : Nat) : 0 + a = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp [ih]',
+        code: 'example (a : Nat) : a + 0 = a := rfl\n\nexample (a : Nat) : 0 + a = a := by\n  induction a with\n  | zero => rfl\n  | succ a ih => simp',
       },
       {
         kind: 'p',
@@ -307,7 +311,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `add_zero` 的对称版本，或者把 `add_comm` 里的 `simp only` 换成普通的 `simp`，观察目标如何一步步关闭。',
+      body: '证明 `add_zero` 和 `zero_add`：一个能直接由定义得出，另一个需要对 `a` 做归纳。',
       hint: '保持 `induction a with` 两个分支；`zero` 分支通常一行 `simp` 或 `rfl`，`succ` 分支记得用上 `ih`。',
       cta: '在编辑器中动手',
       starter:
@@ -317,13 +321,13 @@ export const lessonsZh: LessonPage[] = [
   {
     slug: 'rewrite',
     track: 'intro',
-    navTitle: '06 · Ctrl+H 精准替换',
-    title: 'Ctrl+H 精准替换：`rw` 怎么把目标越变越短',
-    lead: '`rw` 就是查找替换，只不过它替换的是待证目标，而且每一处替换都要有已知等式撑腰。',
+    navTitle: '06 · 等量代换',
+    title: '等量代换：`rw` 怎么把目标越变越短',
+    lead: '`rw` 就是中学里的等量代换：拿一条已知等式，把目标里的某一部分换掉。',
     blocks: [
       {
         kind: 'p',
-        text: '写代码时你会用 Ctrl+H 把旧函数名批量换掉。`rw` 做的是同一件事：拿一条已知等式，把目标里出现的左边替换成右边。',
+        text: '解方程时你会把 `x = 3` 代进 `x + 2 = 5`，得到 `3 + 2 = 5`。`rw` 做的是同一件事：拿一条已知等式，替换目标里出现的表达式。',
       },
       {
         kind: 'p',
@@ -364,14 +368,14 @@ export const lessonsZh: LessonPage[] = [
         summary: '什么时候要写 rw [← h]？',
         text: '看你的等式和目标的「方向」。如果等式是 `a = b`，目标里出现 `b` 而你想要 `a`，就要用 `← h` 反向替换。拿不准时先写 `rw [h]`，看目标变成什么再决定。',
       },
-      { kind: 'note', text: '一句话带走：`rw` 是带证据的 Ctrl+H；方向反了就用 `←`。' },
+      { kind: 'note', text: '一句话带走：`rw` 是带证据的等量代换；方向反了就用 `←`。' },
     ],
     exercise: {
       title: '练习',
-      body: '用 `rw` 证明 `b = a`（已知 `h : a = b`），再试着把结合律的等式反向改写一次。',
+      body: '用 `rw` 证明 `eq_swap`：`b = a`（已知 `h : a = b`），再试着把结合律的等式反向改写一次。',
       hint: '`rw [h]` 会把目标里的 `a` 换成 `b`；如果目标没动，检查等式左右是不是和目标里的表达式完全一致。',
       cta: '在编辑器中动手',
-      starter: 'theorem mul_one_rw (a : Nat) : a * 1 = a := by\n  sorry\n',
+      starter: 'theorem eq_swap (a b : Nat) (h : a = b) : b = a := by\n  sorry\n',
     },
   },
   {
@@ -428,7 +432,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '分别用 `simp` 和 `simp only` 证明 `a + 0 = a`，比较两种写法的可控性。',
+      body: '分别用 `simp` 和 `simp only` 证明 `add_zero_twice`，比较两种写法的可控性。',
       hint: '`simp` 会自动选规则；`simp only [Nat.add_zero]` 只允许这一条。引理名写错时，Lean 会直接报「unknown identifier」。',
       cta: '在编辑器中动手',
       starter: 'theorem add_zero_twice (a : Nat) : a + 0 + 0 = a := by\n  sorry\n',
@@ -495,10 +499,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `∃ n : Nat, n + n = 6`，再证明 `(∀ n, P n) → P 3`。',
+      body: '证明 `exists_six`：`∃ n : Nat, n + n = 6`，再证明 `forall_three`：`(∀ n, P n) → P 3`。',
       hint: '存在命题先想 witness（这里 3 就行），再证等式；全称命题用 `intro` 接参数，或者像 `forall_apply` 那样直接调用。',
       cta: '在编辑器中动手',
-      starter: 'theorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
+      starter:
+        'theorem exists_six : ∃ n : Nat, n + n = 6 := by\n  sorry\n\ntheorem forall_three (P : Nat → Prop) (h : ∀ n, P n) : P 3 := by\n  sorry\n',
     },
   },
   {
@@ -510,7 +515,7 @@ export const lessonsZh: LessonPage[] = [
     blocks: [
       {
         kind: 'p',
-        text: '后端里常见的链表节点是 `nil` 或 `cons(value, next)`。Lean 的 `List Nat` 也是这两个构造子：`[]` 和 `x :: xs`。所以对列表做归纳，永远只有两个分支。',
+        text: '数学里的序列可以这样定义：要么是空序列，要么是一个元素后面接一个更短的序列。Lean 的 `List Nat` 正是这两个构造子：`[]` 和 `x :: xs`。所以对列表做归纳，永远只有两个分支。',
       },
       {
         kind: 'p',
@@ -538,7 +543,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'p',
-        text: '`structure` 把若干字段打包成一个类型，匿名构造子按声明顺序填值；点号可以直接访问字段，和 TypeScript 的 interface 很像。',
+        text: '`structure` 把若干字段打包成一个类型，匿名构造子按声明顺序填值；点号可以直接访问字段。它也能用来描述几何点、向量这类数学对象。',
       },
       {
         kind: 'note',
@@ -561,8 +566,8 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `(xs.map (fun x => x + 0)).length = xs.length`，再把 `Point` 加一个 `z` 字段，观察构造子需要几个参数。',
-      hint: '对 `xs` 做 `induction`；`nil` 分支通常 `rfl`，`cons` 分支用 `simp only` 展开后再用 `ih`。',
+      body: '证明 `scale_one`：`p.scale 1 = p`，再给 `Point` 加一个 `z` 字段，观察构造子需要几个参数。',
+      hint: '`p.scale 1` 展开后是 `⟨p.x * 1, p.y * 1⟩`；分别化简两个字段即可。加 `z` 字段后，`⟨...⟩` 要多填一个分量。',
       cta: '在编辑器中动手',
       starter:
         'structure Point where\n  x : Nat\n  y : Nat\n\ndef Point.scale (p : Point) (k : Nat) : Point :=\n  ⟨p.x * k, p.y * k⟩\n\ntheorem scale_one (p : Point) : p.scale 1 = p := by\n  sorry\n',
@@ -636,7 +641,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '把「偶数 + 偶数还是偶数」用中文写一遍，再逐句翻译成 Lean 策略。',
+      body: '把「偶数 + 偶数还是偶数」用中文写一遍，再逐句翻译成 Lean 策略；先证 `even_eight`，再证 `even_sum`。',
       hint: '先 `rcases` 拆两个定义，再给出新的 witness `x + y`，最后用 `rw` / `ring` 收尾。',
       cta: '在编辑器中动手',
       starter:
@@ -697,11 +702,10 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明「如果 `a ∣ b`，那么 `a ∣ b * c`」。',
+      body: '证明 `dvd_mul_right`：「如果 `a ∣ b`，那么 `a ∣ b * c`」。',
       hint: '`rcases h with ⟨k, rfl⟩`，然后交出新 witness `k * c`，用 `ring` 或 `rfl` 收尾。',
       cta: '在编辑器中动手',
-      starter:
-        'theorem dvd_zero (a : Nat) : a ∣ 0 := by\n  sorry\n\ntheorem one_dvd (a : Nat) : 1 ∣ a := by\n  sorry\n',
+      starter: 'theorem dvd_mul_right (a b c : Nat) (h : a ∣ b) : a ∣ b * c := by\n  sorry\n',
     },
   },
   {
@@ -769,11 +773,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明「偶数 + 奇数 = 奇数」。',
-      hint: '分别 `rcases` 偶数和奇数定义，交出的 witness 应该是两个 `k` 相加再加 1。',
+      body: '证明 `even_plus_odd`：「偶数 + 奇数 = 奇数」。',
+      hint: '分别 `rcases` 偶数和奇数定义，交出的 witness 应该是两个 `k` 相加。',
       cta: '在编辑器中动手',
       starter:
-        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_mul (a b : Nat) (h : Even a) : Even (a * b) := by\n  sorry\n',
+        'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1\n\ntheorem even_plus_odd (a b : Nat) (ha : Even a) (hb : Odd b) : Odd (a + b) := by\n  sorry\n',
     },
   },
   {
@@ -836,11 +840,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `IsGcd a b d → IsGcd b a d`，也就是公约数规格对调两个数后仍然成立。',
+      body: '证明 `gcd_swap`：`IsGcd a b d → IsGcd b a d`，也就是公约数规格对调两个数后仍然成立。',
       hint: '`rcases hd` 拆成三部分，重新 `constructor`；注意交换 `∣` 的两个参数顺序后，引理的用法也要跟着换。',
       cta: '在编辑器中动手',
       starter:
-        'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem two_dvd_gcd (a b : Nat) (ha : 2 ∣ a) (hb : 2 ∣ b) : 2 ∣ Nat.gcd a b := by\n  sorry\n',
+        'def IsGcd (a b d : Nat) : Prop :=\n  d ∣ a ∧ d ∣ b ∧ ∀ e, e ∣ a → e ∣ b → e ∣ d\n\ntheorem gcd_swap (a b d : Nat) (hd : IsGcd a b d) : IsGcd b a d := by\n  sorry\n',
     },
   },
   {
@@ -900,7 +904,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 6 不是素数。',
+      body: '证明 `not_prime_six`：6 不是素数。',
       hint: '用 `not_prime_four` 的套路：假设 `Prime 6`，找到因子 2 或 3，再用 `grind` 推出它既不是 1 也不是 6。',
       cta: '在编辑器中动手',
       starter:
@@ -967,11 +971,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `A ⊆ A`，再证明 `A ⊆ A ∪ B`。',
+      body: '证明 `subset_self`（`A ⊆ A`）和 `subset_union_left`（`A ⊆ A ∪ B`）。',
       hint: '`Subset` 展开后先 `intro x hx`，然后直接 `exact hx`，或者用 `Or.inl hx` 进入并集的左边。',
       cta: '在编辑器中动手',
       starter:
-        'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetInter {α : Type} (A B : Set α) : Set α := fun x => A x ∧ B x\n\ntheorem inter_subset_left {α : Type} (A B : Set α) : Subset (SetInter A B) A := by\n  sorry\n',
+        'def Set (α : Type) := α → Prop\n\ndef Subset {α : Type} (A B : Set α) : Prop := ∀ x, A x → B x\n\ndef SetUnion {α : Type} (A B : Set α) : Set α := fun x => A x ∨ B x\n\ntheorem subset_self {α : Type} (A : Set α) : Subset A A := by\n  sorry\n\ntheorem subset_union_left {α : Type} (A B : Set α) : Subset A (SetUnion A B) := by\n  sorry\n',
     },
   },
   {
@@ -983,7 +987,7 @@ export const lessonsZh: LessonPage[] = [
     blocks: [
       {
         kind: 'p',
-        text: '哈希表最怕两件事：两个键撞到同一个桶（不单射），或者某个桶永远没有键（不满射）。单射、满射就是给函数加的两条质量保证。',
+        text: '想象一间教室，每个人都要有一把椅子，且两把椅子不能坐同一个人。单射保证「不撞车」（不同的人不会挤到同一把椅子），满射保证「不漏掉」（每把椅子都有人坐），两者都有就是一一对应。',
       },
       {
         kind: 'p',
@@ -1028,11 +1032,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明恒等函数 `fun x => x` 是双射。',
+      body: '证明 `bijective_id`：恒等函数 `fun x => x` 是双射。',
       hint: '单射和满射都直接从定义出发：`intro a b h` 后用 `exact h`；满射的 witness 直接取目标值本身。',
       cta: '在编辑器中动手',
       starter:
-        'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
+        'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  sorry\n',
     },
   },
   {
@@ -1081,11 +1085,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明「模 2 同余」满足自反、对称、传递。',
-      hint: '把 `r x y` 定义成 `x % 2 = y % 2`；三条性质分别用 `rfl`、`h.symm`、`h1.trans h2`。',
+      body: '证明 `mod_two_equiv`：「模 2 同余」满足自反、对称、传递。',
+      hint: '把 `ModTwo x y` 定义成 `x % 2 = y % 2`；三条性质分别用 `rfl`、`h.symm`、`h1.trans h2`。',
       cta: '在编辑器中动手',
       starter:
-        'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef SameLength {α : Type} (xs ys : List α) : Prop := xs.length = ys.length\n\ntheorem same_length_equiv {α : Type} : IsEquivalence (SameLength (α := α)) := by\n  sorry\n',
+        'structure IsEquivalence {α : Type} (r : α → α → Prop) : Prop where\n  refl : ∀ x, r x x\n  symm : ∀ {x y}, r x y → r y x\n  trans : ∀ {x y z}, r x y → r y z → r x z\n\ndef ModTwo (x y : Nat) : Prop := x % 2 = y % 2\n\ntheorem mod_two_equiv : IsEquivalence ModTwo := by\n  sorry\n',
     },
   },
   {
@@ -1137,11 +1141,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '用强归纳证明 `fib n ≤ 2 ^ n`，体会两个归纳假设分别用在哪里。',
+      body: '用强归纳证明 `fib_lt_two_pow`：`fib n ≤ 2 ^ n`，体会两个归纳假设分别用在哪里。',
       hint: '先展开 `fib (k + 2)`，再分别对 `k` 和 `k + 1` 使用强归纳假设；最后用 `Nat.pow_succ` 或 `omega` 收尾。',
       cta: '在编辑器中动手',
       starter:
-        'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_mono (n : Nat) : fib n ≤ fib (n + 1) := by\n  sorry\n',
+        'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  sorry\n',
     },
   },
   {
@@ -1257,8 +1261,8 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `sum (xs ++ ys) = sum xs + sum ys`。',
-      hint: '对 `xs` 做 `induction`；`cons` 分支 `simp [sum, ih]` 之后如果还差一点，用 `grind` 或 `omega` 收尾。',
+      body: '利用已经证明的 `sum_append`，证明 `sum_swap`：`sum (xs ++ ys) = sum ys + sum xs`。',
+      hint: '先 `rw [sum_append]`，再用 `Nat.add_comm` 交换右边两项；`sum_append` 已经在上方证好，不用重证。',
       cta: '在编辑器中动手',
       starter:
         'def sum : List Nat → Nat\n  | [] => 0\n  | x :: xs => x + sum xs\n\ntheorem sum_append (xs ys : List Nat) : sum (xs ++ ys) = sum xs + sum ys := by\n  induction xs with\n  | nil => simp [sum]\n  | cons x xs ih =>\n    simp [sum, ih]\n    grind\n\ntheorem sum_swap (xs ys : List Nat) : sum (xs ++ ys) = sum ys + sum xs := by\n  sorry\n',
@@ -1309,8 +1313,8 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '把 `cheat` 的 `sorry` 换成一个真正的证明，或者用 `#print axioms` 检查课程里哪条定理依赖了公理。',
-      hint: '`1 = 2` 是假命题，证不出来；重点观察 `#print axioms cheat` 输出里的 `sorryAx`，以及删掉 `sorry` 后报错的位置。',
+      body: '用 `#print axioms` 检查 `my_em`：先保留 `sorry` 看它依赖 `sorryAx`，再把它换成真正的证明。',
+      hint: '`my_em` 就是排中律；把 `sorry` 换成 `Classical.em P`，再跑 `#print axioms my_em` 看公理清单。',
       cta: '在编辑器中动手',
       starter: 'theorem my_em (P : Prop) : P ∨ ¬ P := by\n  sorry\n\n#print axioms my_em\n',
     },
@@ -1363,8 +1367,8 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '把课程里的 `Even` 定义改写成 Mathlib 风格的名字，并列出三条你想在 Mathlib 里继续查的引理。',
-      hint: '先装 elan，再用 `lake new` 建项目，在 lakefile 里 `require mathlib`；首次编译会比较久，之后就能用整套数学库。',
+      body: '证明 `even_four`，再用 `#check` 对比 `List.mem_append` 与 `Nat.gcd_dvd_left` 在本地 Mathlib 里的对应名字。',
+      hint: '`even_four` 的 witness 取 2；`#check` 只查名字，不会产生证明目标。',
       cta: '在编辑器中动手',
       starter:
         'theorem even_four : ∃ k, 4 = 2 * k := by\n  sorry\n\n#check List.mem_append\n#check Nat.gcd_dvd_left\n',
@@ -1376,6 +1380,7 @@ export const lessonsZh: LessonPage[] = [
     navTitle: '23 · HashMap 存在性证明',
     title: '告别 KeyNotFound 与运行期 Panic：HashMap 的编译期存在性证明',
     lead: '把「这个 key 一定在表里」从一句注释，变成编译器能检查的证明。',
+    requires: ['std'],
     blocks: [
       {
         kind: 'p',
@@ -1450,7 +1455,7 @@ export const lessonsZh: LessonPage[] = [
       hint: '成员关系用 `simp [HashMap.mem_insert]`；查找结果用 `simp` 就能关闭。注意两条定理说的不是同一件事。',
       cta: '在编辑器中动手',
       starter:
-        'import Std.Data.HashMap\n\nopen Std\n\ntheorem mem_after_insert (m : HashMap Nat Nat) (k v : Nat) :\n    k ∈ m.insert k v := by\n  sorry\n',
+        'import Std.Data.HashMap\n\nopen Std\n\ntheorem mem_after_insert (m : HashMap Nat Nat) (k v : Nat) :\n    k ∈ m.insert k v := by\n  sorry\n\ntheorem lookup_after_insert (m : HashMap Nat Nat) (k v : Nat) :\n    (m.insert k v)[k]? = some v := by\n  sorry\n',
     },
   },
   {
@@ -1515,7 +1520,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 32 位加法在 `a.toNat + b.toNat < 2^32` 时不会回绕。',
+      body: '证明 `no_overflow`：32 位加法在 `a.toNat + b.toNat < 2^32` 时不会回绕。',
       hint: '`rw [UInt32.toNat_add, Nat.mod_eq_of_lt h]`；先确认 `h` 的方向和 `Nat.mod_eq_of_lt` 需要的条件一致。',
       cta: '在编辑器中动手',
       starter:
@@ -1528,6 +1533,7 @@ export const lessonsZh: LessonPage[] = [
     navTitle: '25 · 有序树 TreeMap',
     title: '不只是玩具链表：有序树 TreeMap 实战',
     lead: '工业级 `O(log n)` 有序映射，插入后查找的正确性也能写成定理。',
+    requires: ['std'],
     blocks: [
       {
         kind: 'p',
@@ -1582,7 +1588,7 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `TreeMap` 插入后立刻查找能拿到刚插入的值。',
+      body: '证明 `lookup_after_insert`：`TreeMap` 插入后立刻查找能拿到刚插入的值。',
       hint: '直接 `simp`；如果卡住，先 `#check TreeMap.getElem?_insert` 看插入规则长什么样。',
       cta: '在编辑器中动手',
       starter:
@@ -1654,6 +1660,7 @@ export const lessonsZh: LessonPage[] = [
     navTitle: '27 · 状态机与账本守恒',
     title: '状态机与账本守恒：用 HashMap 验证核心业务不变量',
     lead: '用 `structure` 和 `HashMap` 建一个极简账本，证明任意合法转账下总余额守恒。',
+    requires: ['std'],
     blocks: [
       {
         kind: 'p',

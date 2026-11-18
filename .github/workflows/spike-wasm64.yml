@@ -1056,29 +1056,17 @@ jobs:
           run-id: ${{ github.event.inputs.source_run_id }}
           github-token: ${{ github.token }}
 
-      - name: 发布 GitHub Release（runtime-v<lean>-wasm64，归档与构建期使用）
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+      - name: 输出并保存 wasm64 清单
         run: |
-          set -euo pipefail
-          VERSION="$(node -e 'process.stdout.write(require("./runtime/wasm64-runtime-manifest.json").leanVersion)')"
-          TAG="runtime-v${VERSION}-wasm64"
-          REPO="${{ github.repository }}"
-          TARGET_SHA="$GITHUB_SHA"
-          if [ -n "${SOURCE_RUN_ID:-}" ]; then
-            TARGET_SHA="$(gh api "repos/${REPO}/actions/runs/${SOURCE_RUN_ID}" --jq .head_sha)"
-          fi
-          if ! gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              -R "$REPO" \
-              --target "$TARGET_SHA" \
-              --title "Lean ${VERSION} wasm64 experimental runtime" \
-              --notes "Experimental wasm64 (Memory64) runtime + 64-bit Init oleans. Opt-in trial only; do not use in production."
-          fi
-          gh release upload "$TAG" -R "$REPO" runtime/* --clobber
+          cat runtime/wasm64-runtime-manifest.json
 
-      - name: 上传 R2（wasm-lean4/<ver>-wasm64/，存在 secrets 时执行）
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-runtime-manifest
+          path: runtime/wasm64-runtime-manifest.json
+          if-no-files-found: error
+
+      - name: 上传 R2（wasm-lean4/<ver>-wasm64/，浏览器主源，存在 secrets 时执行）
         env:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
@@ -1088,7 +1076,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$R2_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "::notice::未配置 R2 secrets，跳过 R2 上传（仅发布 GitHub Release）"
+            echo "::warning::未配置 R2 secrets，跳过 R2 上传"
             exit 0
           fi
           command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
@@ -1118,3 +1106,26 @@ jobs:
               ], { stdio: "inherit" });
             }
           '
+
+      - name: 发布 GitHub Release（runtime-v<lean>-wasm64，归档与构建期使用）
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -e 'process.stdout.write(require("./runtime/wasm64-runtime-manifest.json").leanVersion)')"
+          TAG="runtime-v${VERSION}-wasm64"
+          REPO="${{ github.repository }}"
+          TARGET_SHA="$GITHUB_SHA"
+          if [ -n "${SOURCE_RUN_ID:-}" ]; then
+            TARGET_SHA="$(gh api "repos/${REPO}/actions/runs/${SOURCE_RUN_ID}" --jq .head_sha)"
+          fi
+          if ! gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              -R "$REPO" \
+              --target "$TARGET_SHA" \
+              --title "Lean ${VERSION} wasm64 experimental runtime" \
+              --notes "Experimental wasm64 (Memory64) runtime + 64-bit Init oleans. Opt-in trial only; do not use in production."
+          fi
+          gh release upload "$TAG" -R "$REPO" runtime/* --clobber

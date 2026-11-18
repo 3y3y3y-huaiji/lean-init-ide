@@ -227,47 +227,133 @@ try {
   const w64Raw = await readFile(resolve(root, 'config/lean4-wasm64-runtime.json'), 'utf8');
   const w64 = JSON.parse(w64Raw);
   const w64Errors = [];
-  if (w64?.arch !== 'wasm64') w64Errors.push('arch 必须是 wasm64');
-  if (!isNonEmptyString(w64?.cacheKey)) w64Errors.push('cacheKey 必须是非空字符串');
-  if (!isNonEmptyString(w64?.primary?.baseUrl) || !w64.primary.baseUrl.startsWith('/')) {
-    w64Errors.push('primary.baseUrl 必须是同源相对路径');
+  const w64Fail = (message) => w64Errors.push(message);
+
+  if (w64?.arch !== 'wasm64') w64Fail('arch 必须是 wasm64');
+  for (const field of ['cacheKey', 'leanVersion', 'runtime']) {
+    if (!isNonEmptyString(w64?.[field])) w64Fail(`${field} 必须是非空字符串`);
   }
-  if (w64?.mirror !== undefined && !isHttps(w64.mirror?.baseUrl)) {
-    w64Errors.push('mirror.baseUrl 必须是 https 地址');
+  if (w64?.experimental !== undefined && typeof w64.experimental !== 'boolean') {
+    w64Fail('experimental 必须是布尔值');
   }
+  const w64Primary = w64?.primary?.baseUrl;
+  if (!isNonEmptyString(w64Primary) || !w64Primary.startsWith('/') || w64Primary.startsWith('//')) {
+    w64Fail('primary.baseUrl 必须是同源相对路径');
+  }
+  if (w64?.fallback !== undefined) {
+    if (!isNonEmptyString(w64.fallback?.label)) w64Fail('fallback.label 必须是非空字符串');
+    if (!isHttps(w64.fallback?.baseUrl)) w64Fail('fallback.baseUrl 必须是 https 地址');
+  }
+  if (w64?.mirror !== undefined) {
+    if (!isNonEmptyString(w64.mirror?.label)) w64Fail('mirror.label 必须是非空字符串');
+    if (!isHttps(w64.mirror?.baseUrl)) w64Fail('mirror.baseUrl 必须是 https 地址');
+    else if (!w64.mirror.baseUrl.endsWith('/')) w64Fail('mirror.baseUrl 必须以 / 结尾');
+    if (w64.mirror?.prefix !== undefined && !isNonEmptyString(w64.mirror.prefix)) {
+      w64Fail('mirror.prefix 必须是非空字符串');
+    }
+  }
+
   if (!Array.isArray(w64?.assets)) {
-    w64Errors.push('assets 必须是数组');
-  } else {
+    w64Fail('assets 必须是数组');
+  } else if (w64.assets.length > 0) {
     const w64Keys = new Set();
+    const w64Sources = new Set();
+    const w64Names = new Set();
+    let keyDir;
     for (const [index, asset] of w64.assets.entries()) {
       const label = `wasm64.assets[${index}]`;
       for (const field of ['name', 'key', 'contentType']) {
-        if (!isNonEmptyString(asset?.[field])) w64Errors.push(`${label}.${field} 必须是非空字符串`);
+        if (!isNonEmptyString(asset?.[field])) w64Fail(`${label}.${field} 必须是非空字符串`);
+      }
+      if (isNonEmptyString(asset?.name)) {
+        if (w64Names.has(asset.name)) w64Fail(`${label}.name 重复: ${asset.name}`);
+        w64Names.add(asset.name);
       }
       if (!Number.isSafeInteger(asset?.bytes) || asset.bytes <= 0) {
-        w64Errors.push(`${label}.bytes 必须是正整数`);
+        w64Fail(`${label}.bytes 必须是正整数`);
       }
       if (!/^[0-9a-f]{64}$/.test(asset?.sha256 ?? '')) {
-        w64Errors.push(`${label}.sha256 必须是 64 位小写十六进制`);
+        w64Fail(`${label}.sha256 必须是 64 位小写十六进制`);
+      }
+      if (!(asset?.contentType ?? '').includes('/')) {
+        w64Fail(`${label}.contentType 缺少 MIME 主/子类型`);
+      }
+      if (asset?.encoding !== undefined && !['gzip', 'zstd'].includes(asset.encoding)) {
+        w64Fail(`${label}.encoding 只能是 gzip 或 zstd`);
+      }
+      if (asset?.ranged !== undefined && typeof asset.ranged !== 'boolean') {
+        w64Fail(`${label}.ranged 必须是布尔值`);
+      }
+      // Range 分片按压缩后的字节切；只有 zstd 资产才会登记为 ranged。
+      if (asset?.ranged === true && asset?.encoding !== 'zstd') {
+        w64Fail(`${label} 标记 ranged 时必须同时声明 encoding: zstd`);
       }
       if (asset?.encoding === 'zstd') {
         if (!Number.isSafeInteger(asset?.uncompressedBytes) || asset.uncompressedBytes <= 0) {
-          w64Errors.push(`${label}.uncompressedBytes 必须是正整数`);
+          w64Fail(`${label}.uncompressedBytes 必须是正整数`);
         }
         if (!/^[0-9a-f]{64}$/.test(asset?.uncompressedSha256 ?? '')) {
-          w64Errors.push(`${label}.uncompressedSha256 必须是 64 位小写十六进制`);
+          w64Fail(`${label}.uncompressedSha256 必须是 64 位小写十六进制`);
         }
       }
+
       const key = asset?.key;
       if (typeof key === 'string') {
         if (key.startsWith('/') || key.includes('..') || key.includes('\\')) {
-          w64Errors.push(`${label}.key 非法: ${key}`);
+          w64Fail(`${label}.key 非法: ${key}`);
         }
-        if (w64Keys.has(key)) w64Errors.push(`${label}.key 重复: ${key}`);
+        if (w64Keys.has(key)) w64Fail(`${label}.key 重复: ${key}`);
         w64Keys.add(key);
+        const slash = key.lastIndexOf('/');
+        if (slash <= 0) {
+          w64Fail(`${label}.key 必须包含目录前缀`);
+        } else {
+          const dir = key.slice(0, slash);
+          keyDir ??= dir;
+          if (dir !== keyDir) w64Fail(`${label}.key 目录不一致: ${dir} != ${keyDir}`);
+          if (isNonEmptyString(asset?.name) && key.slice(slash + 1) !== asset.name) {
+            w64Fail(`${label}.key 文件名必须与 name 一致: ${key}`);
+          }
+        }
+      }
+
+      if (asset?.source !== undefined) {
+        if (!isNonEmptyString(asset.source)) {
+          w64Fail(`${label}.source 必须是非空字符串`);
+        } else {
+          if (w64Sources.has(asset.source)) w64Fail(`${label}.source 与其它资产重复`);
+          w64Sources.add(asset.source);
+        }
       }
     }
+
+    if (keyDir && !keyDir.startsWith('wasm-lean4/')) {
+      w64Fail(`wasm64 资产 key 必须位于 wasm-lean4/ 前缀下，实际为 ${keyDir}`);
+    }
+    for (const required of [
+      'lean-lsp-adapted.mjs',
+      'lean-lsp.wasm.zst',
+      'lean-init-64.index.json',
+    ]) {
+      if (!w64Names.has(required)) w64Fail(`assets 缺少必需资产 ${required}`);
+    }
+    const packIndices = [];
+    for (const name of w64Names) {
+      const match = /^lean-init-64-(\d{2})\.pack\.zst\.bin$/.exec(name);
+      if (match) packIndices.push(Number(match[1]));
+    }
+    if (packIndices.length === 0) {
+      w64Fail('assets 缺少 lean-init-64-NN.pack.zst.bin 分片');
+    } else {
+      packIndices.sort((left, right) => left - right);
+      packIndices.forEach((value, position) => {
+        if (value !== position) {
+          w64Fail(`lean-init-64 分片编号必须从 00 连续，缺少 ${String(position).padStart(2, '0')}`);
+        }
+      });
+    }
   }
+
   if (w64Errors.length > 0) {
     console.error(`wasm64 资产清单校验失败（${w64Errors.length} 项）：`);
     for (const err of w64Errors) console.error(`  - ${err}`);

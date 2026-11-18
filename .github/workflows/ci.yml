@@ -94,10 +94,12 @@ jobs:
       - name: 产物契约
         run: pnpm run verify:build
       # E2E 直接复用这份 dist，避免再跑一次 vite build，也保证测的是同一份产物。
+      # 必须开启 include-hidden-files，否则 dist/.well-known/ai-catalog.json 会被跳过。
       - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
+          include-hidden-files: true
           retention-days: 1
 
   e2e:

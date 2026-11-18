@@ -439,40 +439,40 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   {
     slug: 'double-induction',
     title: {
-      zh: '翻倍 n 次，真的等于 2 × n 吗？',
-      en: 'Does doubling n times really equal 2 × n?',
+      zh: '每步跨 2 级台阶，走 n 步后一定在 2n 级吗？',
+      en: 'Climbing two steps at a time: does n steps land on 2n?',
     },
     summary: {
-      zh: '从 0 开始每次加 2，用归纳法证明走 n 步后正好是 2n。',
-      en: 'Starting at 0 and adding 2 each step, prove by induction that n steps land exactly on 2n.',
+      zh: '从 0 级开始，每步跨 2 级；用归纳法证明走 n 步后正好在 2n 级。',
+      en: 'Start at step 0 and climb two at a time; prove by induction that n steps land exactly on 2n.',
     },
     body: {
-      zh: '把「翻倍」定义成一个过程：从 0 开始，每走一步就加 2。走 3 步得到 6，走 10 步得到 20。对任意步数 n，结果都应该是 2n。这类「一步一步走」的规律，最适合用归纳法证明。',
-      en: 'Define “doubling” as a process: start at 0 and add 2 at every step. Three steps give 6; ten steps give 20. For any number of steps n the result should be 2n. Rules about “one step after another” are exactly what induction is for.',
+      zh: '站在 0 级台阶上，每步跨 2 级：走 1 步到 2，走 3 步到 6。对任意步数 n，位置都应该是 2n。这种「一步一步走」的规律，最适合用归纳法证明。',
+      en: 'Stand on step 0 and climb two steps at a time: one step lands on 2, three steps land on 6. For any number of steps n the position should be 2n. Rules about “one step after another” are exactly what induction is for.',
     },
     hint: {
       zh: '对 n 做归纳。n = 0 时两边都是 0；n + 1 时，先展开一步得到 `double n + 2`，再用归纳假设替换 `double n`。',
       en: 'Induct on n. At n = 0 both sides are 0; at n + 1, unfold one step to get `double n + 2`, then replace `double n` with the induction hypothesis.',
     },
     starter: {
-      zh: `-- 自定义「翻倍」过程：走 0 步结果是 0，每多走一步就加 2
+      zh: `-- 自定义「上台阶」过程：走 0 步停在 0 级，每多走一步就上升 2 级
 def double : Nat → Nat
   | 0 => 0
   | n + 1 => double n + 2
 
--- 目标：走 n 步之后，结果正好是 2 * n
+-- 目标：走 n 步之后，位置正好是 2 * n
 theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
   -- 对 n 做归纳法：
   --   起点 n = 0：double 0 = 0，右边 2 * 0 也算出 0，用 rfl
   --   递推：假设 double n = 2 * n，去证 double (n + 1) = 2 * (n + 1)
   sorry
 `,
-      en: `-- A custom "doubling" process: 0 steps give 0, each extra step adds 2
+      en: `-- A custom "climb" process: 0 steps stay at 0, each extra step goes up 2
 def double : Nat → Nat
   | 0 => 0
   | n + 1 => double n + 2
 
--- Goal: after n steps the result is exactly 2 * n
+-- Goal: after n steps the position is exactly 2 * n
 theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
   -- Induct on n:
   --   base n = 0: double 0 = 0, and 2 * 0 also computes to 0, so rfl
@@ -481,7 +481,7 @@ theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
 `,
     },
     solution: {
-      zh: `-- 自定义「翻倍」过程：走 0 步结果是 0，每多走一步就加 2
+      zh: `-- 自定义「上台阶」过程：走 0 步停在 0 级，每多走一步就上升 2 级
 def double : Nat → Nat
   | 0 => 0
   | n + 1 => double n + 2
@@ -499,7 +499,7 @@ theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
     -- 剩下的算术交给 omega
     omega
 `,
-      en: `-- A custom "doubling" process: 0 steps give 0, each extra step adds 2
+      en: `-- A custom "climb" process: 0 steps stay at 0, each extra step goes up 2
 def double : Nat → Nat
   | 0 => 0
   | n + 1 => double n + 2

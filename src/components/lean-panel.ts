@@ -140,6 +140,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     draftKey,
     onProgress,
     onGoal,
+    requiredExtensions = [],
   } = options;
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
@@ -148,6 +149,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const memory64Supported = probeMemory64Support();
   let selectedArch: LeanRuntimeArch =
     getRuntimeArch() === 'wasm64' && memory64Supported ? 'wasm64' : DEFAULT_RUNTIME_ARCH;
+  // 扩展库只随 wasm32 提供：课程声明了 requires 时，先把实验性 wasm64 退回稳定版，
+  // 否则用户会在启动后直接看到 unknown module prefix。
+  const autoStableFromWasm64 = requiredExtensions.length > 0 && selectedArch === 'wasm64';
+  if (autoStableFromWasm64) {
+    selectedArch = DEFAULT_RUNTIME_ARCH;
+    setRuntimeArch(selectedArch);
+  }
   const draft = draftKey ? readDraft(draftKey) : null;
 
   // 若 SSG 已渲染完整外框且无需动态挂载练习回链，复用原 DOM 保持首屏 H1/布局不被替换。
@@ -641,6 +649,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   };
 
   if (draft) log(t.logDraftRestored);
+  if (autoStableFromWasm64) log(t.logRuntimeAutoStable);
 
   let draftTimer: number | undefined;
   const scheduleDraftSave = () => {
@@ -1077,6 +1086,37 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       });
 
       item.append(button);
+
+      // 缺库报错最容易把新手困住：直接在诊断条目下给出一键修复，
+      // 省掉“先找库菜单、再找运行时开关、再重启”的三步。
+      const missing = /unknown (?:module prefix|package) '(Std|Batteries)'/.exec(
+        diagnostic.message,
+      );
+      if (missing) {
+        const library = missing[1]!;
+        const fix = document.createElement('button');
+        fix.type = 'button';
+        fix.dataset.role = 'library-quick-fix';
+        fix.className =
+          'mt-1 cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55';
+        fix.textContent = t.libraryQuickFix(library);
+        fix.addEventListener('click', () => {
+          fix.disabled = true;
+          fix.textContent = t.libraryQuickFixDone(library);
+          // wasm64 不带扩展库，修复时一并退回稳定版运行时。
+          if (selectedArch === 'wasm64') {
+            selectedArch = DEFAULT_RUNTIME_ARCH;
+            setRuntimeArch(selectedArch);
+            restorePromise = null;
+            syncRuntimeArchUi();
+          }
+          enqueueExtensionSelection(
+            new Set([...desiredExtensions, library.toLowerCase() as RuntimeExtensionId]),
+          );
+        });
+        item.append(fix);
+      }
+
       diagnosticsEl.append(item);
     }
   };
@@ -1094,7 +1134,6 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const isRuntimeExtensionId = (id: string): id is RuntimeExtensionId =>
     runtimeExtensions.some((extension) => extension.id === id);
   const sessionExtensionIds = (savedSession?.extensions ?? []).filter(isRuntimeExtensionId);
-  const requiredExtensionIds = options.requiredExtensions ?? [];
   // 勾选框决定每次启动默认挂载哪些库，持久化在 localStorage；上一页的库选择
   // 仍在 sessionStorage 里，导航回来时与默认值取并集恢复。
   const defaultExtensions = new Set<RuntimeExtensionId>(
@@ -1448,8 +1487,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       // 光标停在声明行时 Lean 还没有目标；如果证明体仍是 sorry，别显示成轻松的“没有 Goal”。
       const declaration = findDeclaration(model.getLinesContent(), position.lineNumber - 1);
       const atDeclarationHeader = declaration?.startLine === position.lineNumber - 1;
+      // sorry 会让目标立刻消失，但这是占位而不是证完；单独解释，避免新手误判。
+      const onSorryLine = /\bsorry\b/.test(model.getLineContent(position.lineNumber));
       setGoalText(
-        atDeclarationHeader && /\bsorry\b/.test(model.getValue()) ? t.goalHint : t.goalEmpty,
+        onSorryLine
+          ? t.goalSorryHint
+          : atDeclarationHeader && /\bsorry\b/.test(model.getValue())
+            ? t.goalHint
+            : t.goalEmpty,
       );
     } catch (error) {
       // 光标移动/新请求已取代这次请求时，迟到的错误不能影响当前面板。
@@ -1614,7 +1659,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
     startInflight = (async () => {
       // 先恢复上一页选中的扩展库，确保 didOpen 时 extensionPacks 已经就绪。
-      await restoreSavedExtensions();
+      // wasm64 只带 Init，跳过扩展包下载，避免无效的 75MB 网络与内存开销。
+      if (selectedArch !== 'wasm64') await restoreSavedExtensions();
       const started = await runStart();
       // 恢复期间用户可能已经点过库按钮，等这次启动结束后再串行处理排队的选择。
       void drainExtensionSelections();
@@ -1633,6 +1679,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const defaultCheckboxes = [...host.querySelectorAll<HTMLInputElement>('[data-library-default]')];
   const releaseAllEl = host.querySelector<HTMLButtonElement>('[data-role="release-all-libraries"]');
 
+  // wasm64 运行包只带 Init，扩展库选择必须整体置灰，避免下载 75MB 后仍报缺模块。
+  const librariesUnavailable = () => selectedArch === 'wasm64';
+
   const syncLibraryButtons = () => {
     for (const button of libraryButtons) {
       const id = button.dataset.library as RuntimeExtensionId;
@@ -1640,7 +1689,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       button.textContent = active ? t.libraryRelease : t.libraryLoad;
       button.dataset.state = active ? 'loaded' : 'idle';
       // 加载/重启期间保持可点：新的选择会排队，等当前重启结束后继续执行。
-      button.disabled = false;
+      // wasm64 不支持扩展库，直接禁用而不是点了才报错。
+      button.disabled = librariesUnavailable();
     }
     if (releaseAllEl) releaseAllEl.disabled = activeExtensions.size === 0;
   };
@@ -1649,11 +1699,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     for (const input of defaultCheckboxes) {
       const id = input.dataset.libraryDefault as RuntimeExtensionId;
       input.checked = defaultExtensions.has(id);
+      input.disabled = librariesUnavailable();
     }
   };
 
   for (const input of defaultCheckboxes) {
     input.addEventListener('change', () => {
+      if (librariesUnavailable()) return;
       const id = input.dataset.libraryDefault as RuntimeExtensionId;
       if (input.checked) {
         // 勾选 Batteries 时把依赖的 Std 一起勾上，避免启动时出现未勾选却已挂载。
@@ -1699,9 +1751,12 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       runtimeArchNoteEl.textContent = !memory64Supported
         ? t.runtimeWasm64Unsupported
         : selectedArch === 'wasm64'
-          ? t.runtimeWasm64AssetNote
+          ? t.runtimeWasm64NoLibraries
           : '';
     }
+    // 运行时切换会改变扩展库可用性，两个菜单必须同步刷新。
+    syncDefaultCheckboxes();
+    syncLibraryButtons();
   };
 
   for (const button of runtimeArchButtons) {
@@ -1715,6 +1770,15 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       if (nextArch === selectedArch) return;
       selectedArch = nextArch;
       setRuntimeArch(nextArch);
+      // wasm64 只带 Init：切过去时立刻释放已挂载的扩展包，避免白占 75MB。
+      if (nextArch === 'wasm64' && activeExtensions.size > 0) {
+        extensionPackCache.clear();
+        extensionPacks = {};
+        activeExtensions.clear();
+        desiredExtensions = new Set();
+      }
+      // 运行包换了，上一轮“扩展库已恢复”的结论作废；切回 wasm32 时要重新挂载。
+      restorePromise = null;
       syncRuntimeArchUi();
       log(t.logRuntimeArchSelected(nextArch === 'wasm64' ? t.runtimeWasm64 : t.runtimeWasm32));
       if (nextArch === 'wasm64') log(t.runtimeWasm64AssetNote);
@@ -1741,7 +1805,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     const ids = resolveExtensionIds([
       ...sessionExtensionIds,
       ...defaultExtensions,
-      ...requiredExtensionIds,
+      ...requiredExtensions,
     ]);
     if (ids.length === 0) {
       restorePromise = Promise.resolve();
@@ -1850,6 +1914,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   for (const button of libraryButtons) {
     button.addEventListener('click', () => {
+      if (librariesUnavailable()) return;
       const id = button.dataset.library as RuntimeExtensionId;
       const next = new Set(desiredExtensions);
       if (next.has(id)) {
@@ -1867,6 +1932,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   // 单独提供“释放全部”，避免单个库的释放按钮误伤其他已加载的库。
   releaseAllEl?.addEventListener('click', () => {
+    if (librariesUnavailable()) return;
     enqueueExtensionSelection(new Set());
   });
   syncLibraryButtons();

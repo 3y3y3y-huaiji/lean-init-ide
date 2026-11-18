@@ -73,6 +73,27 @@ export const zh: Messages = {
     challengesBody:
       '6 道非程序员也能看懂的经典数学题：不用装环境，点开就能在浏览器里亲手证明。与系统课程并列，共用同一套 Lean 运行时。',
     challengesCta: '去挑战',
+    demo: {
+      title: '先看 5 秒：证明就是让目标一行行消失',
+      body: '不用下载 102MB 运行时。下面是一个真实目标，点「下一步」看 Lean 每走一步把 ⊢ 变成什么。',
+      steps: [
+        {
+          goal: '⊢ 2 + 2 = 4',
+          note: '裁判给出待证目标：证明 2 + 2 等于 4。',
+        },
+        {
+          goal: '⊢ 4 = 4',
+          note: 'Lean 先算值：2 + 2 化简成 4，目标变成「4 等于 4」。',
+        },
+        {
+          goal: '没有剩余目标',
+          note: '两边一模一样，rfl 直接盖章；这一行证明就完成了。',
+        },
+      ],
+      stepLabel: (current, total) => `第 ${current} / ${total} 步`,
+      next: '下一步',
+      reset: '重来',
+    },
   },
   challenges: {
     eyebrow: '趣味数学挑战',
@@ -148,6 +169,7 @@ export const zh: Messages = {
     completedLabel: '已完成',
     exerciseCompletionHint:
       '保留题目中的定理名、删掉所有 sorry 且没有错误后，本课会自动标记为已完成。',
+    requiresHint: (libraries) => `本课需要 ${libraries} 库，启动 Lean 时会自动加载。`,
     completedCount: (done, total) => `已完成 ${done} / ${total}`,
     running: '运行中…',
     noOutput: '没有错误，也没有输出',
@@ -183,6 +205,8 @@ end
     goalEmpty: '当前光标没有 Goal',
     goalUnsupported: '该 Lean LSP 不支持 Goal',
     goalHint: '将光标移入 by 块内查看当前证明目标',
+    goalSorryHint:
+      '当前用 sorry 占位，Lean 会暂时把目标当成已完成。把光标移到 by 内，或删掉 sorry，就能看到待证目标。',
     diagnosticsTitle: '诊断',
     diagnosticsPlaceholder: '启动 Lean 后显示诊断',
     runPassed: '运行通过',
@@ -303,10 +327,16 @@ end
     logMemoryHardLimit: (mb, limitMb) =>
       `内存达到硬上限（${mb} / ${limitMb} MB），已保护性停止引擎以防标签页崩溃`,
     runtimeTitle: '运行时',
+    advancedTitle: '高级设置',
     runtimeWasm32: 'wasm32（稳定默认）',
     runtimeWasm64: 'wasm64（实验性）',
     runtimeExperimentalWarning:
       '实验性提醒：默认使用稳定版 wasm32（1 GiB 上限）。wasm64 目前为实验性功能，可能存在不稳定或浏览器兼容性问题，请勿作为生产环境使用，仅建议手动切换试用。',
+    runtimeWasm64NoLibraries:
+      'wasm64 运行包只含 Init，Std / Batteries 扩展库已禁用；需要扩展库时请切回 wasm32。',
+    logRuntimeAutoStable: '本课需要扩展库，已自动切回稳定版 wasm32 运行时',
+    libraryQuickFix: (library) => `一键启用 ${library} 并切回稳定运行时`,
+    libraryQuickFixDone: (library) => `已启用 ${library}，正在重启 Lean…`,
     runtimeWasm64Unsupported: '当前浏览器不支持 Memory64，将继续使用 wasm32 运行时',
     runtimeWasm64AssetNote:
       '实验性提醒：wasm64（64 位 Memory64）将加载独立 64 位 Lean 4.36.0-rc2 + Init 运行包，仅作手动试用，请勿用于生产；Std / Batteries 扩展库仅随 wasm32 提供。',

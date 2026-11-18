@@ -100,6 +100,31 @@ describe('首页渲染', () => {
     }
   });
 
+  it('首屏零下载演示可以逐步骤推进，并在最后一步禁用下一步', () => {
+    document.body.innerHTML = renderHome('zh');
+    hydrateHome(document.body, 'zh');
+
+    const t = messagesFor('zh').home.demo;
+    const goal = document.body.querySelector<HTMLElement>('[data-role="demo-goal"]')!;
+    const count = document.body.querySelector<HTMLElement>('[data-role="demo-count"]')!;
+    const next = document.body.querySelector<HTMLButtonElement>('[data-role="demo-next"]')!;
+    const reset = document.body.querySelector<HTMLButtonElement>('[data-role="demo-reset"]')!;
+
+    expect(goal.textContent).toBe(t.steps[0]!.goal);
+    expect(count.textContent).toBe(t.stepLabel(1, t.steps.length));
+
+    next.click();
+    expect(goal.textContent).toBe(t.steps[1]!.goal);
+
+    next.click();
+    expect(goal.textContent).toBe(t.steps[2]!.goal);
+    expect(next.disabled).toBe(true);
+
+    reset.click();
+    expect(goal.textContent).toBe(t.steps[0]!.goal);
+    expect(next.disabled).toBe(false);
+  });
+
   it('hydrateHome 在空容器中安全无操作', () => {
     const empty = document.createElement('div');
     expect(() => hydrateHome(empty, 'en')).not.toThrow();

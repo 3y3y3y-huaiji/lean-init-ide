@@ -75,6 +75,27 @@ export const en: Messages = {
     challengesBody:
       'Six classic puzzles explained for non-programmers. No setup: open one and prove it in the browser. It sits beside the courses and shares the same Lean runtime.',
     challengesCta: 'Take a challenge',
+    demo: {
+      title: 'Five seconds first: a proof makes the goal shrink, line by line',
+      body: 'No 102 MB runtime download. This is a real goal; press Next to see what Lean does to ⊢ at each step.',
+      steps: [
+        {
+          goal: '⊢ 2 + 2 = 4',
+          note: 'The referee hands you the goal: prove that 2 + 2 equals 4.',
+        },
+        {
+          goal: '⊢ 4 = 4',
+          note: 'Lean computes first: 2 + 2 reduces to 4, so the goal becomes “4 equals 4”.',
+        },
+        {
+          goal: 'No goals left',
+          note: 'Both sides are identical, so rfl stamps it; the proof is done.',
+        },
+      ],
+      stepLabel: (current, total) => `Step ${current} / ${total}`,
+      next: 'Next step',
+      reset: 'Reset',
+    },
   },
   challenges: {
     eyebrow: 'Math challenges',
@@ -152,6 +173,8 @@ export const en: Messages = {
     completedLabel: 'Completed',
     exerciseCompletionHint:
       'Keep the named theorem, remove every sorry and leave no errors; the lesson is then marked as completed automatically.',
+    requiresHint: (libraries) =>
+      `This lesson needs ${libraries}; Lean loads it automatically on start.`,
     completedCount: (done, total) => `${done} / ${total} completed`,
     running: 'Running…',
     noOutput: 'No errors, no output',
@@ -187,6 +210,8 @@ end
     goalEmpty: 'No goal at the cursor',
     goalUnsupported: 'This Lean LSP does not support goals',
     goalHint: 'Move the cursor inside the by block to see the current goal',
+    goalSorryHint:
+      'sorry closes the goal for now, so Lean reports no goal. Move the cursor inside the by block, or delete sorry, to see what still needs proving.',
     diagnosticsTitle: 'Diagnostics',
     diagnosticsPlaceholder: 'Diagnostics appear after Lean starts',
     runPassed: 'Run passed',
@@ -317,10 +342,17 @@ end
     logMemoryHardLimit: (mb, limitMb) =>
       `Memory reached hard limit (${mb} / ${limitMb} MB); stopped engine to protect tab stability`,
     runtimeTitle: 'Runtime',
+    advancedTitle: 'Advanced',
     runtimeWasm32: 'wasm32 (stable default)',
     runtimeWasm64: 'wasm64 (experimental)',
     runtimeExperimentalWarning:
       'Experimental notice: stable wasm32 (1 GiB limit) is the production default. wasm64 is experimental, may be unstable or unsupported across browsers, and must not be used for production — switch manually only to try it.',
+    runtimeWasm64NoLibraries:
+      'The wasm64 runtime ships Init only, so Std / Batteries are disabled. Switch back to wasm32 to use extension libraries.',
+    logRuntimeAutoStable:
+      'This lesson needs an extension library; switched back to the stable wasm32 runtime',
+    libraryQuickFix: (library) => `Enable ${library} and switch to the stable runtime`,
+    libraryQuickFixDone: (library) => `${library} enabled; restarting Lean…`,
     runtimeWasm64Unsupported:
       'Memory64 is not supported in this browser; staying on the stable wasm32 runtime',
     runtimeWasm64AssetNote:

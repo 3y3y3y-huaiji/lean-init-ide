@@ -95,6 +95,25 @@ export const renderHome = (
     )
     .join('');
 
+  const demo = t.demo;
+  const demoStep = demo.steps[0]!;
+  const demoSection = `
+    <section class="mt-[clamp(36px,5vw,56px)]">
+      <div class="rounded-2xl border border-accent bg-accent-soft p-6" data-role="home-demo">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="m-0 text-[17px] font-bold">${demo.title}</h2>
+          <span data-role="demo-count" class="font-mono text-xs tabular-nums text-muted">${demo.stepLabel(1, demo.steps.length)}</span>
+        </div>
+        <p class="mt-2 mb-4 text-sm leading-relaxed text-muted">${demo.body}</p>
+        <pre data-role="demo-goal" class="m-0 overflow-auto rounded-lg border border-line bg-panel px-4 py-3 font-mono text-[13.5px] leading-[1.7] text-fg">${escapeHtml(demoStep.goal)}</pre>
+        <p data-role="demo-note" class="mt-2 mb-4 text-sm leading-relaxed text-muted">${escapeHtml(demoStep.note)}</p>
+        <div class="flex flex-wrap gap-2">
+          <button class="${buttonClass}" type="button" data-role="demo-next">${demo.next}</button>
+          <button class="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
+        </div>
+      </div>
+    </section>`;
+
   return `
     <section class="max-w-[760px]">
       <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
@@ -106,6 +125,8 @@ export const renderHome = (
         <a class="${ghostButtonLgClass}" href="/${locale}/playground">${t.ctaSecondary}</a>
       </div>
     </section>
+
+    ${demoSection}
 
     <section class="mt-[clamp(40px,6vw,72px)]">
       <h2 class="mt-0 mb-4.5 text-sm uppercase tracking-[0.08em] text-muted">${t.pathsTitle}</h2>
@@ -145,7 +166,7 @@ export const hydrateHome = (
   visited: ReadonlySet<string> = new Set(),
   completed: ReadonlySet<string> = new Set(),
 ): void => {
-  const { cta, target, introTarget, mathTarget, engTarget } = computeHomeState(
+  const { t, cta, target, introTarget, mathTarget, engTarget } = computeHomeState(
     locale,
     visited,
     completed,
@@ -161,4 +182,35 @@ export const hydrateHome = (
   if (math && mathTarget) math.href = `/${locale}/learn/${mathTarget}`;
   const eng = root.querySelector<HTMLAnchorElement>('[data-home-cta="eng"]');
   if (eng && engTarget) eng.href = `/${locale}/learn/${engTarget}`;
+
+  // 零下载演示：纯前端状态切换，不触碰 Lean 运行时，也不会触发资产下载。
+  const demo = root.querySelector<HTMLElement>('[data-role="home-demo"]');
+  if (!demo || demo.dataset.bound === 'true') return;
+  demo.dataset.bound = 'true';
+
+  const steps = t.demo.steps;
+  const countEl = demo.querySelector<HTMLElement>('[data-role="demo-count"]');
+  const goalEl = demo.querySelector<HTMLElement>('[data-role="demo-goal"]');
+  const noteEl = demo.querySelector<HTMLElement>('[data-role="demo-note"]');
+  const nextEl = demo.querySelector<HTMLButtonElement>('[data-role="demo-next"]');
+  const resetEl = demo.querySelector<HTMLButtonElement>('[data-role="demo-reset"]');
+  let step = 0;
+
+  const paint = () => {
+    const current = steps[step] ?? steps[0]!;
+    if (goalEl) goalEl.textContent = current.goal;
+    if (noteEl) noteEl.textContent = current.note;
+    if (countEl) countEl.textContent = t.demo.stepLabel(step + 1, steps.length);
+    if (nextEl) nextEl.disabled = step >= steps.length - 1;
+  };
+
+  nextEl?.addEventListener('click', () => {
+    step = Math.min(step + 1, steps.length - 1);
+    paint();
+  });
+  resetEl?.addEventListener('click', () => {
+    step = 0;
+    paint();
+  });
+  paint();
 };

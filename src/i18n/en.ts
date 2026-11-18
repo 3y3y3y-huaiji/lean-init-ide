@@ -307,6 +307,15 @@ end
     logStopped: 'Lean engine stopped, worker and memory released',
     logLowMemory:
       'Low-memory device: auto-start disabled and the persistent cache capped at 128 MB',
+    statusMemoryLimit: 'Near memory limit · stopped safely',
+    logMemorySoftRecycle: (mb) =>
+      `Memory reached ${mb} MB (soft threshold); recycled idle engine to release heap`,
+    logMemoryImportRecycle: (mb) =>
+      `Imports changed at ${mb} MB heap; recycled engine cleanly before reopening`,
+    logMemoryBackgroundRelease: (mb) =>
+      `Tab hidden at ${mb} MB peak heap; released Lean engine memory`,
+    logMemoryHardLimit: (mb, limitMb) =>
+      `Memory reached hard limit (${mb} / ${limitMb} MB); stopped engine to protect tab stability`,
   },
   reference: {
     eyebrow: 'Lean 4 · Reference',

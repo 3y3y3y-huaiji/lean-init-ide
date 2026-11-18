@@ -7,7 +7,7 @@ import { createMessageConnection } from 'vscode-jsonrpc/browser';
 import LeanWorker from '../../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?worker';
 import { messagesFor, type Locale } from '../i18n';
 import { setSourcePreference, type AssetSourcePreference } from '../asset-source';
-import { cacheBudgetBytes, currentMemoryTier } from '../device';
+import { cacheBudgetBytes, currentMemoryTier, wasm64MaxMemoryBytes } from '../device';
 import {
   abbreviationSuggestions,
   findAbbreviationQuery,
@@ -29,7 +29,13 @@ import {
   shouldShowRunPassed,
   supportsLeanRuntime,
 } from '../lean-recovery';
-import { anchorImportDiagnostics, LeanSession, type LspDiagnostic } from '../lean-session';
+import {
+  anchorImportDiagnostics,
+  extractImportLines,
+  LeanSession,
+  type LspDiagnostic,
+} from '../lean-session';
+import { createLeanMemoryGuard, sampleBrowserMemoryBytes } from '../lean-memory-guard';
 import {
   getDefaultExtensions,
   readRuntimeSession,
@@ -124,6 +130,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   } = options;
   const t = messagesFor(locale).playground;
   const memoryTier = currentMemoryTier();
+  const memoryGuardMaxBytes = wasm64MaxMemoryBytes(memoryTier);
   const draft = draftKey ? readDraft(draftKey) : null;
 
   // 若 SSG 已渲染完整外框且无需动态挂载练习回链，复用原 DOM 保持首屏 H1/布局不被替换。
@@ -678,6 +685,40 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   let lastAssetFallback: { name: string; message: string } | null = null;
   let freshHandled = false;
 
+  const formatMb = (bytes: number): string => Math.round(bytes / (1024 * 1024)).toString();
+  const memoryGuard = createLeanMemoryGuard({
+    maxBytes: memoryGuardMaxBytes,
+    sampleMemoryBytes: () => sampleBrowserMemoryBytes(),
+    onPollError: (error) => {
+      log(t.logRuntimeError(error instanceof Error ? error.message : String(error)));
+    },
+    onRecycle: ({ peakBytes, reason }) => {
+      const mb = formatMb(peakBytes);
+      if (reason === 'background-hidden') {
+        if (!session.isReady) return;
+        log(t.logMemoryBackgroundRelease(mb));
+        stop();
+        return;
+      }
+      if (!session.isReady || fileProcessing || startInflight) return;
+      log(t.logMemorySoftRecycle(mb));
+      stop();
+      void start();
+    },
+    onHardLimit: ({ bytes, maxBytes }) => {
+      const mb = formatMb(bytes);
+      const limitMb = formatMb(maxBytes);
+      log(t.logMemoryHardLimit(mb, limitMb));
+      reportError('memory-limit', `${mb}/${limitMb} MB`);
+      stop();
+      setStatus(t.statusMemoryLimit, 'error');
+    },
+  });
+  const onVisibilityChange = () => {
+    memoryGuard.setVisible(document.visibilityState !== 'hidden');
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
   const emitProgress = () =>
     onProgress?.({ label: progressLabel, kind: progressKind, ratio: progressRatio });
 
@@ -1076,7 +1117,15 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
             ? { extensionPacks: extensionPacks as unknown as Record<string, ArrayBuffer> }
             : {}),
         },
-        createWorker: () => new LeanWorker(),
+        createWorker: () => {
+          const worker = new LeanWorker();
+          worker.addEventListener('message', (event: MessageEvent<{ memoryBytes?: unknown }>) => {
+            if (typeof event.data?.memoryBytes === 'number') {
+              memoryGuard.reportBytes(event.data.memoryBytes, 'event');
+            }
+          });
+          return worker;
+        },
         onStatus: (status) => {
           if (status.state === 'loading') {
             // 资产字节数统一用 SW 的聚合进度，避免两个来源轮流覆盖导致百分比回跳。
@@ -1112,6 +1161,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         // 从开始处理那一刻就兜底计时：即使只收到开始通知、没有结束通知也
         // 能退出 Checking file...，不依赖诊断是否恰好在这一轮到达。
         scheduleProcessingFallback();
+        memoryGuard.setProcessing(true);
         resetRunOk();
         if (session.isReady && diagnosticSeq > 0) {
           setStatus(t.statusChecking, 'ready');
@@ -1120,6 +1170,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       }
       clearProcessingFallback();
       if (wasProcessing) finishFileProcessing();
+      memoryGuard.setProcessing(false);
     },
     onLog: log,
     // #check 的信息可能比 documentSymbol 晚几十毫秒，留一个静默窗口避免丢输出。
@@ -1140,6 +1191,28 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     position: { line: position.lineNumber - 1, character: position.column - 1 },
   });
 
+  let lastSyncedImports = extractImportLines(model.getValue());
+
+  const syncEditorChange = (): void => {
+    if (!session.isReady) return;
+    changePending = false;
+    const nextCode = model.getValue();
+    const nextImports = extractImportLines(nextCode);
+    if (nextImports !== lastSyncedImports) {
+      lastSyncedImports = nextImports;
+      // 头部 import 变化会使整份 FileWorker 快照失效；若堆水位已过高，直接重建 Worker 顺手释放旧堆。
+      if (memoryGuard.shouldRecycleOnImportChange()) {
+        log(t.logMemoryImportRecycle(formatMb(memoryGuard.getSnapshot().peakBytes)));
+        stop();
+        void start();
+        return;
+      }
+    }
+    lastEditAt = performance.now();
+    session.change(nextCode);
+    memoryGuard.recordEdit();
+  };
+
   /**
    * 补全、悬停、跳转都基于 LSP 当前文档。编辑有 350ms 防抖，请求前必须先把
    * 未发送的改动刷过去，否则服务端会按旧文档计算（表现为刚输入 `.` 补全为空）。
@@ -1147,9 +1220,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const flushChange = () => {
     if (!session.isReady || !changePending) return;
     window.clearTimeout(debounceTimer);
-    changePending = false;
-    lastEditAt = performance.now();
-    session.change(model.getValue());
+    syncEditorChange();
   };
 
   monaco.languages.registerHoverProvider(LEAN_LANGUAGE_ID, {
@@ -1266,12 +1337,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (suppressSync) return;
     changePending = true;
     window.clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(() => {
-      if (!session.isReady) return;
-      changePending = false;
-      lastEditAt = performance.now();
-      session.change(model.getValue());
-    }, 350);
+    debounceTimer = window.setTimeout(syncEditorChange, 350);
   });
 
   let goalSupported = true;
@@ -1297,6 +1363,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         suppressSync = true;
         model.setValue(code);
         suppressSync = false;
+        lastSyncedImports = extractImportLines(code);
       })
       .then((list) => {
         if (lastCrashAt !== crashAt) {
@@ -1364,6 +1431,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const stop = () => {
     cancelAutoStart();
     cancelAutoRecover();
+    memoryGuard.reset();
     window.clearTimeout(debounceTimer);
     window.clearTimeout(goalTimer);
     session.stop();
@@ -1428,7 +1496,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
 
     try {
-      await session.start(model.getValue());
+      const startCode = model.getValue();
+      lastSyncedImports = extractImportLines(startCode);
+      await session.start(startCode);
       // 启动期间用户可能已经改过代码；didOpen 用的是启动那一刻的内容，这里补一次同步。
       flushChange();
       startEl.textContent = t.stop;
@@ -1715,6 +1785,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     goalRequestSeq += 1;
     clearProcessingFallback();
     fileProcessing = false;
+    memoryGuard.reset();
 
     cancelAutoRecover();
     session.stop();
@@ -1885,7 +1956,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     window.clearTimeout(debounceTimer);
     window.clearTimeout(goalTimer);
     clearProcessingFallback();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
     navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage);
+    memoryGuard.dispose();
     host.removeEventListener('keydown', acceptSuggestionWithEnter, true);
     document.removeEventListener('pointerdown', onDocumentPointerDown, true);
     document.removeEventListener('keydown', onDocumentKeyDown);

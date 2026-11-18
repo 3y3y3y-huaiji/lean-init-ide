@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageConnection } from 'vscode-jsonrpc/browser';
 import {
   anchorImportDiagnostic,
+  extractImportLines,
   LeanSession,
   type LeanSessionOptions,
   type LeanSessionServer,
@@ -571,5 +572,13 @@ describe('anchorImportDiagnostic', () => {
     const unrelated = atFileStart('type mismatch');
     expect(anchorImportDiagnostic(missing, code)).toBe(missing);
     expect(anchorImportDiagnostic(unrelated, code)).toBe(unrelated);
+  });
+
+  it('extractImportLines 提取规范化的 import 行并忽略普通声明', () => {
+    expect(
+      extractImportLines(
+        '  import Init\nprivate import Foo.Bar\n#eval 1 + 1\n  public meta import Baz  \n',
+      ),
+    ).toBe('import Init\nprivate import Foo.Bar\npublic meta import Baz');
   });
 });

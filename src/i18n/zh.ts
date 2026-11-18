@@ -295,6 +295,13 @@ end
     logStartFailed: (message) => `启动失败：${message}`,
     logStopped: '已关闭 Lean 引擎，worker 与内存已释放',
     logLowMemory: '低内存设备：已关闭自动启动，持久缓存上限下调到 128MB',
+    statusMemoryLimit: '内存接近上限 · 已保护性停止',
+    logMemorySoftRecycle: (mb) => `内存达到 ${mb} MB（软阈值），已在空闲时重建引擎释放堆`,
+    logMemoryImportRecycle: (mb) =>
+      `检测到 import 变更且当前堆水位达 ${mb} MB，已顺手重建引擎释放内存`,
+    logMemoryBackgroundRelease: (mb) => `页面切入后台（峰值 ${mb} MB），已释放 Lean 引擎内存`,
+    logMemoryHardLimit: (mb, limitMb) =>
+      `内存达到硬上限（${mb} / ${limitMb} MB），已保护性停止引擎以防标签页崩溃`,
   },
   reference: {
     eyebrow: 'Lean 4 · 速查',

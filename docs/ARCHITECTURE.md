@@ -48,6 +48,18 @@ worker 启动时用 `public/vendor/zstddec.mjs` 的同源 wasm 解码，解压�
 
 访问控制、限流与资产维护的操作方式见 [OPERATIONS](OPERATIONS.md)。
 
+### 实验性 wasm64
+
+- 独立清单 `config/lean4-wasm64-runtime.json`，资产前缀 `wasm-lean4/4.36.0-rc2-wasm64/`，
+  与 wasm32 共用 `/cdn/` 网关、R2 桶和魔搭镜像；默认仍加载 wasm32。
+- `src/lean-wasm64-runtime.ts` 逐资产校验字节数与 SHA-256、解 zstd 并校验解压回执；
+  单个源默认 60 分钟预算，失败按魔搭 / 同源 `/cdn/` 顺序回退。
+- LSP 由 `src/lean-wasm64-supervisor.ts` 管理：bootstrap 进程拿 initialize 能力，
+  文件进程负责文档；每个进程一个 Worker，stdin 走 SharedArrayBuffer 环形缓冲。
+- FileWorker 以退出码 2 请求重启时重放 initialize + didOpen；启动后 15s 内反复退出
+  会触发重启风暴保护，避免无限重挂上百 MB 的库。
+- wasm64 只带 Init；需要 Std / Batteries 的课程与扩展库选择会自动使用 wasm32。
+
 ## 目录结构
 
 ```

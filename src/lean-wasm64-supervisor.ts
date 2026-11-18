@@ -85,6 +85,8 @@ const RESTART_EXIT_CODE = 2;
 const INTERNAL_INIT_ID = 'lean-browser:init';
 const DEFAULT_MAX_RESTARTS = 5;
 const DEFAULT_RESTART_WINDOW_MS = 60_000;
+/** 只有启动后很快退出（而不是用户改 header 后正常重启）才计入重启风暴。 */
+const FAST_RESTART_MS = 15_000;
 const MAX_EARLY_REQUESTS = 128;
 const MAX_DOCUMENT_BYTES = 8 * 1024 ** 2;
 
@@ -326,6 +328,7 @@ export const createWasm64Supervisor = async (
     active = { ...document };
     generation += 1;
     const token = generation;
+    const startedAt = now();
 
     const process = factory(['-j4', '--worker', document.uri], {
       onMessage: (message) => {
@@ -337,7 +340,8 @@ export const createWasm64Supervisor = async (
         fileProcess = undefined;
         if (code === RESTART_EXIT_CODE && active) {
           // FileWorker 在 import / 头部状态变化时请求重启：重开进程并重放 initialize + didOpen。
-          if (!allowRestart()) {
+          // 正常编辑造成的重启不计入风暴，否则用户连续改几次 import 就会被误判。
+          if (now() - startedAt < FAST_RESTART_MS && !allowRestart()) {
             fail(
               `Lean document process restarted ${maxRestarts} times within ${Math.round(restartWindowMs / 1000)}s; giving up.`,
             );

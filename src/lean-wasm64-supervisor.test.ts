@@ -223,6 +223,40 @@ describe('createWasm64Supervisor', () => {
     expect(processes).toHaveLength(4);
   });
 
+  it('运行足够久的正常重启不计入风暴，只有启动后立即退出才计数', async () => {
+    const onError = vi.fn();
+    let clock = 0;
+    const { processes, send } = await connect({
+      onError,
+      now: () => clock,
+      maxRestarts: 1,
+      restartWindowMs: 60_000,
+    });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    // 运行 20s 后改 header：不计数。
+    clock = 20_000;
+    processes[1]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[2]?.args).toEqual(['-j4', '--worker', URI]);
+    expect(onError).not.toHaveBeenCalled();
+
+    // 新进程立即退出：计数 1。
+    processes[2]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[3]?.args).toEqual(['-j4', '--worker', URI]);
+    expect(onError).not.toHaveBeenCalled();
+
+    // 再立即退出：超过 maxRestarts=1。
+    processes[3]!.callbacks.onExit(2);
+    await flush();
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining('restarted 1 times within 60s; giving up'),
+    );
+  });
+
   it('超过 8 MiB UTF-8 的文档在创建进程前就被拒绝', async () => {
     const onError = vi.fn();
     const { processes, send } = await connect({ onError });

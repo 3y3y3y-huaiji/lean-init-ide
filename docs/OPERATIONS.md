@@ -48,7 +48,8 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 ```
 
 检查首页 `#app` 与标题、COOP/COEP、`sw.js` 可访问、`/cdn/<key>` 的 Range 206 与
-`Content-Range`/`ETag`、白名单外路径 404。
+`Content-Range`/`ETag`、白名单外路径 404；实验性 wasm64 另查 wasm Range、最后一个
+pack 的尾部分片与索引整文件 SHA-256。
 
 `.github/workflows/smoke.yml` 另外提供手动触发与每日 01:00 UTC 巡检。它和部署流水线里的冒烟
 分工不同：部署后的那次回答「这次发布对不对」，每日巡检回答「站还在不在」，负责捕捉证书、

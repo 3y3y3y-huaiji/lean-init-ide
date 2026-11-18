@@ -26,10 +26,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'smoke 只验 Init；deep 追加 Mathlib 与 release'
+        description: 'smoke 只验 Init；deep 追加 Mathlib 与 release；publish 从指定 deep run 发布'
         type: choice
-        options: [smoke, deep]
+        options: [smoke, deep, publish]
         default: smoke
+      source_run_id:
+        description: 'mode=publish 时复用的 workflow run ID（需包含 wasm64-runtime-release 产物）'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -78,6 +82,7 @@ jobs:
 
   prepare:
     needs: lint
+    if: github.event.inputs.mode != 'publish'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -228,6 +233,7 @@ jobs:
   # 每次 push 的快速回路：只证明工具链、Init 编译和 Init LSP 没坏。
   smoke:
     needs: prepare
+    if: github.event.inputs.mode != 'publish'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -1020,37 +1026,57 @@ jobs:
           if-no-files-found: warn
 
   # 将 deep 产出的实验性 wasm64 运行时（Init 64位 + release-lsp）发布到
-  # GitHub Release 与 Cloudflare R2，供主站按手动开关实验试用（默认仍是 wasm32）。
+  # Cloudflare R2（经主站 Pages Function /cdn/ 同源网关，浏览器唯一数据源）与 GitHub Release（仅归档），
+  # 供主站按手动开关实验试用（默认仍是 wasm32）。
   publish-wasm64:
-    needs: deep
+    needs: [lint, deep]
     if: >-
-      needs.deep.result == 'success' && (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'deep') ||
-        (github.event_name == 'push' && contains(github.event.head_commit.message, '[wasm64-deep]'))
+      !cancelled() && needs.lint.result == 'success' && (
+        (needs.deep.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'deep') ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, '[wasm64-deep]'))
+        )) ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'publish' && github.event.inputs.source_run_id != '')
       )
     permissions:
       contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
+        if: github.event.inputs.mode != 'publish'
         with:
           name: wasm64-runtime-release
           path: runtime
 
-      - name: 发布 GitHub Release（runtime-v<lean>-wasm64）
+      - uses: actions/download-artifact@v8
+        if: github.event.inputs.mode == 'publish'
+        with:
+          name: wasm64-runtime-release
+          path: runtime
+          run-id: ${{ github.event.inputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: 发布 GitHub Release（runtime-v<lean>-wasm64，归档与构建期使用）
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
         run: |
           set -euo pipefail
           VERSION="$(node -e 'process.stdout.write(require("./runtime/wasm64-runtime-manifest.json").leanVersion)')"
           TAG="runtime-v${VERSION}-wasm64"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
+          REPO="${{ github.repository }}"
+          TARGET_SHA="$GITHUB_SHA"
+          if [ -n "${SOURCE_RUN_ID:-}" ]; then
+            TARGET_SHA="$(gh api "repos/${REPO}/actions/runs/${SOURCE_RUN_ID}" --jq .head_sha)"
+          fi
+          if ! gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
             gh release create "$TAG" \
-              --target "$GITHUB_SHA" \
+              -R "$REPO" \
+              --target "$TARGET_SHA" \
               --title "Lean ${VERSION} wasm64 experimental runtime" \
               --notes "Experimental wasm64 (Memory64) runtime + 64-bit Init oleans. Opt-in trial only; do not use in production."
           fi
-          gh release upload "$TAG" runtime/* --clobber
+          gh release upload "$TAG" -R "$REPO" runtime/* --clobber
 
       - name: 上传 R2（wasm-lean4/<ver>-wasm64/，存在 secrets 时执行）
         env:

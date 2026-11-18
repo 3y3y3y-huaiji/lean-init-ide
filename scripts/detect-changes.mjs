@@ -269,8 +269,7 @@ const main = () => {
   try {
     files = git(['diff', '--name-only', '--no-renames', base, head]).split('\n').filter(Boolean);
   } catch {
-    // 基线不可用（例如浅克隆）时按全量处理。
-    files = [];
+    // 基线不可用（例如浅克隆）时保持空列表，交给 classifyFiles 按全量处理。
   }
 
   const result = classifyFiles(files);

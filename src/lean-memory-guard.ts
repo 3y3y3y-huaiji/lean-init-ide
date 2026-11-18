@@ -12,6 +12,8 @@
 export const DEFAULT_SOFT_THRESHOLD_RATIO = 0.72;
 export const DEFAULT_HARD_THRESHOLD_RATIO = 0.9;
 export const DEFAULT_MEMORY_POLL_MS = 4_000;
+export const DEFAULT_EDIT_SAMPLE_THRESHOLD = 15;
+export const DEFAULT_SAMPLE_COOLDOWN_MS = 20_000;
 
 export type MemoryReportSource = 'event' | 'poll';
 
@@ -40,6 +42,7 @@ export interface MemoryGuardSnapshot {
   readonly needsRecycle: boolean;
   readonly hardTriggered: boolean;
   readonly processing: boolean;
+  readonly pendingEditCount: number;
 }
 
 export interface MemoryGuardTimers {
@@ -55,6 +58,11 @@ export interface LeanMemoryGuardOptions {
   readonly softThresholdRatio?: number;
   readonly hardThresholdRatio?: number;
   readonly pollIntervalMs?: number;
+  /** 连续多少次短平快防抖编辑后，在下次检查归零时补采一次内存。 */
+  readonly editSampleThreshold?: number;
+  /** 编辑计数触发补采的最小冷却时间（毫秒），防止频繁触发浏览器堆统计。 */
+  readonly sampleCooldownMs?: number;
+  readonly now?: () => number;
   readonly sampleMemoryBytes?: () => Promise<number | null> | number | null;
   readonly onPollError?: (error: unknown) => void;
   readonly onSoftLimit?: (event: MemoryThresholdEvent) => void;
@@ -66,7 +74,11 @@ export interface LeanMemoryGuardOptions {
 export interface LeanMemoryGuard {
   /** 上报一次观测到的线性内存或总堆字节数（来自事件或轮询）。 */
   reportBytes: (bytes: number, source?: MemoryReportSource) => void;
-  /** 同步文件处理状态：活跃期开启条件轮询，空闲后兑现延迟回收。 */
+  /** 记录一次有效代码编辑（防抖发送 didChange 时调用），用于在短耗时检查场景补采。 */
+  recordEdit: () => void;
+  /** 头部 import 变更即将重开文档时，判断是否应先重建 Worker 顺手释放已有高水位堆。 */
+  shouldRecycleOnImportChange: () => boolean;
+  /** 同步文件处理状态：活跃期开启条件轮询，空闲后兑现延迟回收与累积编辑补采。 */
   setProcessing: (active: boolean) => void;
   /** 同步页面可见性：切后台且峰值超过软阈值时立刻触发释放。 */
   setVisible: (visible: boolean) => void;
@@ -115,6 +127,9 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
     softThresholdRatio = DEFAULT_SOFT_THRESHOLD_RATIO,
     hardThresholdRatio = DEFAULT_HARD_THRESHOLD_RATIO,
     pollIntervalMs = DEFAULT_MEMORY_POLL_MS,
+    editSampleThreshold = DEFAULT_EDIT_SAMPLE_THRESHOLD,
+    sampleCooldownMs = DEFAULT_SAMPLE_COOLDOWN_MS,
+    now = () => Date.now(),
     sampleMemoryBytes,
     onPollError,
     onSoftLimit,
@@ -138,6 +153,12 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
       `非法内存阈值比例：soft=${softThresholdRatio}, hard=${hardThresholdRatio}`,
     );
   }
+  if (!Number.isInteger(editSampleThreshold) || editSampleThreshold < 1) {
+    throw new RangeError(`editSampleThreshold 必须为正整数，收到 ${editSampleThreshold}`);
+  }
+  if (!Number.isFinite(sampleCooldownMs) || sampleCooldownMs < 0) {
+    throw new RangeError(`sampleCooldownMs 必须为非负有限数，收到 ${sampleCooldownMs}`);
+  }
 
   const softBytes = Math.round(maxBytes * softThresholdRatio);
   const hardBytes = Math.round(maxBytes * hardThresholdRatio);
@@ -150,6 +171,8 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
   let disposed = false;
   let pollTimer: ReturnType<typeof globalThis.setInterval> | null = null;
   let pollInflight = false;
+  let pendingEditCount = 0;
+  let lastSampleAt: number | null = null;
   let epoch = 0;
 
   const stopPolling = (): void => {
@@ -188,6 +211,8 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
     if (disposed || hardTriggered || !sampleMemoryBytes || pollInflight) return;
     const currentEpoch = epoch;
     pollInflight = true;
+    lastSampleAt = now();
+    pendingEditCount = 0;
     try {
       const sampled = await sampleMemoryBytes();
       if (disposed || epoch !== currentEpoch || sampled === null) return;
@@ -198,6 +223,14 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
       pollInflight = false;
     }
   };
+
+  const recordEdit = (): void => {
+    if (disposed || hardTriggered) return;
+    pendingEditCount += 1;
+  };
+
+  const shouldRecycleOnImportChange = (): boolean =>
+    !disposed && !hardTriggered && (needsRecycle || peakBytes >= softBytes);
 
   const setProcessing = (active: boolean): void => {
     if (disposed || active === processing) return;
@@ -213,6 +246,16 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
     stopPolling();
     if (needsRecycle && !hardTriggered) {
       triggerRecycle('soft-limit-idle');
+      return;
+    }
+    const cooldownElapsed = lastSampleAt === null || now() - lastSampleAt >= sampleCooldownMs;
+    if (
+      sampleMemoryBytes &&
+      !hardTriggered &&
+      pendingEditCount >= editSampleThreshold &&
+      cooldownElapsed
+    ) {
+      void pollOnce();
     }
   };
 
@@ -230,6 +273,8 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
     needsRecycle = false;
     hardTriggered = false;
     processing = false;
+    pendingEditCount = 0;
+    lastSampleAt = null;
     stopPolling();
   };
 
@@ -248,10 +293,13 @@ export const createLeanMemoryGuard = (options: LeanMemoryGuardOptions): LeanMemo
     needsRecycle,
     hardTriggered,
     processing,
+    pendingEditCount,
   });
 
   return {
     reportBytes,
+    recordEdit,
+    shouldRecycleOnImportChange,
     setProcessing,
     setVisible,
     pollOnce,

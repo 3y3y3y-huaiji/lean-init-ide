@@ -68,12 +68,14 @@ type RawFileProgress = {
 };
 
 /** 提取 import 行做比较：只有 import 变化才需要让 Lean 重建文档进程。 */
-const importLines = (code: string): string =>
+export const extractImportLines = (code: string): string =>
   code
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => /^(?:(?:public|private|meta)\s+)*import\s+/.test(line))
     .join('\n');
+
+const importLines = extractImportLines;
 
 type ReadyWaiter = {
   resolve: (ready: boolean) => void;

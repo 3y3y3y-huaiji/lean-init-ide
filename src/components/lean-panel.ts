@@ -28,7 +28,7 @@ import {
   shouldPreserveDiagnosticsOnCrash,
   shouldShowRunPassed,
 } from '../lean-recovery';
-import { LeanSession, type LspDiagnostic } from '../lean-session';
+import { extractImportLines, LeanSession, type LspDiagnostic } from '../lean-session';
 import { createLeanMemoryGuard, sampleBrowserMemoryBytes } from '../lean-memory-guard';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
 import { reportError, track } from '../telemetry';
@@ -961,6 +961,28 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     position: { line: position.lineNumber - 1, character: position.column - 1 },
   });
 
+  let lastSyncedImports = extractImportLines(model.getValue());
+
+  const syncEditorChange = (): void => {
+    if (!session.isReady) return;
+    changePending = false;
+    const nextCode = model.getValue();
+    const nextImports = extractImportLines(nextCode);
+    if (nextImports !== lastSyncedImports) {
+      lastSyncedImports = nextImports;
+      // 头部 import 变化会使整份 FileWorker 快照失效；若堆水位已过高，直接重建 Worker 顺手释放旧堆。
+      if (memoryGuard.shouldRecycleOnImportChange()) {
+        log(t.logMemoryImportRecycle(formatMb(memoryGuard.getSnapshot().peakBytes)));
+        stop();
+        void start();
+        return;
+      }
+    }
+    lastEditAt = performance.now();
+    session.change(nextCode);
+    memoryGuard.recordEdit();
+  };
+
   /**
    * 补全、悬停、跳转都基于 LSP 当前文档。编辑有 350ms 防抖，请求前必须先把
    * 未发送的改动刷过去，否则服务端会按旧文档计算（表现为刚输入 `.` 补全为空）。
@@ -968,9 +990,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const flushChange = () => {
     if (!session.isReady || !changePending) return;
     window.clearTimeout(debounceTimer);
-    changePending = false;
-    lastEditAt = performance.now();
-    session.change(model.getValue());
+    syncEditorChange();
   };
 
   monaco.languages.registerHoverProvider(LEAN_LANGUAGE_ID, {
@@ -1087,12 +1107,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (suppressSync) return;
     changePending = true;
     window.clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(() => {
-      if (!session.isReady) return;
-      changePending = false;
-      lastEditAt = performance.now();
-      session.change(model.getValue());
-    }, 350);
+    debounceTimer = window.setTimeout(syncEditorChange, 350);
   });
 
   let goalSupported = true;
@@ -1115,6 +1130,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         suppressSync = true;
         model.setValue(code);
         suppressSync = false;
+        lastSyncedImports = extractImportLines(code);
       })
       .then((list) => {
         if (lastCrashAt !== crashAt) {
@@ -1222,7 +1238,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     }
 
     try {
-      await session.start(model.getValue());
+      const startCode = model.getValue();
+      lastSyncedImports = extractImportLines(startCode);
+      await session.start(startCode);
       // 启动期间用户可能已经改过代码；didOpen 用的是启动那一刻的内容，这里补一次同步。
       flushChange();
       startEl.textContent = t.stop;

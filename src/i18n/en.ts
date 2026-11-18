@@ -1358,6 +1358,8 @@ export const en: Messages = {
     statusMemoryLimit: 'Near memory limit · stopped safely',
     logMemorySoftRecycle: (mb) =>
       `Memory reached ${mb} MB (soft threshold); recycled idle engine to release heap`,
+    logMemoryImportRecycle: (mb) =>
+      `Imports changed at ${mb} MB heap; recycled engine cleanly before reopening`,
     logMemoryBackgroundRelease: (mb) =>
       `Tab hidden at ${mb} MB peak heap; released Lean engine memory`,
     logMemoryHardLimit: (mb, limitMb) =>

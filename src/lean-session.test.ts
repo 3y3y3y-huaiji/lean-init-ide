@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageConnection } from 'vscode-jsonrpc/browser';
 import {
   LeanSession,
+  extractImportLines,
   type LeanSessionOptions,
   type LeanSessionServer,
   type LspDiagnostic,
@@ -494,5 +495,13 @@ describe('LeanSession', () => {
     expect(reqHandler('window/workDoneProgress/create')?.({})).toBeNull();
     expect(reqHandler('client/registerCapability')?.({})).toBeNull();
     expect(() => notifHandler('window/logMessage')?.({ message: 'lean log' })).not.toThrow();
+  });
+
+  it('extractImportLines 提取规范化的 import 行并忽略普通声明', () => {
+    expect(
+      extractImportLines(
+        '  import Init\nprivate import Foo.Bar\n#eval 1 + 1\n  public meta import Baz  \n',
+      ),
+    ).toBe('import Init\nprivate import Foo.Bar\npublic meta import Baz');
   });
 });

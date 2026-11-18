@@ -171,6 +171,83 @@ describe('createLeanMemoryGuard', () => {
     await failingGuard.pollOnce();
     expect(errors).toHaveLength(1);
   });
+
+  it('校验编辑阈值与冷却参数并按累积短编辑+冷却期补采', async () => {
+    expect(() =>
+      createLeanMemoryGuard({
+        maxBytes: 100 * MIB,
+        editSampleThreshold: 0,
+        onHardLimit: () => {},
+      }),
+    ).toThrow(RangeError);
+    expect(() =>
+      createLeanMemoryGuard({
+        maxBytes: 100 * MIB,
+        sampleCooldownMs: -1,
+        onHardLimit: () => {},
+      }),
+    ).toThrow(RangeError);
+
+    let clock = 1000;
+    const sampleMemoryBytes = vi.fn(async () => 400 * MIB);
+    const guard = createLeanMemoryGuard({
+      maxBytes: 1000 * MIB,
+      editSampleThreshold: 3,
+      sampleCooldownMs: 20_000,
+      now: () => clock,
+      sampleMemoryBytes,
+      onHardLimit: () => {},
+    });
+
+    // 低于阈值不触发补采。
+    guard.recordEdit();
+    guard.recordEdit();
+    guard.setProcessing(true);
+    guard.setProcessing(false);
+    await Promise.resolve();
+    expect(sampleMemoryBytes).toHaveBeenCalledTimes(0);
+    expect(guard.getSnapshot().pendingEditCount).toBe(2);
+
+    // 达到阈值后在检查归零时补采一次，并清零计数。
+    guard.recordEdit();
+    guard.setProcessing(true);
+    guard.setProcessing(false);
+    await Promise.resolve();
+    expect(sampleMemoryBytes).toHaveBeenCalledTimes(1);
+    expect(guard.getSnapshot().pendingEditCount).toBe(0);
+
+    // 冷却期内即使再次攒够阈值也不重复触发。
+    clock += 5_000;
+    guard.recordEdit();
+    guard.recordEdit();
+    guard.recordEdit();
+    guard.setProcessing(true);
+    guard.setProcessing(false);
+    await Promise.resolve();
+    expect(sampleMemoryBytes).toHaveBeenCalledTimes(1);
+
+    // 超过冷却期后下一轮空闲触发补采。
+    clock += 20_000;
+    guard.setProcessing(true);
+    guard.setProcessing(false);
+    await Promise.resolve();
+    expect(sampleMemoryBytes).toHaveBeenCalledTimes(2);
+  });
+
+  it('shouldRecycleOnImportChange 仅在达到软水位且未停机时建议回收', () => {
+    const guard = createLeanMemoryGuard({
+      maxBytes: 1000 * MIB,
+      onHardLimit: () => {},
+    });
+    expect(guard.shouldRecycleOnImportChange()).toBe(false);
+
+    guard.setProcessing(true);
+    guard.reportBytes(750 * MIB, 'event');
+    expect(guard.shouldRecycleOnImportChange()).toBe(true);
+
+    guard.reportBytes(950 * MIB, 'event');
+    expect(guard.shouldRecycleOnImportChange()).toBe(false);
+  });
 });
 
 describe('sampleBrowserMemoryBytes', () => {

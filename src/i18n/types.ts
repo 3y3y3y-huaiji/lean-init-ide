@@ -218,6 +218,7 @@ export type Messages = {
     logLowMemory: string;
     statusMemoryLimit: string;
     logMemorySoftRecycle: (mb: string) => string;
+    logMemoryImportRecycle: (mb: string) => string;
     logMemoryBackgroundRelease: (mb: string) => string;
     logMemoryHardLimit: (mb: string, limitMb: string) => string;
   };

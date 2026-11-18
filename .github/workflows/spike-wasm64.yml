@@ -145,6 +145,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
           # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
@@ -271,6 +272,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
           # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
@@ -606,6 +608,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       # deep 用缓存重新 link，而不是下载 250MB+ 的 wasm 产物。

@@ -27,6 +27,7 @@ describe('loadWasm64Runtime', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('清单为空时明确拒绝，不伪造成功', async () => {
@@ -176,6 +177,99 @@ describe('loadWasm64Runtime', () => {
         sha256: 'cd'.repeat(32),
       }),
     ).toBe('/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck1');
+  });
+
+  const cacheManifest = async () => {
+    const glueBytes = new TextEncoder().encode('export default () => ({});');
+    const wasmBytes = new Uint8Array([0x00, 0x61, 0x73, 0x6d]);
+    const indexBytes = new TextEncoder().encode(JSON.stringify({ chunks: [], files: [] }));
+    const prefix = 'wasm-lean4/4.36.0-rc2-wasm64';
+    const manifest: Wasm64Manifest = {
+      cacheKey: 'cache-test',
+      leanVersion: '4.36.0-rc2',
+      runtime: 'test',
+      assets: [
+        {
+          name: WASM64_GLUE,
+          key: `${prefix}/${WASM64_GLUE}`,
+          bytes: glueBytes.byteLength,
+          sha256: await sha256Hex(glueBytes),
+        },
+        {
+          name: WASM64_WASM,
+          key: `${prefix}/${WASM64_WASM}`,
+          bytes: wasmBytes.byteLength,
+          sha256: await sha256Hex(wasmBytes),
+        },
+        {
+          name: WASM64_INDEX,
+          key: `${prefix}/${WASM64_INDEX}`,
+          bytes: indexBytes.byteLength,
+          sha256: await sha256Hex(indexBytes),
+        },
+      ],
+    };
+    const asset = (name: string) => manifest.assets.find((candidate) => candidate.name === name)!;
+    return { manifest, glueBytes, wasmBytes, indexBytes, asset };
+  };
+
+  const createFakeCache = () => {
+    const entries = new Map<string, Uint8Array>();
+    return {
+      entries,
+      match: vi.fn(async (key: string) => {
+        const bytes = entries.get(key);
+        return bytes ? new Response(bytes) : undefined;
+      }),
+      put: vi.fn(async (key: string, response: Response) => {
+        entries.set(key, new Uint8Array(await response.arrayBuffer()));
+      }),
+      delete: vi.fn(async (key: string) => entries.delete(key)),
+    };
+  };
+
+  it('运行时缓存命中时不再发网络请求', async () => {
+    const { manifest, glueBytes, wasmBytes, indexBytes, asset } = await cacheManifest();
+    const cache = createFakeCache();
+    cache.entries.set(wasm64CdnUrl(manifest, asset(WASM64_GLUE)), glueBytes);
+    cache.entries.set(wasm64CdnUrl(manifest, asset(WASM64_WASM)), wasmBytes);
+    cache.entries.set(wasm64CdnUrl(manifest, asset(WASM64_INDEX)), indexBytes);
+    vi.stubGlobal('caches', { open: async () => cache });
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('network should not be used');
+    });
+
+    const runtime = await loadWasm64Runtime({
+      manifest,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(runtime.library[WASM64_INDEX]).toEqual(indexBytes);
+  });
+
+  it('缓存字节损坏时删除该条目并重新下载', async () => {
+    const { manifest, glueBytes, wasmBytes, indexBytes, asset } = await cacheManifest();
+    const cache = createFakeCache();
+    const glueKey = wasm64CdnUrl(manifest, asset(WASM64_GLUE));
+    cache.entries.set(glueKey, new Uint8Array([0, 0]));
+    cache.entries.set(wasm64CdnUrl(manifest, asset(WASM64_WASM)), wasmBytes);
+    cache.entries.set(wasm64CdnUrl(manifest, asset(WASM64_INDEX)), indexBytes);
+    vi.stubGlobal('caches', { open: async () => cache });
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(WASM64_GLUE)) return new Response(glueBytes, { status: 200 });
+      return new Response('missing', { status: 404 });
+    });
+
+    const runtime = await loadWasm64Runtime({
+      manifest,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(cache.delete).toHaveBeenCalledWith(glueKey);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(runtime.library[WASM64_INDEX]).toEqual(indexBytes);
   });
 
   it('单个源超过下载预算时中止，并把超时写进失败汇总', async () => {

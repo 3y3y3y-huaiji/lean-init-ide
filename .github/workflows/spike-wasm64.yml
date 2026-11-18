@@ -183,6 +183,11 @@ jobs:
             patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-replace-fn-iterative.patch"
           fi
           grep -q 'wants_cache' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/kernel/replace_fn.cpp"
+          # 显式续延栈版 simpLoop：消除每重写一步压下的 simpLoop/visitPreContinue 两个原生帧。
+          if ! grep -q 'simpLoopStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/Tactic/Simp/Main.lean"; then
+            patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-simp-loop-stack.patch"
+          fi
+          grep -q 'simpLoopStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/Tactic/Simp/Main.lean"
 
       - name: 缓存 runtime 产物
         uses: actions/cache@v6
@@ -205,7 +210,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v3-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch') }}
+          key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: cgen
         run: |
@@ -289,6 +294,11 @@ jobs:
             patch -p1 -d work/lean4 < scripts/patches/lean-replace-fn-iterative.patch
           fi
           grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp
+          # 显式续延栈版 simpLoop：重写链改成堆上的 continuation 列表。
+          if ! grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-simp-loop-stack.patch
+          fi
+          grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -302,13 +312,13 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/cgen
-          key: wasm64-cgen-v3-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch') }}
+          key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: 缓存 objects
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v10-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch') }}
+          key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: 写入 emsdk 路径（后续阶段不再重复检查）
         run: |
@@ -337,7 +347,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: work/obj
-          key: wasm64-obj-v10-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch') }}
+          key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: link
         run: |
@@ -351,7 +361,7 @@ jobs:
       # -mtail-call 只在**编译步**把尾调用写成 return_call；objects 缓存里如果是旧对象，
       # link 会静默链出一个没有 return_call 的二进制，开关就变成安慰剂（缓存键已并入
       # scripts/patch-wasm64.sh，这里再兜一层）。反汇编数一遍，数到 0 就失败。
-      - name: 校验 return_call 与 whnfCoreStep 真的进了产物
+      - name: 校验 return_call、whnfCoreStep、simpLoopStep 真的进了产物
         run: |
           source emsdk/emsdk_env.sh
           DIS="$(command -v wasm-dis || printf '%s\n' "$EMSDK/upstream/bin/wasm-dis")"
@@ -359,9 +369,11 @@ jobs:
           WAT="$("$DIS" work/dist/lean.wasm)"
           total="$(printf '%s\n' "$WAT" | grep -c 'return_call' || true)"
           whnf="$(printf '%s\n' "$WAT" | grep -c 'whnfCoreStep' || true)"
-          echo "lean.wasm return_call: $total, whnfCoreStep: $whnf"
+          simp="$(printf '%s\n' "$WAT" | grep -c 'simpLoopStep' || true)"
+          echo "lean.wasm return_call: $total, whnfCoreStep: $whnf, simpLoopStep: $simp"
           test "${total:-0}" -gt 0
           test "${whnf:-0}" -gt 0
+          test "${simp:-0}" -gt 0
 
       # 第二份产物：main 跑在 pthread 上，主线程空出来泵 pthread 消息。
       # FileWorker 的 LSP 输出走 Std.Channel 的专用线程，默认构建下拿不到 publishDiagnostics。
@@ -569,6 +581,11 @@ jobs:
             patch -p1 -d work/lean4 < scripts/patches/lean-replace-fn-iterative.patch
           fi
           grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp
+          # 显式续延栈版 simpLoop：重写链改成堆上的 continuation 列表。
+          if ! grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-simp-loop-stack.patch
+          fi
+          grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean
 
       - name: 恢复 runtime 产物
         uses: actions/cache@v6
@@ -582,7 +599,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: work/obj
-          key: wasm64-obj-v10-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch') }}
+          key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: 准备 wasm-llvm 并切成 wasm64 + GMP
         run: |

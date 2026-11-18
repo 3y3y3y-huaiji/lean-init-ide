@@ -45,12 +45,24 @@ interface WorkerScope {
 
 const workerSelf = self as unknown as WorkerScope;
 
+// Chrome 会把 pthread 的未捕获错误再包一层 ErrorEvent；直接读 event.error.stack
+// 只会得到 "Uncaught [object ErrorEvent]"。逐层剥到真正带 stack 的 Error。
+const errorStack = (error: unknown): string | undefined => {
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    const candidate = current as { stack?: unknown; error?: unknown };
+    if (typeof candidate.stack === 'string') return candidate.stack;
+    current = candidate.error;
+  }
+  return undefined;
+};
+
 // 捕获子 pthread 冒泡到 worker 全局的硬异常（如 RangeError: Maximum call stack size exceeded），
 // 回传给 harness 记录完整调用栈，避免直接触发页面 pageerror 导致后续探针样本中断。
 self.addEventListener('error', (event: ErrorEvent) => {
   event.preventDefault();
-  const detail = (event.error as Error | undefined)?.stack ?? event.message ?? 'worker error';
-  workerSelf.postMessage({ failure: String(detail) });
+  const detail = errorStack(event.error) ?? event.message ?? 'worker error';
+  workerSelf.postMessage({ failure: detail });
 });
 
 const fetchJson = async <T>(url: string): Promise<T> => {
@@ -155,7 +167,7 @@ self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
       if (exit && exit.name === 'ExitStatus' && typeof exit.status === 'number') {
         code = exit.status;
       } else {
-        workerSelf.postMessage({ failure: String((error as Error)?.stack ?? error) });
+        workerSelf.postMessage({ failure: errorStack(error) ?? String(error) });
         return;
       }
     }
@@ -164,6 +176,6 @@ self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
     // 把还在代理队列里的 publishDiagnostics 一起判死。
     if (code !== 0) workerSelf.postMessage({ failure: `callMain 返回 ${code}` });
   } catch (error: unknown) {
-    workerSelf.postMessage({ failure: String((error as Error)?.stack ?? error) });
+    workerSelf.postMessage({ failure: errorStack(error) ?? String(error) });
   }
 };

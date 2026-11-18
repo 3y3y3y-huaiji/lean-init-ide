@@ -177,8 +177,8 @@ workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 | emsdk | `wasm64-emsdk-6.0.0-v1` |
 | Lean 源码与引导包 | `wasm64-src-v6` |
 | runtime（-O2 + GMP + tail call） | `wasm64-runtime-v16-<pin+backport+patch hash>` |
-| cgen | `wasm64-cgen-v2-<pin hash>` |
-| objects（-O2 + GMP + tail call） | `wasm64-obj-v9-<pin+patch hash>` |
+| cgen | `wasm64-cgen-v4-<pin+patch hash>` |
+| objects（-O2 + GMP + tail call） | `wasm64-obj-v11-<pin+patch hash>` |
 | GMP（wasm64 静态库） | `wasm64-gmp-v1` |
 | 官方 64 位 oleans | 不缓存，直接从引导包 `work/lean-*-linux/lib/lean` 复制到 `work/olean32` |
 | Mathlib 源码（浅克隆） | `wasm64-mathlib-src-v3` |
@@ -192,6 +192,8 @@ oleans 的 githash 检查能过（运行时确实是新版），但前端还是�
 `<patch hash>` 是 `hashFiles('scripts/patch-wasm64.sh')`，只并入 runtime 与 objects：编译开关（`MEMORY64`、`-mtail-call`）写在那个脚本里，
 而 `stage_objects` 对「比源文件新的 `.o`」直接跳过。不把它算进缓存键，改开关后会复用旧对象、静默链出一个没打开该开关的 wasm。
 `scripts/patches/lean-replace-fn-iterative.patch` 修改的是 `src/kernel/replace_fn.cpp`（属于 libleancpp），所以只并入 runtime 键；
+`scripts/patches/lean-whnf-stack.patch` 与 `scripts/patches/lean-simp-loop-stack.patch` 修改 Lean 源码，
+由 cgen 生成 C、objects 编译，所以并入 cgen 与 objects 键。
 补丁在 workflow 的 fetch 之后应用，fetch 的 `reset --hard` 会冲掉提前打上的源码补丁。
 
 `work/dist` 下有 `lean.mjs` / `lean.wasm`（含 pthread worker），`work/olean32` 是官方 Init/Std/Lean 的 olean/server/ir 文件，`work/mathlib-lib` 是同一份官方库加上自己编出来的 Mathlib/Batteries olean。
@@ -434,6 +436,37 @@ Memory64 只放大线性内存，不会放大约 1 MB 的 Worker 调用栈。
 
 如果 depth 在更高档位继续爆栈，先按 `LEAN_WASM_ERR` / Emscripten 异常栈符号化，
 确认下一层是 `Lean_Level_substParams_go`、`whnfImp` 还是 `ReduceRec` 再决定改动范围，不要直接改构建开关。
+
+## simpLoop 显式续延栈（2026-11-18）
+
+`replace_fn` 修好后，run `44274559203`（#111）的 depth 在 `N=800` 仍然爆栈。
+把 Worker 的 `Error.stackTraceLimit` 提到 200 后拿到完整栈：`replace_rec_fn::apply`
+只出现一次，真正重复的是
+
+```text
+Lean.Meta.Simp.simpLoop
+Lean.Meta.Simp.simpLoop_visitPreContinue
+```
+
+200 帧窗口里已经有 84 对；`f 800` 的 `f (n+1) → f n` 每重写一步就递归一次
+`simpLoop`，真实链长约 800 对。栈顶的 `mk_binding → mk_data` 只是栈满瞬间正在重建的节点。
+
+原因在 `Simp/Main.lean` 的三处非尾调用（`.visit`、`visitPreContinue` 的 rewrite 分支、
+`visitPostContinue`）：递归结果返回后还要 `mkEqTrans` 与 `cacheResult`，所以每步在
+wasm 原生栈上留 `simpLoop + visitPreContinue` 两个帧，800 步就把约 1 MB 的栈吃光。
+
+`scripts/patches/lean-simp-loop-stack.patch` 把这三处改成显式续延栈：
+
+- `SimpLoopCont { e, cfg, r }` 压进 `List`，`SimpLoopTask.eval` / `.finish` 之间只有尾调用。
+- `.finish` 沿列表逆序还原 `r.mkEqTrans` 并补 `cacheResult`，顺序与递归版一致。
+- 缓存命中、`numSteps` 检查、`pre` / `post` 的调用时机全部保持原样。
+- `withIncRecDepth` 只在最外层 `simpLoop` 入口计一次；迭代重写链不再按步数增加递归深度，
+  步数仍由 `maxSteps` 限制。这是显式栈版本唯一有意的语义差异。
+
+补丁用 `leanprover/lean4 v4.36.0-rc2` 的官方 `lean` 单独 typecheck 过
+（`LEAN_PATH=<release>/lib/lean lean -R src -o /tmp/Main.olean src/Lean/Meta/Tactic/Simp/Main.lean`）。
+它改的是 Lean 源码，计入 cgen / objects 缓存键；CI 的 link 校验会确认
+`simpLoopStep` 真的进了 wasm，缺失就失败。
 
 ## 尚未验证
 

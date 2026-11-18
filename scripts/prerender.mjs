@@ -16,8 +16,9 @@ const manifestPath = resolve(dist, '.vite', 'manifest.json');
 
 const preloadsFor = (manifest, route) => {
   const keys = [`src/i18n/${route.locale}.ts`];
-  if (route.page === 'lesson') keys.push('src/views/lesson.ts');
-  else if (route.page === 'playground') keys.push('src/views/playground.ts');
+  if (route.page === 'lesson') {
+    keys.push('src/views/lesson.ts', `src/i18n/lessons-${route.locale}.ts`);
+  } else if (route.page === 'playground') keys.push('src/views/playground.ts');
   else if (route.page === 'reference') keys.push('src/views/reference.ts');
   else if (route.page === 'challenges' || route.page === 'challenge')
     keys.push('src/views/challenge.ts');
@@ -40,7 +41,7 @@ try {
   await build({
     stdin: {
       contents: `
-        export { loadLocale } from './src/i18n/index.ts';
+        export { loadLessons, loadLocale } from './src/i18n/index.ts';
         export { allStaticRoutes, injectPrerenderedHtml, inlineStylesheet, outputRelPath } from './src/prerender.ts';
       `,
       resolveDir: root,
@@ -69,7 +70,12 @@ try {
   });
 
   const ssr = await import(pathToFileURL(ssrBundle).href);
-  await Promise.all([ssr.loadLocale('zh'), ssr.loadLocale('en')]);
+  await Promise.all([
+    ssr.loadLocale('zh'),
+    ssr.loadLocale('en'),
+    ssr.loadLessons('zh'),
+    ssr.loadLessons('en'),
+  ]);
 
   let templateHtml = await readFile(templatePath, 'utf8');
   const stylesheetMatch =

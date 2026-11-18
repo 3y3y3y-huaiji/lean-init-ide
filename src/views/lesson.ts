@@ -2,7 +2,7 @@ import type { LeanPanel, LeanPanelProgress, LspDiagnostic } from '../components/
 import { anchorImportDiagnostics } from '../lean-session';
 import { buttonClass, ghostButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
-import { messagesFor, type Locale } from '../i18n';
+import { lessonsFor, messagesFor, type Locale } from '../i18n';
 import type { LessonPage, LessonTrack } from '../i18n/types';
 import { markLessonVisited, readCompleted } from '../progress';
 import { escapeHtml } from './html';
@@ -23,7 +23,10 @@ const noteClass = (tone: 'info' | 'warn' | undefined) =>
     : 'my-5 rounded-lg border border-line bg-panel-soft px-4 py-3 text-[13.5px] leading-relaxed text-muted';
 
 /** 定位当前课时；slug 无效时回退到第一节，避免出现空白页。 */
-const pickLesson = (lessons: LessonPage[], slug?: string): { page: LessonPage; index: number } => {
+const pickLesson = (
+  lessons: readonly LessonPage[],
+  slug?: string,
+): { page: LessonPage; index: number } => {
   const found = lessons.findIndex((lesson) => lesson.slug === slug);
   const index = found === -1 ? 0 : found;
   return { page: lessons[index]!, index };
@@ -91,15 +94,16 @@ const renderBlocks = (
 
 export const renderLesson = (locale: Locale, slug?: string): string => {
   const t = messagesFor(locale).lesson;
-  const { page, index } = pickLesson(t.lessons, slug);
-  const prev = t.lessons[index - 1];
-  const next = t.lessons[index + 1];
+  const lessons = lessonsFor(locale);
+  const { page, index } = pickLesson(lessons, slug);
+  const prev = lessons[index - 1];
+  const next = lessons[index + 1];
   const body = renderBlocks(page, t.runInEditor, t.goalLabel);
 
   const trackOf = (lesson: LessonPage): LessonTrack => lesson.track ?? 'intro';
   const toc = (['intro', 'math', 'eng'] as const)
     .map((track) => {
-      const entries = t.lessons
+      const entries = lessons
         .map((lesson, i) => ({ lesson, i }))
         .filter(({ lesson }) => trackOf(lesson) === track);
       if (entries.length === 0) return '';
@@ -126,7 +130,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         <span>${escapeHtml(t.tocTitle)}</span>
         <span class="flex items-center gap-2 font-mono text-xs text-muted">${String(
           index + 1,
-        ).padStart(2, '0')} / ${String(t.lessons.length).padStart(2, '0')}
+        ).padStart(2, '0')} / ${String(lessons.length).padStart(2, '0')}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="transition-transform group-open:rotate-180"><path d="m3.5 5.5 3.5 3 3.5-3"/></svg>
         </span>
       </summary>
@@ -330,7 +334,8 @@ const renderRunFailure = (
 
 export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => {
   const t = messagesFor(locale).lesson;
-  const { page } = pickLesson(t.lessons, slug);
+  const lessons = lessonsFor(locale);
+  const { page } = pickLesson(lessons, slug);
 
   // 进度只存在浏览器里：进入课程即记为已读；练习通过后目录里打勾。
   const completed = readCompleted();
@@ -346,7 +351,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   }
 
   // 目录顶部显示总完成度，练习区说明完成条件；都不依赖服务端。
-  const counter = t.completedCount(completed.size, t.lessons.length);
+  const counter = t.completedCount(completed.size, lessons.length);
   for (const el of root.querySelectorAll<HTMLElement>('[data-role="toc-progress"]')) {
     el.textContent = counter;
   }

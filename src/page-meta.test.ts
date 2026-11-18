@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messagesFor } from './i18n';
+import { lessonsFor, messagesFor } from './i18n';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 
 describe('page-meta', () => {
@@ -23,9 +23,9 @@ describe('page-meta', () => {
     expect(pageDescription({ page: 'notFound', locale: 'zh' })).toBe(zh.home.lead);
 
     const fallbackTitle = pageTitle({ page: 'lesson', locale: 'zh', slug: 'nonexistent-slug' });
-    expect(fallbackTitle).toContain(zh.lesson.lessons[0]!.title);
+    expect(fallbackTitle).toContain(lessonsFor('zh')[0]!.title);
     expect(pageDescription({ page: 'lesson', locale: 'en', slug: 'nonexistent-slug' })).toBe(
-      en.lesson.lessons[0]!.lead,
+      lessonsFor('en')[0]!.lead,
     );
   });
 

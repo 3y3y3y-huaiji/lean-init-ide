@@ -1,6 +1,6 @@
 import './index.css';
 import { applySourcePreference } from './asset-source';
-import { detectLocale, loadLocale, otherLocale } from './i18n';
+import { detectLocale, loadLessons, loadLocale, otherLocale } from './i18n';
 import { applyPageMeta } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { readCompleted, readProgress } from './progress';
@@ -16,7 +16,10 @@ initTelemetry();
 void applySourcePreference(location.search);
 
 const boot = async (route: Route, root: HTMLElement) => {
-  await loadLocale(route.locale);
+  await Promise.all([
+    loadLocale(route.locale),
+    route.page === 'lesson' ? loadLessons(route.locale) : Promise.resolve(),
+  ]);
   document.title = pageTitle(route);
   applyPageMeta(document, {
     locale: route.locale,

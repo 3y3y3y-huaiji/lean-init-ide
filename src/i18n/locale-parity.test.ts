@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import e2eLessonsSource from '../../scripts/e2e-lessons.mjs?raw';
 import { en } from './en';
+import { LESSON_CATALOG } from './lesson-catalog';
+import { lessonsEn } from './lessons-en';
+import { lessonsZh } from './lessons-zh';
 import { zh } from './zh';
 
 type Shape = string | Shape[] | { [key: string]: Shape };
@@ -38,20 +41,23 @@ const emptyPaths = (value: unknown, path = ''): string[] => {
 describe('i18n 字典结构对齐', () => {
   it('en 与 zh 的键集合、数组长度与函数签名完全一致', () => {
     expect(shapeOf(en)).toEqual(shapeOf(zh));
+    expect(shapeOf(lessonsEn)).toEqual(shapeOf(lessonsZh));
   });
 
   it('两种语言都没有空文案', () => {
     expect(emptyPaths(zh, 'zh')).toEqual([]);
     expect(emptyPaths(en, 'en')).toEqual([]);
+    expect(emptyPaths(lessonsZh, 'lessonsZh')).toEqual([]);
+    expect(emptyPaths(lessonsEn, 'lessonsEn')).toEqual([]);
   });
 
   it('每节课都有 slug、标题和内容块', () => {
-    for (const [name, messages] of [
-      ['zh', zh],
-      ['en', en],
+    for (const [name, lessons] of [
+      ['zh', lessonsZh],
+      ['en', lessonsEn],
     ] as const) {
-      expect(messages.lesson.lessons.length, name).toBeGreaterThan(0);
-      for (const lesson of messages.lesson.lessons) {
+      expect(lessons.length, name).toBeGreaterThan(0);
+      for (const lesson of lessons) {
         expect(lesson.slug.trim(), name).not.toBe('');
         expect(lesson.title.trim(), name).not.toBe('');
         expect(lesson.blocks.length, name).toBeGreaterThan(0);
@@ -59,24 +65,25 @@ describe('i18n 字典结构对齐', () => {
     }
   });
 
-  it('两种语言的课时 slug 顺序一致，切换语言不会掉到别的课', () => {
-    expect(zh.lesson.lessons.map((lesson) => lesson.slug)).toEqual(
-      en.lesson.lessons.map((lesson) => lesson.slug),
+  it('两种语言的课时 slug 顺序与 LESSON_CATALOG 一致，切换语言不会掉到别的课', () => {
+    expect(lessonsZh.map((lesson) => lesson.slug)).toEqual(lessonsEn.map((lesson) => lesson.slug));
+    expect(LESSON_CATALOG).toEqual(
+      lessonsZh.map((lesson) => ({ slug: lesson.slug, track: lesson.track ?? 'intro' })),
     );
   });
 
   it('slug 全站唯一', () => {
-    for (const [name, messages] of [
-      ['zh', zh],
-      ['en', en],
+    for (const [name, lessons] of [
+      ['zh', lessonsZh],
+      ['en', lessonsEn],
     ] as const) {
-      const slugs = messages.lesson.lessons.map((lesson) => lesson.slug);
+      const slugs = lessons.map((lesson) => lesson.slug);
       expect(new Set(slugs).size, name).toBe(slugs.length);
     }
   });
 
   it('e2e-lessons 脚本包含全部课程 slug', () => {
-    const expectedSlugs = zh.lesson.lessons.map((lesson) => lesson.slug);
+    const expectedSlugs = lessonsZh.map((lesson) => lesson.slug);
 
     const match = /const SLUGS = \[([\s\S]*?)\];/.exec(e2eLessonsSource);
     expect(match).not.toBeNull();

@@ -1,5 +1,5 @@
 import { beforeAll } from 'vitest';
-import { loadLocale } from './i18n';
+import { loadLessons, loadLocale } from './i18n';
 
 /**
  * jsdom 不实现 matchMedia，而 theme 模块在加载时就会调用一次。
@@ -20,7 +20,7 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   })) as unknown as typeof window.matchMedia;
 }
 
-// 预加载中英文语言包，保持同步视图渲染函数的单测可直接调用 messagesFor。
+// 预加载中英文语言包与课程正文，保持同步视图渲染函数的单测可直接调用 messagesFor / lessonsFor。
 beforeAll(async () => {
-  await Promise.all([loadLocale('zh'), loadLocale('en')]);
+  await Promise.all([loadLocale('zh'), loadLocale('en'), loadLessons('zh'), loadLessons('en')]);
 });

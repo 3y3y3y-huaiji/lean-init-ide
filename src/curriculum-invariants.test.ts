@@ -1,18 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { isExerciseStarter } from './exercise';
-import { loadLocale, LOCALES } from './i18n';
+import { loadLessons, loadLocale, LOCALES } from './i18n';
 import { pageDescription, pageTitle } from './page-meta';
 import { canonicalRoutePath, FIRST_LESSON_SLUG, resolveRoute } from './router';
 
 describe('curriculum & route invariants', () => {
   beforeAll(async () => {
-    await Promise.all(LOCALES.map(loadLocale));
+    await Promise.all([...LOCALES.map(loadLocale), ...LOCALES.map(loadLessons)]);
   });
 
   it('zh 与 en 保持一一对应的课时 slug、路径分类与练习配置', async () => {
-    const [zh, en] = await Promise.all([loadLocale('zh'), loadLocale('en')]);
-    const zhLessons = zh.lesson.lessons;
-    const enLessons = en.lesson.lessons;
+    const [zhLessons, enLessons] = await Promise.all([loadLessons('zh'), loadLessons('en')]);
 
     expect(zhLessons.length).toBeGreaterThan(0);
     expect(zhLessons.map((lesson) => lesson.slug)).toEqual(enLessons.map((lesson) => lesson.slug));
@@ -28,10 +26,10 @@ describe('curriculum & route invariants', () => {
 
   it('每节课程都有合法唯一的 slug、非空正文块和可判定的练习模板', async () => {
     for (const locale of LOCALES) {
-      const msgs = await loadLocale(locale);
+      const lessons = await loadLessons(locale);
       const seen = new Set<string>();
 
-      for (const lesson of msgs.lesson.lessons) {
+      for (const lesson of lessons) {
         expect(lesson.slug, locale).toMatch(/^[a-z0-9-]+$/);
         expect(seen.has(lesson.slug), `${locale}:${lesson.slug}`).toBe(false);
         seen.add(lesson.slug);
@@ -78,8 +76,8 @@ describe('curriculum & route invariants', () => {
 
   it('所有课时路由、canonical 路径与页面元信息均能精确解析而不回退', async () => {
     for (const locale of LOCALES) {
-      const msgs = await loadLocale(locale);
-      for (const lesson of msgs.lesson.lessons) {
+      const lessons = await loadLessons(locale);
+      for (const lesson of lessons) {
         const path = `/${locale}/learn/${lesson.slug}`;
         const resolved = resolveRoute(path, locale);
         expect(resolved, path).toEqual({

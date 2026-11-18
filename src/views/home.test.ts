@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messagesFor } from '../i18n';
+import { LESSON_CATALOG, messagesFor } from '../i18n';
 import { hydrateHome, renderHome } from './home';
 
 describe('首页渲染', () => {
@@ -44,9 +44,7 @@ describe('首页渲染', () => {
   it('数学与验证路径入口指向第一节数学课', () => {
     for (const locale of ['zh', 'en'] as const) {
       const html = renderHome(locale);
-      const mathLessons = messagesFor(locale).lesson.lessons.filter(
-        (lesson) => lesson.track === 'math',
-      );
+      const mathLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'math');
       expect(html).toContain(messagesFor(locale).lesson.tracks.math.title);
       expect(html).toContain(`href="/${locale}/learn/${mathLessons[0]!.slug}"`);
     }
@@ -55,9 +53,7 @@ describe('首页渲染', () => {
   it('工程实战路径入口指向第一节工程课', () => {
     for (const locale of ['zh', 'en'] as const) {
       const html = renderHome(locale);
-      const engLessons = messagesFor(locale).lesson.lessons.filter(
-        (lesson) => lesson.track === 'eng',
-      );
+      const engLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'eng');
       expect(engLessons.length, locale).toBe(5);
       expect(html).toContain(messagesFor(locale).lesson.tracks.eng.title);
       expect(html).toContain(`href="/${locale}/learn/${engLessons[0]!.slug}"`);
@@ -96,9 +92,7 @@ describe('首页渲染', () => {
     expect(primary?.textContent).toBe(messagesFor('zh').home.continueCta);
     const intro = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="intro"]');
     expect(intro?.getAttribute('href')).toBe('/zh/learn/first-proof');
-    const mathLessons = messagesFor('zh').lesson.lessons.filter(
-      (lesson) => lesson.track === 'math',
-    );
+    const mathLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'math');
     if (mathLessons.length >= 2) {
       hydrateHome(document.body, 'zh', new Set(), new Set([mathLessons[0]!.slug]));
       const math = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="math"]');

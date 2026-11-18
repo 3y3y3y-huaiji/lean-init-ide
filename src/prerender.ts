@@ -1,5 +1,5 @@
 import { CHALLENGES } from './challenges';
-import { messagesFor, type Locale } from './i18n';
+import { LESSON_CATALOG, type Locale } from './i18n';
 import { SITE_ORIGIN, swapLocalePath } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { canonicalRoutePath, FIRST_LESSON_SLUG, type Route } from './router';
@@ -70,7 +70,7 @@ export const allStaticRoutes = (locales: readonly Locale[] = ['zh', 'en']): Rout
     routes.push({ page: 'reference', locale });
     routes.push({ page: 'privacy', locale });
     routes.push({ page: 'challenges', locale });
-    for (const lesson of messagesFor(locale).lesson.lessons) {
+    for (const lesson of LESSON_CATALOG) {
       routes.push({ page: 'lesson', locale, slug: lesson.slug });
     }
     for (const challenge of CHALLENGES) {

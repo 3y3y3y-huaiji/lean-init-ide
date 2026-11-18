@@ -153,7 +153,6 @@ export type Messages = {
     /** 证明类代码没有诊断时的提示：说明目标已关闭，而不是“什么都没发生”。 */
     proofAccepted: string;
     editorHint: string;
-    lessons: LessonPage[];
   };
   playground: {
     title: string;

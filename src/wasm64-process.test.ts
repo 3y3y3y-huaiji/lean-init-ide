@@ -169,6 +169,33 @@ describe('createWasm64ProcessFactory', () => {
     expect(text).toContain('"method":"initialize"');
   });
 
+  it('发送超过环形缓冲的帧时上报失败并终止 Worker', () => {
+    const { process, failures, worker } = setup();
+    void process.ready.catch(() => undefined);
+
+    process.send({
+      jsonrpc: '2.0',
+      method: 'textDocument/didOpen',
+      params: {
+        textDocument: { uri: 'file:///workspace/Main.lean', text: 'a'.repeat(9 * 1024 ** 2) },
+      },
+    });
+
+    expect(failures[0]).toContain('超过缓冲区');
+    expect(worker.terminated).toBe(true);
+  });
+
+  it('stdout 出现坏帧时上报失败并终止 Worker', () => {
+    const { process, failures, worker } = setup();
+    void process.ready.catch(() => undefined);
+    const bad = Uint8Array.from('Content-Length: 4\r\n\r\n{oops', (char) => char.charCodeAt(0));
+
+    post(worker, { stdout: bad });
+
+    expect(failures[0]).toContain('无法解析的 LSP 帧');
+    expect(worker.terminated).toBe(true);
+  });
+
   it('dispose 终止 Worker，之后的 stdout/exit 不再回调', async () => {
     const { process, messages, exits, worker } = setup();
     const rejection = process.ready.catch((error: Error) => error);

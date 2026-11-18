@@ -7,7 +7,9 @@
 // worker：`-j4 --worker <uri>` 直接起文件 worker，和 SDK 在浏览器里的做法一致，能真正拿到 publishDiagnostics。
 //
 // 两种模式都断言：Bad.lean 有类型不匹配诊断，Good.lean 干净（同时证明 import 的 olean 真的加载成功）。
+import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import {
   CliError,
@@ -380,6 +382,8 @@ const assertGood = (name: string, diagnostics: readonly Diagnostic[]): void => {
   }
 };
 
+export type DiagDocName = 'Bad.lean' | 'Good.lean';
+
 export interface DiagOptions {
   readonly leanMjs: string;
   readonly libDir: string;
@@ -389,6 +393,7 @@ export interface DiagOptions {
   readonly timeoutMs: number;
   readonly idleTimeoutMs: number;
   readonly jobs: number;
+  readonly doc?: DiagDocName;
 }
 
 const initializeParams = {
@@ -443,42 +448,113 @@ const runServerMode = async (
   }
 };
 
-/** 文件 worker 模式：每个文档一个实例，直接收 publishDiagnostics —— SDK 在浏览器里就是这么做的。 */
+/** 子进程失败：保留原本退出码（3=可重试网络错误，4=无进展超时），让 CI 策略准确生效。 */
+class ChildDiagError extends Error {
+  readonly exitCode: number;
+  constructor(message: string, exitCode: number) {
+    super(message);
+    this.name = 'ChildDiagError';
+    this.exitCode = exitCode;
+  }
+}
+
+export const buildWorkerChildArgs = (options: DiagOptions, doc: DiagDocName): string[] => {
+  const args = [
+    '--lean',
+    options.leanMjs,
+    '--lib',
+    options.libDir,
+    '--mode',
+    'worker',
+    '--timeout',
+    String(options.timeoutMs),
+    '--idle-timeout',
+    String(options.idleTimeoutMs),
+    '--jobs',
+    String(options.jobs),
+    '--doc',
+    doc,
+  ];
+  if (options.moduleName !== undefined) args.push('--module', options.moduleName);
+  if (options.goodCode !== undefined) args.push('--good-code', options.goodCode);
+  return args;
+};
+
+const runSingleWorkerDoc = async (
+  options: DiagOptions,
+  name: DiagDocName,
+  documents: Record<string, string>,
+  exampleLine: number,
+): Promise<void> => {
+  const proxy = /adapted-proxy/.test(options.leanMjs);
+  const uri = `file:///workspace/${name}`;
+  const session = createSession({
+    leanMjs: options.leanMjs,
+    libDir: options.libDir,
+    files: { [`/workspace/${name}`]: documents[name] ?? '' },
+    args: [`-j${options.jobs}`, '--worker', uri],
+    proxy,
+    timezone: readTimezone(),
+    idleTimeoutMs: options.idleTimeoutMs,
+  });
+  try {
+    // 按 SDK 的顺序：initialize 与 didOpen 连着发，不等待 initialize 响应。
+    session.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams });
+    openDocument(session, name, uri, documents);
+    // Bad 等到非空诊断；Good 等到 ileanInfoFinal（跳过 setupImports 的空通知）。
+    const diagnostics = await awaitDiagnostics(
+      session,
+      uri,
+      name === 'Good.lean',
+      name,
+      options.timeoutMs,
+      exampleLine,
+    );
+    if (name === 'Bad.lean') assertBad(name, diagnostics);
+    else assertGood(name, diagnostics);
+  } finally {
+    await session.dispose();
+  }
+};
+
+const runWorkerChild = (options: DiagOptions, doc: DiagDocName): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    const scriptPath = fileURLToPath(import.meta.url);
+    const child = spawn(process.execPath, [scriptPath, ...buildWorkerChildArgs(options, doc)], {
+      stdio: 'inherit',
+    });
+    child.on('error', (error) => reject(error));
+    child.on('exit', (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const exitCode = code ?? 1;
+      reject(
+        new ChildDiagError(
+          `${doc} 子进程失败 (code=${String(code)} signal=${String(signal)})`,
+          exitCode,
+        ),
+      );
+    });
+  });
+
+/**
+ * 文件 worker 模式：每个文档一个独立 Node 进程，直接收 publishDiagnostics。
+ * 单个 Lean wasm64 LSP 实例会拉起 48 个 pthread 并保留大量 V8 Wasm JIT 页；同一进程连续起第二份
+ * 会在 V8 里触发 `Check failed: jit_page.has_value()`，拆成子进程后由 OS 彻底回收。
+ */
 const runWorkerMode = async (
   options: DiagOptions,
   documents: Record<string, string>,
   exampleLine: number,
 ) => {
-  const proxy = /adapted-proxy/.test(options.leanMjs);
-  for (const name of ['Bad.lean', 'Good.lean']) {
-    const uri = `file:///workspace/${name}`;
-    const session = createSession({
-      leanMjs: options.leanMjs,
-      libDir: options.libDir,
-      files: { [`/workspace/${name}`]: documents[name] ?? '' },
-      args: [`-j${options.jobs}`, '--worker', uri],
-      proxy,
-      timezone: readTimezone(),
-      idleTimeoutMs: options.idleTimeoutMs,
-    });
-    try {
-      // 按 SDK 的顺序：initialize 与 didOpen 连着发，不等待 initialize 响应。
-      session.sendFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initializeParams });
-      openDocument(session, name, uri, documents);
-      // Bad 等到非空诊断；Good 等到 ileanInfoFinal（跳过 setupImports 的空通知）。
-      const diagnostics = await awaitDiagnostics(
-        session,
-        uri,
-        name === 'Good.lean',
-        name,
-        options.timeoutMs,
-        exampleLine,
-      );
-      if (name === 'Bad.lean') assertBad(name, diagnostics);
-      else assertGood(name, diagnostics);
-    } finally {
-      await session.dispose();
-    }
+  if (options.doc !== undefined) {
+    await runSingleWorkerDoc(options, options.doc, documents, exampleLine);
+    return;
+  }
+  for (const name of ['Bad.lean', 'Good.lean'] as const) {
+    await runWorkerChild(options, name);
   }
 };
 
@@ -503,6 +579,11 @@ const DIAG_SPEC: Record<string, FlagSpec> = {
     description: '多久没有任何消息或输出就判定卡死（默认 120000）',
   },
   jobs: { kind: 'number', valueName: 'n', description: 'worker 模式的 -j 线程数（默认 4）' },
+  doc: {
+    kind: 'string',
+    valueName: 'Bad.lean|Good.lean',
+    description: 'worker 模式下只验证单个文档',
+  },
 };
 
 export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
@@ -517,6 +598,10 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
     throw new CliError(`--idle-timeout 必须是正整数，收到 ${idleTimeoutMs}`);
   const jobs = parsed.flags.jobs === undefined ? 4 : requireNumber(parsed, 'jobs');
   if (!Number.isInteger(jobs) || jobs < 1) throw new CliError(`--jobs 必须是正整数，收到 ${jobs}`);
+  const doc = optionalString(parsed, 'doc');
+  if (doc !== undefined && doc !== 'Bad.lean' && doc !== 'Good.lean') {
+    throw new CliError(`--doc 只能是 Bad.lean 或 Good.lean，收到 ${doc}`);
+  }
   const moduleName = optionalString(parsed, 'module');
   const goodCode = optionalString(parsed, 'good-code');
   return {
@@ -528,6 +613,7 @@ export const parseDiagOptions = (argv: readonly string[]): DiagOptions => {
     timeoutMs,
     idleTimeoutMs,
     jobs,
+    ...(doc === undefined ? {} : { doc }),
   };
 };
 
@@ -560,7 +646,8 @@ const main = async (): Promise<void> => {
     const message = (error as Error).message;
     console.error(`[diag] failed: ${message}`);
     // CI 靠退出码决定是否重试：4 = 无进展/超时（不重试），3 = 网络/缓存（值得一次重试）。
-    if (error instanceof NoProgressError || message.includes('超时')) process.exitCode = 4;
+    if (error instanceof ChildDiagError) process.exitCode = error.exitCode;
+    else if (error instanceof NoProgressError || message.includes('超时')) process.exitCode = 4;
     else if (isRetryable(message)) process.exitCode = 3;
     else process.exitCode = 1;
   } finally {

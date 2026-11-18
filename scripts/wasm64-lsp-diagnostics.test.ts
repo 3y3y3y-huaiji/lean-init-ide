@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CliError } from './lib/cli.ts';
 import {
   buildDocuments,
+  buildWorkerChildArgs,
   describeDiagnostic,
   isTypeMismatch,
   parseDiagOptions,
@@ -135,5 +136,54 @@ describe('parseDiagOptions', () => {
     expect(() =>
       parseDiagOptions(['--lean', lean, '--lib', join(tmpdir(), 'no-such-lib')]),
     ).toThrowError(/不是目录/);
+  });
+
+  it('支持 --doc 过滤单文档并拒绝未知文档名', () => {
+    const { lean, lib } = makePaths();
+    const parsed = parseDiagOptions(['--lean', lean, '--lib', lib, '--doc', 'Good.lean']);
+    expect(parsed.doc).toBe('Good.lean');
+    expect(() =>
+      parseDiagOptions(['--lean', lean, '--lib', lib, '--doc', 'Other.lean']),
+    ).toThrowError(/Bad\.lean 或 Good\.lean/);
+  });
+
+  it('buildWorkerChildArgs 透传全部运行参数与目标文档', () => {
+    const { lean, lib } = makePaths();
+    const options = parseDiagOptions([
+      '--lean',
+      lean,
+      '--lib',
+      lib,
+      '--module',
+      'Mathlib.Order.Basic',
+      '--good-code',
+      'example : True := trivial',
+      '--timeout',
+      '600000',
+      '--idle-timeout',
+      '180000',
+      '--jobs',
+      '2',
+    ]);
+    expect(buildWorkerChildArgs(options, 'Bad.lean')).toEqual([
+      '--lean',
+      lean,
+      '--lib',
+      lib,
+      '--mode',
+      'worker',
+      '--timeout',
+      '600000',
+      '--idle-timeout',
+      '180000',
+      '--jobs',
+      '2',
+      '--doc',
+      'Bad.lean',
+      '--module',
+      'Mathlib.Order.Basic',
+      '--good-code',
+      'example : True := trivial',
+    ]);
   });
 });

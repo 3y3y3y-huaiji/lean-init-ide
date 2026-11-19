@@ -9,56 +9,44 @@
 从来没有离开过这台电脑。
 
 写错一步，它会立刻用红线拦住你；写对了，它只会冷冷地回一句 `no goals`。
-那种「被机器抓住逻辑漏洞」的感觉，值得亲自体验一次。
+现在不仅内置 `Init`，还能按需挂载与释放 `Std` 与 `Batteries`，覆盖 **27 节双语课程**、**趣味数学挑战**与**全屏编辑器**。
 
 在线使用：<https://criticalthinking.de5.net>（备用：<https://lean-init-ide.pages.dev>）
 
 ## 30 秒上手
 
-打开 <https://criticalthinking.de5.net>，选一门课，点「运行」。
+打开 <https://criticalthinking.de5.net>，先看再写，按需加载：
 
-- 首次会下载约 102MB 运行时（zstd 压缩后），之后走浏览器持久缓存，二次进入通常 4–7 秒可用。
-- 需要 cross-origin isolation（COOP/COEP）与 SharedArrayBuffer，Chromium 系浏览器体验最佳。
-- 低内存设备（`navigator.deviceMemory ≤ 4`）不会自动下载，需要手动点「启动 Lean」。
-- 只想读课程时不必启动引擎：正文直接可看，代码块点「运行」时才会拉起 Lean。
+- **不用下载也能先体验**：首页「先看 5 秒」零下载演示直接展示 `⊢` 目标一步步消失的过程；每节课程正文与右侧 **Goal 演练面板**也可免下载阅读与逐步推演。
+- **点「运行」拉起真编译器**：首次启动会下载约 102MB 运行时（Init，zstd 压缩后分片校验），之后走浏览器持久缓存，二次进入通常 4–7 秒可用。
+- **设备与流量友好**：低内存设备（`navigator.deviceMemory ≤ 4`）与开启省流模式时不会自动下载，需手动点「启动 Lean」；需要 cross-origin isolation（COOP/COEP）与 `SharedArrayBuffer`，Chromium 系浏览器体验最佳，桌面端与手机端均已适配。
 
 ## 它和别的在线沙盒差在哪
 
-单元测试只能测出你想到的那几个用例；Lean 用数学逻辑，把所有可能的输入一次性证死。
+代几个数试一试，只能证明那几个样例没错；Lean 用数学逻辑，把所有可能的输入一次性证死。
 
-- **真编译器，不是模拟。** Lean 4.35.0 编译成 WebAssembly，解析、精化、诊断全部在页面里完成，
-  没有任何一条「用正则猜证明对不对」的捷径。
-- **诊断与 Goal 实时反馈。** 停手后 LSP 推送诊断；光标停在证明内部，右侧立刻显示当前目标——
-  你能看见自己离答案还差几步。
-- **Init + Std + Batteries 分包。** 默认只下载 Init；工程课按需挂载 Std 与 Batteries，用完即释放内存。
-- **27 节课，三条路径。** 从零基础到真实数据结构与状态机，每一节都能在页面里直接跑起来。
+- **真编译器，不是模拟。** Lean 4.35.0 编译成 WebAssembly，解析、精化与诊断全在浏览器本地 Web Worker 里完成，没有任何「用正则猜证明对不对」的捷径。
+- **全流程 Goal 与实时诊断。** 全部 27 节课程均配有右侧 **Goal 步骤演练面板**，运行页面代码块时还会将真实诊断与实时 `⊢` 状态同步回面板；从课后作业或趣味挑战进入编辑器时，顶部自动保留当前题干与折叠提示，不再切过去就忘题。
+- **Init + Std + Batteries 按需分包。** 默认只下载 `Init`；工程实战课与编辑器按需挂载 `Std`（约 75MB）与 `Batteries`（约 5.7MB），用完即可手动释放内存。
+- **27 节课 + 趣味数学挑战。** 三条渐进路径从零基础一直讲到真实数据结构与状态机，外加开箱即用的经典数学挑战题。
 
 ## 三条学习路径
 
 | 路径 | 适合谁 | 节数 |
 | --- | --- | --- |
-| 入门路径 | 零基础，想先摸清交互式证明的手感 | 9 |
-| 数学与验证 | 有数学直觉，想把它翻译成 Lean 代码 | 13 |
-| 工程实战 | 后端、系统与安全工程师，想验证真实数据结构与状态不变量 | 5 |
+| 入门路径 | 零基础，用生活直觉先摸清交互式证明与 `⊢` 手感 | 9 |
+| 数学与验证 | 有数学直觉，想把它翻译成严格的形式化证明 | 13 |
+| 工程实战 | 后端、系统与安全工程师，验证数据结构与状态不变量 | 5 |
 
-## 趣味数学挑战
-
-不想从第一课按顺序学，也可以直接挑一道经典数学题动手：
-
-- `/zh/challenges`、`/en/challenges` 是与系统课程并列的挑战区，每题有独立分享链接
-  `/<lang>/challenges/<slug>`，共用同一套运行时与 Service Worker 缓存。
-- 页面保留实时 Goal 面板与 `rfl` / `intro` / `rw` / `simp` / `omega` 等快捷策略按钮，
-  骨架代码只依赖 Init，不需要理解完整语法也能开始。
-- 想换到自己熟悉的编辑器，可打开 `/<lang>/playground?challenge=<slug>`；本机已有草稿时不会静默覆盖。
-
-## 课程
+<details>
+<summary>展开查看全部 27 节课程目录</summary>
 
 ### 入门路径（9 节）
 
 | 课时 | 主题 | 关键动作 |
 | --- | --- | --- |
 | `what-is-lean` | 会做数学题的编译器 | `#eval`、`#check`、`rfl` |
-| `first-proof` | 你的第一个零漏洞证明 | `rfl`、等式即类型 |
+| `first-proof` | 你的第一个零漏洞证明 | `#check`、`#eval`、`rfl` 化简过关 |
 | `implication` | 写一个 if…then… 风格的证明函数 | `intro`、`exact` |
 | `connectives` | 打包与拆包：∧ 与 ∨ | `⟨hp, hq⟩`、`h.1` / `h.2`、`cases` |
 | `induction` | 多米诺骨牌：归纳就是递归 | `induction ... with`、`simp only` |
@@ -94,6 +82,16 @@
 | `eng-rbmap` | 不只是玩具链表：有序树 | `Std.TreeMap`、`insert` / `get?`、插入后查找性质 |
 | `eng-array-bounds` | 消除数组越界 | `Array.getElem?_eq_getElem`、把 `i < arr.size` 写进签名 |
 | `eng-state-machine` | 状态机与账本守恒 | `structure` + `HashMap`、`transfer`、总余额守恒、余额非负 |
+
+</details>
+
+## 趣味数学挑战
+
+不想按顺序从第 01 课学起，也可以直接挑一道经典数学题动手：
+
+- `/zh/challenges`、`/en/challenges` 与系统课程并列，每道题提供独立可分享链接 `/<lang>/challenges/<slug>`，共用同一套运行时与 Service Worker 缓存。
+- 页面自带实时 Goal 面板与 `rfl` / `intro` / `rw` / `simp` / `omega` 快捷策略按钮，骨架只依赖 `Init`。
+- 点击跳转 `/<lang>/playground?challenge=<slug>` 会在顶部固定保留题面，本机已有个人草稿时不会静默覆盖。
 
 ## 限制
 

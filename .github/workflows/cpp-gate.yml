@@ -1,0 +1,54 @@
+name: CI · C/C++ 静态门禁
+run-name: CI · C/C++ · ${{ github.ref_name }}
+
+# 手写 C/C++ 的静态门禁：clang-format + clang-tidy + -Wall -Wextra -Werror。
+# 只覆盖 scripts 下的手写源码；上游 Lean runtime 与 `lean -c` 生成的 C 不扫，
+# 全量扫会产出几千条历史告警，规则只能整体关掉。
+#
+# 需要真正编译 wasm 的探针（yield-rec.cpp 依赖 emscripten.h）由 depth-probe workflow 覆盖。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**/*.cpp'
+      - 'scripts/**/*.cc'
+      - 'scripts/**/*.c'
+      - 'scripts/check-cpp.sh'
+      - '.clang-format'
+      - '.clang-tidy'
+      - '.github/workflows/cpp-gate.yml'
+  pull_request:
+    paths:
+      - 'scripts/**/*.cpp'
+      - 'scripts/**/*.cc'
+      - 'scripts/**/*.c'
+      - 'scripts/check-cpp.sh'
+      - '.clang-format'
+      - '.clang-tidy'
+      - '.github/workflows/cpp-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpp-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 clang 工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-format clang-tidy
+          clang++ --version | head -n 1
+          clang-format --version
+          clang-tidy --version | head -n 2
+
+      - name: 运行门禁
+        run: bash scripts/check-cpp.sh

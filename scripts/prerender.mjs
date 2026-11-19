@@ -105,6 +105,15 @@ try {
     await writeFile(outPath, html, 'utf8');
   }
 
+  // `_redirects` 把 / 与未知路径都回落到 index.html。此前这是 Vite 的空壳模板，
+  // 爬虫抓根域名时看不到任何 <h1>；这里用默认中文首页填充，canonical 仍指向 /zh/。
+  const rootRoute = { page: 'home', locale: 'zh' };
+  await writeFile(
+    templatePath,
+    ssr.injectPrerenderedHtml(templateHtml, rootRoute, preloadsFor(manifest, rootRoute)),
+    'utf8',
+  );
+
   await rm(resolve(dist, '.vite'), { recursive: true, force: true });
   console.log(`SSG 预渲染完成：生成 ${routes.length} 个静态页面`);
 } finally {

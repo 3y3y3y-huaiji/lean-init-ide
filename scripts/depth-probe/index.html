@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8" />
+<link rel="icon" href="data:," />
+<title>Lean 深递归探针</title>
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const variants = (params.get('variants') ?? 'baseline').split(',').filter(Boolean);
+  const worker = new Worker('./probe-worker.js', { type: 'module' });
+  worker.onmessage = (event) => {
+    if (event.data?.done) globalThis.__depthResults = event.data;
+  };
+  worker.onerror = (event) => {
+    globalThis.__depthResults = { done: true, fatal: event.message || String(event) };
+  };
+  worker.postMessage({ variants });
+</script>

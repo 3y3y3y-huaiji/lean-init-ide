@@ -42,6 +42,24 @@ pnpm exec vitest run src/lsp-patches.test.ts
 FileWorker 偶发重复精化导致的「already declared」假阳性。先确认上游是否已修复；已修复就删除这段
 过滤并更新相关单测，未修复则保留。
 
+## wasm64 运行时与栈补丁
+
+wasm64 构建链、Lean 版本 pin（默认 4.36.0-rc2，可用 `LEAN_PIN_*` 覆盖）与三处栈补丁只在
+`.github/workflows/spike-wasm64.yml` 里跑，本地只做静态检查与门禁单测：
+
+```bash
+pnpm run typecheck:spike      # tsconfig.spike.json
+pnpm run lint:spike           # 只扫 scripts/**/*.ts
+pnpm run format:check:spike
+pnpm run test:spike           # vitest.spike.config.ts
+pnpm run test:spike:coverage  # CI 用，阈值 75% 行 / 60% 函数
+pnpm run check:cpp            # 手写 C/C++ 的 clang-format + clang-tidy
+```
+
+真正的行为基准是 `scripts/wasm64-patch-equivalence.ts`：同一批 Lean 源文件分别用官方
+未打补丁的原生 Lean 与打补丁的 wasm64 编译，比较退出码与 stdout。它需要完整构建产物，
+所以只在 Actions 的 smoke job 里执行。设计细节与踩坑记录见 [WASM64-SPIKE](WASM64-SPIKE.md)。
+
 ## 质量门禁
 
 > **PR 阶段无需本地跑全套检查**：提 PR 后会由 `.github/workflows/ci.yml`（`CI · 应用`）在 GitHub Actions 上自动执行下列完整门禁与 E2E，合并前等待 Actions 检查全绿即可。

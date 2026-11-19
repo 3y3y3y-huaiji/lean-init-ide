@@ -1,5 +1,5 @@
 // 实验性 wasm64 运行时用的 LSP 帧编解码与 stdin 环形缓冲。
-// 与 spike/wasm64 分支 scripts/lib/frames.ts 同一算法（该实现已在 Chrome 与 Node 的 LSP 链路里验证）。
+// 与 scripts/lib/frames.ts 同一算法（该实现已在 Chrome 与 Node 的 LSP 链路里验证）。
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

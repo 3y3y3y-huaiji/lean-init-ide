@@ -36,6 +36,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
+    // 递归深度探针运行在浏览器 Worker 里。
+    files: ['scripts/depth-probe/**/*.js'],
+    languageOptions: { globals: { ...globals.browser, ...globals.worker } },
+  },
+  {
     files: ['public/sw.js'],
     languageOptions: { globals: globals.serviceworker },
   },

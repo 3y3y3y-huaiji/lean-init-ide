@@ -186,10 +186,24 @@ export type Messages = {
     /** 证明类代码没有诊断时的提示：说明目标已关闭，而不是“什么都没发生”。 */
     proofAccepted: string;
     editorHint: string;
+    /** 课程页右侧 Goal 面板文案。 */
+    goalPanelTitle: string;
+    goalStepLabel: (current: number, total: number) => string;
+    goalPrev: string;
+    goalNext: string;
+    goalLive: string;
+    goalBackToSteps: string;
+    goalOpenPlayground: string;
+    goalChecking: string;
+    goalNoRemaining: string;
   };
   playground: {
     title: string;
     hint: string;
+    /** 编辑器主包加载前的占位文案。 */
+    editorLoading: string;
+    editorLoadingHint: string;
+    editorLoadFailed: string;
     /** Playground 的 meta description：独立控制检索长度与关键词。 */
     seoDescription: string;
     /** 未启动 Lean 前就能被爬虫读到的 GEO 事实清单。 */

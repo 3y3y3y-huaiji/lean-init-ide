@@ -12,7 +12,7 @@ import {
   CHALLENGES,
   type Challenge,
 } from '../challenges';
-import { renderLeanMarkup } from '../components/lean-markup';
+import { renderLeanMarkup, showEditorLoadFailure } from '../components/lean-markup';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { draftKeyFor } from '../draft';
@@ -214,7 +214,25 @@ export const mountChallenge = async (
   };
   earlyStartEl?.addEventListener('click', onEarlyStart, { once: true });
 
-  const { createLeanPanel } = await import('../components/lean-panel');
+  let createLeanPanel: typeof import('../components/lean-panel').createLeanPanel;
+  try {
+    ({ createLeanPanel } = await import('../components/lean-panel'));
+  } catch {
+    earlyStartEl?.removeEventListener('click', onEarlyStart);
+    if (earlyStartEl) earlyStartEl.disabled = false;
+    const panelMessages = {
+      ...messagesFor(locale).playground,
+      title: t.editorTitle,
+      hint: t.detail.starterNote,
+    };
+    showEditorLoadFailure(panelHost, panelMessages, () => {
+      panelHost.innerHTML = renderLeanMarkup(locale, 'full', panelMessages, undefined, {
+        heading: false,
+      });
+      void mountChallenge(root, locale, slug);
+    });
+    return;
+  }
   earlyStartEl?.removeEventListener('click', onEarlyStart);
   if (earlyStartEl) earlyStartEl.disabled = false;
 

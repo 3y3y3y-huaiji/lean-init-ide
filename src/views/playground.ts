@@ -1,5 +1,5 @@
 import { resolveChallengeParam } from '../challenges';
-import { renderLeanMarkup } from '../components/lean-markup';
+import { renderLeanMarkup, showEditorLoadFailure } from '../components/lean-markup';
 import { currentMemoryTier } from '../device';
 import { draftKeyFor, readDraft } from '../draft';
 import { loadLessons, messagesFor, type Locale } from '../i18n';
@@ -85,7 +85,18 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   const requiredExtensions = lesson?.requires ?? inferExtensions(code);
 
   // 把 3.5MB Monaco 与 LSP 推迟到页面骨架渲染完再按需加载，不阻塞首屏 H1 绘制。
-  const { createLeanPanel } = await import('../components/lean-panel');
+  let createLeanPanel: typeof import('../components/lean-panel').createLeanPanel;
+  try {
+    ({ createLeanPanel } = await import('../components/lean-panel'));
+  } catch {
+    earlyStartEl?.removeEventListener('click', onEarlyStart);
+    if (earlyStartEl) earlyStartEl.disabled = false;
+    showEditorLoadFailure(host, messagesFor(locale).playground, () => {
+      host.innerHTML = renderLeanMarkup(locale, 'full', messagesFor(locale).playground);
+      void mountPlayground(root, locale);
+    });
+    return;
+  }
   earlyStartEl?.removeEventListener('click', onEarlyStart);
   if (earlyStartEl) earlyStartEl.disabled = false;
 

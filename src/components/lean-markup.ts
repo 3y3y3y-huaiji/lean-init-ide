@@ -46,6 +46,41 @@ export const diagnosticBadgeClass = (severity?: number) =>
 
 export const diagnosticMessageClass = 'text-[13px] leading-normal';
 
+/**
+ * 编辑器主包异步加载失败时替换占位层，给出明确错误与重试按钮，
+ * 避免用户只看到空白或卡在无限加载态。
+ */
+export const showEditorLoadFailure = (
+  host: HTMLElement,
+  t: Messages['playground'],
+  onRetry: () => void,
+): void => {
+  const statusEl = host.querySelector<HTMLElement>('[data-role="status"]');
+  if (statusEl) {
+    statusEl.textContent = t.statusError(t.editorLoadFailed);
+    statusEl.dataset.state = 'error';
+  }
+  const loadingEl = host.querySelector<HTMLElement>('[data-role="editor-loading"]');
+  if (!loadingEl) return;
+  loadingEl.setAttribute('aria-busy', 'false');
+  loadingEl.replaceChildren();
+
+  const card = document.createElement('div');
+  card.className =
+    'm-auto flex max-w-[320px] flex-col items-center gap-3 rounded-xl border border-err/45 bg-panel px-5 py-4 text-center shadow-[var(--shadow)]';
+  const text = document.createElement('p');
+  text.className = 'm-0 text-[13px] leading-relaxed text-err';
+  text.textContent = t.editorLoadFailed;
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.dataset.role = 'retry-editor';
+  retry.className = buttonClass;
+  retry.textContent = t.retryLoad;
+  retry.addEventListener('click', onRetry, { once: true });
+  card.append(text, retry);
+  loadingEl.append(card);
+};
+
 const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
   <div
     data-role="workspace"
@@ -76,13 +111,26 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       <div class="relative min-h-0 flex-1" data-role="editor">
         <div
           data-role="editor-loading"
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0 flex flex-col gap-2.5 bg-editor-bg p-4"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+          class="absolute inset-0 flex flex-col justify-between bg-panel-soft p-4"
         >
-          <span class="h-2 w-2/5 rounded bg-line/60"></span>
-          <span class="h-2 w-3/5 rounded bg-line/50"></span>
-          <span class="h-2 w-1/2 rounded bg-line/40"></span>
-          <span class="h-2 w-2/3 rounded bg-line/30"></span>
+          <div class="flex flex-col gap-3 animate-pulse" aria-hidden="true">
+            <span class="h-2.5 w-2/5 rounded bg-line-strong/70"></span>
+            <span class="h-2.5 w-3/5 rounded bg-line-strong/55"></span>
+            <span class="h-2.5 w-1/2 rounded bg-line-strong/45"></span>
+            <span class="h-2.5 w-2/3 rounded bg-line-strong/35"></span>
+          </div>
+          <div class="m-auto flex max-w-[280px] flex-col items-center gap-2 rounded-xl border border-line bg-panel px-5 py-4 text-center shadow-[var(--shadow)]">
+            <span
+              class="size-5 animate-spin rounded-full border-2 border-line border-t-accent"
+              aria-hidden="true"
+            ></span>
+            <span data-role="editor-loading-text" class="text-[13px] font-[650] text-fg">${t.editorLoading}</span>
+            <span class="text-xs text-muted">${t.editorLoadingHint}</span>
+          </div>
+          <div class="h-6" aria-hidden="true"></div>
         </div>
       </div>
     </section>

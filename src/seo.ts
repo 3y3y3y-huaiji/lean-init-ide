@@ -78,7 +78,7 @@ export const buildLlmsTxt = (origin: string = SITE_ORIGIN): string => {
     '',
     '## Core Pages (English)',
     '',
-    `- [${en.nav.home}](${origin}/en/): ${en.home.title}`,
+    `- [${en.nav.home}](${origin}/): ${en.home.title}`,
     `- [${en.nav.lesson}](${origin}/en/learn/${FIRST_LESSON_SLUG}): ${en.home.courseBody}`,
     `- [${en.nav.challenges}](${origin}/en/challenges): ${en.challenges.lead}`,
     `- [${en.nav.playground}](${origin}/en/playground): ${en.playground.hint}`,

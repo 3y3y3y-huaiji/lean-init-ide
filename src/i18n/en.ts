@@ -38,6 +38,11 @@ export const en: Messages = {
     eyebrow: 'Lean 4.35.0 · Init + Std + Batteries · LSP in the browser',
     title: 'Run a real Lean 4 theorem prover in your browser',
     lead: 'Not a regex mock, and not code shipped to a server: the full compiler and language server live in a Web Worker. Open the page and write your first proof in 30 seconds.',
+    seoDescription:
+      'Run Lean 4.35.0 in your browser: the real compiler and language server run as WebAssembly in a Web Worker, with Init, Std and Batteries and zero backend.',
+    facts: (lessonCount) =>
+      `Lean 4.35.0 runtime · client-side Web Worker · Init built in, Std and Batteries on demand · zero backend · ${lessonCount} bilingual lessons · open source`,
+    factsRepo: 'GitHub repository',
     heroNote:
       'Unit tests only cover the cases you remembered to write. Lean uses mathematical logic to rule out every possible input at once, and the compiler stops you with a red line the moment a step breaks.',
     ctaPrimary: 'Start the first lesson',
@@ -192,6 +197,11 @@ export const en: Messages = {
   playground: {
     title: 'Lean playground',
     hint: 'The first run downloads about 102 MB of runtime; later visits use the persistent cache.',
+    seoDescription:
+      'Open the Lean 4 Playground: a browser-based editor and language server run as WebAssembly in a Web Worker, with Init built in, Std and Batteries on demand, and no backend.',
+    facts: (lessonCount) =>
+      `Lean 4.35.0 · WebAssembly in a Web Worker · Init built in, Std and Batteries on demand · zero backend · ${lessonCount} bilingual lessons · open source`,
+    factsRepo: 'GitHub repository',
     defaultCode: `open Classical
 
 noncomputable section

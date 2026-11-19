@@ -17,8 +17,8 @@ describe('renderPrivacy', () => {
     }
   });
 
-  it('返回链接带语言前缀', () => {
-    expect(renderPrivacy('en')).toContain('href="/en/"');
+  it('返回链接使用各语言首页的规范路径', () => {
+    expect(renderPrivacy('en')).toContain('href="/"');
     expect(renderPrivacy('zh')).toContain('href="/zh/"');
   });
 

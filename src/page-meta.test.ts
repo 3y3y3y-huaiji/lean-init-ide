@@ -6,12 +6,15 @@ describe('page-meta', () => {
   it('按路由生成中英文标题与描述并在缺失课时回退第一课', () => {
     const zh = messagesFor('zh');
     const en = messagesFor('en');
+    const hanCount = (value: string) =>
+      Array.from(value).filter((char) => /\p{Script=Han}/u.test(char)).length;
 
-    expect(pageTitle({ page: 'home', locale: 'zh' })).toBe('Lean Init IDE');
-    expect(pageDescription({ page: 'home', locale: 'en' })).toBe(en.home.lead);
+    expect(hanCount(pageTitle({ page: 'home', locale: 'zh' }))).toBeGreaterThanOrEqual(15);
+    expect(pageTitle({ page: 'home', locale: 'en' }).length).toBeGreaterThanOrEqual(30);
+    expect(pageDescription({ page: 'home', locale: 'en' }).length).toBeGreaterThanOrEqual(110);
 
-    expect(pageTitle({ page: 'playground', locale: 'zh' })).toContain(zh.playground.title);
-    expect(pageDescription({ page: 'playground', locale: 'en' })).toBe(en.playground.hint);
+    expect(pageTitle({ page: 'playground', locale: 'zh' })).toContain('Playground');
+    expect(pageDescription({ page: 'playground', locale: 'en' })).toContain('Lean 4 Playground');
 
     expect(pageTitle({ page: 'privacy', locale: 'en' })).toContain(en.privacy.title);
     expect(pageDescription({ page: 'privacy', locale: 'zh' })).toBe(zh.privacy.intro);
@@ -20,11 +23,11 @@ describe('page-meta', () => {
     expect(pageDescription({ page: 'reference', locale: 'en' })).toBe(en.reference.lead);
 
     expect(pageTitle({ page: 'notFound', locale: 'en' })).toContain(en.notFound.title);
-    expect(pageDescription({ page: 'notFound', locale: 'zh' })).toBe(zh.home.lead);
+    expect(pageDescription({ page: 'notFound', locale: 'zh' })).toContain(zh.home.lead);
 
     const fallbackTitle = pageTitle({ page: 'lesson', locale: 'zh', slug: 'nonexistent-slug' });
     expect(fallbackTitle).toContain(lessonsFor('zh')[0]!.title);
-    expect(pageDescription({ page: 'lesson', locale: 'en', slug: 'nonexistent-slug' })).toBe(
+    expect(pageDescription({ page: 'lesson', locale: 'en', slug: 'nonexistent-slug' })).toContain(
       lessonsFor('en')[0]!.lead,
     );
   });
@@ -35,7 +38,7 @@ describe('page-meta', () => {
 
     expect(zhHtml).toContain('href="/zh/"');
     expect(zhHtml).toContain(messagesFor('zh').notFound.title);
-    expect(enHtml).toContain('href="/en/"');
+    expect(enHtml).toContain('href="/"');
     expect(enHtml).toContain(messagesFor('en').notFound.title);
   });
 });

@@ -6,7 +6,8 @@ import {
 import { ghostButtonClass } from '../components/ui';
 import { REPO_URL } from '../feedback';
 import { localeLabel, messagesFor, otherLocale, rememberLocale, type Locale } from '../i18n';
-import { FIRST_LESSON_SLUG } from '../router';
+import { swapLocalePath } from '../meta';
+import { FIRST_LESSON_SLUG, localeHomePath } from '../router';
 import { clearRuntimeCache } from '../runtime-cache';
 import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
@@ -40,14 +41,15 @@ export const renderLayout = (
 ): string => {
   const t = messagesFor(locale);
   const other = otherLocale(locale);
-  const rest = url.pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '') || '/';
+  const homeHref = localeHomePath(locale);
   // 切换语言时保留查询串：练习页的 ?lesson= 不能丢，否则会退回空白编辑器。
   const suffix = `${url.search ?? ''}${url.hash ?? ''}`;
+  const switchHref = `${swapLocalePath(url.pathname, locale)}${suffix}`;
   const pref = getThemePreference();
   const themeLabel = `${t.theme.label} · ${t.theme[pref]}`;
 
   const navItems: Array<{ page: ActivePage; href: string; label: string }> = [
-    { page: 'home', href: `/${locale}/`, label: t.nav.home },
+    { page: 'home', href: homeHref, label: t.nav.home },
     { page: 'lesson', href: `/${locale}/learn/${FIRST_LESSON_SLUG}`, label: t.nav.lesson },
     { page: 'challenges', href: `/${locale}/challenges`, label: t.nav.challenges },
     { page: 'playground', href: `/${locale}/playground`, label: t.nav.playground },
@@ -76,7 +78,7 @@ export const renderLayout = (
   return `
     <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[900px]:relative">
       <div class="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-4 gap-y-2 gutter-x py-2.5 min-[901px]:py-3.5">
-        <a class="inline-flex min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline" href="/${locale}/">
+        <a class="inline-flex min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline" href="${homeHref}">
           <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-[17px] font-bold text-accent-contrast">λ</span>
           <span class="truncate">Lean Init IDE</span>
         </a>
@@ -85,7 +87,7 @@ export const renderLayout = (
           <a
             id="lang-switch"
             class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
-            href="/${other}${rest}${suffix}"
+            href="${switchHref}"
             title="${t.language.label}"
             aria-label="${t.language.label}"
           >

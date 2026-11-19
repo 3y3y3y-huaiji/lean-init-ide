@@ -34,6 +34,7 @@ describe('SSG 预渲染', () => {
     const routes = allStaticRoutes(['zh', 'en']);
     const expectedLessons = LESSON_CATALOG.length;
     expect(routes.length).toBe(2 * (5 + expectedLessons + CHALLENGES.length));
+    expect(outputRelPath({ page: 'home', locale: 'en' })).toBe('index.html');
     expect(outputRelPath({ page: 'home', locale: 'zh' })).toBe('zh/index.html');
     expect(outputRelPath({ page: 'playground', locale: 'en' })).toBe('en/playground.html');
     expect(outputRelPath({ page: 'lesson', locale: 'zh', slug: 'what-is-lean' })).toBe(
@@ -68,10 +69,48 @@ describe('SSG 预渲染', () => {
     expect(html).toContain(`>${lessonsFor('en')[0]!.title}</h1>`);
   });
 
-  it('首页预渲染恰好包含一个 H1，保证根路径回落到 index.html 时可被索引', () => {
-    const html = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'home', locale: 'zh' });
-    expect(html.match(/<h1/g)).toHaveLength(1);
-    expect(html).toContain(`>${messagesFor('zh').home.title}</h1>`);
+  it('首页预渲染恰好包含一个 H1，且英文首页 canonical 与 hreflang 指向根路径', () => {
+    const zhHtml = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'home', locale: 'zh' });
+    expect(zhHtml.match(/<h1/g)).toHaveLength(1);
+    expect(zhHtml).toContain(`>${messagesFor('zh').home.title}</h1>`);
+
+    const enHtml = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'home', locale: 'en' });
+    expect(enHtml).toContain('<link rel="canonical" href="https://criticalthinking.de5.net/" />');
+    expect(enHtml).toContain(
+      '<link rel="alternate" hreflang="en" href="https://criticalthinking.de5.net/" />',
+    );
+    expect(enHtml).toContain(
+      '<link rel="alternate" hreflang="x-default" href="https://criticalthinking.de5.net/" />',
+    );
+    expect(enHtml).toContain(
+      '<link rel="alternate" hreflang="zh" href="https://criticalthinking.de5.net/zh/" />',
+    );
+    expect(enHtml).toContain('<script type="application/ld+json">');
+    expect(enHtml).toContain('"@type":"WebApplication"');
+  });
+
+  it('每个预渲染页面都恰好一个 H1，标题与描述满足 SEO 长度规范', () => {
+    const hanCount = (value: string) =>
+      Array.from(value).filter((char) => /\p{Script=Han}/u.test(char)).length;
+    for (const route of allStaticRoutes(['zh', 'en'])) {
+      const label = `${route.locale}:${route.page}:${route.slug ?? ''}`;
+      const html = renderStaticApp(route);
+      expect(html.match(/<h1\b/g) ?? [], label).toHaveLength(1);
+
+      const title = pageTitle(route);
+      const description = pageDescription(route);
+      if (route.locale === 'zh') {
+        expect(hanCount(title), `${label} title`).toBeGreaterThanOrEqual(15);
+        expect(hanCount(title), `${label} title`).toBeLessThanOrEqual(30);
+        expect(hanCount(description), `${label} description`).toBeGreaterThanOrEqual(55);
+        expect(hanCount(description), `${label} description`).toBeLessThanOrEqual(85);
+      } else {
+        expect(title.length, `${label} title`).toBeGreaterThanOrEqual(30);
+        expect(title.length, `${label} title`).toBeLessThanOrEqual(60);
+        expect(description.length, `${label} description`).toBeGreaterThanOrEqual(110);
+        expect(description.length, `${label} description`).toBeLessThanOrEqual(155);
+      }
+    }
   });
 
   it('playground 预渲染设置 body data-page=playground 且不含空壳 h1 缺失问题', () => {
@@ -84,7 +123,7 @@ describe('SSG 预渲染', () => {
 
   it('各页面标题、描述与 404 视图渲染正确且含 $ 字符时不会被替换语法破坏', () => {
     const refTitle = pageTitle({ page: 'reference', locale: 'en' });
-    expect(refTitle).toContain(messagesFor('en').reference.title);
+    expect(refTitle).toContain('Lean 4 tactics and symbols reference');
     expect(pageDescription({ page: 'privacy', locale: 'zh' })).toBe(
       messagesFor('zh').privacy.intro,
     );

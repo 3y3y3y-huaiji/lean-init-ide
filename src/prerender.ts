@@ -1,4 +1,5 @@
 import { CHALLENGES } from './challenges';
+import { REPO_URL } from './feedback';
 import { LESSON_CATALOG, type Locale } from './i18n';
 import { SITE_ORIGIN, swapLocalePath } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
@@ -15,6 +16,28 @@ import { renderReference } from './views/reference';
 export { pageDescription, pageTitle, renderNotFound };
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** 首页与 Playground 的 WebApplication 结构化数据；内联到预渲染 HTML，爬虫无需执行 JS。 */
+const webApplicationJsonLd = (
+  route: Route,
+  canonical: string,
+  title: string,
+  description: string,
+): string =>
+  JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: title,
+    url: canonical,
+    description,
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'Any',
+    browserRequirements: 'Requires WebAssembly, Web Workers and cross-origin isolation',
+    inLanguage: route.locale === 'zh' ? 'zh-CN' : 'en',
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    sameAs: [REPO_URL],
+  }).replaceAll('<', '\\u003c');
 
 /** 将主样式表内联为 <style>，消除首屏渲染阻塞请求。 */
 export const inlineStylesheet = (html: string, cssHref: string, cssText: string): string => {
@@ -84,7 +107,8 @@ export const allStaticRoutes = (locales: readonly Locale[] = ['zh', 'en']): Rout
 export const outputRelPath = (route: Route): string => {
   switch (route.page) {
     case 'home':
-      return `${route.locale}/index.html`;
+      // 英文首页是站点根入口，直接覆盖 dist/index.html；中文仍输出 /zh/index.html。
+      return route.locale === 'en' ? 'index.html' : `${route.locale}/index.html`;
     case 'lesson':
       return `${route.locale}/learn/${route.slug ?? FIRST_LESSON_SLUG}.html`;
     case 'playground':
@@ -116,6 +140,7 @@ export const injectPrerenderedHtml = (
   const ogLocale = route.locale === 'zh' ? 'zh_CN' : 'en_US';
   const htmlLang = route.locale === 'zh' ? 'zh-CN' : 'en';
   const bodyPage = route.page === 'playground' ? 'playground' : 'content';
+  const isAppPage = route.page === 'home' || route.page === 'playground';
 
   const headExtra = [
     ...preloads.map(
@@ -125,8 +150,20 @@ export const injectPrerenderedHtml = (
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
     `<link rel="alternate" hreflang="zh" href="${escapeHtml(altZh)}" />`,
     `<link rel="alternate" hreflang="en" href="${escapeHtml(altEn)}" />`,
+    // x-default 指向英文版本：英文首页就是根路径 `/`。
+    `<link rel="alternate" hreflang="x-default" href="${escapeHtml(altEn)}" />`,
     `<meta property="og:url" content="${escapeHtml(canonical)}" />`,
     `<meta property="og:locale" content="${ogLocale}" />`,
+    ...(isAppPage
+      ? [
+          `<script type="application/ld+json">${webApplicationJsonLd(
+            route,
+            canonical,
+            title,
+            description,
+          )}</script>`,
+        ]
+      : []),
   ].join('\n    ');
 
   const appHtml = renderStaticApp(route);

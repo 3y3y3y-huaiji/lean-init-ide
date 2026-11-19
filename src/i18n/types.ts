@@ -76,8 +76,13 @@ export type Messages = {
     eyebrow: string;
     title: string;
     lead: string;
+    /** 首页 meta description：独立于首屏正文，便于控制检索长度与关键词。 */
+    seoDescription: string;
     /** 首屏解释形式化证明价值的补充句。 */
     heroNote: string;
+    /** 静态首屏即出现的 GEO 事实清单（版本、架构、库、课程数、开源）。 */
+    facts: (lessonCount: number) => string;
+    factsRepo: string;
     ctaPrimary: string;
     /** 已有进度时的主按钮文案。 */
     continueCta: string;
@@ -185,6 +190,11 @@ export type Messages = {
   playground: {
     title: string;
     hint: string;
+    /** Playground 的 meta description：独立控制检索长度与关键词。 */
+    seoDescription: string;
+    /** 未启动 Lean 前就能被爬虫读到的 GEO 事实清单。 */
+    facts: (lessonCount: number) => string;
+    factsRepo: string;
     /** playground 的默认示例：同一段 Lean，注释按语言本地化。 */
     defaultCode: string;
     start: string;

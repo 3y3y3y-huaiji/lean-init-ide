@@ -23,20 +23,32 @@ export type RouteResolution = { kind: 'route'; route: Route } | { kind: 'redirec
 /** 课程入口默认跳到的第一节课。新增课时时同步这里。 */
 export const FIRST_LESSON_SLUG = 'what-is-lean';
 
+/** 各语言首页的规范路径：英文首页固定为根路径，与 Search Console 选定的规范网址一致。 */
+export const localeHomePath = (locale: Locale): string => (locale === 'en' ? '/' : '/zh/');
+
 /**
- * 路由约定：/{locale}/、/{locale}/learn/what-is-lean、/{locale}/playground。
+ * 路由约定：英文首页 `/`、/{locale}/learn/what-is-lean、/{locale}/playground。
  * 没有语言前缀时返回重定向目标，由调用方写入 location。
  */
 export const resolveRoute = (pathname: string, fallbackLocale: Locale): RouteResolution => {
   const segments = pathname.split('/').filter(Boolean);
+
+  // 根路径是唯一英文主入口，不再按浏览器语言跳到 /zh/。
+  if (segments.length === 0) return { kind: 'route', route: { page: 'home', locale: 'en' } };
+
   const first = segments[0];
 
   if (!isLocale(first)) {
-    const rest = segments.length ? `/${segments.join('/')}` : '/';
+    const rest = `/${segments.join('/')}`;
     return { kind: 'redirect', path: `/${fallbackLocale}${rest}` };
   }
 
   const rest = segments.slice(1);
+
+  // /en 与 /en/ 不再是可索引的独立首页；Cloudflare Pages 会先做 301，
+  // 这里保留同样的跳转，避免直接以 SPA 形式落到旧地址。
+  if (first === 'en' && rest.length === 0) return { kind: 'redirect', path: '/' };
+
   if (rest.length === 0) return { kind: 'route', route: { page: 'home', locale: first } };
   if (rest[0] === 'playground')
     return { kind: 'route', route: { page: 'playground', locale: first } };
@@ -71,6 +83,6 @@ export const canonicalRoutePath = (route: Route): string => {
     case 'challenge':
       return `/${route.locale}/challenges/${route.slug ?? CHALLENGES[0]!.slug}`;
     default:
-      return `/${route.locale}/`;
+      return localeHomePath(route.locale);
   }
 };

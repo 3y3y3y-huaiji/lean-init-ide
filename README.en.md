@@ -9,61 +9,56 @@ compiled to WebAssembly and packed into a Web Worker together with the full lang
 a proof, the compiler judges it on the spot — and your code never leaves your machine.
 
 One wrong step and it stops you with a red underline; get it right and it just replies `no goals`.
-That feeling of having a machine catch a hole in your logic is worth trying once.
+Beyond `Init`, it mounts `Std` and `Batteries` on demand across **27 bilingual interactive lessons**,
+**math challenges**, and a full **playground**.
 
 Live: <https://criticalthinking.de5.net> (fallback: <https://lean-init-ide.pages.dev>)
 
 ## Start in 30 seconds
 
-Open <https://criticalthinking.de5.net>, pick a lesson, press **Run**.
+Open <https://criticalthinking.de5.net>, explore first, and download only when needed:
 
-- The first run downloads about 102 MB (zstd-compressed), then caches it in the browser; later visits
-  are usually ready in 4–7 seconds.
-- It requires cross-origin isolation (COOP/COEP) and SharedArrayBuffer; Chromium-based browsers work best.
-- Low-memory devices (`navigator.deviceMemory ≤ 4`) do not auto-download; press **Start Lean** yourself.
-- Reading lessons does not require starting the engine; the runtime only loads when you press **Run**.
+- **Try in 5 seconds with zero download**: the home page includes an interactive zero-download demo showing
+  how `⊢` shrinks step by step, and every lesson's prose and right-hand **Goal walkthrough panel** work
+  without starting the compiler.
+- **Press Run for the real prover**: the first start downloads about 102 MB (Init, zstd-compressed and
+  verified by SHA-256), then stays cached in the browser so return visits take roughly 4–7 seconds.
+- **Friendly to lower-spec devices**: low-memory devices (`navigator.deviceMemory ≤ 4`) and Save-Data
+  browsers wait for an explicit **Start Lean** click; requires cross-origin isolation (COOP/COEP) and
+  `SharedArrayBuffer` (Chromium desktop and mobile layouts are both supported).
 
 ## How it differs from yet another sandbox
 
-Unit tests only cover the cases you remembered to write. Lean uses mathematical logic to rule out
-every possible input at once.
+Spot-checking a few test values only verifies those examples. Lean checks mathematical logic across every
+possible input at once.
 
 - **A real compiler, not a mock.** Lean 4.35.0 is compiled to WebAssembly, so parsing, elaboration and
-  diagnostics all happen in the page. No regex ever decides whether a proof is valid.
-- **Live diagnostics and goals.** The LSP publishes diagnostics once typing settles, and the goal panel
-  follows your cursor inside a proof — you can see how far you are from the answer.
-- **Init + Std + Batteries, split into packs.** Only Init downloads by default; engineering lessons
-  mount Std and Batteries on demand and release them when they are no longer needed.
-- **27 lessons, three paths.** From absolute basics to real data structures and state machines, every
-  lesson runs in the page.
+  diagnostics all happen in a local Web Worker. No regex ever guesses whether a proof is valid.
+- **Step-by-step Goal panel & live diagnostics.** All 27 lessons include a sticky **Goal panel** that
+  steps through the target state and updates live when you run snippets; opening an exercise or challenge
+  in the playground keeps its prompt and collapsible hint pinned above the editor.
+- **Init + Std + Batteries on demand.** Only `Init` downloads by default; engineering lessons and the
+  playground mount `Std` (~75 MB) and `Batteries` (~5.7 MB) on demand and release them to free memory.
+- **27 lessons + math challenges.** Three structured paths take learners from everyday intuition to real
+  data structures and state machines, alongside standalone proof puzzles.
 
 ## Three learning paths
 
 | Path | Who it is for | Lessons |
 | --- | --- | --- |
-| Getting started | Complete beginners who want to feel interactive proving first | 9 |
-| Math & verification | Readers with mathematical intuition who want to translate it into Lean | 13 |
+| Getting started | Complete beginners building intuition for interactive proving and `⊢` | 9 |
+| Math & verification | Readers with mathematical intuition translating paper proofs into Lean | 13 |
 | Engineering | Backend, systems and security engineers verifying real data structures and invariants | 5 |
 
-## Math challenges
-
-If you would rather start from a classic puzzle than lesson one:
-
-- `/zh/challenges` and `/en/challenges` sit beside the courses. Every challenge has its own shareable
-  URL at `/<lang>/challenges/<slug>` and uses the same runtime and Service Worker cache.
-- Each page keeps a live Goal panel plus one-click `rfl` / `intro` / `rw` / `simp` / `omega` tactic
-  buttons. The starter code only depends on Init.
-- Prefer your own editor? Open `/<lang>/playground?challenge=<slug>`; an existing local draft is never
-  overwritten silently.
-
-## Lessons
+<details>
+<summary>Expand all 27 lessons</summary>
 
 ### Getting started (9)
 
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
 | `what-is-lean` | A compiler that does math homework | `#eval`, `#check`, `rfl` |
-| `first-proof` | Your first leak-proof proof | `rfl`, equality as a type |
+| `first-proof` | Your first leak-proof proof | `#check`, `#eval`, `rfl` simplification |
 | `implication` | Write an if…then… proof function | `intro`, `exact` |
 | `connectives` | Pack and unpack: ∧ and ∨ | `⟨hp, hq⟩`, `h.1` / `h.2`, `cases` |
 | `induction` | Dominoes: induction is recursion | `induction ... with`, `simp only` |
@@ -99,6 +94,19 @@ If you would rather start from a classic puzzle than lesson one:
 | `eng-rbmap` | Not a toy list: ordered TreeMap | `Std.TreeMap`, `insert` / `get?`, lookup-after-insert |
 | `eng-array-bounds` | Eliminate out-of-bounds access | `Array.getElem?_eq_getElem`, `i < arr.size` in the signature |
 | `eng-state-machine` | State machines and ledger conservation | `structure` + `HashMap`, `transfer`, conservation, non-negative balances |
+
+</details>
+
+## Math challenges
+
+If you would rather start from a classic puzzle than lesson one:
+
+- `/zh/challenges` and `/en/challenges` sit beside the courses. Every challenge has its own shareable
+  URL at `/<lang>/challenges/<slug>` and uses the same runtime and Service Worker cache.
+- Each page keeps a live Goal panel plus one-click `rfl` / `intro` / `rw` / `simp` / `omega` tactic
+  buttons. The starter code only depends on `Init`.
+- Prefer the full editor? Open `/<lang>/playground?challenge=<slug>`; the prompt stays pinned above the
+  editor and an existing local draft is never overwritten silently.
 
 ## Limitations
 

@@ -7,7 +7,13 @@ vi.mock('../components/lean-panel', () => ({ createLeanPanel }));
 import type { LspDiagnostic } from '../components/lean-panel';
 import { lessonsFor, messagesFor } from '../i18n';
 import { markLessonCompleted, markLessonVisited, readCompleted, readProgress } from '../progress';
-import { bindLesson, dropSpuriousRedeclarations, renderLesson } from './lesson';
+import {
+  bindLesson,
+  dropSpuriousRedeclarations,
+  extractLessonGoalSteps,
+  extractLiveLessonGoal,
+  renderLesson,
+} from './lesson';
 import { escapeHtml } from './html';
 
 beforeEach(() => {
@@ -172,11 +178,50 @@ describe('课程页渲染', () => {
     expect(html).toContain(messagesFor('zh').lesson.feedbackBug);
   });
 
-  it('不再渲染右侧编辑器栏', () => {
-    const html = renderLesson('zh', 'first-proof');
+  it('不再渲染右侧编辑器栏，但每节课都渲染轻量 Goal 面板', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      for (const lesson of lessonsOf(locale)) {
+        const html = renderLesson(locale, lesson.slug);
+        expect(html, `${locale}:${lesson.slug}`).not.toContain('data-role="lean-panel"');
+        expect(html, `${locale}:${lesson.slug}`).toContain('data-role="runner"');
+        expect(html, `${locale}:${lesson.slug}`).toContain('data-role="lesson-goal-panel"');
+        expect(html, `${locale}:${lesson.slug}`).toContain('data-role="lesson-goal-text"');
+      }
+    }
+  });
 
-    expect(html).not.toContain('data-role="lean-panel"');
-    expect(html).toContain('data-role="runner"');
+  it('extractLessonGoalSteps 合并缩进续行、冒号引导行与目标行', () => {
+    const steps = extractLessonGoalSteps({
+      slug: 'demo',
+      navTitle: 'Demo',
+      title: 'Demo',
+      lead: 'Lead',
+      blocks: [
+        {
+          kind: 'goal',
+          text: '0 + a = a：\nzero 分支：⊢ 0 + 0 = 0\nsucc 分支：ih : 0 + a = a\n目标：⊢ 0 + succ a = succ a\n        = succ (0 + a)',
+        },
+      ],
+    });
+    expect(steps).toEqual([
+      '0 + a = a：\nzero 分支：⊢ 0 + 0 = 0',
+      'succ 分支：ih : 0 + a = a\n目标：⊢ 0 + succ a = succ a\n= succ (0 + a)',
+    ]);
+  });
+
+  it('extractLiveLessonGoal 仅在存在未解决目标或证明通过时返回实时 Goal', () => {
+    expect(
+      extractLiveLessonGoal(
+        [diagnostic('unsolved goals\nh : P\n⊢ Q')],
+        'theorem t : Q := by sorry',
+        'done',
+      ),
+    ).toBe('unsolved goals\nh : P\n⊢ Q');
+    expect(extractLiveLessonGoal([], 'theorem t : True := trivial', 'done')).toBe('done');
+    expect(extractLiveLessonGoal([], '#eval 1 + 1', 'done')).toBeNull();
+    expect(
+      extractLiveLessonGoal([diagnostic('type mismatch')], 'theorem t : True := 1', 'done'),
+    ).toBeNull();
   });
 });
 
@@ -451,5 +496,56 @@ describe('课程页交互绑定', () => {
     bindLesson(document.body, 'zh');
 
     expect(createLeanPanel).not.toHaveBeenCalled();
+  });
+
+  it('右侧 Goal 面板支持逐步演练、运行后显示实时 Goal 并可回到步骤演示', async () => {
+    const panel = makePanel();
+    panel.run
+      .mockResolvedValueOnce([diagnostic('unsolved goals\nh : P\n⊢ P')])
+      .mockResolvedValueOnce([]);
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'implication');
+    bindLesson(document.body, 'zh', 'implication');
+
+    const t = messagesFor('zh').lesson;
+    const textEl = document.body.querySelector<HTMLElement>('[data-role="lesson-goal-text"]')!;
+    const badgeEl = document.body.querySelector<HTMLElement>('[data-role="lesson-goal-badge"]')!;
+    const prevBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-role="lesson-goal-prev"]',
+    )!;
+    const nextBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-role="lesson-goal-next"]',
+    )!;
+    const resetBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-role="lesson-goal-reset"]',
+    )!;
+
+    const firstStep = textEl.textContent;
+    expect(prevBtn.disabled).toBe(true);
+    expect(nextBtn.disabled).toBe(false);
+
+    nextBtn.click();
+    expect(textEl.textContent).not.toBe(firstStep);
+    expect(prevBtn.disabled).toBe(false);
+
+    prevBtn.click();
+    expect(textEl.textContent).toBe(firstStep);
+
+    // 第一次运行：包含未解决目标时 Goal 面板切到实时结果并显示「回到步骤演示」。
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(badgeEl.textContent).toBe(t.goalLive);
+    expect(textEl.textContent).toContain('⊢ P');
+    expect(resetBtn.hidden).toBe(false);
+
+    resetBtn.click();
+    expect(textEl.textContent).toBe(firstStep);
+    expect(resetBtn.hidden).toBe(true);
+
+    // 第二次运行：证明通过后显示无剩余目标。
+    document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(badgeEl.textContent).toBe(t.goalLive);
+    expect(textEl.textContent).toBe(t.goalNoRemaining);
   });
 });

@@ -1297,6 +1297,10 @@ export const lessonsZh: LessonPage[] = [
         text: '`sorry` 会生成 `sorryAx`，让任何命题「成立」。它适合草稿，不适合交付。',
       },
       {
+        kind: 'goal',
+        text: "证明开始：⊢ 1 = 2\n执行 sorry：没有剩余目标（但生成警告与 sorryAx 公理依赖）\n执行 #print axioms cheat：输出 'cheat' depends on axioms: [sorryAx]",
+      },
+      {
         kind: 'note',
         text: '动手跑一次：把 `cheat` 里的 `sorry` 换成 `rfl`，看 `1 = 2` 为什么证不出来。这个错误正是 `sorry` 帮你掩盖的东西。',
         tone: 'warn',
@@ -1349,6 +1353,10 @@ export const lessonsZh: LessonPage[] = [
       {
         kind: 'p',
         text: '对照表：`Even` / `Odd`、`Nat.Prime`、`Nat.gcd`、`Set`、`Function.Injective`、`List.Perm` 分别是这些概念的 Mathlib 名字。',
+      },
+      {
+        kind: 'goal',
+        text: '证明开始：⊢ ∃ k, 4 = 2 * k\n提供 witness 2：⊢ 4 = 2 * 2\nrfl 收尾：没有剩余目标（#check 只查询类型，不产生目标）',
       },
       {
         kind: 'note',

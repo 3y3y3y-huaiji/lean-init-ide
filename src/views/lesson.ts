@@ -41,6 +41,47 @@ const needsExtensionPacks = (page: LessonPage): boolean =>
   ) ||
   /import\s+(?:Std|Batteries)\./.test(page.exercise?.starter ?? '');
 
+/** 从本课 Goal 旁白块提取可逐步切换的 Goal 演练步骤。 */
+export const extractLessonGoalSteps = (page: LessonPage): string[] => {
+  const steps: string[] = [];
+  for (const block of page.blocks) {
+    if (block.kind !== 'goal') continue;
+    const rawLines = block.text.split('\n');
+    for (let i = 0; i < rawLines.length; i += 1) {
+      const raw = rawLines[i]!;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      if (steps.length > 0 && (/^\s+/.test(raw) || /^(?:目标：|goal:)/i.test(trimmed))) {
+        steps[steps.length - 1] = `${steps[steps.length - 1]}\n${trimmed}`;
+        continue;
+      }
+      if (/[:：]$/.test(trimmed) && i + 1 < rawLines.length && rawLines[i + 1]!.trim()) {
+        steps.push(`${trimmed}\n${rawLines[i + 1]!.trim()}`);
+        i += 1;
+        continue;
+      }
+      steps.push(trimmed);
+    }
+  }
+  return steps;
+};
+
+/** 从课程代码块的运行诊断中提取实时 Goal 状态（未解决目标或证明完成）。 */
+export const extractLiveLessonGoal = (
+  diagnostics: readonly LspDiagnostic[],
+  code: string,
+  proofNoGoalLabel: string,
+): string | null => {
+  const withGoal = diagnostics.find(
+    (item) =>
+      item.severity === 1 && (item.message.includes('⊢') || /unsolved goals/i.test(item.message)),
+  );
+  if (withGoal) return withGoal.message.trim();
+  const hasError = diagnostics.some((item) => item.severity === 1);
+  if (!hasError && looksLikeProof(code)) return proofNoGoalLabel;
+  return null;
+};
+
 const renderBlocks = (
   page: LessonPage,
   runLabel: string,
@@ -202,8 +243,45 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       )}">${escapeHtml(t.feedbackBug)}</a>
     </div>`;
 
+  const goalSteps = extractLessonGoalSteps(page);
+  const goalPanel = `
+      <aside
+        data-role="lesson-goal-panel"
+        data-panel="goal"
+        data-goal-steps="${escapeHtml(JSON.stringify(goalSteps))}"
+        data-goal-step="0"
+        class="sticky top-[84px] overflow-hidden rounded-xl border border-line bg-panel max-[1040px]:static"
+      >
+        <div class="flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px]">
+          <h2 class="m-0 text-xs font-[650] uppercase tracking-[0.07em] text-muted">${escapeHtml(t.goalPanelTitle)}</h2>
+          <span data-role="lesson-goal-badge" class="font-mono text-[11px] tabular-nums text-accent">${
+            goalSteps.length > 0 ? escapeHtml(t.goalStepLabel(1, goalSteps.length)) : ''
+          }</span>
+        </div>
+        <div class="p-3.5">
+          <pre
+            data-role="lesson-goal-text"
+            class="m-0 max-h-[260px] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-panel-soft px-3 py-2.5 font-mono text-[12.5px] leading-[1.65] text-fg"
+          >${escapeHtml(goalSteps[0] ?? t.goalNoRemaining)}</pre>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            ${
+              goalSteps.length > 1
+                ? `<button type="button" data-role="lesson-goal-prev" class="${ghostButtonClass} px-2.5 py-1 text-xs" disabled>${escapeHtml(t.goalPrev)}</button>
+                   <button type="button" data-role="lesson-goal-next" class="${ghostButtonClass} px-2.5 py-1 text-xs">${escapeHtml(t.goalNext)}</button>`
+                : ''
+            }
+            <button type="button" data-role="lesson-goal-reset" hidden class="${ghostButtonClass} px-2.5 py-1 text-xs">${escapeHtml(t.goalBackToSteps)}</button>
+          </div>
+          ${
+            page.exercise
+              ? `<a class="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-[650] text-accent no-underline transition hover:bg-accent hover:text-accent-contrast" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(t.goalOpenPlayground)} →</a>`
+              : ''
+          }
+        </div>
+      </aside>`;
+
   return `
-    <div class="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-6 max-[1040px]:grid-cols-1">
+    <div class="grid grid-cols-[180px_minmax(0,1fr)_280px] items-start gap-6 max-[1040px]:grid-cols-1">
       <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1040px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
         <div class="mb-2 flex items-baseline justify-between gap-2 px-2.5">
           <p class="m-0 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
@@ -224,6 +302,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${pager}
         ${feedback}
       </article>
+      ${goalPanel}
     </div>
     <div data-role="runner" class="sr-only" aria-hidden="true"></div>
   `;
@@ -391,6 +470,44 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
       : 'w-full text-[11.5px] leading-normal text-muted';
   }
 
+  const goalPanel = root.querySelector<HTMLElement>('[data-role="lesson-goal-panel"]');
+  const goalSteps = extractLessonGoalSteps(page);
+  const goalTextEl = goalPanel?.querySelector<HTMLElement>('[data-role="lesson-goal-text"]');
+  const goalBadgeEl = goalPanel?.querySelector<HTMLElement>('[data-role="lesson-goal-badge"]');
+  const goalPrevEl = goalPanel?.querySelector<HTMLButtonElement>('[data-role="lesson-goal-prev"]');
+  const goalNextEl = goalPanel?.querySelector<HTMLButtonElement>('[data-role="lesson-goal-next"]');
+  const goalResetEl = goalPanel?.querySelector<HTMLButtonElement>(
+    '[data-role="lesson-goal-reset"]',
+  );
+  let goalStep = 0;
+
+  const paintGoalSteps = () => {
+    if (!goalPanel || goalSteps.length === 0) return;
+    goalPanel.dataset.goalStep = String(goalStep);
+    if (goalTextEl) goalTextEl.textContent = goalSteps[goalStep] ?? '';
+    if (goalBadgeEl) goalBadgeEl.textContent = t.goalStepLabel(goalStep + 1, goalSteps.length);
+    if (goalPrevEl) goalPrevEl.disabled = goalStep <= 0;
+    if (goalNextEl) goalNextEl.disabled = goalStep >= goalSteps.length - 1;
+    if (goalResetEl) goalResetEl.hidden = true;
+  };
+
+  const showLiveGoal = (liveText: string) => {
+    if (!goalPanel) return;
+    if (goalTextEl) goalTextEl.textContent = liveText;
+    if (goalBadgeEl) goalBadgeEl.textContent = t.goalLive;
+    if (goalResetEl) goalResetEl.hidden = goalSteps.length === 0;
+  };
+
+  goalPrevEl?.addEventListener('click', () => {
+    goalStep = Math.max(0, goalStep - 1);
+    paintGoalSteps();
+  });
+  goalNextEl?.addEventListener('click', () => {
+    goalStep = Math.min(goalSteps.length - 1, goalStep + 1);
+    paintGoalSteps();
+  });
+  goalResetEl?.addEventListener('click', paintGoalSteps);
+
   const codes = page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));
   const runnerHost = root.querySelector<HTMLElement>('[data-role="runner"]');
   const first = codes[0];
@@ -471,11 +588,10 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
     void ensurePanel()
       .then((panel) => panel.run(code).then((list) => ({ panel, list })))
       .then(({ list }) => {
-        renderOutput(
-          output,
-          anchorImportDiagnostics(dropSpuriousRedeclarations(list, code), code),
-          looksLikeProof(code) ? t.proofAccepted : t.noOutput,
-        );
+        const filtered = anchorImportDiagnostics(dropSpuriousRedeclarations(list, code), code);
+        renderOutput(output, filtered, looksLikeProof(code) ? t.proofAccepted : t.noOutput);
+        const liveGoal = extractLiveLessonGoal(filtered, code, t.goalNoRemaining);
+        if (liveGoal) showLiveGoal(liveGoal);
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

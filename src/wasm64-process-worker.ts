@@ -1,7 +1,7 @@
 /**
  * 实验性 wasm64：一个 Worker 承载一个 Lean 进程（--server 或 --worker）。
  * 在 Chrome 里直接由该 Worker 运行 PROXY_TO_PTHREAD 版 glue，pthread 由 Emscripten 自行派生。
- * 对应 spike/wasm64 的 scripts/wasm64-lsp-browser-worker.ts（已在 Chrome LSP 链路验证）。
+ * 与 scripts/wasm64-lsp-browser-worker.ts 对应（后者已在 Chrome LSP 链路验证）。
  *
  * stdin 走 SharedArrayBuffer 环形缓冲（adapt-glue 已把 fd 0 改成读它）；
  * stdout 以 { stdout } 回传，真实退出码走 lspProcessExit。

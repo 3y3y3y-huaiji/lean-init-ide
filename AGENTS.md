@@ -18,6 +18,7 @@
 | `/cdn` 网关、缓存、Range | `functions/cdn/`；`src/cdn-range.ts`；`docs/OPERATIONS.md`「访问控制与成本保护」 |
 | 前端、课程、i18n | `src/views/`；`src/i18n/`；`docs/DEVELOPMENT.md` |
 | CI、部署、冒烟 | `docs/CI.md`；`docs/OPERATIONS.md`「部署与冒烟」 |
+| wasm64 构建、栈补丁、差分门禁 | `docs/WASM64-SPIKE.md`；`scripts/pin-lean.ts`；`scripts/wasm64-patch-equivalence.ts` |
 
 ## 强联动文件（R）
 
@@ -32,8 +33,11 @@
 | `public/_headers` | `scripts/verify-build.mjs`、`scripts/smoke.mjs`、`scripts/local-gateway.mjs`、`index.html` 的内联脚本哈希 |
 | `wrangler.toml` | `functions/cdn/` 的 `LEAN_ASSETS` binding；production / preview 两份 `[[env.*.r2_buckets]]` |
 | `patches/` 或清单哈希 | `pnpm-workspace.yaml` 的 `patchedDependencies`；`pnpm run patch:lsp`；`src/lsp-patches.test.ts` |
+| `scripts/pin-lean.ts` 的 `LEAN_PIN` | `scripts/patches/lean-*.patch`（三份补丁必须匹配该源码）、`.github/workflows/spike-wasm64.yml` 的缓存键与 `deep` 分支、`docs/WASM64-SPIKE.md` |
+| `scripts/patches/lean-*.patch` | 对应的 `grep` 断言、`.github/workflows/spike-wasm64.yml` 的 runtime / cgen / objects 缓存键、`scripts/wasm64-patch-equivalence.ts` 的差分语料 |
+| `scripts/wasm64-patch-equivalence.ts` | `.github/workflows/spike-wasm64.yml` 的 smoke job；新增栈补丁时先补差分用例 |
 
-原则：先改单一事实来源，再沿右列同步。资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`。
+原则：先改单一事实来源，再沿右列同步。资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`；wasm64 的 Lean 版本只有 `scripts/pin-lean.ts`。
 
 ## 硬红线（物理/平台）
 
@@ -44,6 +48,8 @@
 5. **CSP 不能删这几项。** `'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入）、`static.cloudflareinsights.com`（Web Analytics）、`connect-src` 里的 `https://*.modelscope.cn`（镜像回退）与 `data:`（zstddec 内嵌 wasm）。
 6. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时不含 Lean / Lake / Mathlib，引用会编译失败。
 7. **遥测不记录用户代码、cookie、设备指纹；任何上报失败必须静默。**
+8. **wasm64 的 Lean 版本只有 `scripts/pin-lean.ts` 一个事实来源。** 默认值在 `LEAN_PIN`，`LEAN_PIN_*` 环境变量只用于本地/临时覆盖；正式升级必须改 `LEAN_PIN` 以让 `hashFiles(...)` 缓存键失效。升级时必须同时重做三份栈补丁，并让 `scripts/wasm64-patch-equivalence.ts` 的差分门禁（官方原生 Lean vs 打补丁 wasm64）在 CI 通过；不能只改 pin 就发布。补丁必须与当前 pin 的源码逐行匹配，`grep` 断言缺失应直接失败，禁止静默跳过。
+9. **差分门禁只容忍「退出期已知 trap」，不要放宽成「退出码不一致也放行」。** 判据是 `isKnownExitTrap`（stderr 命中 `emscripten_builtin_free` / `lean_dec_ref_cold`）**且** stdout 与原版 Lean 逐字节一致；先重跑一次，复现才降级成告警。stdout 有任何差异、或 stderr 是别的崩溃（爆栈、`Maximum call stack`）都必须红。理由与复现记录见 `docs/WASM64-SPIKE.md`「尚未验证」。
 
 ## 非显式约束（S）
 

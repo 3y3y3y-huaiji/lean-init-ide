@@ -95,7 +95,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       class="${
         compact
           ? 'relative flex min-h-[130px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg'
-          : 'relative flex h-[calc(100svh-292px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52svh] max-[900px]:min-h-[360px]'
+          : 'relative flex h-[calc(100svh-292px)] min-h-[420px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52svh] max-[900px]:min-h-[360px]'
       }"
     >
       ${
@@ -156,7 +156,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       class="${
         compact
           ? 'contents'
-          : 'flex h-[calc(100svh-292px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[520px]'
+          : 'flex h-[calc(100svh-292px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[420px]'
       }"
     >
       <section data-panel="goal" class="${panelClass(compact)} shrink-0">
@@ -364,7 +364,7 @@ export const renderLeanMarkup = (
             ? `<div
           class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start max-[900px]:gap-3"
         >
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1 max-w-[540px]">
             <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${runtimeLabel}</p>
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
@@ -373,7 +373,7 @@ export const renderLeanMarkup = (
               <a class="inline-flex min-h-7 items-center text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.factsRepo}</a>
             </p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
+          <div class="flex shrink-0 max-w-full flex-wrap items-center gap-2 min-[901px]:justify-end max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
         </div>`
             : `<div class="flex flex-wrap items-center justify-end gap-2 border-b border-line gutter-x py-2">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>`
         }

@@ -47,7 +47,7 @@ describe('playground 页面', () => {
     expect(typeof options.autoStart).toBe('boolean');
   });
 
-  it('带 ?lesson= 参数时载入对应课时练习 starter 与 draftKey', async () => {
+  it('带 ?lesson= 参数时载入对应课时练习 starter 与 draftKey，并展示本课题目与提示', async () => {
     history.replaceState(null, '', '/en/playground?lesson=math-parity');
     document.body.innerHTML = renderPlayground('en');
 
@@ -60,6 +60,31 @@ describe('playground 页面', () => {
     expect(options.lessonSlug).toBe('math-parity');
     expect(options.draftKey).toContain('math-parity');
     expect(options.code).toContain('even_plus_odd');
+
+    const notice = document.body.querySelector<HTMLElement>('[data-role="lesson-notice"]')!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset.lessonSlug).toBe('math-parity');
+    expect(notice.textContent).toContain(messagesFor('en').playground.lessonNoticeTitle);
+    expect(notice.textContent).toContain('even_plus_odd');
+    expect(notice.querySelector('details summary')?.textContent).toBe(
+      messagesFor('en').playground.lessonNoticeHint,
+    );
+  });
+
+  it('带 ?lesson=first-proof（中文）时展示练习说明，无参数时不展示课时横幅', async () => {
+    history.replaceState(null, '', '/zh/playground?lesson=first-proof');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const notice = document.body.querySelector<HTMLElement>('[data-role="lesson-notice"]')!;
+    expect(notice.textContent).toContain('当前课时练习');
+    expect(notice.textContent).toContain('two_add_two');
+
+    history.replaceState(null, '', '/zh/playground');
+    document.body.innerHTML = renderPlayground('zh');
+    await mountPlayground(document.body, 'zh');
+    expect(document.body.querySelector('[data-role="lesson-notice"]')).toBeNull();
   });
 
   it('低内存设备即使开启自动启动也强制关闭 autoStart', async () => {

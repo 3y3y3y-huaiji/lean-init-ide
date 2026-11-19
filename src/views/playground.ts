@@ -3,8 +3,9 @@ import { renderLeanMarkup, showEditorLoadFailure } from '../components/lean-mark
 import { currentMemoryTier } from '../device';
 import { draftKeyFor, readDraft } from '../draft';
 import { loadLessons, messagesFor, type Locale } from '../i18n';
+import type { LessonPage } from '../i18n/types';
 import { getAutoStart } from '../settings';
-import { escapeHtml } from './html';
+import { escapeHtml, renderInlineCode } from './html';
 
 /** 课程元数据没有声明时，从 starter 的 import 里兜底推断所需扩展库。 */
 const inferExtensions = (code: string): Array<'std' | 'batteries'> => {
@@ -15,6 +16,32 @@ const inferExtensions = (code: string): Array<'std' | 'batteries'> => {
 
 export const renderPlayground = (locale: Locale = 'zh'): string =>
   `<div data-role="playground">${renderLeanMarkup(locale, 'full', messagesFor(locale).playground)}</div>`;
+
+/**
+ * 课程练习会带 ?lesson=<slug> 进入 Playground，顶部固定显示本课题目要求与可选提示，
+ * 避免切到编辑器后忘记要证明什么。
+ */
+const renderLessonNotice = (locale: Locale, lesson: LessonPage): HTMLElement | null => {
+  if (!lesson.exercise) return null;
+  const t = messagesFor(locale).playground;
+  const notice = document.createElement('section');
+  notice.dataset.role = 'lesson-notice';
+  notice.dataset.lessonSlug = lesson.slug;
+  notice.className = 'border-b border-line bg-panel-soft gutter-x py-3';
+  const hint = lesson.exercise.hint
+    ? `<details class="mt-2 max-w-[820px] rounded-lg border border-line bg-panel px-3 py-2">
+         <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-xs font-[650] text-fg">${escapeHtml(t.lessonNoticeHint)}</summary>
+         <p class="mt-1 mb-0 text-xs leading-relaxed text-muted">${renderInlineCode(lesson.exercise.hint)}</p>
+       </details>`
+    : '';
+  notice.innerHTML = `
+    <p class="m-0 text-xs uppercase tracking-[0.08em] text-accent">${escapeHtml(t.lessonNoticeTitle)} · ${escapeHtml(lesson.navTitle)}</p>
+    <p class="mt-1 mb-0 text-[13px] font-[650]">${escapeHtml(lesson.title)} — ${escapeHtml(lesson.exercise.title)}</p>
+    <p class="mt-1 mb-0 max-w-[820px] text-[13px] leading-relaxed text-muted">${renderInlineCode(lesson.exercise.body)}</p>
+    ${hint}
+  `;
+  return notice;
+};
 
 /**
  * 挑战入口会带 ?challenge=<slug> 过来。题面固定展示；如果本机已有个人草稿，
@@ -111,6 +138,12 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
     startImmediately: startRequested,
     ...(requiredExtensions.length ? { requiredExtensions } : {}),
   });
+
+  if (lesson) {
+    const lessonNotice = renderLessonNotice(locale, lesson);
+    if (lessonNotice) host.prepend(lessonNotice);
+    return;
+  }
 
   if (!challenge) return;
 

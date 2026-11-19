@@ -56,4 +56,17 @@ describe('首页入口与边缘安全/路由契约', () => {
       expect(match.index, path).toBeLessThan(fallbackIndex);
     }
   });
+
+  it('_redirects 将旧英文首页永久重定向到根路径，并排在 SPA 回退之前', () => {
+    const redirects = readFileSync(resolve(root, 'public', '_redirects'), 'utf8');
+    const fallbackIndex = redirects.search(/^\/\*\s+\/index\.html\s+200$/m);
+    expect(fallbackIndex).toBeGreaterThan(-1);
+
+    for (const from of ['/en', '/en/']) {
+      const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = new RegExp(`^${escaped}\\s+/\\s+301$`, 'm').exec(redirects);
+      expect(match, from).not.toBeNull();
+      expect(match.index, from).toBeLessThan(fallbackIndex);
+    }
+  });
 });

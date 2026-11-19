@@ -47,6 +47,36 @@ if (!(await exists(dist))) {
 }
 
 // 1. 应用入口与预渲染静态页
+const HAN = /\p{Script=Han}/u;
+const hanCount = (value) => Array.from(value).filter((char) => HAN.test(char)).length;
+const checkSeoLengths = (rel, html) => {
+  const title = /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '';
+  const description = /<meta\s+name="description"\s+content="([^"]*)"\s*\/>/.exec(html)?.[1] ?? '';
+  const zhPage = rel.startsWith('zh/');
+  if (!/<link rel="canonical" href="https:\/\/criticalthinking\.de5\.net\//.test(html)) {
+    fail(`dist/${rel} 缺少 canonical`);
+  }
+  if (!html.includes('hreflang="x-default"')) fail(`dist/${rel} 缺少 x-default hreflang`);
+  if ((html.match(/<h1\b/g) ?? []).length !== 1) {
+    fail(`dist/${rel} 的 <h1> 数量不是恰好 1 个`);
+  }
+  if (zhPage) {
+    if (hanCount(title) < 15 || hanCount(title) > 30) {
+      fail(`dist/${rel} 的中文标题汉字数 ${hanCount(title)} 不在 15–30`);
+    }
+    if (hanCount(description) < 55 || hanCount(description) > 85) {
+      fail(`dist/${rel} 的中文描述汉字数 ${hanCount(description)} 不在 55–85`);
+    }
+  } else {
+    if (title.length < 30 || title.length > 60) {
+      fail(`dist/${rel} 的英文标题长度 ${title.length} 不在 30–60`);
+    }
+    if (description.length < 110 || description.length > 155) {
+      fail(`dist/${rel} 的英文描述长度 ${description.length} 不在 110–155`);
+    }
+  }
+};
+
 const indexPath = resolve(dist, 'index.html');
 let indexHtml = '';
 if (!(await exists(indexPath))) {
@@ -64,10 +94,24 @@ if (!(await exists(indexPath))) {
   // 根路径由 `_redirects` 回落到 index.html，必须和预渲染页一样带有可抓取的标题。
   if (!indexHtml.includes('<meta name="lean-ssg"')) fail('index.html 缺少 lean-ssg 标记');
   if (!/<h1[^>]*>[^<]+<\/h1>/.test(indexHtml)) fail('index.html 没有预渲染主标题 <h1>');
+  // 英文首页是唯一主入口：canonical 与 x-default 都指向 `/`。
+  if (!indexHtml.includes('<link rel="canonical" href="https://criticalthinking.de5.net/" />')) {
+    fail('dist/index.html 的 canonical 不是 https://criticalthinking.de5.net/');
+  }
+  if (
+    !indexHtml.includes(
+      '<link rel="alternate" hreflang="x-default" href="https://criticalthinking.de5.net/" />',
+    )
+  ) {
+    fail('dist/index.html 的 x-default 不是 https://criticalthinking.de5.net/');
+  }
+  checkSeoLengths('index.html', indexHtml);
+}
+if (await exists(resolve(dist, 'en/index.html'))) {
+  fail('dist/en/index.html 不应存在：英文首页规范入口是根路径 /');
 }
 for (const rel of [
   'zh/index.html',
-  'en/index.html',
   'zh/playground.html',
   'en/playground.html',
   'zh/learn/what-is-lean.html',
@@ -82,6 +126,7 @@ for (const rel of [
   if (!html.includes('<div id="app">')) fail(`dist/${rel} 缺少 #app 挂载点`);
   if (!html.includes('<meta name="lean-ssg"')) fail(`dist/${rel} 缺少 lean-ssg 标记`);
   if (!/<h1[^>]*>[^<]+<\/h1>/.test(html)) fail(`dist/${rel} 没有预渲染主标题 <h1>`);
+  checkSeoLengths(rel, html);
 }
 if (await exists(resolve(dist, '.vite'))) {
   fail('dist/.vite 清单目录未在构建后清理');
@@ -232,6 +277,12 @@ if (await exists(sitemapPath)) {
       fail(`sitemap.xml 含非本站 URL：${loc}`);
     }
   }
+  if (!locs.includes('https://criticalthinking.de5.net/')) {
+    fail('sitemap.xml 缺少英文首页规范 URL https://criticalthinking.de5.net/');
+  }
+  if (locs.includes('https://criticalthinking.de5.net/en/')) {
+    fail('sitemap.xml 不应包含重复的英文首页 https://criticalthinking.de5.net/en/');
+  }
   for (const match of xml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(match[1])) fail(`sitemap.xml 的 lastmod 非法：${match[1]}`);
   }
@@ -320,6 +371,17 @@ if (!(await exists(redirectsPath))) {
       fail(`_redirects 缺少 ${from} -> ${to} 的 200 直出规则，会被 /* SPA 回退吞掉`);
     } else if (fallbackIndex !== -1 && match.index > fallbackIndex) {
       fail(`_redirects 中 ${from} 位于 /* 回退之后，无法生效`);
+    }
+  }
+
+  // 旧英文首页必须永久重定向到根路径，且规则要排在 /* 回退之前。
+  for (const from of ['/en', '/en/']) {
+    const rule = new RegExp(`^${from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+/\\s+301$`, 'm');
+    const match = rule.exec(redirects);
+    if (!match) {
+      fail(`_redirects 缺少 ${from} -> / 的 301 重定向`);
+    } else if (fallbackIndex !== -1 && match.index > fallbackIndex) {
+      fail(`_redirects 中 ${from} 的 301 规则位于 /* 回退之后，无法生效`);
     }
   }
 }

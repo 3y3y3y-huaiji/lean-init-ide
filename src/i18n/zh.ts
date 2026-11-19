@@ -36,6 +36,11 @@ export const zh: Messages = {
     eyebrow: 'Lean 4.35.0 · Init + Std + Batteries · 浏览器内 LSP',
     title: '在浏览器里跑真正的 Lean 4 定理证明器',
     lead: '不是正则模拟，也不是把代码发到云端：完整编译器和语言服务器就塞在 Web Worker 里。打开网页 30 秒，写下第一行证明。',
+    seoDescription:
+      '在浏览器里运行 Lean 4.35.0 定理证明器：完整编译器与语言服务器以 WebAssembly 在 Web Worker 中运行，内置 Init，Std 与 Batteries 按需加载，零后端，代码不会上传，同时提供双语课程、速查表与在线编辑器。',
+    facts: (lessonCount) =>
+      `Lean 4.35.0 运行时 · 客户端 Web Worker · 内置 Init，Std 与 Batteries 按需加载 · 零后端 · ${lessonCount} 节双语课程 · 开源仓库`,
+    factsRepo: 'GitHub 仓库',
     heroNote:
       '单元测试只能测出你写到的那几个用例没错；Lean 能用数学逻辑把所有可能输入一次性证死，错一步编译器当场红线拦住。',
     ctaPrimary: '从第一课开始',
@@ -187,6 +192,11 @@ export const zh: Messages = {
   playground: {
     title: 'Lean 编辑器',
     hint: '首次启动需下载约 102MB 运行时，之后会持久缓存。',
+    seoDescription:
+      '打开 Lean 4 在线 Playground：Monaco 编辑器与语言服务器在浏览器内以 WebAssembly 和 Web Worker 运行，内置 Init，Std 与 Batteries 按需加载，零后端，代码不会上传。',
+    facts: (lessonCount) =>
+      `Lean 4.35.0 · WebAssembly 与 Web Worker · 内置 Init，Std 与 Batteries 按需加载 · 零后端 · ${lessonCount} 节双语课程 · 开源仓库`,
+    factsRepo: 'GitHub 仓库',
     defaultCode: `open Classical
 
 noncomputable section

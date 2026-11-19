@@ -39,10 +39,11 @@ const ensureMeta = (
   return meta;
 };
 
-/** 把 /zh/... 与 /en/... 互换，用于 hreflang。 */
+/** 把 /zh/... 与 /en/... 互换，用于 hreflang；英文首页的规范路径是根路径。 */
 export const swapLocalePath = (pathname: string, locale: 'zh' | 'en'): string => {
   const other = locale === 'zh' ? 'en' : 'zh';
   const rest = pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '');
+  if (other === 'en' && (rest === '' || rest === '/')) return '/';
   return `/${other}${rest || '/'}`;
 };
 
@@ -65,4 +66,7 @@ export const applyPageMeta = (doc: Document, options: MetaOptions): void => {
     const link = ensureLink(doc, 'alternate', locale);
     link.href = `${SITE_ORIGIN}${locale === options.locale ? options.pathname : swapLocalePath(options.pathname, options.locale)}`;
   }
+  // x-default 指向英文版本；英文首页本身就是根路径 `/`。
+  const xDefault = ensureLink(doc, 'alternate', 'x-default');
+  xDefault.href = `${SITE_ORIGIN}${options.locale === 'en' ? options.pathname : swapLocalePath(options.pathname, options.locale)}`;
 };

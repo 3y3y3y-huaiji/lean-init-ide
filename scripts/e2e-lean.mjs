@@ -476,11 +476,24 @@ const main = async () => {
     }
     await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('h1');
-    const rootPath = await page.evaluate(() => globalThis.location.pathname);
-    if (rootPath !== '/en/' && rootPath !== '/zh/') {
-      throw new Error(`根路径原地规范化失败，实际路径为 ${rootPath}`);
+    const root = await page.evaluate(() => ({
+      path: globalThis.location.pathname,
+      lang: globalThis.document.documentElement.lang,
+      canonical: globalThis.document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+    }));
+    // 根路径本身就是英文首页的规范入口，不再原地改写成 /en/ 或 /zh/。
+    if (root.path !== '/') {
+      throw new Error(`根路径不应被改写，实际路径为 ${root.path}`);
     }
-    console.log(`[${stamp()}] 速查表 / 英文路由 / 遥测端点 / SSG 与 CLS 校验正常`);
+    if (root.lang !== 'en') {
+      throw new Error(`根路径 <html lang> 期望 en，实际为 "${root.lang}"`);
+    }
+    if (root.canonical !== 'https://criticalthinking.de5.net/') {
+      throw new Error(
+        `根路径 canonical 期望 https://criticalthinking.de5.net/，实际为 "${root.canonical}"`,
+      );
+    }
+    console.log(`[${stamp()}] 速查表 / 英文路由 / 遥测端点 / 根路径规范入口 / SSG 与 CLS 校验正常`);
     console.log(`E2E PASS: ${result.initializeLine?.trim()}`);
   } finally {
     await browser.close();

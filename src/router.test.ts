@@ -76,8 +76,16 @@ describe('resolveRoute', () => {
     });
   });
 
-  it('redirects the root to the fallback locale', () => {
-    expect(resolveRoute('/', 'zh')).toEqual({ kind: 'redirect', path: '/zh/' });
+  it('treats the root as the English home instead of redirecting by locale', () => {
+    expect(resolveRoute('/', 'zh')).toEqual({
+      kind: 'route',
+      route: { page: 'home', locale: 'en' },
+    });
+  });
+
+  it('redirects the legacy English home to the root path', () => {
+    expect(resolveRoute('/en', 'zh')).toEqual({ kind: 'redirect', path: '/' });
+    expect(resolveRoute('/en/', 'zh')).toEqual({ kind: 'redirect', path: '/' });
   });
 
   it('prefixes bare paths with the fallback locale', () => {
@@ -88,6 +96,7 @@ describe('resolveRoute', () => {
   });
 
   it('formats canonical paths consistently for SSG matching', () => {
+    expect(canonicalRoutePath({ page: 'home', locale: 'en' })).toBe('/');
     expect(canonicalRoutePath({ page: 'home', locale: 'zh' })).toBe('/zh/');
     expect(canonicalRoutePath({ page: 'lesson', locale: 'en', slug: 'induction' })).toBe(
       '/en/learn/induction',
@@ -100,6 +109,6 @@ describe('resolveRoute', () => {
     expect(canonicalRoutePath({ page: 'challenge', locale: 'en', slug: 'add-comm' })).toBe(
       '/en/challenges/add-comm',
     );
-    expect(canonicalRoutePath({ page: 'notFound', locale: 'en' })).toBe('/en/');
+    expect(canonicalRoutePath({ page: 'notFound', locale: 'en' })).toBe('/');
   });
 });

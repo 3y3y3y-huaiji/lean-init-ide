@@ -16,8 +16,40 @@ permissions:
   contents: read
 
 jobs:
+  # 先按改动类型分档，后面的重门禁只在需要时启动：
+  # 文档 / 工作流改动直接过，课程内容改动只跑改到的课，运行时改动才全量 E2E。
+  changes:
+    name: 变更分类
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+      workflows: ${{ steps.detect.outputs.workflows }}
+      static: ${{ steps.detect.outputs.static }}
+      test: ${{ steps.detect.outputs.test }}
+      build: ${{ steps.detect.outputs.build }}
+      smoke: ${{ steps.detect.outputs.smoke }}
+      full_lessons: ${{ steps.detect.outputs.full_lessons }}
+      content: ${{ steps.detect.outputs.content }}
+      lessons: ${{ steps.detect.outputs.lessons }}
+      challenges: ${{ steps.detect.outputs.challenges }}
+      lesson_slugs: ${{ steps.detect.outputs.lesson_slugs }}
+      challenge_slugs: ${{ steps.detect.outputs.challenge_slugs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 需要与基线做 diff，必须拿全历史。
+          fetch-depth: 0
+      - name: 分类改动
+        id: detect
+        env:
+          # PR 用基线分支 tip；push 用上一次提交；手动触发交给脚本退回 HEAD^。
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/detect-changes.mjs --base "$BASE"
+
   static:
     name: 静态检查
+    needs: changes
+    if: needs.changes.outputs.static == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -30,7 +62,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prefer-offline
       - name: 代码格式
         run: pnpm run format:check
       - name: ESLint
@@ -42,6 +74,8 @@ jobs:
 
   actionlint:
     name: Actions 工作流静态检查
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,6 +85,8 @@ jobs:
 
   test:
     name: 单元测试
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,7 +99,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prefer-offline
       # 覆盖率阈值写在 vitest.config.ts，低于阈值即失败。
       - run: pnpm test
       - uses: actions/upload-artifact@v7
@@ -76,6 +112,8 @@ jobs:
 
   build:
     name: 构建产物
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -88,7 +126,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prefer-offline
       # build:web 跳过 102 MB 资产下载，运行时由 /cdn 网关按需拉取。
       - run: pnpm run build:web
       - name: 产物契约
@@ -102,76 +140,135 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
-  e2e:
-    name: 浏览器端到端
-    needs: build
+  # 浏览器 E2E 按改动分档：
+  # - 运行时 / 资产 / LSP 改动：启动冒烟 + 全量课程（分片并行）
+  # - 仅课程或挑战内容改动：只跑改动到的条目
+  # - 其它应用代码：只跑启动冒烟
+  e2e-smoke:
+    name: 浏览器端到端（启动与诊断）
+    needs: [changes, build]
+    if: needs.changes.outputs.smoke == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数
         uses: ./.github/actions/host-info
-      - uses: pnpm/action-setup@v6
+      - name: 准备 E2E 环境
+        uses: ./.github/actions/e2e-prepare
         with:
-          version: 12.18.0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v8
-        with:
-          name: dist
-          path: dist
-      # 和 deploy 共用同一份资产缓存；命中时 fetch:assets 只做哈希校验。
-      - name: 缓存 Lean 资产
-        uses: actions/cache@v6
-        with:
-          path: public/wasm-lean4
-          key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
-      - name: 准备 Lean 资产
-        # 工程实战课直接编译 Std / Batteries，E2E 必须能像生产一样提供扩展分包。
-        env:
-          LEAN_FETCH_EXTENSIONS: '1'
-        run: pnpm run fetch:assets
-      # build:web 的 dist 不含 wasm-lean4；小资产（index.json/lean.mjs 等）不走 SW，
-      # 必须补回静态副本，否则会落到网关的 SPA 回退。
-      - name: 补齐静态兜底资产
-        run: mkdir -p dist/wasm-lean4 && cp -r public/wasm-lean4/. dist/wasm-lean4/
-      - name: 复核含资产的构建产物契约
-        run: pnpm run verify:build
-      - name: 启动本地等价网关
-        run: |
-          node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &
-          for _ in $(seq 1 50); do
-            if curl -fsS http://127.0.0.1:4174/__health >/dev/null; then
-              exit 0
-            fi
-            sleep 0.2
-          done
-          cat /tmp/gateway.log
-          exit 1
+          # 和 deploy / modelscope 共用基础资产缓存。
+          assets-cache-key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}
       - name: 浏览器启动 Lean 并检查诊断
         env:
           LEAN_E2E_CHANNEL: chrome
         run: node scripts/e2e-lean.mjs
-      - name: 逐课运行全部代码块
+      - name: 失败时保留网关日志
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-smoke-gateway-log
+          path: /tmp/gateway.log
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # 运行时改动才跑全量课程；分两片并行压墙钟。
+  e2e-lessons-full:
+    name: 浏览器端到端（全量课程 ${{ matrix.shard }}/2）
+    needs: [changes, build]
+    if: needs.changes.outputs.full_lessons == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # 分片数要同时改 matrix 长度与下面的 LEAN_E2E_SHARDS。
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
+      - name: 准备 E2E 环境
+        uses: ./.github/actions/e2e-prepare
+        with:
+          # 工程实战课直接编译 Std / Batteries，E2E 必须能像生产一样提供扩展分包。
+          extensions: '1'
+          # 带扩展的资产单独缓存，避免每次从 GitHub / 魔搭重下约 75 MB。
+          assets-cache-key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}-extensions
+      - name: 全量运行课程代码块（分片 ${{ matrix.shard }}/2）
         env:
           LEAN_E2E_CHANNEL: chrome
           # 工程课会同时加载 Init + Std + Batteries，三路并行把 runner 内存打爆；
-          # 单路慢一点，但能稳定跑完 27 节。
+          # 保持单路，用两个独立 runner 分片并行，稳定且墙钟时间减半。
           LEAN_E2E_WORKERS: 1
+          LEAN_E2E_SHARDS: 2
+          LEAN_E2E_SHARD: ${{ matrix.shard }}
         run: node scripts/e2e-lessons.mjs
       - name: 失败时保留网关日志
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-gateway-log
+          name: e2e-lessons-full-${{ matrix.shard }}-gateway-log
           path: /tmp/gateway.log
           retention-days: 3
           if-no-files-found: ignore
 
+  # 只是改了某几节课 / 挑战题：只跑改动到的条目，不碰运行时。
+  e2e-lessons-changed:
+    name: 浏览器端到端（变更课程）
+    needs: [changes, build]
+    if: needs.changes.outputs.full_lessons != 'true' && needs.changes.outputs.content == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
+      - name: 准备 E2E 环境
+        uses: ./.github/actions/e2e-prepare
+        with:
+          extensions: '1'
+          assets-cache-key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}-extensions
+      - name: 只运行改动到的课程 / 挑战
+        env:
+          LEAN_E2E_CHANNEL: chrome
+          LEAN_E2E_WORKERS: 1
+          # 未改动的类别由分类器输出 `-`，脚本据此跳过。
+          LEAN_E2E_LESSONS: ${{ needs.changes.outputs.lesson_slugs }}
+          LEAN_E2E_CHALLENGES: ${{ needs.changes.outputs.challenge_slugs }}
+        run: node scripts/e2e-lessons.mjs
+      - name: 失败时保留网关日志
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-lessons-changed-gateway-log
+          path: /tmp/gateway.log
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # 分支保护里既有的 required check 是「浏览器端到端」。内部 E2E 拆成多个 job 后，
+  # 由这个聚合 job 对外汇报同名结果，避免每次拆分都去改仓库设置。
+  e2e-gate:
+    name: 浏览器端到端
+    needs: [changes, e2e-smoke, e2e-lessons-full, e2e-lessons-changed]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总 E2E 结果
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SMOKE: ${{ needs.e2e-smoke.result }}
+          FULL: ${{ needs.e2e-lessons-full.result }}
+          CHANGED: ${{ needs.e2e-lessons-changed.result }}
+        run: |
+          echo "changes=$CHANGES smoke=$SMOKE full=$FULL changed=$CHANGED"
+          case "$CHANGES $SMOKE $FULL $CHANGED" in
+            *failure*|*cancelled*) echo "E2E 未通过"; exit 1 ;;
+          esac
+          echo "E2E 通过（未触发的档位为 skipped）"
+
   audit:
     name: 依赖审计
+    needs: changes
+    # 只有会进构建产物的改动才可能影响依赖面；纯文档 / 纯工作流改动直接跳过。
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -183,8 +280,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # pnpm audit 只读锁文件，不需要安装依赖，省掉一次 store 还原与 install。
       # 只审生产依赖：开发工具链的告警不阻塞发布，但会在日志里可见。
       - name: 生产依赖高危漏洞
         run: pnpm audit --prod --audit-level high

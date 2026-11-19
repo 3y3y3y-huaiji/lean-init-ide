@@ -1,0 +1,61 @@
+name: E2E prepare
+description: 安装依赖、下载构建产物、准备 Lean 资产并启动本地等价网关
+
+# 浏览器 E2E 拆成多个 job 后共用这一段准备流程：
+# 每个 job 独立 VM，但都需要同一份 dist 与运行时资产。
+inputs:
+  extensions:
+    description: 是否下载 Std / Batteries 扩展分片（1/0）
+    required: false
+    default: '0'
+  assets-cache-key:
+    description: public/wasm-lean4 的缓存键（调用方按是否含扩展分包区分）
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+      with:
+        version: 12.18.0
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: pnpm
+    - run: pnpm install --frozen-lockfile --prefer-offline
+      shell: bash
+    - uses: actions/download-artifact@v8
+      with:
+        name: dist
+        path: dist
+    - name: 缓存 Lean 资产
+      uses: actions/cache@v6
+      with:
+        path: public/wasm-lean4
+        key: ${{ inputs.assets-cache-key }}
+    - name: 准备 Lean 资产
+      # 工程实战课直接编译 Std / Batteries，课程 E2E 必须能像生产一样提供扩展分包。
+      shell: bash
+      env:
+        LEAN_FETCH_EXTENSIONS: ${{ inputs.extensions }}
+      run: pnpm run fetch:assets
+    # build:web 的 dist 不含 wasm-lean4；小资产（index.json/lean.mjs 等）不走 SW，
+    # 必须补回静态副本，否则会落到网关的 SPA 回退。
+    - name: 补齐静态兜底资产
+      shell: bash
+      run: mkdir -p dist/wasm-lean4 && cp -r public/wasm-lean4/. dist/wasm-lean4/
+    - name: 复核含资产的构建产物契约
+      shell: bash
+      run: pnpm run verify:build
+    - name: 启动本地等价网关
+      shell: bash
+      run: |
+        node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &
+        for _ in $(seq 1 50); do
+          if curl -fsS http://127.0.0.1:4174/__health >/dev/null; then
+            exit 0
+          fi
+          sleep 0.2
+        done
+        cat /tmp/gateway.log
+        exit 1

@@ -5,11 +5,13 @@ Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检
 
 | 工作流 | 触发 | 用途 | 产物 / 影响 |
 | --- | --- | --- | --- |
-| [ci.yml](../.github/workflows/ci.yml) `CI · 应用` | PR、手动、被 Deploy 复用 | 静态检查、单测、构建、浏览器 e2e、依赖审计、actionlint | PR 检查结果，不部署 |
+| [ci.yml](../.github/workflows/ci.yml) `CI · 应用` | PR、手动、被 Deploy 复用 | 先由 `changes` 分类：文档/工作流直接过、课程内容增量 e2e、运行时改动全量 e2e；另有 static / test / build / audit / actionlint | PR 检查结果，不部署 |
 | [deploy.yml](../.github/workflows/deploy.yml) `Deploy · 应用` | push `main`、手动 | PR 合并：直接构建、部署、smoke；direct push：先复用 `CI · 应用`，通过后再部署 | 生产站点 |
 | [runtime-wasm32-435.yml](../.github/workflows/runtime-wasm32-435.yml) `Runtime · Lean 4.35 wasm32` | `runtime-v*` tag、手动 | 构建 4.35 wasm32 运行时、Init oleans 与 zstd 资产；手动可选发布 R2 / 魔搭 / GitHub Release | artifact；发布时写 R2、魔搭、Release |
 | [modelscope.yml](../.github/workflows/modelscope.yml) `Runtime · 魔搭镜像` | 手动 | 单独重传或校验魔搭镜像 | ModelScope |
 | [smoke.yml](../.github/workflows/smoke.yml) `Smoke · 线上巡检` | 每天 01:00 UTC、手动 | 首页、COOP/COEP、`sw.js`、`/cdn/` Range、白名单 404 巡检 | 只读 |
+
+> `CI · 应用` 对外的 required check 固定为：`changes` / `static` / `test` / `build` / `浏览器端到端` / `audit` / `actionlint`。其中 `浏览器端到端` 是聚合门禁（`e2e-gate`），内部再拆成 `e2e-smoke` / `e2e-lessons-full` / `e2e-lessons-changed`；内部 job 改名不影响分支保护。变更分类跳过的 job 在 PR 上显示为 Skipped，GitHub 按通过处理。
 
 ## 命名与触发约定
 

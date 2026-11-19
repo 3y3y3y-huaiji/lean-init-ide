@@ -1,7 +1,7 @@
 name: Deploy · 应用
 run-name: Deploy · ${{ github.ref_name }}
 
-# PR CI（static / test / build / e2e / audit / actionlint）已经在合并前跑过；
+# PR CI（changes 分档后的 static / test / build / e2e-* / audit / actionlint）已经在合并前跑过；
 # main 上只做构建、部署和线上冒烟，不再重复整条 CI。
 on:
   push:
@@ -66,7 +66,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prefer-offline
       # 认证失败时 wrangler 只回一句 9106，看不出是 token 值坏了还是权限不够。
       - name: 诊断部署凭据
         env:

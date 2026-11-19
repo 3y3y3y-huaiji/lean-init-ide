@@ -7,5 +7,9 @@
 /ai-catalog.json               /.well-known/ai-catalog.json   200
 /.well-known/ard.json          /.well-known/ai-catalog.json   200
 
+# 英文首页唯一入口是根路径 `/`；旧 /en/ 与 /en 永久重定向，避免重复索引。
+/en/                            /                              301
+/en                             /                              301
+
 # 前端接管路由，未知路径回落到入口页。
 /*  /index.html  200

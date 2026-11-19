@@ -58,7 +58,12 @@ describe('页面骨架渲染', () => {
 
   it('根路径下语言切换回到对应首页', () => {
     setPath('/zh');
-    expect(renderLayout('zh', 'home', '')).toContain('href="/en/"');
+    expect(renderLayout('zh', 'home', '')).toContain('href="/"');
+
+    setPath('/');
+    const enHome = renderLayout('en', 'home', '');
+    expect(enHome).toContain('href="/zh/"');
+    expect(enHome).toContain('href="/"');
   });
 
   it('playground 页面让主区域撑满宽度', () => {

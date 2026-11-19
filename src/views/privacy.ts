@@ -1,5 +1,6 @@
 import { buttonClass } from '../components/ui';
 import { messagesFor, type Locale } from '../i18n';
+import { localeHomePath } from '../router';
 import { escapeHtml } from './html';
 
 export const renderPrivacy = (locale: Locale): string => {
@@ -29,7 +30,7 @@ export const renderPrivacy = (locale: Locale): string => {
       ${sections}
       <p class="mt-10 rounded-lg border border-line bg-panel-soft px-4 py-3 text-[13px] leading-relaxed text-muted">${escapeHtml(t.note)}</p>
       <p class="mt-8">
-        <a class="${buttonClass}" href="/${locale}/">${escapeHtml(t.backHome)}</a>
+        <a class="${buttonClass}" href="${localeHomePath(locale)}">${escapeHtml(t.backHome)}</a>
       </p>
     </article>
   `;

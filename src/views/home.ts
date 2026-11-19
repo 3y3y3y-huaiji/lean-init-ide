@@ -1,4 +1,5 @@
 import { buttonClass, ghostButtonLgClass } from '../components/ui';
+import { REPO_URL } from '../feedback';
 import { LESSON_CATALOG, messagesFor, type Locale } from '../i18n';
 import { firstUncompletedLesson } from '../progress';
 import { FIRST_LESSON_SLUG } from '../router';
@@ -119,7 +120,11 @@ export const renderHome = (
       <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
       <h1 class="mt-0 mb-4 text-[clamp(32px,5.4vw,52px)] tracking-[-0.02em]">${t.title}</h1>
       <p class="mt-0 mb-3 max-w-[640px] text-[clamp(15px,1.6vw,18px)] text-muted">${t.lead}</p>
-      <p class="mt-0 mb-6.5 max-w-[640px] text-sm leading-relaxed text-muted">${t.heroNote}</p>
+      <p class="mt-0 mb-3 max-w-[640px] text-sm leading-relaxed text-muted">${t.heroNote}</p>
+      <p data-role="seo-facts" class="mt-0 mb-6.5 max-w-[640px] text-xs leading-relaxed text-muted">
+        ${escapeHtml(t.facts(LESSON_CATALOG.length))}
+        <a class="text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${escapeHtml(t.factsRepo)}</a>
+      </p>
       <div class="flex flex-wrap gap-3">
         <a class="${buttonClass}" data-home-cta="primary" href="/${locale}/learn/${target}">${cta}</a>
         <a class="${ghostButtonLgClass}" href="/${locale}/playground">${t.ctaSecondary}</a>

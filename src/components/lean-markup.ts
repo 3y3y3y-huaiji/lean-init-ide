@@ -1,5 +1,6 @@
-import type { Locale } from '../i18n';
+import { LESSON_CATALOG, type Locale } from '../i18n';
 import runtimeManifest from '../../config/lean4-runtime.json';
+import { REPO_URL } from '../feedback';
 import { runtimeExtensions } from '../runtime-extensions';
 import type { Messages } from '../i18n/types';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from './ui';
@@ -319,6 +320,10 @@ export const renderLeanMarkup = (
             <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${runtimeLabel}</p>
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
+            <p data-role="seo-facts" class="mt-1 mb-0 text-xs leading-relaxed text-muted">
+              ${t.facts(LESSON_CATALOG.length)}
+              <a class="text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.factsRepo}</a>
+            </p>
           </div>
           <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
         </div>`

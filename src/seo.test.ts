@@ -35,9 +35,12 @@ describe('SEO 产物生成', () => {
     expect(new Set(locs).size).toBe(locs.length);
 
     let lessonCount = 0;
+    expect(locs).toContain(`${SITE_ORIGIN}/`);
+    expect(locs).toContain(`${SITE_ORIGIN}/zh/`);
+    // 英文首页只保留根路径，/en/ 不再是独立索引的规范页。
+    expect(locs).not.toContain(`${SITE_ORIGIN}/en/`);
     for (const locale of ['zh', 'en'] as const) {
       const lessons = lessonsFor(locale);
-      expect(locs).toContain(`${SITE_ORIGIN}/${locale}/`);
       for (const page of ['playground', 'reference', 'privacy', 'challenges']) {
         expect(locs).toContain(`${SITE_ORIGIN}/${locale}/${page}`);
       }
@@ -97,8 +100,9 @@ describe('SEO 产物生成', () => {
     expect(llms).toContain('\n> ');
     const links = Array.from(llms.matchAll(/^- \[[^\]]+\]\((https:\/\/[^)]+)\): /gm), (m) => m[1]!);
     expect(links.length).toBeGreaterThan(50);
-    expect(links).toContain(`${SITE_ORIGIN}/en/`);
+    expect(links).toContain(`${SITE_ORIGIN}/`);
     expect(links).toContain(`${SITE_ORIGIN}/zh/`);
+    expect(links).not.toContain(`${SITE_ORIGIN}/en/`);
     expect(links).toContain(`${SITE_ORIGIN}/en/learn/what-is-lean`);
     expect(links).toContain(`${SITE_ORIGIN}/zh/challenges/${CHALLENGES[0]!.slug}`);
     expect(llms.endsWith('\n')).toBe(true);

@@ -1,7 +1,7 @@
 import './index.css';
 import { applySourcePreference } from './asset-source';
-import { detectLocale, loadLessons, loadLocale, otherLocale } from './i18n';
-import { applyPageMeta } from './meta';
+import { detectLocale, loadLessons, loadLocale } from './i18n';
+import { applyPageMeta, swapLocalePath } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { readCompleted, readProgress } from './progress';
 import { canonicalRoutePath, resolveRoute, type Route } from './router';
@@ -23,7 +23,8 @@ const boot = async (route: Route, root: HTMLElement) => {
   document.title = pageTitle(route);
   applyPageMeta(document, {
     locale: route.locale,
-    pathname: location.pathname,
+    // 404 保留真实地址；其余路由使用规范路径（英文首页固定为 `/`）。
+    pathname: route.page === 'notFound' ? location.pathname : canonicalRoutePath(route),
     title: document.title,
     description: pageDescription(route),
   });
@@ -40,8 +41,7 @@ const boot = async (route: Route, root: HTMLElement) => {
     if (location.search || location.hash) {
       const langSwitch = root.querySelector<HTMLAnchorElement>('#lang-switch');
       if (langSwitch) {
-        const rest = location.pathname.replace(/^\/(?:zh|en)(?=\/|$)/, '') || '/';
-        langSwitch.href = `/${otherLocale(route.locale)}${rest}${location.search}${location.hash}`;
+        langSwitch.href = `${swapLocalePath(location.pathname, route.locale)}${location.search}${location.hash}`;
       }
     }
     bindLayout(root, route.locale);

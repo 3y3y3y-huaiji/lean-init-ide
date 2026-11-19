@@ -25,7 +25,7 @@
       content="不是正则模拟，也不是云端跑代码：完整 Lean 4.35.0 编译器与语言服务器就塞在 Web Worker 里。单元测试只能测几个用例，Lean 能把所有输入一次性证死。"
     />
     <script>
-      // 首屏绘制前确定主题，避免闪白或闪黑。
+      // 首屏绘制前确定主题，避免闪白或闪黑；同时代理首屏零下载演示按钮，防止脚本加载前点击无效。
       (() => {
         try {
           const stored = localStorage.getItem('lean:theme');
@@ -38,6 +38,33 @@
         } catch {
           // localStorage 不可用时保留默认暗色。
         }
+        document.addEventListener('click', (event) => {
+          const btn =
+            event.target instanceof Element
+              ? event.target.closest('[data-role="demo-next"],[data-role="demo-reset"]')
+              : null;
+          if (!btn) return;
+          const demo = btn.closest('[data-role="home-demo"]');
+          if (!demo || demo.dataset.bound === 'true' || !demo.dataset.demoSteps) return;
+          const steps = JSON.parse(demo.dataset.demoSteps);
+          if (!Array.isArray(steps) || steps.length === 0) return;
+          const labels = demo.dataset.demoLabels ? JSON.parse(demo.dataset.demoLabels) : [];
+          const cur = Number(demo.dataset.demoStep || 0) || 0;
+          const step =
+            btn.getAttribute('data-role') === 'demo-reset'
+              ? 0
+              : Math.min(cur + 1, steps.length - 1);
+          demo.dataset.demoStep = String(step);
+          const item = steps[step] || steps[0];
+          const goal = demo.querySelector('[data-role="demo-goal"]');
+          const note = demo.querySelector('[data-role="demo-note"]');
+          const count = demo.querySelector('[data-role="demo-count"]');
+          const next = demo.querySelector('[data-role="demo-next"]');
+          if (goal) goal.textContent = item.goal;
+          if (note) note.textContent = item.note;
+          if (count && labels[step]) count.textContent = labels[step];
+          if (next instanceof HTMLButtonElement) next.disabled = step >= steps.length - 1;
+        });
       })();
     </script>
   </head>

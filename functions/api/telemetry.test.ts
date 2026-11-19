@@ -212,4 +212,33 @@ describe('POST /api/telemetry', () => {
       doubles: [42],
     });
   });
+
+  it('缺少 Content-Type 时返回 415，超量字段截断为 12 个并跳过非有限数值', async () => {
+    const writeDataPoint = vi.fn();
+    const noCt = await call(
+      new Request('https://example.com/api/telemetry', { method: 'POST', body: '{}' }),
+    );
+    expect(noCt.status).toBe(415);
+
+    const manyFields: Record<string, unknown> = { bad_num: Number.POSITIVE_INFINITY };
+    for (let i = 0; i < 15; i += 1) manyFields[`f${i}`] = i;
+
+    const ok = await call(
+      post(
+        withEvents([
+          { name: 'boot', ts: 10 },
+          { name: 'sw', ts: 11, fields: manyFields },
+        ]),
+      ),
+      { TELEMETRY: { writeDataPoint } },
+    );
+    expect(ok.status).toBe(204);
+    expect(writeDataPoint).toHaveBeenNthCalledWith(1, {
+      indexes: ['boot'],
+      blobs: ['boot', '{}'],
+      doubles: [10],
+    });
+    const secondBlobs = (writeDataPoint.mock.calls[1]?.[0] as { blobs: string[] }).blobs;
+    expect(Object.keys(JSON.parse(secondBlobs[1]!))).toHaveLength(12);
+  });
 });

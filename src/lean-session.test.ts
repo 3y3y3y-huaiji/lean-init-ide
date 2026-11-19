@@ -522,6 +522,46 @@ describe('LeanSession', () => {
     expect(reqHandler('client/registerCapability')?.({})).toBeNull();
     expect(() => notifHandler('window/logMessage')?.({ message: 'lean log' })).not.toThrow();
   });
+
+  it('documentSymbol 屏障失败时记录日志并返回已收到的诊断（不写入缓存）', async () => {
+    const onLog = vi.fn();
+    const h = makeHarness({ onLog });
+    await h.session.start('def a := 1');
+    let rejectSymbol!: (err: Error) => void;
+    h.connection.sendRequest.mockImplementation(async (method: string) => {
+      if (method === 'textDocument/documentSymbol') {
+        return new Promise((_resolve, reject) => {
+          rejectSymbol = reject;
+        });
+      }
+      return {};
+    });
+
+    const runPromise = h.session.run('def b := 2', vi.fn());
+    await vi.advanceTimersByTimeAsync(0);
+    h.publish({
+      uri: 'file:///workspace/Main.lean',
+      version: 2,
+      diagnostics: [diagnostic('partial')],
+    });
+    rejectSymbol(new Error('symbol failed'));
+    const result = await runPromise;
+    expect(result.map((d) => d.message)).toEqual(['partial']);
+    expect(
+      onLog.mock.calls.flat().some((line) => String(line).includes('documentSymbol failed')),
+    ).toBe(true);
+  });
+
+  it('import 变更触发重开延迟期间若被停止，定时器回调直接退出', async () => {
+    const h = makeHarness();
+    await h.session.start('import Init\ndef a := 1');
+    const pending = h.session.run('import Std\ndef b := 2', vi.fn());
+    await vi.advanceTimersByTimeAsync(10);
+    h.session.stop();
+    await expect(pending).resolves.toEqual([]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(h.sent('textDocument/didOpen')).toHaveLength(1);
+  });
 });
 
 describe('anchorImportDiagnostic', () => {

@@ -176,4 +176,57 @@ describe('挑战页挂载', () => {
     await mountChallenge(document.body, 'zh', challenge.slug);
     expect(createLeanPanel).not.toHaveBeenCalled();
   });
+
+  it('缺少 navigator.clipboard 时复制链接展示失败提示', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+    });
+    document.body.innerHTML = renderChallenge('en', challenge.slug);
+    await mountChallenge(document.body, 'en', challenge.slug);
+
+    const status = document.body.querySelector<HTMLElement>('[data-role="copy-status"]')!;
+    document.body.querySelector<HTMLButtonElement>('[data-role="copy-link"]')!.click();
+    await vi.waitFor(() =>
+      expect(status.textContent).toBe(messagesFor('en').challenges.detail.copyLinkFailed),
+    );
+  });
+
+  it('主包加载前点击启动 Lean 会传递 startImmediately，并在加载失败时支持重试', async () => {
+    document.body.innerHTML = renderChallenge('zh', challenge.slug);
+    const pending = mountChallenge(document.body, 'zh', challenge.slug);
+    document.body.querySelector<HTMLButtonElement>('[data-role="start"]')!.click();
+    expect(document.body.querySelector<HTMLElement>('[data-role="status"]')?.dataset.state).toBe(
+      'loading',
+    );
+    await pending;
+
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { startImmediately?: boolean },
+    ];
+    expect(options.startImmediately).toBe(true);
+
+    vi.resetModules();
+    let shouldFail = true;
+    vi.doMock('../components/lean-panel', () => {
+      if (shouldFail) throw new Error('chunk error');
+      return { createLeanPanel };
+    });
+    const { loadLocale } = await import('../i18n');
+    await loadLocale('zh');
+    const { mountChallenge: mountFresh, renderChallenge: renderFresh } =
+      await import('./challenge');
+    document.body.innerHTML = renderFresh('zh', challenge.slug);
+    await mountFresh(document.body, 'zh', challenge.slug);
+
+    const retry = document.body.querySelector<HTMLButtonElement>('[data-role="retry-editor"]')!;
+    expect(retry).not.toBeNull();
+    shouldFail = false;
+    retry.click();
+    await vi.waitFor(() => expect(createLeanPanel).toHaveBeenCalledTimes(2));
+
+    vi.doUnmock('../components/lean-panel');
+    vi.resetModules();
+  });
 });

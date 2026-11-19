@@ -248,12 +248,43 @@ describe('createLeanMemoryGuard', () => {
     guard.reportBytes(950 * MIB, 'event');
     expect(guard.shouldRecycleOnImportChange()).toBe(false);
   });
+
+  it('切入后台且已达软水位时触发后台释放，dispose 后忽略后续调用', async () => {
+    const recycles: string[] = [];
+    const guard = createLeanMemoryGuard({
+      maxBytes: 1000 * MIB,
+      onRecycle: (ctx) => recycles.push(ctx.reason),
+      onHardLimit: () => {},
+    });
+
+    guard.reportBytes(750 * MIB, 'event');
+    guard.setVisible(false);
+    expect(recycles).toEqual(['background-hidden']);
+
+    guard.dispose();
+    guard.dispose();
+    guard.recordEdit();
+    guard.setProcessing(true);
+    guard.setVisible(false);
+    await guard.pollOnce();
+    expect(guard.getSnapshot().processing).toBe(false);
+  });
 });
 
 describe('sampleBrowserMemoryBytes', () => {
-  it('未跨源隔离或缺少 API 时返回 null；可用时返回字节数', async () => {
+  it('未跨源隔离或缺少 API 时返回 null；非有限值返回 null，可用时返回字节数', async () => {
     expect(await sampleBrowserMemoryBytes({ crossOriginIsolated: false })).toBeNull();
     expect(await sampleBrowserMemoryBytes({ crossOriginIsolated: true })).toBeNull();
+    expect(
+      await sampleBrowserMemoryBytes({
+        crossOriginIsolated: true,
+        performance: {
+          measureUserAgentSpecificMemory: async () => ({ bytes: Number.NaN }),
+        } as unknown as Performance & {
+          measureUserAgentSpecificMemory: () => Promise<{ bytes: number }>;
+        },
+      }),
+    ).toBeNull();
     expect(
       await sampleBrowserMemoryBytes({
         crossOriginIsolated: true,

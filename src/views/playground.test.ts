@@ -47,7 +47,7 @@ describe('playground 页面', () => {
     expect(typeof options.autoStart).toBe('boolean');
   });
 
-  it('带 ?lesson= 参数时载入对应课时练习 starter 与 draftKey', async () => {
+  it('带 ?lesson= 参数时载入对应课时练习 starter 与 draftKey，并展示本课题目与提示', async () => {
     history.replaceState(null, '', '/en/playground?lesson=math-parity');
     document.body.innerHTML = renderPlayground('en');
 
@@ -60,6 +60,31 @@ describe('playground 页面', () => {
     expect(options.lessonSlug).toBe('math-parity');
     expect(options.draftKey).toContain('math-parity');
     expect(options.code).toContain('even_plus_odd');
+
+    const notice = document.body.querySelector<HTMLElement>('[data-role="lesson-notice"]')!;
+    expect(notice).not.toBeNull();
+    expect(notice.dataset.lessonSlug).toBe('math-parity');
+    expect(notice.textContent).toContain(messagesFor('en').playground.lessonNoticeTitle);
+    expect(notice.textContent).toContain('even_plus_odd');
+    expect(notice.querySelector('details summary')?.textContent).toBe(
+      messagesFor('en').playground.lessonNoticeHint,
+    );
+  });
+
+  it('带 ?lesson=first-proof（中文）时展示练习说明，无参数时不展示课时横幅', async () => {
+    history.replaceState(null, '', '/zh/playground?lesson=first-proof');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const notice = document.body.querySelector<HTMLElement>('[data-role="lesson-notice"]')!;
+    expect(notice.textContent).toContain('当前课时练习');
+    expect(notice.textContent).toContain('two_add_two');
+
+    history.replaceState(null, '', '/zh/playground');
+    document.body.innerHTML = renderPlayground('zh');
+    await mountPlayground(document.body, 'zh');
+    expect(document.body.querySelector('[data-role="lesson-notice"]')).toBeNull();
   });
 
   it('低内存设备即使开启自动启动也强制关闭 autoStart', async () => {
@@ -159,5 +184,46 @@ describe('playground 页面', () => {
     const [, options] = createLeanPanel.mock.calls[0] as [HTMLElement, { code: string }];
     expect(options.code).toBe(messagesFor('zh').playground.defaultCode);
     expect(document.body.querySelector('[data-role="challenge-notice"]')).toBeNull();
+  });
+
+  it('带 ?lesson=eng-hashmap 时传递 requiredExtensions', async () => {
+    history.replaceState(null, '', '/zh/playground?lesson=eng-hashmap');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { requiredExtensions?: string[] },
+    ];
+    expect(options.requiredExtensions).toEqual(['std']);
+  });
+
+  it('编辑器主包加载失败时展示错误与重试按钮，点击重试可恢复挂载', async () => {
+    vi.resetModules();
+    let shouldFail = true;
+    vi.doMock('../components/lean-panel', () => {
+      if (shouldFail) throw new Error('chunk fetch failed');
+      return { createLeanPanel };
+    });
+    const { loadLessons, loadLocale } = await import('../i18n');
+    await Promise.all([loadLocale('zh'), loadLessons('zh')]);
+    const { mountPlayground: mountFresh, renderPlayground: renderFresh } =
+      await import('./playground');
+
+    document.body.innerHTML = renderFresh('zh');
+    await mountFresh(document.body, 'zh');
+
+    const status = document.body.querySelector<HTMLElement>('[data-role="status"]')!;
+    expect(status.dataset.state).toBe('error');
+    const retry = document.body.querySelector<HTMLButtonElement>('[data-role="retry-editor"]')!;
+    expect(retry).not.toBeNull();
+
+    shouldFail = false;
+    retry.click();
+    await vi.waitFor(() => expect(createLeanPanel).toHaveBeenCalledTimes(1));
+
+    vi.doUnmock('../components/lean-panel');
+    vi.resetModules();
   });
 });

@@ -30,6 +30,20 @@ describe('page-meta', () => {
     expect(pageDescription({ page: 'lesson', locale: 'en', slug: 'nonexistent-slug' })).toContain(
       lessonsFor('en')[0]!.lead,
     );
+
+    expect(pageTitle({ page: 'challenges', locale: 'zh' })).toContain('挑战');
+    const challengesDesc = pageDescription({ page: 'challenges', locale: 'en' });
+    expect(challengesDesc).toContain('plain-language');
+    expect(challengesDesc.length).toBeLessThanOrEqual(155);
+    expect(pageTitle({ page: 'challenge', locale: 'zh', slug: 'add-comm' })).toBeTruthy();
+    expect(pageDescription({ page: 'challenge', locale: 'en', slug: 'unknown' })).toBeTruthy();
+
+    // 覆盖中文描述超过 85 汉字时的截断逻辑（truncateHan）。
+    for (const lesson of lessonsFor('zh')) {
+      expect(
+        hanCount(pageDescription({ page: 'lesson', locale: 'zh', slug: lesson.slug })),
+      ).toBeLessThanOrEqual(85);
+    }
   });
 
   it('404 视图渲染对应语言的标题与回首页链接', () => {

@@ -75,49 +75,49 @@ export const lessonsEn: LessonPage[] = [
     track: 'intro',
     navTitle: '02 · Your first proof',
     title: 'Your first leak-proof proof',
-    lead: 'Walk the full loop with `rfl`: read the type, compute the value, let the compiler stamp it.',
+    lead: 'No jargon to memorize: tell a rule apart from an answer, then let rfl earn the referee’s stamp.',
     blocks: [
       {
         kind: 'p',
-        text: 'A unit test only proves the handful of cases you wrote down. `rfl` is a stronger `assert`: it does not run a sample, it makes the compiler confirm that both sides are identical by definition.',
+        text: 'Quick spot-checks with a couple of numbers only show those samples worked. `rfl` does not guess: it makes Lean simplify both sides by the rules until they are visibly identical.',
       },
       {
         kind: 'p',
-        text: 'Watch the right panel: above `⊢` are your assumptions (none yet), below it is the goal. After every step, check whether `⊢` got shorter.',
+        text: 'Watch the Goal panel on the right: above `⊢` are the cards in your hand (empty for now), and below `⊢` is the conclusion the referee wants. After each move, check whether `⊢` shrank or cleared.',
       },
       { kind: 'code', code: '#check Nat.add\n#eval 2 + 3' },
       {
         kind: 'p',
-        text: 'Click Run: the output first shows the type of `Nat.add`, then the value of `#eval`. The point of this lesson is to tell the two apart.',
+        text: 'Click Run and the output shows two things: `Nat.add` tells you what kind of rule it is (two natural numbers in, one natural number out), while `#eval` gives the actual calculated answer (5).',
       },
       { kind: 'code', code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl' },
       {
         kind: 'p',
-        text: 'In Lean, “2 + 2 = 4” is a type, and a proof is an element of that type. When both sides compute to the same expression, `rfl` closes the goal immediately.',
+        text: 'In Lean, a statement like “2 + 2 = 4” is the question sheet, and a proof is a valid answer that satisfies the referee. Whenever both sides simplify to the exact same value, `rfl` fills out that sheet on the spot.',
       },
       {
         kind: 'goal',
-        text: 'Start: ⊢ 2 + 2 = 4\nAfter rfl: no goals left\n\nThe `#check` line only asks for a type; it does not create a proof goal.',
+        text: 'Start: ⊢ 2 + 2 = 4\nAfter rfl: no goals left\n\nThe `#check` line only asks what rule or statement a name stands for; it leaves no proof goal for the referee.',
       },
       {
         kind: 'note',
-        text: 'Run it once, then change `rfl` to `rfl 1` and read the error saying this proof takes no arguments. Then change `2 + 2` to `2 + 3` and look at the new goal.',
+        text: 'Run it once, then change `rfl` to `rfl 1` to see Lean tell you `rfl` takes no extra inputs. Then change `2 + 2` to `2 + 3` and see what stays below `⊢` when the two sides do not match.',
         tone: 'warn',
       },
       {
         kind: 'details',
         summary: 'Why can rfl not prove 0 + a = a?',
-        text: '`Nat.add` recurses on its second argument: `a + 0` reduces to `a`, so `a + 0 = a` is definitional. But `0 + a` is stuck when `a` is a variable, so it needs induction on `a`. Lesson 05 makes this distinction explicit.',
+        text: 'Addition unpacks its right-hand side first: `a + 0` simplifies straight to `a`, so `rfl` immediately sees both sides match. For `0 + a`, Lean tries to unpack `a`, but an unknown `a` cannot be unpacked mechanically yet—you need step-by-step climbing from 0 (induction) in Lesson 05.',
       },
       {
         kind: 'note',
-        text: 'One takeaway: `rfl` only handles equalities where both sides compute to the same thing; anything else needs a different tactic.',
+        text: 'One takeaway: `rfl` only settles equalities whose two sides simplify to the same thing; anything that uses assumptions or multiple reasoning steps uses other moves.',
       },
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Change `#eval 2 + 3` to something you like, then replace the `sorry` in `two_add_two` with `rfl`.',
-      hint: 'Use `#check` for the type and `#eval` for the value; `two_add_two` opens with `:= by`, and `rfl` closes it by computation.',
+      body: 'Change `#eval 2 + 3` to an expression you like, then replace `sorry` in `two_add_two` with `rfl` and watch the goal clear.',
+      hint: 'Use `#check` to inspect the rule (type) and `#eval` to compute a value; `two_add_two` opens step mode with `:= by`, and `rfl` finishes it by simplification.',
       cta: 'Try it in the editor',
       starter: '#check Nat.mul\n#eval 6 * 7\n\ntheorem two_add_two : 2 + 2 = 4 := by\n  sorry\n',
     },
@@ -1333,6 +1333,10 @@ export const lessonsEn: LessonPage[] = [
         text: '`sorry` generates `sorryAx`, which makes any proposition “hold”. It is fine for drafts, not for delivery.',
       },
       {
+        kind: 'goal',
+        text: "Start: ⊢ 1 = 2\nAfter sorry: no goals left (but emits a warning and depends on sorryAx)\nAfter #print axioms cheat: prints 'cheat' depends on axioms: [sorryAx]",
+      },
+      {
         kind: 'note',
         text: 'Run it once, then replace `sorry` in `cheat` with `rfl` and see why `1 = 2` cannot be proved. That error is exactly what `sorry` was hiding.',
         tone: 'warn',
@@ -1385,6 +1389,10 @@ export const lessonsEn: LessonPage[] = [
       {
         kind: 'p',
         text: 'Cheat sheet: `Even` / `Odd`, `Nat.Prime`, `Nat.gcd`, `Set`, `Function.Injective`, `List.Perm` are the Mathlib names for these concepts.',
+      },
+      {
+        kind: 'goal',
+        text: 'Start: ⊢ ∃ k, 4 = 2 * k\nProvide witness 2: ⊢ 4 = 2 * 2\nrfl closes it: no goals left (#check only queries types and creates no goals)',
       },
       {
         kind: 'note',

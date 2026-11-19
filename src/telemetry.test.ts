@@ -225,4 +225,23 @@ describe('telemetry', () => {
     await Promise.resolve();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('doNotTrack 读取抛错或 JSON 序列化失败时安全降级且不抛错', async () => {
+    Object.defineProperty(window, 'doNotTrack', {
+      configurable: true,
+      get() {
+        throw new Error('blocked');
+      },
+    });
+    const { initTelemetry, track, flushTelemetry } = await loadTelemetry();
+    initTelemetry({ sampleRate: 1 });
+    track('boot', { page: 'home' });
+
+    const stringifySpy = vi.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+      throw new Error('cannot stringify');
+    });
+    expect(() => flushTelemetry()).not.toThrow();
+    stringifySpy.mockRestore();
+    Object.defineProperty(window, 'doNotTrack', { value: undefined, configurable: true });
+  });
 });

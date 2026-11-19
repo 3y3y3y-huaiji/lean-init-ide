@@ -66,8 +66,15 @@ describe('createWasm64LanguageServer', () => {
     }> = [];
 
     try {
+      const stages: string[] = [];
+      const onMemoryBytes = vi.fn();
+      const onError = vi.fn();
       const server = await createWasm64LanguageServer({
         manifest,
+        onStage: (stage) => stages.push(stage),
+        onMemoryBytes,
+        onError,
+        startupTimeoutMs: 5000,
         createFactory:
           () =>
           (args, callbacks): LeanProcess => {
@@ -82,6 +89,7 @@ describe('createWasm64LanguageServer', () => {
             };
           },
       });
+      expect(stages.length).toBeGreaterThan(0);
 
       expect(spawned).toHaveLength(1);
       expect(spawned[0]?.args).toEqual(['-j2', '--server']);

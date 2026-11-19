@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { messagesFor } from '../i18n';
 import {
   diagnosticBadgeClass,
   diagnosticLocationClass,
   panelClass,
   renderLeanMarkup,
+  showEditorLoadFailure,
 } from './lean-markup';
 
 describe('renderLeanMarkup', () => {
@@ -16,6 +17,8 @@ describe('renderLeanMarkup', () => {
     // 编辑器容器不能有 paint/layout containment，否则 hover 浮层会被裁剪。
     expect(html).not.toContain('[contain:');
     expect(html).toContain('data-role="editor-loading"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain(messagesFor('zh').playground.editorLoading);
     expect(html).toContain('100svh');
     expect(html).not.toContain('100dvh');
     expect(html).not.toContain('52dvh');
@@ -78,5 +81,31 @@ describe('renderLeanMarkup', () => {
     expect(diagnosticBadgeClass(4)).toContain('text-accent');
     expect(panelClass(true)).toContain('max-h-[150px]');
     expect(panelClass(false)).toContain('max-[900px]:max-h-[320px]');
+  });
+
+  it('showEditorLoadFailure 展示错误提示与可重试按钮并更新状态胶囊', () => {
+    const t = messagesFor('zh').playground;
+    document.body.innerHTML = renderLeanMarkup('zh', 'full', t);
+    const retry = vi.fn();
+
+    showEditorLoadFailure(document.body, t, retry);
+
+    const status = document.body.querySelector<HTMLElement>('[data-role="status"]')!;
+    const loading = document.body.querySelector<HTMLElement>('[data-role="editor-loading"]')!;
+    const btn = document.body.querySelector<HTMLButtonElement>('[data-role="retry-editor"]')!;
+
+    expect(status.dataset.state).toBe('error');
+    expect(status.textContent).toContain(t.editorLoadFailed);
+    expect(loading.getAttribute('aria-busy')).toBe('false');
+    expect(loading.textContent).toContain(t.editorLoadFailed);
+
+    btn.click();
+    btn.click();
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('showEditorLoadFailure 在缺少 loading 节点时仍安全退出', () => {
+    const host = document.createElement('div');
+    expect(() => showEditorLoadFailure(host, messagesFor('en').playground, vi.fn())).not.toThrow();
   });
 });

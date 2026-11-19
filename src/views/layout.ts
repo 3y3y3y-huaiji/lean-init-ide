@@ -58,8 +58,8 @@ export const renderLayout = (
 
   const navLink = (isActive: boolean) =>
     isActive
-      ? 'inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-lg bg-accent-soft px-3 py-1.5 text-sm text-fg no-underline min-[901px]:min-h-0 min-[901px]:px-2.5'
-      : 'inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg min-[901px]:min-h-0 min-[901px]:px-2.5';
+      ? 'inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-accent-soft px-3 py-1.5 text-sm text-fg no-underline min-[901px]:min-h-9 min-[901px]:px-2.5'
+      : 'inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg min-[901px]:min-h-9 min-[901px]:px-2.5';
 
   const nav = navItems
     .map(
@@ -78,7 +78,7 @@ export const renderLayout = (
   return `
     <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[900px]:relative">
       <div class="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-4 gap-y-2 gutter-x py-2.5 min-[901px]:py-3.5">
-        <a class="inline-flex min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline" href="${homeHref}">
+        <a class="inline-flex min-h-9 min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline max-[900px]:min-h-11" href="${homeHref}">
           <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-[17px] font-bold text-accent-contrast">λ</span>
           <span class="truncate">Lean Init IDE</span>
         </a>
@@ -86,7 +86,7 @@ export const renderLayout = (
         <div class="order-2 ml-auto flex shrink-0 items-center gap-1.5 max-[400px]:gap-1 min-[641px]:order-none min-[641px]:ml-0 min-[901px]:gap-2">
           <a
             id="lang-switch"
-            class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
+            class="${ghostButtonClass} max-[900px]:size-11 max-[900px]:px-0"
             href="${switchHref}"
             title="${t.language.label}"
             aria-label="${t.language.label}"
@@ -96,7 +96,7 @@ export const renderLayout = (
           </a>
           <button
             id="theme-toggle"
-            class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
+            class="${ghostButtonClass} max-[900px]:size-11 max-[900px]:px-0"
             type="button"
             title="${themeLabel}"
             aria-label="${themeLabel}"
@@ -107,7 +107,7 @@ export const renderLayout = (
           <div class="relative">
             <button
               id="settings-toggle"
-              class="${ghostButtonClass} max-[900px]:size-10 max-[900px]:px-0"
+              class="${ghostButtonClass} max-[900px]:size-11 max-[900px]:px-0"
               type="button"
               aria-expanded="false"
               aria-controls="settings-panel"
@@ -122,8 +122,8 @@ export const renderLayout = (
               hidden
             >
               <h2 class="mt-0 mb-3 text-xs font-[650] uppercase tracking-[0.07em] text-muted">${t.settings.title}</h2>
-              <label class="flex cursor-pointer items-start gap-2.5">
-                <input id="auto-start" class="mt-[3px] accent-accent" type="checkbox" />
+              <label class="flex min-h-11 cursor-pointer items-start gap-3 py-1">
+                <input id="auto-start" class="mt-[3px] size-4 shrink-0 accent-accent" type="checkbox" />
                 <span>
                   <strong class="block text-[13px] font-semibold">${t.settings.autoStart}</strong>
                   <small class="mt-1 block text-xs leading-normal text-muted">${t.settings.autoStartHint}</small>
@@ -167,13 +167,13 @@ export const renderLayout = (
       class="${isPlayground ? 'w-full max-w-none p-0' : 'mx-auto w-full max-w-[1160px] gutter-x pb-12 pt-[clamp(24px,5vw,56px)]'} flex-1"
     >${content}</main>
     <footer
-      class="mx-auto flex w-full flex-wrap justify-between gap-x-6 gap-y-2 gutter-x pb-6 pt-4 text-xs text-muted ${isPlayground ? 'max-w-none' : 'max-w-[1160px]'}"
+      class="mx-auto flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 gutter-x pb-6 pt-4 text-xs text-muted ${isPlayground ? 'max-w-none' : 'max-w-[1160px]'}"
     >
       <span>${t.footer.note}</span>
-      <span class="inline-flex gap-4">
-        <a href="${REPO_URL}" target="_blank" rel="noreferrer">${t.footer.repo}</a>
-        <a href="/${locale}/privacy">${t.footer.privacy}</a>
-        <span>${t.footer.license}</span>
+      <span class="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+        <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center rounded-md px-2 text-muted no-underline hover:text-fg hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.footer.repo}</a>
+        <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center rounded-md px-2 text-muted no-underline hover:text-fg hover:underline" href="/${locale}/privacy">${t.footer.privacy}</a>
+        <span class="px-1">${t.footer.license}</span>
       </span>
     </footer>
   `;

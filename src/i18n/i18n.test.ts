@@ -39,6 +39,53 @@ describe('translations', () => {
       if (typeof value === 'function') expect(typeof enPaths.get(path), path).toBe('function');
     }
   });
+
+  it('invokes every message formatter in both locales and returns non-empty text', () => {
+    for (const locale of [zh, en]) {
+      expect(locale.home.facts(27)).toContain('27');
+      expect(locale.home.pathMeta(5)).toContain('5');
+      expect(locale.home.demo.stepLabel(1, 3)).toContain('1');
+      expect(locale.challenges.detail.goalsRemaining(2)).toContain('2');
+      expect(locale.challenges.detail.feedbackIssueTitle('Add Comm')).toContain('Add Comm');
+      expect(locale.lesson.requiresHint('Std')).toContain('Std');
+      expect(locale.lesson.feedbackIssueTitle('Intro')).toContain('Intro');
+      expect(locale.lesson.completedCount(3, 27)).toContain('3');
+      expect(locale.lesson.goalStepLabel(1, 2)).toContain('1');
+      expect(locale.playground.facts(27)).toContain('27');
+      expect(locale.playground.runPassedDetail(0, 12)).toContain('12');
+      expect(locale.playground.runPassedDetail(2, 15)).toContain('2');
+      expect(locale.playground.libraryLoading('50%')).toContain('50%');
+      expect(locale.playground.libraryError('boom')).toContain('boom');
+      expect(locale.playground.libraryQuickFix('Std')).toContain('Std');
+      expect(locale.playground.libraryQuickFixDone('Std')).toContain('Std');
+      expect(locale.playground.logCompletion(1, 2, 3)).toContain('3');
+      expect(locale.playground.logHover(1, 2, true)).toBeTruthy();
+      expect(locale.playground.logHover(1, 2, false)).toBeTruthy();
+      expect(locale.playground.logRequestFailed('hover', 'timeout')).toContain('timeout');
+      expect(locale.playground.logGoalFailed('err')).toContain('err');
+      expect(locale.playground.statusChunks('1.0', '2.0')).toContain('1.0');
+      expect(locale.playground.statusChunkFallback('init', 'retry')).toContain('init');
+      expect(locale.playground.statusError('bad')).toContain('bad');
+      expect(locale.playground.statusFailure('fail')).toContain('fail');
+      expect(locale.playground.crashAutoDetail('oom')).toContain('oom');
+      expect(locale.playground.crashLoopDetail('stack')).toContain('stack');
+      expect(locale.playground.sourceSwitching('CDN')).toContain('CDN');
+      expect(locale.playground.assetFallbackLabel('cdn', '404')).toContain('cdn');
+      expect(locale.playground.statusReady(1, 20)).toContain('20');
+      expect(locale.playground.statusNoDiagnostics(10)).toContain('10');
+      expect(locale.playground.logSwFailed('denied')).toContain('denied');
+      expect(locale.playground.logRuntimeError('err')).toContain('err');
+      expect(locale.playground.logRuntimeCrash('trap')).toContain('trap');
+      expect(locale.playground.logSourceSwitched('Mirror')).toContain('Mirror');
+      expect(locale.playground.logInitialize('1.2')).toContain('1.2');
+      expect(locale.playground.logStartFailed('fail')).toContain('fail');
+      expect(locale.playground.logMemorySoftRecycle('500')).toContain('500');
+      expect(locale.playground.logMemoryImportRecycle('600')).toContain('600');
+      expect(locale.playground.logMemoryBackgroundRelease('700')).toContain('700');
+      expect(locale.playground.logMemoryHardLimit('900', '1024')).toContain('1024');
+      expect(locale.playground.logRuntimeArchSelected('wasm64')).toContain('wasm64');
+    }
+  });
 });
 
 describe('detectLocale', () => {
@@ -58,6 +105,22 @@ describe('detectLocale', () => {
     const { detectLocale, readLocalePreference } = await import('./index');
     expect(readLocalePreference()).toBeNull();
     expect(detectLocale()).toBe('en');
+  });
+
+  it('在 localStorage 不可用或 navigator.languages 为空时安全回退', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    Object.defineProperty(navigator, 'languages', { value: [], configurable: true });
+    Object.defineProperty(navigator, 'language', { value: 'zh-CN', configurable: true });
+
+    const { detectLocale, readLocalePreference, rememberLocale } = await import('./index');
+    expect(readLocalePreference()).toBeNull();
+    expect(detectLocale()).toBe('zh');
+    expect(() => rememberLocale('zh')).not.toThrow();
   });
 
   it('按需加载语言包并复用并发与已缓存结果', async () => {

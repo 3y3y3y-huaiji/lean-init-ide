@@ -43,6 +43,7 @@ describe('isExerciseSolved', () => {
 
   it('保留声明名、去掉 sorry 且无错误才通关', () => {
     expect(isExerciseSolved(STARTER, SOLVED, [])).toBe(true);
+    expect(isExerciseSolved(STARTER, STARTER, [])).toBe(false);
     expect(isExerciseSolved(STARTER, SOLVED, [{ severity: 2 }])).toBe(true);
     expect(isExerciseSolved(STARTER, SOLVED, [{ severity: 1 }])).toBe(false);
   });

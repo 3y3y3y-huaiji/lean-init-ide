@@ -225,5 +225,27 @@ describe('createWasm64ProcessFactory', () => {
     expect(preventDefault).toHaveBeenCalled();
     expect(failures[0]).toContain('RangeError: Maximum call stack size exceeded');
     expect(worker.terminated).toBe(true);
+
+    // disposed 后再 send、dispose 或触发 onerror/failure 均安全忽略。
+    process.send({ jsonrpc: '2.0', id: 2, method: 'shutdown' });
+    process.dispose();
+    post(worker, { failure: 'ignored' });
+  });
+
+  it('stderr 输出记录警告日志，worker.onerror 无 error 对象时使用消息兜底', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { process, failures, worker } = setup();
+    void process.ready.catch(() => undefined);
+
+    post(worker, { stderr: 'diag line\n' });
+    expect(warn).toHaveBeenCalledWith('Lean 4 (wasm64):', 'diag line\n');
+
+    worker.onerror?.({
+      preventDefault: vi.fn(),
+      error: undefined,
+      message: '',
+    } as unknown as ErrorEvent);
+    expect(failures).toEqual(['Lean wasm64 process worker failed.']);
+    warn.mockRestore();
   });
 });

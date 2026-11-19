@@ -188,10 +188,22 @@ export const zh: Messages = {
     proofAccepted: '证明通过 · Lean 已接受，没有待证目标',
     editorHint:
       '右侧是真实编辑器。打开本页会自动开始加载 Lean，完成后改动代码即可看到诊断与 Goal。',
+    goalPanelTitle: 'Goal 面板',
+    goalStepLabel: (current, total) => `第 ${current} / ${total} 步`,
+    goalPrev: '上一步',
+    goalNext: '下一步',
+    goalLive: '实时检查',
+    goalBackToSteps: '回到步骤演示',
+    goalOpenPlayground: '在编辑器中实时看 Goal',
+    goalChecking: '正在运行代码并检查 Goal…',
+    goalNoRemaining: '✓ 没有剩余目标（当前证明已关闭）',
   },
   playground: {
     title: 'Lean 编辑器',
     hint: '首次启动需下载约 102MB 运行时，之后会持久缓存。',
+    editorLoading: '正在加载编辑器…',
+    editorLoadingHint: '正在准备代码高亮与交互环境',
+    editorLoadFailed: '编辑器主包加载失败，请检查网络后重试。',
     seoDescription:
       '打开 Lean 4 在线 Playground：Monaco 编辑器与语言服务器在浏览器内以 WebAssembly 和 Web Worker 运行，内置 Init，Std 与 Batteries 按需加载，零后端，代码不会上传。',
     facts: (lessonCount) =>
@@ -234,6 +246,8 @@ end
     severityInfo: '信息',
     abbreviationDetail: 'Unicode 缩写',
     backToLesson: '回到本课',
+    lessonNoticeTitle: '当前课时练习',
+    lessonNoticeHint: '查看提示',
     challengeNoticeTitle: '已从趣味挑战进入',
     challengeNoticeBody: '题面就在下方；如果本机已有编辑器草稿，我们不会自动覆盖。',
     challengeNoticeLoad: '载入本题骨架',

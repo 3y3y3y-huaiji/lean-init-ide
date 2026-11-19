@@ -114,8 +114,12 @@ const boot = async (route: Route, root: HTMLElement) => {
     case 'notFound':
       content = renderNotFound(route.locale);
       break;
-    default:
-      content = renderHome(route.locale, readProgress(), readCompleted());
+    default: {
+      const visited = readProgress();
+      const completed = readCompleted();
+      content = renderHome(route.locale, visited, completed);
+      mount = () => hydrateHome(root, route.locale, visited, completed);
+    }
   }
 
   root.innerHTML = renderLayout(

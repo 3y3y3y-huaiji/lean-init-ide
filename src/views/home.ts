@@ -98,9 +98,16 @@ export const renderHome = (
 
   const demo = t.demo;
   const demoStep = demo.steps[0]!;
+  const demoLabels = demo.steps.map((_, index) => demo.stepLabel(index + 1, demo.steps.length));
   const demoSection = `
     <section class="mt-[clamp(36px,5vw,56px)]">
-      <div class="rounded-2xl border border-accent bg-accent-soft p-6" data-role="home-demo">
+      <div
+        class="rounded-2xl border border-accent bg-accent-soft p-6"
+        data-role="home-demo"
+        data-demo-step="0"
+        data-demo-steps="${escapeHtml(JSON.stringify(demo.steps))}"
+        data-demo-labels="${escapeHtml(JSON.stringify(demoLabels))}"
+      >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h2 class="m-0 text-[17px] font-bold">${demo.title}</h2>
           <span data-role="demo-count" class="font-mono text-xs tabular-nums text-muted">${demo.stepLabel(1, demo.steps.length)}</span>
@@ -110,7 +117,7 @@ export const renderHome = (
         <p data-role="demo-note" class="mt-2 mb-4 text-sm leading-relaxed text-muted">${escapeHtml(demoStep.note)}</p>
         <div class="flex flex-wrap gap-2">
           <button class="${buttonClass}" type="button" data-role="demo-next">${demo.next}</button>
-          <button class="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
+          <button class="inline-flex min-h-10 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
         </div>
       </div>
     </section>`;
@@ -123,7 +130,7 @@ export const renderHome = (
       <p class="mt-0 mb-3 max-w-[640px] text-sm leading-relaxed text-muted">${t.heroNote}</p>
       <p data-role="seo-facts" class="mt-0 mb-6.5 max-w-[640px] text-xs leading-relaxed text-muted">
         ${escapeHtml(t.facts(LESSON_CATALOG.length))}
-        <a class="text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${escapeHtml(t.factsRepo)}</a>
+        <a class="inline-flex min-h-7 items-center text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${escapeHtml(t.factsRepo)}</a>
       </p>
       <div class="flex flex-wrap gap-3">
         <a class="${buttonClass}" data-home-cta="primary" href="/${locale}/learn/${target}">${cta}</a>
@@ -199,10 +206,14 @@ export const hydrateHome = (
   const noteEl = demo.querySelector<HTMLElement>('[data-role="demo-note"]');
   const nextEl = demo.querySelector<HTMLButtonElement>('[data-role="demo-next"]');
   const resetEl = demo.querySelector<HTMLButtonElement>('[data-role="demo-reset"]');
-  let step = 0;
+  const parsedStep = Number(demo.dataset.demoStep ?? 0);
+  let step = Number.isFinite(parsedStep)
+    ? Math.max(0, Math.min(steps.length - 1, Math.trunc(parsedStep)))
+    : 0;
 
   const paint = () => {
     const current = steps[step] ?? steps[0]!;
+    demo.dataset.demoStep = String(step);
     if (goalEl) goalEl.textContent = current.goal;
     if (noteEl) noteEl.textContent = current.note;
     if (countEl) countEl.textContent = t.demo.stepLabel(step + 1, steps.length);

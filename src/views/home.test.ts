@@ -130,6 +130,41 @@ describe('首页渲染', () => {
     expect(next.disabled).toBe(false);
   });
 
+  it('renderHome 嵌入静态演示步骤数据，hydrateHome 接管时保留加载前已点到的步骤', () => {
+    document.body.innerHTML = renderHome('zh');
+    const demo = document.body.querySelector<HTMLElement>('[data-role="home-demo"]')!;
+    const t = messagesFor('zh').home.demo;
+    expect(JSON.parse(demo.dataset.demoSteps ?? '[]')).toHaveLength(t.steps.length);
+    expect(JSON.parse(demo.dataset.demoLabels ?? '[]')).toEqual(
+      t.steps.map((_, i) => t.stepLabel(i + 1, t.steps.length)),
+    );
+
+    // 模拟在异步加载完成前内联代理已推进到第 2 步。
+    demo.dataset.demoStep = '1';
+    hydrateHome(document.body, 'zh');
+
+    expect(document.body.querySelector('[data-role="demo-goal"]')?.textContent).toBe(
+      t.steps[1]!.goal,
+    );
+    expect(document.body.querySelector('[data-role="demo-count"]')?.textContent).toBe(
+      t.stepLabel(2, t.steps.length),
+    );
+  });
+
+  it('hydrateHome 对越界或非法的 data-demo-step 安全夹紧，并在缺少 eng/math 进度时仍更新其它 CTA', () => {
+    document.body.innerHTML = renderHome('en');
+    const demo = document.body.querySelector<HTMLElement>('[data-role="home-demo"]')!;
+    demo.dataset.demoStep = 'not-a-number';
+    hydrateHome(document.body, 'en');
+    expect(demo.dataset.demoStep).toBe('0');
+
+    // 已绑定后再次调用 hydrateHome 不重复绑定事件，且推进工程课链接。
+    const engLessons = LESSON_CATALOG.filter((lesson) => lesson.track === 'eng');
+    hydrateHome(document.body, 'en', new Set(), new Set([engLessons[0]!.slug]));
+    const eng = document.body.querySelector<HTMLAnchorElement>('[data-home-cta="eng"]');
+    expect(eng?.getAttribute('href')).toBe(`/en/learn/${engLessons[1]!.slug}`);
+  });
+
   it('hydrateHome 在空容器中安全无操作', () => {
     const empty = document.createElement('div');
     expect(() => hydrateHome(empty, 'en')).not.toThrow();

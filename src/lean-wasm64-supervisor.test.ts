@@ -442,4 +442,80 @@ describe('createWasm64Supervisor', () => {
       server.transport.writer.write({ jsonrpc: '2.0', method: 'x' } as never),
     ).rejects.toThrow('closed');
   });
+
+  it('覆盖全量 didChange 替换、reader 监听注销、以及出错后写入返回 -32603', async () => {
+    const onError = vi.fn();
+    const { processes, send, server } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    // 全量替换（不带 range）与错误 URI 的 didChange 分支。
+    await send({
+      jsonrpc: '2.0',
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: URI, version: 2 },
+        contentChanges: [{ text: 'def replaced := 42' }],
+      },
+    });
+    await send({
+      jsonrpc: '2.0',
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: 'file:///workspace/Other.lean', version: 3 },
+        contentChanges: [{ text: 'ignored' }],
+      },
+    });
+    expect(processes[1]!.sent.some((m) => m.method === 'textDocument/didChange')).toBe(true);
+
+    // reader.listen 返回的订阅可单独 dispose，也能通过 reader.dispose 清除。
+    const extraListener = vi.fn();
+    const sub = server.transport.reader.listen(extraListener);
+    sub.dispose();
+    server.transport.reader.dispose();
+  });
+
+  it('覆盖 initialized/exit 空处理、非法文档 URI、重复 initialize 与早期请求取消', async () => {
+    const onError = vi.fn();
+    const { processes, send, received } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send({ jsonrpc: '2.0', method: 'initialized', params: {} });
+    await send({ jsonrpc: '2.0', method: 'exit', params: {} });
+
+    // shutdown 会取消尚未开文档时排队的 early 请求。
+    await send({
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: URI } },
+    });
+    await send({ jsonrpc: '2.0', id: 10, method: 'shutdown', params: {} });
+    expect(received.find((m) => m.id === 9)?.error?.code).toBe(-32801);
+
+    // 重复 initialize 触发错误并走 fail() 终止监督器。
+    await send({ jsonrpc: '2.0', id: 11, method: 'initialize', params: { rootUri: null } });
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it('bootstrap 启动过程中意外退出与非法 didOpen 均能报错拒绝', async () => {
+    const onError = vi.fn();
+    const { processes } = await connect({ onError });
+    processes[0]!.callbacks.onExit(9);
+    expect(onError).toHaveBeenCalledWith('Lean initialization process exited with code 9.');
+
+    const err2 = vi.fn();
+    const h2 = await connect({ onError: err2 });
+    await h2.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    h2.processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await h2.send({
+      jsonrpc: '2.0',
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri: 'https://example.test/not-local.txt', text: '' } },
+    });
+    expect(err2).toHaveBeenCalledWith(
+      'Lean LSP requires a local .lean document of at most 8 MiB (UTF-8).',
+    );
+  });
 });

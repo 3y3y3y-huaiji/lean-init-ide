@@ -27,9 +27,17 @@ const origin =
   'https://criticalthinking.de5.net';
 
 const manifest = JSON.parse(await readFile(resolve(root, 'config/lean4-runtime.json'), 'utf8'));
+const wasm64Manifest = JSON.parse(
+  await readFile(resolve(root, 'config/lean4-wasm64-runtime.json'), 'utf8'),
+);
 const probe = manifest.assets[0];
 const tailAsset = manifest.assets.find((asset) => asset.name === 'lean-init-05.pack.gz.bin');
 const workerAsset = manifest.assets.find((asset) => asset.name === 'runner-worker.js');
+const wasm64Ranged = wasm64Manifest.assets.find((asset) => asset.ranged === true);
+const wasm64Index = wasm64Manifest.assets.find((asset) => asset.name === 'lean-init-64.index.json');
+const wasm64Packs = wasm64Manifest.assets
+  .filter((asset) => /^lean-init-64-\d+\.pack\.zst\.bin$/.test(asset.name))
+  .sort((left, right) => left.name.localeCompare(right.name));
 
 const request = async (url, { method = 'GET', headers = {}, body: payload } = {}) => {
   const dir = await mkdtemp(join(tmpdir(), 'lean-smoke-'));
@@ -213,6 +221,55 @@ await check(`/cdn 尾部分片（${tailAsset.key}）`, async () => {
   assert(response.body.length === 1024, `实际收到 ${response.body.length} 字节`);
   return '206，尾部分片正确';
 });
+
+if (wasm64Ranged) {
+  await check(`/cdn wasm64 Range（${wasm64Ranged.key}）`, async () => {
+    const response = await request(
+      `${origin}/cdn/${wasm64Ranged.key}?r=${wasm64Manifest.cacheKey}`,
+      { headers: { Range: 'bytes=0-15' } },
+    );
+    assert(response.status === 206, `期望 206，实际 ${response.status}`);
+    const expected = `bytes 0-15/${wasm64Ranged.bytes}`;
+    const actual = response.headers.get('content-range');
+    assert(actual === expected, `Content-Range=${actual ?? '(缺失)'}，期望 ${expected}`);
+    assert(response.body.length === 16, `实际收到 ${response.body.length} 字节`);
+    return '206，Content-Range 正确';
+  });
+}
+
+if (wasm64Packs.length > 0) {
+  await check('wasm64 pack 分片齐全', async () => {
+    for (const pack of wasm64Packs) {
+      const start = pack.bytes - 16;
+      const response = await request(`${origin}/cdn/${pack.key}?r=${wasm64Manifest.cacheKey}`, {
+        headers: { Range: `bytes=${start}-${pack.bytes - 1}` },
+      });
+      assert(response.status === 206, `${pack.name} 期望 206，实际 ${response.status}`);
+      const expected = `bytes ${start}-${pack.bytes - 1}/${pack.bytes}`;
+      const actual = response.headers.get('content-range');
+      assert(
+        actual === expected,
+        `${pack.name} Content-Range=${actual ?? '(缺失)'}，期望 ${expected}`,
+      );
+      assert(response.body.length === 16, `${pack.name} 实际收到 ${response.body.length} 字节`);
+    }
+    return `${wasm64Packs.length} 个分片可读`;
+  });
+}
+
+if (wasm64Index) {
+  await check('wasm64 索引与清单一致', async () => {
+    const response = await request(`${origin}/cdn/${wasm64Index.key}?r=${wasm64Manifest.cacheKey}`);
+    assert(response.status === 200, `期望 200，实际 ${response.status}`);
+    assert(
+      response.body.length === wasm64Index.bytes,
+      `字节数 ${response.body.length}，期望 ${wasm64Index.bytes}`,
+    );
+    const sha256 = createHash('sha256').update(response.body).digest('hex');
+    assert(sha256 === wasm64Index.sha256, `sha256=${sha256}，期望 ${wasm64Index.sha256}`);
+    return `200，${response.body.length} B，sha256 一致`;
+  });
+}
 
 await check('worker 资产与清单一致', async () => {
   const response = await request(`${origin}/cdn/${workerAsset.key}?r=${manifest.cacheKey}`);

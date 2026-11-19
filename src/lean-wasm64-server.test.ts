@@ -93,4 +93,63 @@ describe('createWasm64LanguageServer', () => {
       vi.restoreAllMocks();
     }
   });
+
+  it('监督器启动失败时释放 glue URL 并向上抛错', async () => {
+    const glueBytes = new TextEncoder().encode('export default () => ({});');
+    const wasmBytes = new Uint8Array([0x00, 0x61, 0x73, 0x6d]);
+    const indexBytes = new TextEncoder().encode(JSON.stringify({ chunks: [], files: [] }));
+    const manifest: Wasm64Manifest = {
+      cacheKey: 'srv-fail',
+      leanVersion: '4.36.0-rc2',
+      runtime: 'test',
+      assets: [
+        {
+          name: 'lean-lsp-adapted.mjs',
+          key: 'k/glue.mjs',
+          bytes: glueBytes.byteLength,
+          sha256: await sha256Hex(glueBytes),
+        },
+        {
+          name: 'lean-lsp.wasm.zst',
+          key: 'k/lean.wasm.zst',
+          bytes: wasmBytes.byteLength,
+          sha256: await sha256Hex(wasmBytes),
+        },
+        {
+          name: 'lean-init-64.index.json',
+          key: 'k/index.json',
+          bytes: indexBytes.byteLength,
+          sha256: await sha256Hex(indexBytes),
+        },
+      ],
+    };
+
+    vi.spyOn(WebAssembly, 'compile').mockResolvedValue({} as WebAssembly.Module);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:https://example.test/fail-glue');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('glue')) return new Response(glueBytes, { status: 200 });
+      if (url.includes('wasm')) return new Response(wasmBytes, { status: 200 });
+      return new Response(indexBytes, { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        createWasm64LanguageServer({
+          manifest,
+          createFactory: () => () => ({
+            ready: Promise.reject(new Error('bootstrap boom')),
+            send: () => undefined,
+            dispose: () => undefined,
+          }),
+        }),
+      ).rejects.toThrow('bootstrap boom');
+      expect(revokeSpy).toHaveBeenCalledWith('blob:https://example.test/fail-glue');
+    } finally {
+      globalThis.fetch = originalFetch;
+      vi.restoreAllMocks();
+    }
+  });
 });

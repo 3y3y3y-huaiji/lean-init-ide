@@ -147,8 +147,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const memoryGuardMaxBytes = wasm64MaxMemoryBytes(memoryTier);
   // 默认保持稳定的 wasm32；wasm64 目前仅为实验性试用，不支持 Memory64 的浏览器安全回落 wasm32。
   const memory64Supported = probeMemory64Support();
+  const wasm64Published = wasm64Available();
   let selectedArch: LeanRuntimeArch =
-    getRuntimeArch() === 'wasm64' && memory64Supported ? 'wasm64' : DEFAULT_RUNTIME_ARCH;
+    getRuntimeArch() === 'wasm64' && memory64Supported && wasm64Published
+      ? 'wasm64'
+      : DEFAULT_RUNTIME_ARCH;
   // 扩展库只随 wasm32 提供：课程声明了 requires 时，先把实验性 wasm64 退回稳定版，
   // 否则用户会在启动后直接看到 unknown module prefix。
   const autoStableFromWasm64 = requiredExtensions.length > 0 && selectedArch === 'wasm64';
@@ -802,7 +805,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       overallTotal?: number;
       message?: string;
       source?: string;
+      arch?: string;
     };
+    // 同源多标签页可能同时使用不同架构；只看当前面板架构的进度与回退。
+    if (data?.arch && data.arch !== selectedArch) return;
     if (data?.type === 'lean-asset-fallback' && data.name) {
       lastAssetFallback = { name: data.name, message: data.message ?? 'unknown error' };
       log(t.statusChunkFallback(data.name, data.message ?? 'unknown error'));
@@ -821,7 +827,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     if (!assetTelemetry.started) {
       assetTelemetry.started = true;
       assetTelemetry.startedAt = performance.now();
-      track('assets', { phase: 'first_bytes', source: data.source ?? 'unknown' });
+      track('assets', {
+        phase: 'first_bytes',
+        source: data.source ?? 'unknown',
+        arch: selectedArch,
+      });
     }
     if (downloaded && !assetTelemetry.completed) {
       assetTelemetry.completed = true;
@@ -829,6 +839,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         phase: 'complete',
         bytes: total,
         ms: performance.now() - assetTelemetry.startedAt,
+        arch: selectedArch,
       });
     }
     setStatus(
@@ -1002,6 +1013,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       track('first_diagnostics', {
         ms: runStartedAt ? performance.now() - runStartedAt : 0,
         count: diagnostics.length,
+        arch: selectedArch,
       });
     }
     diagnosticSeq += 1;
@@ -1169,11 +1181,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       setProgress(1);
       setStatus(t.statusLspReady, 'ready');
       log(t.logRuntimeReady);
-      track('lsp_ready', { ms: runStartedAt ? performance.now() - runStartedAt : 0 });
+      track('lsp_ready', {
+        ms: runStartedAt ? performance.now() - runStartedAt : 0,
+        arch: selectedArch,
+      });
     } else if (status.state === 'error') {
       const message = status.message ?? 'unknown error';
       log(t.logRuntimeError(message));
-      reportError('runtime', message);
+      reportError('runtime', message, { arch: selectedArch });
       if (engineEverReady) {
         handleRuntimeCrash(message);
       } else {
@@ -1735,6 +1750,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const runtimeArchLabelEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-label"]');
   const runtimeArchNoteEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-note"]');
   const runtimeArchButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-runtime-arch]')];
+  // 扩展库只随 wasm32 提供；课程声明 requires 时 wasm64 无法完成本课。
+  const wasm64BlockedByExtensions = requiredExtensions.length > 0;
 
   const syncRuntimeArchUi = () => {
     if (runtimeArchLabelEl) {
@@ -1745,16 +1762,21 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       const active = arch === selectedArch;
       button.dataset.active = String(active);
       button.setAttribute('aria-checked', String(active));
-      if (arch === 'wasm64' && !memory64Supported) {
+      if (
+        arch === 'wasm64' &&
+        (!memory64Supported || wasm64BlockedByExtensions || !wasm64Published)
+      ) {
         button.disabled = true;
       }
     }
     if (runtimeArchNoteEl) {
       runtimeArchNoteEl.textContent = !memory64Supported
         ? t.runtimeWasm64Unsupported
-        : selectedArch === 'wasm64'
-          ? t.runtimeWasm64NoLibraries
-          : '';
+        : !wasm64Published
+          ? t.runtimeWasm64NotPublished
+          : wasm64BlockedByExtensions || selectedArch === 'wasm64'
+            ? t.runtimeWasm64NoLibraries
+            : '';
     }
     // 运行时切换会改变扩展库可用性，两个菜单必须同步刷新。
     syncDefaultCheckboxes();
@@ -1764,10 +1786,22 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   for (const button of runtimeArchButtons) {
     button.addEventListener('click', () => {
       const nextArch = button.dataset.runtimeArch as LeanRuntimeArch;
-      if (nextArch === 'wasm64' && !memory64Supported) {
-        log(t.runtimeWasm64Unsupported);
-        syncRuntimeArchUi();
-        return;
+      if (nextArch === 'wasm64') {
+        if (!memory64Supported) {
+          log(t.runtimeWasm64Unsupported);
+          syncRuntimeArchUi();
+          return;
+        }
+        if (!wasm64Published) {
+          log(t.runtimeWasm64NotPublished);
+          syncRuntimeArchUi();
+          return;
+        }
+        if (wasm64BlockedByExtensions) {
+          log(t.runtimeWasm64NoLibraries);
+          syncRuntimeArchUi();
+          return;
+        }
       }
       if (nextArch === selectedArch) return;
       selectedArch = nextArch;

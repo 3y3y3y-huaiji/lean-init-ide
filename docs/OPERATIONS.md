@@ -48,7 +48,8 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 ```
 
 检查首页 `#app` 与标题、COOP/COEP、`sw.js` 可访问、`/cdn/<key>` 的 Range 206 与
-`Content-Range`/`ETag`、白名单外路径 404。
+`Content-Range`/`ETag`、白名单外路径 404；实验性 wasm64 另查 wasm Range、所有 pack 分片
+可读与索引整文件 SHA-256。
 
 `.github/workflows/smoke.yml` 另外提供手动触发与每日 01:00 UTC 巡检。它和部署流水线里的冒烟
 分工不同：部署后的那次回答「这次发布对不对」，每日巡检回答「站还在不在」，负责捕捉证书、
@@ -222,7 +223,9 @@ pnpm install --no-frozen-lockfile
 `navigator.doNotTrack === '1'` 时整页关闭，普通指标按 50% 采样，错误事件必发且每页最多 3 条。
 
 - 事件名：`boot` / `sw` / `assets` / `lsp_ready` / `first_diagnostics` / `runtime_error`
-- 字段：单事件最多 12 个，key 限 `[a-z][a-z0-9_]{0,23}`，字符串截断 120 字符
+- 字段：单事件最多 12 个，key 限 `[a-z][a-z0-9_]{0,23}`，字符串截断 120 字符；
+  `assets` / `lsp_ready` / `first_diagnostics` / `runtime_error` 带 `arch`（`wasm32` / `wasm64`），
+  用于区分实验性运行时
 - 上报：`navigator.sendBeacon('/api/telemetry')`，不可用时回退 `fetch(..., { keepalive: true })`
 - 接收端：`functions/api/telemetry.ts`，校验后返回 204；`public/_routes.json` 只放行 `/api/telemetry` 与 `/cdn/*` 两个精确路径
 - 限流：接收端自带固定窗口兜底（单 IP 每分钟 30 次、单 isolate 每分钟 600 次，超限返回 429），

@@ -39,16 +39,18 @@ export const createWasm64ProcessFactory =
       rejectReady = reject;
     });
 
-    const fail = (message: string): void => {
-      if (disposed) return;
-      rejectReady(new Error(message));
-      callbacks.onFailure(message);
-    };
-
     const startupTimer = setTimeout(
       () => fail('Lean wasm64 process startup timed out.'),
       hooks.startupTimeoutMs,
     );
+
+    const fail = (message: string): void => {
+      if (disposed) return;
+      rejectReady(new Error(message));
+      // 失败即终止 Worker，避免调用方只上报错误却留下一个仍在跑的 Lean 进程。
+      dispose();
+      callbacks.onFailure(message);
+    };
 
     const dispose = (): void => {
       if (disposed) return;

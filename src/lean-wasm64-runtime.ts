@@ -66,7 +66,11 @@ export type LoadWasm64Options = {
   readonly createZstd?: () => Promise<ZstdDecoder>;
   readonly onStage?: (stage: string) => void;
   readonly concurrency?: number;
+  /** 单个资产单个源的下载预算；超时后中止并尝试下一个源。 */
+  readonly assetTimeoutMs?: number;
 };
+
+const DEFAULT_ASSET_TIMEOUT_MS = 60 * 60_000;
 
 const toHex = (digest: ArrayBuffer): string =>
   [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
@@ -186,11 +190,17 @@ export const loadWasm64Runtime = async (
     }
 
     const errors: string[] = [];
+    const assetTimeoutMs = options.assetTimeoutMs ?? DEFAULT_ASSET_TIMEOUT_MS;
     for (const url of wasm64CandidateUrls(manifest, asset)) {
       const sameOrigin = url.startsWith('/');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), assetTimeoutMs);
       try {
         // 魔搭镜像会 302 到 cdn-lfs 域；同源路径仍禁止重定向。
-        const response = await fetchImpl(url, { redirect: sameOrigin ? 'error' : 'follow' });
+        const response = await fetchImpl(url, {
+          redirect: sameOrigin ? 'error' : 'follow',
+          signal: controller.signal,
+        });
         if (!response.ok) {
           errors.push(`${url}: HTTP ${response.status}`);
           continue;
@@ -222,7 +232,13 @@ export const loadWasm64Runtime = async (
         }
         return delivered;
       } catch (error) {
-        errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+        errors.push(
+          controller.signal.aborted
+            ? `${url}: timeout after ${assetTimeoutMs}ms`
+            : `${url}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      } finally {
+        clearTimeout(timer);
       }
     }
     throw new Error(`wasm64 资产 ${asset.name} 所有源均失败: ${errors.join(' | ')}`);

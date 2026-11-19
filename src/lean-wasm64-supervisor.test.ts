@@ -4,6 +4,7 @@ import {
   type LeanProcess,
   type LeanProcessCallbacks,
   type LspMessage,
+  type Wasm64SupervisorOptions,
 } from './lean-wasm64-supervisor';
 
 class FakeProcess implements LeanProcess {
@@ -39,7 +40,7 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 10; i += 1) await Promise.resolve();
 };
 
-const connect = async (options?: { onError?: (message: string) => void }) => {
+const connect = async (options?: Wasm64SupervisorOptions) => {
   const h = harness();
   const server = await createWasm64Supervisor(h.factory, options);
   const received: LspMessage[] = [];
@@ -122,6 +123,259 @@ describe('createWasm64Supervisor', () => {
       text: 'import Init\nexample : True := trivial',
       version: 2,
     });
+  });
+
+  it('文件进程的 initialize 响应只是内部握手，不转发给客户端', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    processes[1]!.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 'lean-browser:init',
+      result: { capabilities: { hoverProvider: true } },
+    });
+
+    expect(received.some((message) => message.id === 'lean-browser:init')).toBe(false);
+  });
+
+  it('文件进程 initialize 失败时上报终态错误，而不是静默丢弃', async () => {
+    const onError = vi.fn();
+    const { processes, send } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    processes[1]!.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 'lean-browser:init',
+      error: { code: -32603, message: 'bad params' },
+    });
+
+    expect(onError).toHaveBeenCalledWith('Lean document process failed to initialize: bad params');
+  });
+
+  it('服务端请求 ID 重写后，客户端响应与 $/cancelRequest 都映射回原始 ID', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+    const file = processes[1]!;
+
+    file.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 7,
+      method: '$/lean/plainGoal',
+      params: {},
+    });
+    const rewritten = received.find((message) => message.method === '$/lean/plainGoal');
+    expect(rewritten?.id).toBe('lean-browser:1');
+
+    await send({
+      jsonrpc: '2.0',
+      method: '$/cancelRequest',
+      params: { id: 'lean-browser:1' },
+    });
+    expect(file.sent.at(-1)).toMatchObject({
+      method: '$/cancelRequest',
+      params: { id: 7 },
+    });
+
+    file.callbacks.onMessage({
+      jsonrpc: '2.0',
+      id: 8,
+      method: '$/lean/plainGoal',
+      params: {},
+    });
+    const second = received.filter((message) => message.method === '$/lean/plainGoal').at(-1);
+    await send({ jsonrpc: '2.0', id: second!.id!, result: { goals: [] } });
+    expect(file.sent.at(-1)).toMatchObject({ id: 8, result: { goals: [] } });
+  });
+
+  it('时间窗内反复以退出码 2 重启会判定为重启风暴并停止重开', async () => {
+    const onError = vi.fn();
+    const { processes, send } = await connect({
+      onError,
+      now: () => 0,
+      maxRestarts: 2,
+      restartWindowMs: 1000,
+    });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    processes[1]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[2]?.args).toEqual(['-j4', '--worker', URI]);
+
+    processes[2]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[3]?.args).toEqual(['-j4', '--worker', URI]);
+
+    processes[3]!.callbacks.onExit(2);
+    await flush();
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining('restarted 2 times within 1s; giving up'),
+    );
+    expect(processes[3]!.disposed).toBe(true);
+    expect(processes).toHaveLength(4);
+  });
+
+  it('运行足够久的正常重启不计入风暴，只有启动后立即退出才计数', async () => {
+    const onError = vi.fn();
+    let clock = 0;
+    const { processes, send } = await connect({
+      onError,
+      now: () => clock,
+      maxRestarts: 1,
+      restartWindowMs: 60_000,
+    });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    // 运行 20s 后改 header：不计数。
+    clock = 20_000;
+    processes[1]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[2]?.args).toEqual(['-j4', '--worker', URI]);
+    expect(onError).not.toHaveBeenCalled();
+
+    // 新进程立即退出：计数 1。
+    processes[2]!.callbacks.onExit(2);
+    await flush();
+    expect(processes[3]?.args).toEqual(['-j4', '--worker', URI]);
+    expect(onError).not.toHaveBeenCalled();
+
+    // 再立即退出：超过 maxRestarts=1。
+    processes[3]!.callbacks.onExit(2);
+    await flush();
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining('restarted 1 times within 60s; giving up'),
+    );
+  });
+
+  it('超过 8 MiB UTF-8 的文档在创建进程前就被拒绝', async () => {
+    const onError = vi.fn();
+    const { processes, send } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+
+    await send(openMessage('a'.repeat(8 * 1024 ** 2 + 1)));
+
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('8 MiB (UTF-8)'));
+    expect(processes).toHaveLength(1);
+  });
+
+  it('didChange 的增量 range 会应用到重启重放缓冲区', async () => {
+    const { processes, send } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage('line1\nline2\nline3'));
+
+    await send({
+      jsonrpc: '2.0',
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: URI, version: 2 },
+        contentChanges: [
+          {
+            range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } },
+            text: 'LINE2',
+          },
+        ],
+      },
+    });
+
+    processes[1]!.callbacks.onExit(2);
+    await flush();
+
+    const replayed = processes[2]!.sent.find(
+      (message) => message.method === 'textDocument/didOpen',
+    );
+    expect(replayed?.params?.textDocument).toMatchObject({
+      text: 'line1\nLINE2\nline3',
+      version: 2,
+    });
+  });
+
+  it('didOpen 之前的请求先排队，打开文档后按顺序重放', async () => {
+    const { processes, send } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+
+    await send({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: URI } },
+    });
+    expect(processes).toHaveLength(1);
+
+    await send(openMessage());
+    expect(processes[1]!.sent.map((message) => message.method)).toEqual([
+      'initialize',
+      'textDocument/didOpen',
+      'textDocument/hover',
+    ]);
+  });
+
+  it('didOpen 之前最多排队 128 个请求，超出即终止', async () => {
+    const onError = vi.fn();
+    const { send } = await connect({ onError });
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+
+    for (let id = 2; id <= 130; id += 1) {
+      await send({
+        jsonrpc: '2.0',
+        id,
+        method: 'textDocument/hover',
+        params: { textDocument: { uri: URI } },
+      });
+    }
+
+    expect(onError).toHaveBeenCalledWith('Too many Lean requests before didOpen.');
+  });
+
+  it('shutdown 返回 null 并取消未完成请求', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+    await send({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: URI } },
+    });
+
+    await send({ jsonrpc: '2.0', id: 6, method: 'shutdown', params: {} });
+
+    expect(processes[1]!.disposed).toBe(true);
+    expect(received.find((message) => message.id === 5)?.error?.message).toBe(
+      'Lean LSP shut down.',
+    );
+    expect(received.find((message) => message.id === 6)?.result).toBeNull();
+  });
+
+  it('打开文档后，指向其它 URI 的请求直接报错', async () => {
+    const { processes, send, received } = await connect();
+    await send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    processes[0]!.callbacks.onMessage({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } });
+    await send(openMessage());
+
+    await send({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'textDocument/hover',
+      params: { textDocument: { uri: 'file:///workspace/Other.lean' } },
+    });
+
+    expect(received.find((message) => message.id === 7)?.error?.message).toBe(
+      'Lean LSP has a different active document.',
+    );
   });
 
   it('非 2 的退出码是致命错误：上报并让未完成请求以错误结算', async () => {

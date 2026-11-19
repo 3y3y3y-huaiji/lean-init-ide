@@ -64,13 +64,16 @@ export const unpackLibrary = (
   // TextDecoder.decode 在浏览器里拒绝 SharedArrayBuffer 视图（"must not be shared"），
   // 而索引与 pack 一样由 SAB 承载；索引只有几百 KB，先复制成普通缓冲再解码。
   const index = JSON.parse(new TextDecoder().decode(new Uint8Array(indexBytes))) as PackIndex;
-  const chunks = index.chunks.map((chunk) => {
-    const bytes = library[chunk.path.replace(/\.zst$/, '')];
-    if (!bytes || bytes.byteLength !== chunk.uncompressedBytes) {
-      throw new Error(`wasm64 库分片 ${chunk.path} 缺失或长度不符`);
-    }
-    return { ...chunk, bytes };
-  });
+  // 索引顺序不一定按偏移量排列；跨分片文件必须按偏移量顺序拼接。
+  const chunks = index.chunks
+    .map((chunk) => {
+      const bytes = library[chunk.path.replace(/\.zst$/, '')];
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength !== chunk.uncompressedBytes) {
+        throw new Error(`wasm64 库分片 ${chunk.path} 缺失或长度不符`);
+      }
+      return { ...chunk, bytes };
+    })
+    .sort((left, right) => left.offset - right.offset);
   return index.files.map((file) => {
     if (!SAFE_LIBRARY_PATH.test(file.path)) throw new Error(`wasm64 库条目非法: ${file.path}`);
     const out = new Uint8Array(file.bytes);

@@ -38,6 +38,10 @@ pnpm exec vitest run src/lsp-patches.test.ts
 `patch:lsp` 会从 npm registry 下载对应版本、校验 tarball 完整性、应用补丁并更新
 `pnpm-workspace.yaml`，不依赖 `pnpm patch-commit`，避开它在 Windows 上的临时目录清理问题。
 
+升级后还要回归课程页的诊断过滤：`src/views/lesson.ts` 的 `dropSpuriousRedeclarations` 用来掩盖
+FileWorker 偶发重复精化导致的「already declared」假阳性。先确认上游是否已修复；已修复就删除这段
+过滤并更新相关单测，未修复则保留。
+
 ## wasm64 运行时与栈补丁
 
 wasm64 构建链、Lean 版本 pin（默认 4.36.0-rc2，可用 `LEAN_PIN_*` 覆盖）与三处栈补丁只在

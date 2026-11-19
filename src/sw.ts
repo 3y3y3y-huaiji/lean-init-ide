@@ -88,7 +88,10 @@ const MAX_SPLIT_DEPTH = 2;
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 sw.addEventListener('install', () => {
-  void sw.skipWaiting();
+  // 首次安装要立刻接管，否则首个页面的大文件下载不经过 SW。
+  // 已有旧版本时等待所有受控页面关闭再激活：新清单的资产字节可能已变化，
+  // 直接 claim 会让还停留在旧版页面的用户按旧清单校验新字节。
+  if (!sw.registration.active) void sw.skipWaiting();
 });
 
 sw.addEventListener('activate', (event) => {

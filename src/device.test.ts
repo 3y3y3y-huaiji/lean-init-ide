@@ -118,6 +118,11 @@ describe('wasm64MaxMemoryBytes & probeMemory64Support', () => {
       probeMemory64Support({ Memory: BadMemory as unknown as typeof WebAssembly.Memory }),
     ).toBe(false);
     expect(probeMemory64Support({ Memory: undefined })).toBeTypeOf('boolean');
+
+    const origWasm = globalThis.WebAssembly;
+    Object.defineProperty(globalThis, 'WebAssembly', { value: undefined, configurable: true });
+    expect(probeMemory64Support()).toBe(false);
+    Object.defineProperty(globalThis, 'WebAssembly', { value: origWasm, configurable: true });
   });
 
   it('默认架构为 wasm32（1GiB），切换到 wasm64 时按档位返回对应上限', () => {

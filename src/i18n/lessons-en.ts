@@ -1333,6 +1333,10 @@ export const lessonsEn: LessonPage[] = [
         text: '`sorry` generates `sorryAx`, which makes any proposition “hold”. It is fine for drafts, not for delivery.',
       },
       {
+        kind: 'goal',
+        text: "Start: ⊢ 1 = 2\nAfter sorry: no goals left (but emits a warning and depends on sorryAx)\nAfter #print axioms cheat: prints 'cheat' depends on axioms: [sorryAx]",
+      },
+      {
         kind: 'note',
         text: 'Run it once, then replace `sorry` in `cheat` with `rfl` and see why `1 = 2` cannot be proved. That error is exactly what `sorry` was hiding.',
         tone: 'warn',
@@ -1385,6 +1389,10 @@ export const lessonsEn: LessonPage[] = [
       {
         kind: 'p',
         text: 'Cheat sheet: `Even` / `Odd`, `Nat.Prime`, `Nat.gcd`, `Set`, `Function.Injective`, `List.Perm` are the Mathlib names for these concepts.',
+      },
+      {
+        kind: 'goal',
+        text: 'Start: ⊢ ∃ k, 4 = 2 * k\nProvide witness 2: ⊢ 4 = 2 * 2\nrfl closes it: no goals left (#check only queries types and creates no goals)',
       },
       {
         kind: 'note',

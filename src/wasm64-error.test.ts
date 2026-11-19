@@ -44,4 +44,10 @@ describe('formatWorkerError', () => {
 
     expect(formatWorkerError(cyclic)).toBe('inner failure');
   });
+
+  it('处理字符串、原始值与空白兜底', () => {
+    expect(formatWorkerError('direct worker failure')).toBe('direct worker failure');
+    expect(formatWorkerError('   ', '   ')).toBe('Lean wasm64 worker error.');
+    expect(formatWorkerError(42, 'fallback msg')).toBe('fallback msg');
+  });
 });

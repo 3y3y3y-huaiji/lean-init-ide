@@ -12,7 +12,7 @@ import {
   CHALLENGES,
   type Challenge,
 } from '../challenges';
-import { renderLeanMarkup } from '../components/lean-markup';
+import { renderLeanMarkup, showEditorLoadFailure } from '../components/lean-markup';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from '../components/ui';
 import { currentMemoryTier, shouldAutoStart } from '../device';
 import { draftKeyFor } from '../draft';
@@ -44,7 +44,7 @@ const renderIntro = (locale: Locale): string => {
     .join('');
   return `
     <details data-role="challenge-intro" open class="rounded-2xl border border-line bg-panel p-5">
-      <summary class="cursor-pointer text-sm font-[650]">${escapeHtml(t.title)}</summary>
+      <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-sm font-[650]">${escapeHtml(t.title)}</summary>
       <p class="mt-2 mb-0 max-w-[720px] text-sm leading-relaxed text-muted">${escapeHtml(t.body)}</p>
       <ol class="m-0 mt-3 grid list-none grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2 p-0">${steps}</ol>
       <p class="mt-3 mb-0 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-xs leading-relaxed text-fg">${escapeHtml(t.codeNote)}</p>
@@ -98,14 +98,14 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
       (tactic, index) => `
         <div class="rounded-lg border border-line bg-panel-soft p-2.5">
           <button type="button" class="${toolbarButtonClass}" data-tactic-index="${index}">${escapeHtml(tactic.label)}</button>
-          <p class="mt-1.5 mb-0 text-[11.5px] leading-relaxed text-muted">${escapeHtml(tactic.description[locale])}</p>
+          <p class="mt-1.5 mb-0 text-xs leading-relaxed text-muted">${escapeHtml(tactic.description[locale])}</p>
         </div>`,
     )
     .join('');
 
   return `
     <section data-role="challenge" class="pb-4">
-      <a class="text-[13px] text-muted no-underline hover:text-accent" href="${challengesPath(locale)}">${detail.back}</a>
+      <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center text-[13px] text-muted no-underline hover:text-accent" href="${challengesPath(locale)}">${detail.back}</a>
       <div class="mt-3 max-w-[760px]">
         <p class="m-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
         <h1 class="mt-0 mb-3 text-[clamp(26px,4vw,38px)] tracking-[-0.02em]">${escapeHtml(challenge.title[locale])}</h1>
@@ -132,7 +132,7 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span data-role="goal-progress" class="text-[13px] font-[650] text-fg">${detail.goalsNone}</span>
-          <span class="text-[11px] uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</span>
+          <span class="text-xs uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</span>
         </div>
         <p class="mt-1.5 mb-0 text-xs leading-relaxed text-muted">${detail.tacticsHint}</p>
         <div class="mt-2.5 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2">${tactics}</div>
@@ -148,11 +148,11 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
 
       <div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5">
         <details data-role="hint" class="rounded-xl border border-line bg-panel p-4">
-          <summary class="cursor-pointer text-[13px] font-[650]">${detail.hintLabel}</summary>
+          <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.hintLabel}</summary>
           <p class="mt-2 mb-0 text-sm leading-relaxed text-muted">${escapeHtml(challenge.hint[locale])}</p>
         </details>
         <details data-role="solution" class="rounded-xl border border-line bg-panel p-4">
-          <summary class="cursor-pointer text-[13px] font-[650]">${detail.solutionTitle}</summary>
+          <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.solutionTitle}</summary>
           <p class="mt-2 mb-2 text-sm leading-relaxed text-muted">${detail.solutionHint}</p>
           <button class="${ghostButtonClass}" type="button" data-role="load-solution">${detail.loadSolution}</button>
           <pre class="mt-3 mb-0 overflow-auto rounded-lg border border-line bg-panel-soft p-3 font-mono text-xs leading-[1.65] text-fg"><code>${escapeHtml(
@@ -214,7 +214,25 @@ export const mountChallenge = async (
   };
   earlyStartEl?.addEventListener('click', onEarlyStart, { once: true });
 
-  const { createLeanPanel } = await import('../components/lean-panel');
+  let createLeanPanel: typeof import('../components/lean-panel').createLeanPanel;
+  try {
+    ({ createLeanPanel } = await import('../components/lean-panel'));
+  } catch {
+    earlyStartEl?.removeEventListener('click', onEarlyStart);
+    if (earlyStartEl) earlyStartEl.disabled = false;
+    const panelMessages = {
+      ...messagesFor(locale).playground,
+      title: t.editorTitle,
+      hint: t.detail.starterNote,
+    };
+    showEditorLoadFailure(panelHost, panelMessages, () => {
+      panelHost.innerHTML = renderLeanMarkup(locale, 'full', panelMessages, undefined, {
+        heading: false,
+      });
+      void mountChallenge(root, locale, slug);
+    });
+    return;
+  }
   earlyStartEl?.removeEventListener('click', onEarlyStart);
   if (earlyStartEl) earlyStartEl.disabled = false;
 

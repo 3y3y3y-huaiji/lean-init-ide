@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getAutoStart,
   getDefaultExtensions,
@@ -104,5 +104,25 @@ describe('runtime architecture selection', () => {
 
     setRuntimeArch('wasm32');
     expect(getRuntimeArch()).toBe('wasm32');
+  });
+
+  it('存储抛错时全部读写操作安全回退', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    expect(getRuntimeArch()).toBe('wasm32');
+    expect(getAutoStart()).toBe(false);
+    expect(getDefaultExtensions()).toEqual([]);
+    expect(readRuntimeSession()).toBeNull();
+    expect(() => {
+      setRuntimeArch('wasm64');
+      setAutoStart(true);
+      setDefaultExtensions(['std']);
+      writeRuntimeSession({ active: true, extensions: ['std'] });
+    }).not.toThrow();
+    vi.restoreAllMocks();
   });
 });

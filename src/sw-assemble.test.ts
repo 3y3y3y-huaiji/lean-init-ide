@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { loadRangedAsset, type AssembleOptions } from './sw-assemble';
+import { assembleResponse, loadRangedAsset, type AssembleOptions } from './sw-assemble';
 
 const body = (length: number) =>
   Uint8Array.from({ length }, (_, index) => index % 251).buffer as ArrayBuffer;
@@ -161,5 +161,24 @@ describe('loadRangedAsset', () => {
       'asset.bin',
       'all remote sources failed, falling back to origin: offline',
     );
+  });
+
+  it('无法改写 Response 元属性时回退到 fallbackFetch', async () => {
+    const req = request();
+    const fallbackFetch = vi.fn(async () => new Response('fallback-prop'));
+    const defineSpy = vi.spyOn(Object, 'defineProperty').mockImplementation(() => {
+      throw new TypeError('cannot redefine');
+    });
+    try {
+      const response = await assembleResponse(
+        req,
+        new Blob([new Uint8Array([1, 2, 3])]),
+        fallbackFetch,
+      );
+      expect(await response.text()).toBe('fallback-prop');
+      expect(fallbackFetch).toHaveBeenCalledWith(req);
+    } finally {
+      defineSpy.mockRestore();
+    }
   });
 });

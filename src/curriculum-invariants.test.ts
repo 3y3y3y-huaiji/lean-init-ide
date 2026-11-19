@@ -40,6 +40,10 @@ describe('curriculum & route invariants', () => {
         expect(lesson.title.trim().length, `${locale}:${lesson.slug}:title`).toBeGreaterThan(0);
         expect(lesson.lead.trim().length, `${locale}:${lesson.slug}:lead`).toBeGreaterThan(0);
         expect(lesson.blocks.length, `${locale}:${lesson.slug}:blocks`).toBeGreaterThan(0);
+        expect(
+          lesson.blocks.some((block) => block.kind === 'goal'),
+          `${locale}:${lesson.slug}:goal-block`,
+        ).toBe(true);
 
         for (const block of lesson.blocks) {
           if (block.kind === 'code') {

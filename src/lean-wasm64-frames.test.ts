@@ -57,6 +57,7 @@ describe('encodeFrame / FrameDecoder', () => {
 describe('RingWriter', () => {
   it('写入并推进 write 游标', () => {
     const writer = new RingWriter(new SharedArrayBuffer(16 + 64), 64);
+    expect(writer.capacity).toBe(64);
     writer.write(utf8.encode('abc'));
     expect(writer.stats()).toEqual({ write: 3, read: 0, closed: false });
     writer.close();

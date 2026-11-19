@@ -88,4 +88,47 @@ describe('theme', () => {
     theme.setThemePreference('light');
     expect(seen).toEqual(['light', 'dark']);
   });
+
+  it('启动时恢复已保存的暗色偏好，并在存储异常或系统无变化时保持稳定', async () => {
+    localStorage.setItem('lean:theme', 'dark');
+    const matches = false;
+    let changeHandler: (() => void) | undefined;
+    window.matchMedia = vi.fn((query: string) => ({
+      get matches() {
+        return matches;
+      },
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn((_event: string, cb: () => void) => {
+        changeHandler = cb;
+      }),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+
+    const theme = await import('./theme');
+    expect(theme.getThemePreference()).toBe('dark');
+    expect(theme.getResolvedTheme()).toBe('dark');
+
+    // system 模式下 OS 未变时不触发回调；存储异常时不抛错。
+    theme.setThemePreference('system');
+    const listener = vi.fn();
+    theme.onResolvedThemeChange(listener);
+    changeHandler?.();
+    expect(listener).not.toHaveBeenCalled();
+
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    expect(() => theme.setThemePreference('light')).not.toThrow();
+
+    vi.resetModules();
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const fallbackTheme = await import('./theme');
+    expect(fallbackTheme.getThemePreference()).toBe('system');
+  });
 });

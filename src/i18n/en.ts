@@ -193,10 +193,22 @@ export const en: Messages = {
     proofAccepted: 'Proof accepted · Lean has no remaining goals',
     editorHint:
       'The right panel is the real editor. Opening this page starts loading Lean automatically; once it is ready, edits show diagnostics and goals.',
+    goalPanelTitle: 'Goal panel',
+    goalStepLabel: (current, total) => `Step ${current} / ${total}`,
+    goalPrev: 'Prev',
+    goalNext: 'Next',
+    goalLive: 'Live check',
+    goalBackToSteps: 'Back to steps',
+    goalOpenPlayground: 'Inspect live Goal in playground',
+    goalChecking: 'Running code and checking Goal…',
+    goalNoRemaining: '✓ No remaining goals (proof accepted)',
   },
   playground: {
     title: 'Lean playground',
     hint: 'The first run downloads about 102 MB of runtime; later visits use the persistent cache.',
+    editorLoading: 'Loading editor…',
+    editorLoadingHint: 'Preparing syntax highlighting and editor UI',
+    editorLoadFailed: 'Failed to load the editor bundle. Check your network and retry.',
     seoDescription:
       'Open the Lean 4 Playground: a browser-based editor and language server run as WebAssembly in a Web Worker, with Init built in, Std and Batteries on demand, and no backend.',
     facts: (lessonCount) =>

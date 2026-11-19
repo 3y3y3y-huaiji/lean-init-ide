@@ -160,4 +160,45 @@ describe('playground 页面', () => {
     expect(options.code).toBe(messagesFor('zh').playground.defaultCode);
     expect(document.body.querySelector('[data-role="challenge-notice"]')).toBeNull();
   });
+
+  it('带 ?lesson=eng-hashmap 时传递 requiredExtensions', async () => {
+    history.replaceState(null, '', '/zh/playground?lesson=eng-hashmap');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { requiredExtensions?: string[] },
+    ];
+    expect(options.requiredExtensions).toEqual(['std']);
+  });
+
+  it('编辑器主包加载失败时展示错误与重试按钮，点击重试可恢复挂载', async () => {
+    vi.resetModules();
+    let shouldFail = true;
+    vi.doMock('../components/lean-panel', () => {
+      if (shouldFail) throw new Error('chunk fetch failed');
+      return { createLeanPanel };
+    });
+    const { loadLessons, loadLocale } = await import('../i18n');
+    await Promise.all([loadLocale('zh'), loadLessons('zh')]);
+    const { mountPlayground: mountFresh, renderPlayground: renderFresh } =
+      await import('./playground');
+
+    document.body.innerHTML = renderFresh('zh');
+    await mountFresh(document.body, 'zh');
+
+    const status = document.body.querySelector<HTMLElement>('[data-role="status"]')!;
+    expect(status.dataset.state).toBe('error');
+    const retry = document.body.querySelector<HTMLButtonElement>('[data-role="retry-editor"]')!;
+    expect(retry).not.toBeNull();
+
+    shouldFail = false;
+    retry.click();
+    await vi.waitFor(() => expect(createLeanPanel).toHaveBeenCalledTimes(1));
+
+    vi.doUnmock('../components/lean-panel');
+    vi.resetModules();
+  });
 });

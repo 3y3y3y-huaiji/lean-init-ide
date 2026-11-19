@@ -1,0 +1,1329 @@
+name: Runtime · Lean 4.36 wasm64 gate
+
+# wasm64 运行时的构建与行为门禁。Lean 版本冻结在 scripts/pin-lean.ts 的
+# v4.36.0-rc2（commit b35cb10c），三处热点栈补丁在 fetch 后应用：
+#   lean-replace-fn-iterative.patch  src/kernel/replace_fn.cpp
+#   lean-whnf-stack.patch            src/Lean/Meta/WHNF.lean
+#   lean-simp-loop-stack.patch       src/Lean/Meta/Tactic/Simp/Main.lean
+#
+# 分两层，避免每次改动都在 Mathlib 和长 LSP 等待上耗掉一小时：
+#   smoke  PR 或 main 上改动构建链：--version + Init 编译 + Init LSP good/bad，
+#          并跑 wasm64-patch-equivalence 差分门禁（官方未打补丁 Lean vs 打补丁 wasm64）。
+#   deep   Mathlib 裁切、官方 olean、数学库 LSP、release/npm。只在 nightly、
+#          手动 dispatch(mode=deep) 或提交信息带 [wasm64-deep] 时跑。
+on:
+  push:
+    branches: [main]
+    # 只有会改变 wasm64 产物或差分门禁的改动才值得跑一轮构建。
+    paths:
+      - 'scripts/patches/**'
+      - 'scripts/pin-lean.ts'
+      - 'scripts/patch-wasm64.sh'
+      - 'scripts/build-wasm64-gmp.sh'
+      - 'scripts/link-wasm64-lsp.sh'
+      - 'scripts/link-wasm64-release.sh'
+      - 'scripts/adapt-glue.ts'
+      - 'scripts/ci/**'
+      - 'scripts/lib/**'
+      - 'scripts/mathlib-slice.ts'
+      - 'scripts/pack-lean-lib.ts'
+      - 'scripts/pack-npm.ts'
+      - 'scripts/package-wasm64-runtime.ts'
+      - 'scripts/wasm64-*.ts'
+      - 'scripts/check-cpp.sh'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.spike.json'
+      - 'vitest.spike.config.ts'
+      - '.github/workflows/spike-wasm64.yml'
+  pull_request:
+    paths:
+      - 'scripts/patches/**'
+      - 'scripts/pin-lean.ts'
+      - 'scripts/patch-wasm64.sh'
+      - 'scripts/build-wasm64-gmp.sh'
+      - 'scripts/link-wasm64-lsp.sh'
+      - 'scripts/link-wasm64-release.sh'
+      - 'scripts/adapt-glue.ts'
+      - 'scripts/ci/**'
+      - 'scripts/lib/**'
+      - 'scripts/mathlib-slice.ts'
+      - 'scripts/pack-lean-lib.ts'
+      - 'scripts/pack-npm.ts'
+      - 'scripts/package-wasm64-runtime.ts'
+      - 'scripts/wasm64-*.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.spike.json'
+      - 'vitest.spike.config.ts'
+      - '.github/workflows/spike-wasm64.yml'
+  # nightly 跑 deep：白天不占 runner，也避免一天多次全量 Mathlib。
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'smoke 只验 Init；deep 追加 Mathlib 与 release；publish 从指定 deep run 发布'
+        type: choice
+        options: [smoke, deep, publish]
+        default: smoke
+      source_run_id:
+        description: 'mode=publish 时复用的 workflow run ID（需包含 wasm64-runtime-release 产物）'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# 同一触发源的新一轮直接取消上一轮：push 不再排在旧构建后面干等。
+# 用 event_name 分组，nightly/manual 的长任务不会被随手一推杀掉。
+concurrency:
+  group: spike-wasm64-${{ github.event_name }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # 便宜的门禁先跑：类型、lint、格式、单测、workflow 语法。
+  # 任何一项不过就不该占用 6 小时的构建 runner。
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: 安装依赖
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          pnpm install --frozen-lockfile
+
+      - name: TypeScript 静态检查
+        run: pnpm run typecheck:spike
+
+      - name: ESLint
+        run: pnpm run lint:spike
+
+      - name: Prettier
+        run: pnpm run format:check:spike
+
+      - name: 单测与覆盖率
+        run: pnpm run test:spike:coverage
+
+      - name: GitHub Actions 语法检查
+        run: |
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color -shellcheck=
+
+  prepare:
+    needs: lint
+    if: github.event.inputs.mode != 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
+
+      - name: 缓存 Emscripten 6.0.0
+        uses: actions/cache@v6
+        with:
+          path: emsdk
+          key: wasm64-emsdk-6.0.0-v1
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          if [ ! -x emsdk/upstream/emscripten/emcc ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
+          fi
+          source emsdk/emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 探测 memory64 + pthreads
+        run: |
+          source emsdk/emsdk_env.sh
+          cat > probe.c <<'EOF'
+          #include <pthread.h>
+          #include <stdio.h>
+          static void *worker(void *arg) { *(int *)arg = 42; return NULL; }
+          int main(void) {
+            printf("sizeof(void*)=%zu\n", sizeof(void *));
+            pthread_t t;
+            int value = 0;
+            if (pthread_create(&t, NULL, worker, &value) != 0) {
+              puts("pthread_create failed");
+              return 2;
+            }
+            pthread_join(t, NULL);
+            printf("value=%d\n", value);
+            return value == 42 ? 0 : 3;
+          }
+          EOF
+          emcc probe.c -sMEMORY64=1 -pthread -O2 -sPTHREAD_POOL_SIZE=2 -sENVIRONMENT=node -o probe.mjs
+          node probe.mjs
+
+      - name: 缓存 GMP（wasm64）
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/gmp-install
+            work/gmp-6.3.0.tar.xz
+          key: wasm64-gmp-v1
+
+      - name: 构建 GMP（USE_GMP=ON 所需）
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/build-wasm64-gmp.sh "$GITHUB_WORKSPACE/work/gmp-install"
+
+      - name: 准备 wasm-llvm 并切成 wasm64 + GMP
+        run: |
+          git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
+          bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
+          # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
+          node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
+
+      - name: 缓存 Lean 源码与引导包
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/lean4
+            work/lean-*-linux
+          key: wasm64-src-v6
+
+      - name: fetch
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          # 缓存里的源码可能带着上一次的本地修改；先恢复干净，让 fetch 重新应用 pinned patch。
+          if [ -d "$WASM_LLVM_LEAN_WORK_DIR/lean4/.git" ]; then
+            git -C "$WASM_LLVM_LEAN_WORK_DIR/lean4" reset --hard -q HEAD
+            git -C "$WASM_LLVM_LEAN_WORK_DIR/lean4" clean -fdq
+          fi
+          bash producer/lean-browser/scripts/build.sh fetch
+          # wasm64 的源码修复（lean.h / CMakeLists / 诊断插桩）统一放在 TS 脚本里，
+          # 锚点缺失会让这一步直接失败，不再靠 sed 静默跳过。
+          node "$GITHUB_WORKSPACE/scripts/ci/backport-wasm64.ts" "$WASM_LLVM_LEAN_WORK_DIR/lean4"
+          # 显式工作栈版 whnfCore：消除 WHNF 归约环里 whnfCore/whnfEasyCases 的原生栈帧。
+          if ! grep -q 'whnfCoreStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/WHNF.lean"; then
+            patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-whnf-stack.patch"
+          fi
+          grep -q 'whnfCoreStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/WHNF.lean"
+          # 显式堆栈版 replace_fn：Lean 的 Expr.replace（instantiateLevelParams 走这条）
+          # 是后序遍历，深表达式会在 1MB Worker 栈上把 replace_fn::apply 递归打穿。
+          if ! grep -q 'wants_cache' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/kernel/replace_fn.cpp"; then
+            patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-replace-fn-iterative.patch"
+          fi
+          grep -q 'wants_cache' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/kernel/replace_fn.cpp"
+          # 显式续延栈版 simpLoop：消除每重写一步压下的 simpLoop/visitPreContinue 两个原生帧。
+          if ! grep -q 'simpLoopStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/Tactic/Simp/Main.lean"; then
+            patch -p1 -d "$WASM_LLVM_LEAN_WORK_DIR/lean4" < "$GITHUB_WORKSPACE/scripts/patches/lean-simp-loop-stack.patch"
+          fi
+          grep -q 'simpLoopStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/Tactic/Simp/Main.lean"
+
+      - name: 缓存 runtime 产物
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/build-wasm
+            work/emcache
+          key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
+
+      - name: runtime
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh emsdk runtime
+
+      - name: 缓存 cgen（机器生成的 C 源码）
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
+      - name: cgen
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh cgen
+          WHNF_C="$(find "$WASM_LLVM_LEAN_WORK_DIR/cgen" -name 'WHNF.c' | head -n 1)"
+          test -n "$WHNF_C"
+          grep -qE 'LEAN_EXPORT.*l___private_Lean_Meta_WHNF_0__Lean_Meta_whnfCore_go\(' "$WHNF_C"
+
+  # 每次 push 的快速回路：只证明工具链、Init 编译和 Init LSP 没坏。
+  smoke:
+    needs: prepare
+    if: github.event.inputs.mode != 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
+
+      - name: 缓存 Emscripten 6.0.0
+        uses: actions/cache@v6
+        with:
+          path: emsdk
+          key: wasm64-emsdk-6.0.0-v1
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          if [ ! -x emsdk/upstream/emscripten/emcc ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
+          fi
+          source emsdk/emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 缓存 GMP（wasm64）
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/gmp-install
+            work/gmp-6.3.0.tar.xz
+          key: wasm64-gmp-v1
+
+      - name: 构建 GMP（USE_GMP=ON 所需）
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/build-wasm64-gmp.sh "$GITHUB_WORKSPACE/work/gmp-install"
+
+      - name: 准备 wasm-llvm 并切成 wasm64 + GMP
+        run: |
+          git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
+          bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
+          # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
+          node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
+
+      - name: 恢复 Lean 源码与引导包
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/lean4
+            work/lean-*-linux
+          key: wasm64-src-v6
+
+      - name: backport 上游 wasm64 修复
+        run: |
+          node scripts/ci/backport-wasm64.ts work/lean4
+          if ! grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-whnf-stack.patch
+          fi
+          grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean
+          # 显式堆栈版 replace_fn：instantiateLevelParams → Expr.replace 不再递归压栈。
+          if ! grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-replace-fn-iterative.patch
+          fi
+          grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp
+          # 显式续延栈版 simpLoop：重写链改成堆上的 continuation 列表。
+          if ! grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-simp-loop-stack.patch
+          fi
+          grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean
+
+      - name: 恢复 runtime 产物
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/build-wasm
+            work/emcache
+          key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
+
+      - name: 恢复 cgen
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
+      - name: 缓存 objects
+        uses: actions/cache@v6
+        with:
+          path: work/obj
+          key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
+      - name: 写入 emsdk 路径（后续阶段不再重复检查）
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh emsdk
+
+      - name: objects
+        id: objects
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh objects
+
+      # 浏览器验证失败会让 Job 失败，actions/cache 的 Post 阶段就不会保存 objects，
+      # 于是每次迭代都要重编 649 个模块。这里在 objects 成功后立刻显式保存。
+      - name: 立即保存 objects 缓存
+        if: always() && steps.objects.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: work/obj
+          key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
+      - name: link
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh link
+          grep -q 'initialize_Init_Data_Random' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
+          grep -q 'l_IO_getRandomBytes___boxed' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
+
+      # -mtail-call 只在**编译步**把尾调用写成 return_call；objects 缓存里如果是旧对象，
+      # link 会静默链出一个没有 return_call 的二进制，开关就变成安慰剂（缓存键已并入
+      # scripts/patch-wasm64.sh，这里再兜一层）。反汇编数一遍，数到 0 就失败。
+      - name: 校验 return_call、whnfCoreStep、simpLoopStep 真的进了产物
+        run: |
+          source emsdk/emsdk_env.sh
+          DIS="$(command -v wasm-dis || printf '%s\n' "$EMSDK/upstream/bin/wasm-dis")"
+          test -x "$DIS" || { echo "找不到 wasm-dis，无法校验"; exit 1; }
+          WAT="$("$DIS" work/dist/lean.wasm)"
+          total="$(printf '%s\n' "$WAT" | grep -c 'return_call' || true)"
+          whnf="$(printf '%s\n' "$WAT" | grep -c 'whnfCoreStep' || true)"
+          simp="$(printf '%s\n' "$WAT" | grep -c 'simpLoopStep' || true)"
+          echo "lean.wasm return_call: $total, whnfCoreStep: $whnf, simpLoopStep: $simp"
+          test "${total:-0}" -gt 0
+          test "${whnf:-0}" -gt 0
+          test "${simp:-0}" -gt 0
+
+      # 第二份产物：main 跑在 pthread 上，主线程空出来泵 pthread 消息。
+      # FileWorker 的 LSP 输出走 Std.Channel 的专用线程，默认构建下拿不到 publishDiagnostics。
+      - name: 链接 LSP 变体（PROXY_TO_PTHREAD）
+        timeout-minutes: 20
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
+
+      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收 / 内存扩容通知）
+        run: |
+          node scripts/adapt-glue.ts work/dist/lean.mjs work/dist/lean-adapted.mjs
+          node scripts/adapt-glue.ts work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
+          grep -q 'onMemoryResize' work/dist/lean-adapted-proxy.mjs
+
+      - name: 使用官方 64 位 oleans（GMP 编码）
+        run: |
+          BOOT="$(node scripts/ci/boot-dir.ts)"
+          rm -rf work/olean32
+          cp -a "$BOOT/lib/lean" work/olean32
+          echo "oleans: $(find work/olean32 -name '*.olean' | wc -l)"
+          echo "server parts: $(find work/olean32 -name '*.olean.server' | wc -l)"
+          ls -l work/olean32/Init.olean work/olean32/Lean.olean
+
+      # 主链验证 + GMP 验证：大整数运算必须走真正的 GMP，否则 2^100 的结果会对不上。
+      - name: 用官方 oleans 编译 import Init + 大整数（Node）
+        run: |
+          mkdir -p work/probe
+          cat > work/probe/Probe.lean <<'EOF'
+          import Init
+          #eval (2 ^ 100 : Nat)
+          example : 2 ^ 100 = 1267650600228229401496703205376 := rfl
+          EOF
+          node wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            work/dist/lean.mjs work/probe work/olean32 -- \
+            -j1 -R /src -o /src/Probe.olean /src/Probe.lean
+          ls -l work/probe/Probe.olean
+          echo -n "wasm contains LEAN_WASM_ERR: "; grep -c 'LEAN_WASM_ERR' work/dist/lean.wasm
+
+      - name: LSP 握手（--server）
+        run: |
+          echo -n "glue lspStdin refs: "; grep -c 'lspStdin' work/dist/lean.mjs || true
+          node scripts/wasm64-lsp-handshake.ts work/dist/lean.mjs work/olean32
+
+      - name: 生成浏览器用 olean 清单
+        run: |
+          node scripts/ci/gen-olean-manifest.ts --lib work/olean32 --out work/dist/olean-manifest.json
+
+      - name: 准备浏览器驱动（pnpm + runner 自带 Chrome，不下载浏览器）
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          mkdir -p work/browser
+          cd work/browser
+          pnpm init > /dev/null
+          pnpm pkg set type=module
+          pnpm add playwright-core tsx esbuild --allow-build=esbuild
+          cp ../../scripts/wasm64-browser-verify.ts .
+          pnpm exec esbuild ../../scripts/wasm64-browser-harness.ts --bundle --format=esm --outfile=../../work/dist/harness.mjs
+          pnpm exec esbuild ../../scripts/wasm64-lsp-browser-worker.ts --bundle --format=esm --outfile=../../work/dist/lsp-worker.mjs
+
+      - name: 关键验证：runner 自带 Chrome（Memory64 原生支持）里用自建 64 位 oleans 编译与 LSP
+        timeout-minutes: 20
+        run: |
+          cd work/browser
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32 --modes version,compile,lsp
+
+      # 测 Chrome 1 MB Worker 栈下 whnfCoreStep 的实际递归上界（N=1000..4000）。
+      - name: 递归深度实测：Chrome Worker（maxRecDepth=8000）
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          cd work/browser
+          pnpm exec tsx wasm64-browser-verify.ts ../../work/dist ../../work/olean32 --modes depth
+
+      # Init 是 smoke 的硬判据：失败必须让 Job 变红，不重试超时。
+      # 只有网络/缓存类错误（退出码 3）值得重试一次；无进展/超时（退出码 4）直接结束。
+      - name: LSP 诊断链路（Init，必须通过）
+        timeout-minutes: 10
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_WASM_TRACE: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          set -euo pipefail
+          if [ -f work/dist/lean-adapted-proxy.mjs ]; then
+            GLUE=work/dist/lean-adapted-proxy.mjs
+            JOBS=4
+          elif [ -f work/dist/lean-adapted.mjs ]; then
+            GLUE=work/dist/lean-adapted.mjs
+            JOBS=1
+          else
+            echo "缺少 LSP 产物"; exit 1
+          fi
+          echo "glue=$GLUE jobs=$JOBS"
+          : > work/init-lsp.log
+          diag() {
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean "$GLUE" --lib work/olean32 \
+              --mode worker --timeout 180000 --idle-timeout 120000 --jobs "$JOBS" \
+              2>&1 | tee -a work/init-lsp.log
+            return "${PIPESTATUS[0]}"
+          }
+          set +e
+          diag
+          status=$?
+          set -e
+          if [ "$status" -eq 3 ]; then
+            echo "::warning::网络/缓存错误，重试一次（jobs=2）"
+            JOBS=2
+            set +e
+            diag
+            status=$?
+            set -e
+          fi
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          node scripts/wasm64-lsp-diagnostics.ts \
+            --lean "$GLUE" --lib work/olean32 \
+            --doc Good.lean \
+            --good-code $'#eval System.Platform.numBits\n#eval IO.rand 1 10' \
+            --expect-info 64 \
+            --mode worker --timeout 180000 --idle-timeout 120000 --jobs "$JOBS" \
+            2>&1 | tee -a work/init-lsp.log
+
+      - name: 补丁行为等价与深栈回归门禁（unpatched boot vs patched wasm64）
+        timeout-minutes: 15
+        env:
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          BOOT="$(node scripts/ci/boot-dir.ts)"
+          GLUE=work/dist/lean-adapted-proxy.mjs
+          test -f "$GLUE" || GLUE=work/dist/lean-adapted.mjs
+          node scripts/wasm64-patch-equivalence.ts \
+            --boot-lean "$BOOT/bin/lean" \
+            --boot-lib work/olean32 \
+            --wasm-lean work/dist/lean.mjs \
+            --lsp-glue "$GLUE" \
+            --lean4-src work/lean4 \
+            --run-lean wasm-llvm/producer/lean-browser/scripts/run-lean.mjs \
+            --timeout 180000
+
+      # 失败立即留证据，不等到最后；后续步骤也不会再跑。
+      - name: 失败时上传 Init LSP 日志
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-init-failure
+          path: |
+            work/init-lsp.log
+            work/*.log
+          if-no-files-found: warn
+
+      # smoke 不传 100MB 级 wasm：deep 会用缓存重新 link，比下载+解压更稳。
+      - name: 保存 smoke 摘要
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-smoke
+          path: |
+            work/dist/*.mjs
+            work/dist/*.json
+            work/*.log
+          if-no-files-found: warn
+
+  # 深水区：Mathlib 裁切、官方 olean、数学库 LSP、release/npm。
+  # 只在 nightly、手动 dispatch(mode=deep) 或提交信息带 [wasm64-deep] 时跑。
+  deep:
+    needs: [prepare, smoke]
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'deep') ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[wasm64-deep]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
+
+      - name: 缓存 Emscripten 6.0.0
+        uses: actions/cache@v6
+        with:
+          path: emsdk
+          key: wasm64-emsdk-6.0.0-v1
+
+      - name: 安装 Emscripten 6.0.0
+        run: |
+          if [ ! -x emsdk/upstream/emscripten/emcc ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+            (cd emsdk && ./emsdk install 6.0.0 && ./emsdk activate 6.0.0)
+          fi
+          source emsdk/emsdk_env.sh
+          emcc --version | head -n 2
+
+      - name: 缓存 GMP（wasm64）
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/gmp-install
+            work/gmp-6.3.0.tar.xz
+          key: wasm64-gmp-v1
+
+      - name: 构建 GMP（USE_GMP=ON 所需）
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/build-wasm64-gmp.sh "$GITHUB_WORKSPACE/work/gmp-install"
+
+      - name: 恢复 Lean 源码与引导包
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/lean4
+            work/lean-*-linux
+          key: wasm64-src-v6
+
+      - name: backport 上游 wasm64 修复
+        run: |
+          node scripts/ci/backport-wasm64.ts work/lean4
+          if ! grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-whnf-stack.patch
+          fi
+          grep -q 'whnfCoreStep' work/lean4/src/Lean/Meta/WHNF.lean
+          # 显式堆栈版 replace_fn：instantiateLevelParams → Expr.replace 不再递归压栈。
+          if ! grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-replace-fn-iterative.patch
+          fi
+          grep -q 'wants_cache' work/lean4/src/kernel/replace_fn.cpp
+          # 显式续延栈版 simpLoop：重写链改成堆上的 continuation 列表。
+          if ! grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean; then
+            patch -p1 -d work/lean4 < scripts/patches/lean-simp-loop-stack.patch
+          fi
+          grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean
+
+      - name: 恢复 runtime 产物
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/build-wasm
+            work/emcache
+          key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
+
+      # deep 会重新生成 symtab.c 并重链：若不恢复 work/cgen，gen-symtab.py 只能扫到 0 个 C 文件，
+      # 导致 symtab 丢失所有 Init/Std/Lean 符号，线上 #eval 触发 Init.Data.Random 初始化器报错。
+      - name: 恢复 cgen
+        uses: actions/cache@v6
+        with:
+          path: work/cgen
+          key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
+      - name: 恢复 objects（smoke 已显式保存）
+        uses: actions/cache@v6
+        with:
+          path: work/obj
+          key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
+
+      - name: 准备 wasm-llvm 并切成 wasm64 + GMP
+        run: |
+          git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
+          bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
+          node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
+          node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
+
+      # deep 用缓存重新 link，而不是下载 250MB+ 的 wasm 产物。
+      - name: link
+        run: |
+          source emsdk/emsdk_env.sh
+          cd wasm-llvm
+          export EMSDK="$GITHUB_WORKSPACE/emsdk"
+          export WASM_LLVM_LEAN_WORK_DIR="$GITHUB_WORKSPACE/work"
+          export WASM_LLVM_LEAN_JOBS=3
+          bash producer/lean-browser/scripts/build.sh emsdk
+          bash producer/lean-browser/scripts/build.sh link
+          grep -q 'initialize_Init_Data_Random' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
+          grep -q 'l_IO_getRandomBytes___boxed' "$WASM_LLVM_LEAN_WORK_DIR/obj/symtab.c"
+
+      - name: 链接 LSP 变体（PROXY_TO_PTHREAD）
+        timeout-minutes: 20
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE"
+
+      - name: 适配 glue（lspStdin / fd0 环形缓冲 / 线程回收 / 内存扩容通知）
+        run: |
+          node scripts/adapt-glue.ts work/dist/lean.mjs work/dist/lean-adapted.mjs
+          node scripts/adapt-glue.ts work/dist/lean-lsp.mjs work/dist/lean-adapted-proxy.mjs
+          grep -q 'onMemoryResize' work/dist/lean-adapted-proxy.mjs
+
+      - name: 重建官方 64 位 oleans
+        run: |
+          BOOT="$(node scripts/ci/boot-dir.ts)"
+          rm -rf work/olean32
+          cp -a "$BOOT/lib/lean" work/olean32
+          echo "oleans: $(find work/olean32 -name '*.olean' | wc -l)"
+
+      - name: 准备浏览器驱动
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          mkdir -p work/browser
+          cd work/browser
+          pnpm init > /dev/null
+          pnpm pkg set type=module
+          pnpm add playwright-core tsx esbuild --allow-build=esbuild
+          cp ../../scripts/wasm64-browser-verify.ts .
+          pnpm exec esbuild ../../scripts/wasm64-browser-harness.ts --bundle --format=esm --outfile=../../work/dist/harness.mjs
+          pnpm exec esbuild ../../scripts/wasm64-lsp-browser-worker.ts --bundle --format=esm --outfile=../../work/dist/lsp-worker.mjs
+
+      - name: 生成浏览器用 olean 清单
+        run: |
+          node scripts/ci/gen-olean-manifest.ts --lib work/olean32 --out work/dist/olean-manifest.json
+
+      # 真实依赖：从 Mathlib 源码裁出目标模块的静态 import 闭包，再用 wasm64 编译器逐个重编。
+      # 只做静态分析，不需要官方 Linux 工具链；闭包超过上限时脚本以 3 退出，后续步骤跳过编译。
+      - name: 缓存 Mathlib 源码
+        uses: actions/cache@v6
+        with:
+          path: work/mathlib
+          key: wasm64-mathlib-src-v3
+
+      - name: 裁切 Mathlib 依赖闭包
+        timeout-minutes: 30
+        run: |
+          set -uo pipefail
+          if [ ! -d work/mathlib/mathlib4/.git ]; then
+            # 版本从 manifest 解析，避免 `ls | head -1` 在 4.34 与 4.36 目录并存时取错。
+            BOOT="$(node scripts/ci/boot-dir.ts 2>/dev/null || true)"
+            VER=""
+            if [ -n "$BOOT" ]; then
+              VER="v$(basename "$BOOT" | sed -E 's/^lean-([^-]+)-linux$/\1/')"
+            fi
+            if [ -z "$VER" ]; then
+              REQ="$(cat work/lean4/lean-toolchain)"
+              VER="${REQ##*:}"
+            fi
+            echo "lean version: $VER"
+            if git ls-remote --tags https://github.com/leanprover-community/mathlib4.git "refs/tags/$VER" | grep -q .; then
+              TAG="$VER"
+            else
+              echo "::warning::mathlib4 没有标签 $VER，回退 master（可能与 Lean 版本不匹配）"
+              TAG=master
+            fi
+            git clone --depth 1 --branch "$TAG" https://github.com/leanprover-community/mathlib4.git work/mathlib/mathlib4
+          fi
+          node scripts/mathlib-slice.ts deps work/mathlib/mathlib4 > work/mathlib-deps.txt
+          cat work/mathlib-deps.txt
+          while read -r url rev name; do
+            [ -z "${name:-}" ] && continue
+            dir="work/mathlib/$name"
+            [ -d "$dir/.git" ] && continue
+            git init -q "$dir"
+            git -C "$dir" remote add origin "$url"
+            if git -C "$dir" fetch -q --depth 1 origin "$rev" && git -C "$dir" checkout -q FETCH_HEAD; then
+              echo "dep ok $name"
+            else
+              echo "::warning::依赖 $name 拉取失败，编译时可能缺模块"
+            fi
+          done < work/mathlib-deps.txt
+          node scripts/mathlib-slice.ts slice \
+            --root work/mathlib \
+            --union \
+            --targets "Mathlib.Tactic.Spread" \
+            --optional "Mathlib.Order.Notation,Mathlib.Order.Basic,Mathlib.Logic.Basic,Mathlib.Data.Nat.Defs" \
+            --max 240 \
+            --out work/mathlib-src \
+            --manifest work/mathlib-slice.json
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::闭包超过上限，跳过 Mathlib 编译"
+            exit 0
+          fi
+          exit "$code"
+
+      - name: 实验：直接复用官方 Mathlib 64 位 olean 缓存（lake exe cache get + Node/Chrome LSP）
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_WASM_TRACE: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          set -uo pipefail
+          BOOT="$(node scripts/ci/boot-dir.ts)"
+          export PATH="$BOOT/bin:$PATH"
+          echo "mathlib toolchain: $(cat work/mathlib/mathlib4/lean-toolchain 2>/dev/null || echo missing)"
+          echo "mathlib head: $(git -C work/mathlib/mathlib4 rev-parse HEAD 2>/dev/null || echo missing)"
+          mkdir -p work/mathlib/mathlib4/.lake/packages
+          while read -r url rev name; do
+            [ -z "${name:-}" ] && continue
+            if [ -d "work/mathlib/$name" ]; then
+              ln -sfn "$PWD/work/mathlib/$name" "work/mathlib/mathlib4/.lake/packages/$name"
+            fi
+          done < work/mathlib-deps.txt
+          (
+            cd work/mathlib/mathlib4
+            lake exe cache get \
+              Mathlib/Tactic/Spread.lean \
+              Mathlib/Order/Basic.lean \
+              Mathlib/Data/Nat/Prime/Basic.lean \
+              Mathlib/Tactic/Ring.lean
+          )
+          rm -rf work/mathlib-official-lib
+          node scripts/ci/collect-lake-libs.ts \
+            --base work/olean32 \
+            --lake work/mathlib/mathlib4 \
+            --out work/mathlib-official-lib
+          node scripts/ci/gen-olean-manifest.ts \
+            --lib work/mathlib-official-lib \
+            --roots Init,Std,Lean,Lake,Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+            --ir-roots Batteries,Qq,Aesop,Plausible,ProofWidgets,ImportGraph,LeanSearchClient,Cli,Mathlib \
+            --out work/dist/mathlib-official-manifest.json
+          node scripts/pack-lean-lib.ts \
+            --lib work/mathlib-official-lib \
+            --manifest work/dist/mathlib-official-manifest.json \
+            --out work/mathlib-pack \
+            --prefix lean-mathlib \
+            --level 6
+          ls -lh work/mathlib-pack
+          if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
+            echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Chrome Compile + LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes compile,lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Data.Nat.Prime.Basic \
+                --good "example : Nat.Prime 2 := Nat.prime_two"
+            )
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Order/Basic.olean ]; then
+            echo "=== 测试官方 Mathlib.Order.Basic (Chrome LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Order.Basic \
+                --good "example {α : Type} [Preorder α] {a b c : α} (h₁ : a ≤ b) (h₂ : b ≤ c) : a ≤ c := le_trans h₁ h₂"
+            )
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Tactic/Ring.olean ]; then
+            echo "=== 测试官方 Mathlib.Tactic.Ring (Chrome LSP) ==="
+            (
+              cd work/browser
+              pnpm exec tsx wasm64-browser-verify.ts \
+                ../../work/dist ../../work/mathlib-official-lib \
+                --modes lsp \
+                --manifest /mathlib-official-manifest.json \
+                --module Mathlib.Tactic.Ring \
+                --good "example (a b : Nat) : (a + b) * (a + b) = a * a + 2 * a * b + b * b := by ring"
+            )
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Data/Nat/Prime/Basic.olean ]; then
+            echo "=== 测试官方 Mathlib.Data.Nat.Prime.Basic (Node LSP) ==="
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean work/dist/lean-adapted-proxy.mjs \
+              --lib work/mathlib-official-lib \
+              --module Mathlib.Data.Nat.Prime.Basic \
+              --good-code "example : Nat.Prime 2 := Nat.prime_two" \
+              --mode worker --timeout 300000 --idle-timeout 180000 --jobs 4
+          fi
+          if [ -f work/mathlib-official-lib/Mathlib/Tactic/Ring.olean ]; then
+            echo "=== 测试官方 Mathlib.Tactic.Ring (Node LSP) ==="
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean work/dist/lean-adapted-proxy.mjs \
+              --lib work/mathlib-official-lib \
+              --module Mathlib.Tactic.Ring \
+              --good-code "example (a b : Nat) : (a + b) * (a + b) = a * a + 2 * a * b + b * b := by ring" \
+              --mode worker --timeout 600000 --idle-timeout 180000 --jobs 4 || echo "::warning::Ring Node LSP timed out"
+          fi
+
+      - name: 恢复 Mathlib 裁切编译产物
+        uses: actions/cache/restore@v6
+        with:
+          path: work/mathlib-lib
+          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-${{ github.run_number }}
+          restore-keys: |
+            wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-
+
+      # 每个文件单独起一次 wasm64 进程：EXIT_RUNTIME=1 之后同一实例不能复用。
+      # 已编译的 olean 直接跳过，配合缓存可以逐轮补齐。
+      - name: 编译 Mathlib 裁切（wasm64）
+        continue-on-error: true
+        timeout-minutes: 240
+        run: |
+          set -uo pipefail
+          if [ ! -f work/mathlib-slice.json ]; then echo "没有裁切结果，跳过"; exit 0; fi
+          # 缓存里可能已经有编译结果。Init/Std/Lean 必须用官方 olean 覆盖：
+          # 旧缓存里带的是 flags=0 的自建 Init，留着会让所有 import 报 incompatible header。
+          if [ ! -d work/mathlib-lib ]; then
+            cp -a work/olean32 work/mathlib-lib
+          else
+            cp -a work/olean32/. work/mathlib-lib/
+          fi
+          mkdir -p work/mathlib-log
+          RUN=wasm-llvm/producer/lean-browser/scripts/run-lean.mjs
+          node -e 'for (const m of require("./work/mathlib-slice.json").modules) console.log(m)' > work/mathlib-modules.txt
+          total=0
+          cached=0
+          fails=0
+          retried=0
+          while read -r mod; do
+            rel="$(printf '%s' "$mod" | tr '.' '/')"
+            total=$((total + 1))
+            if [ -f "work/mathlib-lib/$rel.olean" ]; then cached=$((cached + 1)); continue; fi
+            mkdir -p "work/mathlib-lib/$(dirname "$rel")"
+            log="work/mathlib-log/$rel.log"
+            mkdir -p "$(dirname "$log")"
+            if timeout 20m node "$RUN" work/dist/lean.mjs work/mathlib-src work/mathlib-lib -- \
+                 -j1 -R /src -Dinterpreter.prefer_native=false -Dpp.rawOnError=true \
+                 -o "/lean/lib/lean/$rel.olean" "/src/$rel.lean" > "$log" 2>&1; then
+              echo "ok $mod"
+            elif timeout 20m node "$RUN" work/dist/lean.mjs work/mathlib-src work/mathlib-lib -- \
+                 -j1 -R /src -Dpp.rawOnError=true \
+                 -o "/lean/lib/lean/$rel.olean" "/src/$rel.lean" >> "$log" 2>&1; then
+              # IR 解释器（prefer_native=false）在部分 Mathlib 初始化器上会断言失败；
+              # 用默认设置重试一次，先确认是不是这条路径的问题。
+              echo "ok $mod (retry without prefer_native)"
+              retried=$((retried + 1))
+            else
+              echo "FAIL $mod"
+              tail -n 25 "$log"
+              fails=$((fails + 1))
+              if [ "$fails" -ge 3 ]; then echo "连续失败 3 个，停止"; break; fi
+            fi
+          done < work/mathlib-modules.txt
+          echo "modules=$total cached=$cached retried=$retried fails=$fails"
+          echo "server oleans: $(find work/mathlib-lib -name '*.olean.server' | wc -l)"
+          echo "ir files: $(find work/mathlib-lib -name '*.ir' | wc -l)"
+          TARGET="$(node -e 'process.stdout.write(require("./work/mathlib-slice.json").target)')"
+          TREL="$(printf '%s' "$TARGET" | tr '.' '/')"
+          ls -l "work/mathlib-lib/$TREL".* 2>/dev/null || echo "目标 $TARGET 没有产物"
+          [ "$fails" -eq 0 ]
+
+      - name: 保存 Mathlib 裁切编译产物
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: work/mathlib-lib
+          key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-${{ github.run_number }}-${{ github.run_attempt }}
+
+      # 门禁：Mathlib 裁切的目标模块必须真的产出 olean。编译步本身 continue-on-error，
+      # 是为了让诊断链路那一步还能跑；这里才是整轮是否成功的判据。
+      - name: 检查 Mathlib 裁切产物
+        run: |
+          TARGET="$(node -e 'process.stdout.write(require("./work/mathlib-slice.json").target)')"
+          REL="$(printf '%s' "$TARGET" | tr '.' '/')"
+          test -f "work/mathlib-lib/$REL.olean" || { echo "缺少 $TARGET"; exit 1; }
+          ls -l "work/mathlib-lib/$REL".*
+
+      # 完整诊断链路：initialize → didOpen → publishDiagnostics。
+      # watchdog 模式的 didOpen 会 Process.spawn（wasm 不支持），所以按 SDK 的做法直接起文件 worker。
+      # Mathlib 是实验项，允许失败；Init 的硬门禁已经在 smoke 里。
+      - name: LSP 诊断链路（Mathlib，实验）
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_WASM_TRACE: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          set -uo pipefail
+          if [ -f work/dist/lean-adapted-proxy.mjs ]; then
+            GLUE=work/dist/lean-adapted-proxy.mjs
+            JOBS=4
+          elif [ -f work/dist/lean-adapted.mjs ]; then
+            GLUE=work/dist/lean-adapted.mjs
+            JOBS=1
+          else
+            GLUE=work/dist/lean.mjs
+            JOBS=1
+          fi
+          diag() {
+            local module="$1" timeout="$2"
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean "$GLUE" --lib work/mathlib-lib \
+              --module "$module" \
+              --mode worker --timeout "$timeout" --idle-timeout 180000 --jobs "$JOBS"
+          }
+          if [ ! -f work/mathlib-slice.json ]; then echo "没有裁切结果，跳过"; exit 0; fi
+          TARGET="$(node -e 'process.stdout.write(require("./work/mathlib-slice.json").target)')"
+          REL="$(printf '%s' "$TARGET" | tr '.' '/')"
+          if [ -f "work/mathlib-lib/$REL.olean" ]; then
+            diag "$TARGET" 600000
+          else
+            echo "::warning::$TARGET 没编完，跳过 Mathlib 诊断"
+          fi
+          if [ -f "work/mathlib-lib/Mathlib/Order/Basic.olean" ]; then
+            node scripts/wasm64-lsp-diagnostics.ts \
+              --lean "$GLUE" \
+              --lib work/mathlib-lib \
+              --module Mathlib.Order.Basic \
+              --good-code "example {α : Type} [Preorder α] {a b c : α} (h₁ : a ≤ b) (h₂ : b ≤ c) : a ≤ c := le_trans h₁ h₂" \
+              --mode worker --timeout 600000 --idle-timeout 180000 --jobs "$JOBS"
+          fi
+
+      - name: 链接 release 变体（无调试符号）
+        timeout-minutes: 20
+        run: |
+          source emsdk/emsdk_env.sh
+          bash scripts/link-wasm64-release.sh "$GITHUB_WORKSPACE"
+          bash scripts/link-wasm64-lsp.sh "$GITHUB_WORKSPACE" --release
+          node scripts/adapt-glue.ts work/release-lsp/lean-lsp.mjs work/release-lsp/lean-lsp-adapted.mjs
+          grep -qa 'initialize_Init_Data_Random' work/release/lean.wasm
+          grep -qa 'initialize_Init_Data_Random' work/release-lsp/lean-lsp.wasm
+          grep -qa 'l_IO_getRandomBytes___boxed' work/release-lsp/lean-lsp.wasm
+
+      - name: 验证 release LSP 产物可执行 #eval（64 位 + Init.Data.Random）
+        timeout-minutes: 10
+        env:
+          LEAN_WASM_DIAG_DEBUG: '1'
+          LEAN_STACK_SIZE_KB: '16384'
+          LEAN_MAIN_USE_THREAD: '0'
+        run: |
+          node scripts/wasm64-lsp-diagnostics.ts \
+            --lean work/release-lsp/lean-lsp-adapted.mjs \
+            --lib work/olean32 \
+            --doc Good.lean \
+            --good-code $'#eval System.Platform.numBits\n#eval IO.rand 1 10' \
+            --expect-info 64 \
+            --mode worker --timeout 180000 --idle-timeout 120000 --jobs 4
+
+      - name: 打包实验性 wasm64 运行时资产（Init 64位 + release-lsp）
+        run: |
+          VERSION="$(node -e 'import("./scripts/pin-lean.ts").then((m) => process.stdout.write(m.LEAN_PIN.version))')"
+          node scripts/package-wasm64-runtime.ts \
+            --glue work/release-lsp/lean-lsp-adapted.mjs \
+            --wasm work/release-lsp/lean-lsp.wasm \
+            --wasm-zst work/release-lsp/lean-lsp.wasm.zst \
+            --lib work/olean32 \
+            --out work/wasm64-runtime \
+            --lean-version "$VERSION"
+          ls -lh work/wasm64-runtime
+
+      - name: 保存实验性 wasm64 运行时产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-runtime-release
+          path: work/wasm64-runtime/**
+          if-no-files-found: error
+
+      - name: 打包 npm（lean4-wasm64）
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.18.0 --activate
+          VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then VERSION="${GITHUB_REF_NAME#npm-v}"; fi
+          echo "NPM_VERSION=$VERSION" >> "$GITHUB_ENV"
+          node scripts/pack-npm.ts --dist work/release --out work/npm --version "$VERSION"
+          cd work/npm
+          pnpm pack
+          ls -l ./*.tgz
+
+      - name: 检查 npm token
+        id: npm_token
+        env:
+          TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+
+      # 只在 npm-v* 标签上发布，分支推送只留 tarball。
+      - name: 发布到 npm
+        if: steps.npm_token.outputs.ready == 'true' && github.ref_type == 'tag' && startsWith(github.ref_name, 'npm-v')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd work/npm
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > .npmrc
+          pnpm publish --no-git-checks --access public --tag latest
+
+      - name: 保存 deep 产物与日志
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-deep
+          path: |
+            work/release/**
+            work/release-lsp/**
+            work/npm/*.tgz
+            work/*.log
+            work/*.olean-fail.log
+            work/mathlib-slice.json
+            work/mathlib-modules.txt
+            work/mathlib-log/**
+          if-no-files-found: warn
+
+  # 将 deep 产出的实验性 wasm64 运行时（Init 64位 + release-lsp）发布到
+  # Cloudflare R2（经主站 Pages Function /cdn/ 同源网关，浏览器唯一数据源）与 GitHub Release（仅归档），
+  # 供主站按手动开关实验试用（默认仍是 wasm32）。
+  publish-wasm64:
+    needs: [lint, deep]
+    if: >-
+      !cancelled() && needs.lint.result == 'success' && (
+        (needs.deep.result == 'success' && (
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'deep') ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, '[wasm64-deep]'))
+        )) ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'publish' && github.event.inputs.source_run_id != '')
+      )
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        if: github.event.inputs.mode != 'publish'
+        with:
+          name: wasm64-runtime-release
+          path: runtime
+
+      - uses: actions/download-artifact@v8
+        if: github.event.inputs.mode == 'publish'
+        with:
+          name: wasm64-runtime-release
+          path: runtime
+          run-id: ${{ github.event.inputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: 输出并保存 wasm64 清单
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = "./runtime/wasm64-runtime-manifest.json";
+            const m = JSON.parse(fs.readFileSync(path, "utf8"));
+            if (m.leanVersion === "build/release/stage1") {
+              m.leanVersion = "4.36.0-rc2";
+              m.runtime = "Lean 4.36.0-rc2 Init (wasm64 experimental)";
+              m.fallback = {
+                label: "GitHub release",
+                baseUrl: "https://github.com/3y3y3y-huaiji/lean-init-ide/releases/download/runtime-v4.36.0-rc2-wasm64/",
+              };
+              for (const a of m.assets) a.key = "wasm-lean4/4.36.0-rc2-wasm64/" + a.name;
+            }
+            if (!m.mirror) {
+              m.mirror = {
+                label: "魔搭镜像（国内）",
+                baseUrl: "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/",
+                prefix: "wasm-lean4/" + m.leanVersion + "-wasm64",
+              };
+            }
+            fs.writeFileSync(path, JSON.stringify(m, null, 2) + "\n");
+            process.stdout.write(fs.readFileSync(path, "utf8"));
+          '
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm64-runtime-manifest
+          path: runtime/wasm64-runtime-manifest.json
+          if-no-files-found: error
+
+      - name: 上传 R2（wasm-lean4/<ver>-wasm64/，浏览器主源，存在 secrets 时执行）
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_REGION: auto
+        run: |
+          set -euo pipefail
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::warning::未配置 R2 secrets，跳过 R2 上传"
+            exit 0
+          fi
+          command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const { execFileSync } = require("child_process");
+            const manifest = JSON.parse(fs.readFileSync("./runtime/wasm64-runtime-manifest.json", "utf8"));
+            const bucket = process.env.R2_BUCKET || manifest.bucket || "lean4-ide-releases";
+            const endpoint = process.env.R2_ENDPOINT;
+            for (const asset of manifest.assets) {
+              const filePath = path.join("./runtime", asset.source);
+              const stat = fs.statSync(filePath);
+              if (stat.size !== asset.bytes) {
+                throw new Error(`${asset.name} size mismatch: ${stat.size} != ${asset.bytes}`);
+              }
+              try {
+                const head = execFileSync("aws", [
+                  "--endpoint-url", endpoint,
+                  "s3api", "head-object",
+                  "--bucket", bucket,
+                  "--key", asset.key,
+                  "--output", "json",
+                ], { encoding: "utf8" });
+                const meta = JSON.parse(head);
+                if (Number(meta.ContentLength) === asset.bytes && meta.Metadata?.sha256 === asset.sha256) {
+                  console.log(`skip   s3://${bucket}/${asset.key} (${asset.bytes} bytes)`);
+                  continue;
+                }
+              } catch {}
+              console.log(`upload s3://${bucket}/${asset.key} (${asset.bytes} bytes)`);
+              execFileSync("aws", [
+                "--endpoint-url", endpoint,
+                "s3api", "put-object",
+                "--bucket", bucket,
+                "--key", asset.key,
+                "--body", filePath,
+                "--content-type", asset.contentType,
+                "--cache-control", "public,max-age=31536000,immutable",
+                "--metadata", `sha256=${asset.sha256},bytes=${asset.bytes}`,
+              ], { stdio: "inherit" });
+            }
+          '
+
+      - name: 上传魔搭镜像（ModelScope，存在 token 时执行）
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+          MODELSCOPE_REPO: HQZMSu/lean4-assets
+          MODELSCOPE_REPO_TYPE: dataset
+        run: |
+          set -euo pipefail
+          if [ -z "$MODELSCOPE_TOKEN" ]; then
+            echo "::warning::未配置 MODELSCOPE_TOKEN，跳过魔搭镜像上传"
+            exit 0
+          fi
+          command -v git-lfs >/dev/null || (sudo apt-get update && sudo apt-get install -y git-lfs)
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const { execFileSync } = require("child_process");
+            const manifest = JSON.parse(fs.readFileSync("./runtime/wasm64-runtime-manifest.json", "utf8"));
+            const repo = process.env.MODELSCOPE_REPO || "HQZMSu/lean4-assets";
+            // ModelScope 的 Git 认证用户名固定是 oauth2，不是账号名。
+            const user = "oauth2";
+            const repoUrl = `https://www.modelscope.cn/datasets/${repo}.git`;
+            const prefix = manifest.mirror?.prefix || `wasm-lean4/${manifest.leanVersion}-wasm64`;
+            const work = path.resolve("ms-repo");
+            fs.rmSync(work, { recursive: true, force: true });
+            const env = { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_LFS_SKIP_SMUDGE: "1" };
+            const helper = `!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" "${user}" "$MODELSCOPE_TOKEN"; }; f`;
+            execFileSync("git", ["-c", "credential.helper=", "-c", `credential.helper=${helper}`, "clone", "--depth", "1", repoUrl, work], { stdio: "inherit", env });
+            execFileSync("git", ["config", "user.name", "github-actions[bot]"], { cwd: work, env });
+            execFileSync("git", ["config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], { cwd: work, env });
+            execFileSync("git", ["config", "credential.helper", ""], { cwd: work, env });
+            execFileSync("git", ["config", "--add", "credential.helper", helper], { cwd: work, env });
+            execFileSync("git", ["lfs", "install", "--local"], { cwd: work, env });
+
+            // 确保 *.zst 与 *.bin 都走 Git LFS CDN，SW 分片才能拿到 206 Range。
+            const attrPath = path.join(work, ".gitattributes");
+            let attrs = fs.existsSync(attrPath) ? fs.readFileSync(attrPath, "utf8") : "";
+            for (const rule of [
+              "*.bin filter=lfs diff=lfs merge=lfs -text",
+              "*.gz filter=lfs diff=lfs merge=lfs -text",
+              "*.zst filter=lfs diff=lfs merge=lfs -text",
+              "*.json filter=lfs diff=lfs merge=lfs -text",
+              "*.wasm filter=lfs diff=lfs merge=lfs -text",
+              "*.pack filter=lfs diff=lfs merge=lfs -text",
+            ]) {
+              if (!attrs.includes(rule)) attrs = `${attrs}${attrs && !attrs.endsWith("\n") ? "\n" : ""}${rule}\n`;
+            }
+            fs.writeFileSync(attrPath, attrs);
+
+            const targetDir = path.join(work, prefix);
+            fs.mkdirSync(targetDir, { recursive: true });
+            for (const asset of manifest.assets) {
+              fs.copyFileSync(path.join("./runtime", asset.source), path.join(targetDir, asset.name));
+            }
+            if (fs.existsSync("./runtime/SHA256SUMS")) {
+              fs.copyFileSync("./runtime/SHA256SUMS", path.join(targetDir, "SHA256SUMS"));
+            }
+
+            execFileSync("git", ["add", "-A"], { cwd: work, stdio: "inherit", env });
+            const status = execFileSync("git", ["status", "--porcelain"], { cwd: work, encoding: "utf8", env });
+            if (!status.trim()) {
+              console.log(`modelscope: ${prefix} 已最新，无需提交`);
+              process.exit(0);
+            }
+            execFileSync("git", ["commit", "-m", `assets: ${prefix} (${manifest.cacheKey})`], { cwd: work, stdio: "inherit", env });
+            execFileSync("git", ["push", "origin", "master"], { cwd: work, stdio: "inherit", env });
+            console.log(`modelscope: uploaded ${prefix} (${manifest.assets.length} assets)`);
+          '
+
+      - name: 发布 GitHub Release（runtime-v<lean>-wasm64，归档与构建期使用）
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -e 'process.stdout.write(require("./runtime/wasm64-runtime-manifest.json").leanVersion)')"
+          TAG="runtime-v${VERSION}-wasm64"
+          REPO="${{ github.repository }}"
+          TARGET_SHA="$GITHUB_SHA"
+          if [ -n "${SOURCE_RUN_ID:-}" ]; then
+            TARGET_SHA="$(gh api "repos/${REPO}/actions/runs/${SOURCE_RUN_ID}" --jq .head_sha)"
+          fi
+          if ! gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              -R "$REPO" \
+              --target "$TARGET_SHA" \
+              --title "Lean ${VERSION} wasm64 experimental runtime" \
+              --notes "Experimental wasm64 (Memory64) runtime + 64-bit Init oleans. Opt-in trial only; do not use in production."
+          fi
+          gh release upload "$TAG" -R "$REPO" runtime/* --clobber

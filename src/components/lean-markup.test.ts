@@ -12,6 +12,7 @@ describe('renderLeanMarkup', () => {
     const html = renderLeanMarkup('zh', 'full', messagesFor('zh').playground);
     expect(html).toContain('data-ssr-markup="full"');
     expect(html).toContain(`>${messagesFor('zh').playground.title}</h1>`);
+    expect(html).toContain(messagesFor('zh').playground.summary);
     expect(html).toContain('data-role="editor"');
     // 编辑器容器不能有 paint/layout containment，否则 hover 浮层会被裁剪。
     expect(html).not.toContain('[contain:');

@@ -68,6 +68,28 @@ describe('SSG 预渲染', () => {
     expect(html).toContain(`>${lessonsFor('en')[0]!.title}</h1>`);
   });
 
+  it('预渲染页面注入可解析的 SoftwareApplication JSON-LD', () => {
+    const html = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'playground', locale: 'en' });
+    const match = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html);
+    expect(match).not.toBeNull();
+    const data = JSON.parse(match![1]!) as {
+      '@type': string;
+      name: string;
+      isAccessibleForFree: boolean;
+      offers: { price: string };
+      codeRepository: string;
+      softwareVersion: string;
+      inLanguage: string[];
+    };
+    expect(data['@type']).toBe('SoftwareApplication');
+    expect(data.name).toBe('Lean Init IDE');
+    expect(data.isAccessibleForFree).toBe(true);
+    expect(data.offers.price).toBe('0');
+    expect(data.codeRepository).toContain('github.com');
+    expect(data.softwareVersion).toBe('Lean 4.35.0');
+    expect(data.inLanguage).toEqual(['zh-CN', 'en']);
+  });
+
   it('playground 预渲染设置 body data-page=playground 且不含空壳 h1 缺失问题', () => {
     const html = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'playground', locale: 'zh' });
     expect(html).toContain('<body data-page="playground">');

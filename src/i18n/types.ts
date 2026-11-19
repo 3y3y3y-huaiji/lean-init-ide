@@ -78,6 +78,10 @@ export type Messages = {
     lead: string;
     /** 首屏解释形式化证明价值的补充句。 */
     heroNote: string;
+    /** H1 下方硬事实清单的无障碍标题。 */
+    factsTitle: string;
+    /** H1 下方可直接被搜索摘要与 AI 抓取的硬事实：版本、运行方式、课程数与开源协议。 */
+    facts: (lessons: number, challenges: number) => string[];
     ctaPrimary: string;
     /** 已有进度时的主按钮文案。 */
     continueCta: string;
@@ -185,6 +189,8 @@ export type Messages = {
   playground: {
     title: string;
     hint: string;
+    /** H1 下方的静态事实摘要：版本、按需挂载与零后端，供未启动 Lean 的抓取直接读取。 */
+    summary: string;
     /** playground 的默认示例：同一段 Lean，注释按语言本地化。 */
     defaultCode: string;
     start: string;

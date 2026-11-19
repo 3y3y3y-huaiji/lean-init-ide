@@ -8,6 +8,19 @@ describe('首页渲染', () => {
     expect(renderHome('en')).toContain('href="/en/learn/what-is-lean"');
   });
 
+  it('H1 下方输出可直接抓取的硬事实清单', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      const html = renderHome(locale);
+      const facts = messagesFor(locale).home.facts(LESSON_CATALOG.length, 6);
+      expect(html).toContain(`aria-label="${messagesFor(locale).home.factsTitle}"`);
+      expect(html).toContain('<ul');
+      for (const fact of facts) expect(html).toContain(fact);
+      expect(html).toContain('Lean 4.35.0');
+      expect(html).toContain('WebAssembly');
+      expect(html).toContain('github.com');
+    }
+  });
+
   it('次要行动按钮指向 playground', () => {
     expect(renderHome('zh')).toContain('href="/zh/playground"');
     expect(renderHome('en')).toContain('href="/en/playground"');

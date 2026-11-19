@@ -318,7 +318,8 @@ export const renderLeanMarkup = (
           <div class="min-w-0">
             <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${runtimeLabel}</p>
             <h1 class="m-0 text-[clamp(20px,2.6vw,26px)] font-bold">${t.title}</h1>
-            <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
+            <p class="mt-1.5 mb-0 text-xs text-muted">${t.summary}</p>
+            <p class="mt-1 mb-0 text-xs text-muted">${t.hint}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
         </div>`

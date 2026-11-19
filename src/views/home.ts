@@ -1,4 +1,5 @@
 import { buttonClass, ghostButtonLgClass } from '../components/ui';
+import { CHALLENGES } from '../challenges';
 import { LESSON_CATALOG, messagesFor, type Locale } from '../i18n';
 import { firstUncompletedLesson } from '../progress';
 import { FIRST_LESSON_SLUG } from '../router';
@@ -43,6 +44,7 @@ const computeHomeState = (
     lessonMsgs,
     target,
     cta,
+    facts: t.facts(LESSON_CATALOG.length, CHALLENGES.length),
     introLessons,
     mathLessons,
     engLessons,
@@ -62,6 +64,7 @@ export const renderHome = (
     lessonMsgs,
     target,
     cta,
+    facts,
     introLessons,
     mathLessons,
     engLessons,
@@ -119,6 +122,12 @@ export const renderHome = (
       <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
       <h1 class="mt-0 mb-4 text-[clamp(32px,5.4vw,52px)] tracking-[-0.02em]">${t.title}</h1>
       <p class="mt-0 mb-3 max-w-[640px] text-[clamp(15px,1.6vw,18px)] text-muted">${t.lead}</p>
+      <ul
+        aria-label="${escapeHtml(t.factsTitle)}"
+        class="mt-0 mb-5 grid max-w-[640px] list-disc gap-1.5 pl-5 text-sm leading-relaxed text-muted"
+      >
+        ${facts.map((fact) => `<li>${escapeHtml(fact)}</li>`).join('\n        ')}
+      </ul>
       <p class="mt-0 mb-6.5 max-w-[640px] text-sm leading-relaxed text-muted">${t.heroNote}</p>
       <div class="flex flex-wrap gap-3">
         <a class="${buttonClass}" data-home-cta="primary" href="/${locale}/learn/${target}">${cta}</a>

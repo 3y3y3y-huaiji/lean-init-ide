@@ -1,3 +1,5 @@
+import { REPO_URL } from '../feedback';
+import { LEAN_RUNTIME_VERSION, SITE_LICENSE } from '../meta';
 import type { Messages } from './types';
 
 export const zh: Messages = {
@@ -38,6 +40,14 @@ export const zh: Messages = {
     lead: '不是正则模拟，也不是把代码发到云端：完整编译器和语言服务器就塞在 Web Worker 里。打开网页 30 秒，写下第一行证明。',
     heroNote:
       '单元测试只能测出你写到的那几个用例没错；Lean 能用数学逻辑把所有可能输入一次性证死，错一步编译器当场红线拦住。',
+    factsTitle: '核心事实',
+    facts: (lessons, challenges) => [
+      `${LEAN_RUNTIME_VERSION} 编译器与语言服务器编译为 WebAssembly，在浏览器 Web Worker 内运行`,
+      '内置 Init，Std 与 Batteries 按需挂载；不含 Lean / Lake / Mathlib',
+      '100% 浏览器端运行，零后端，代码不上传服务器',
+      `${lessons} 节中英双语课程 + ${challenges} 道趣味数学挑战`,
+      `免费开源（${SITE_LICENSE}）：${REPO_URL}`,
+    ],
     ctaPrimary: '从第一课开始',
     continueCta: '继续学习',
     ctaSecondary: '直接打开编辑器',
@@ -187,6 +197,7 @@ export const zh: Messages = {
   playground: {
     title: 'Lean 编辑器',
     hint: '首次启动需下载约 102MB 运行时，之后会持久缓存。',
+    summary: `${LEAN_RUNTIME_VERSION} 真编译器 · Init 内置，Std / Batteries 按需挂载 · 100% 浏览器端 WebAssembly Worker · 零后端`,
     defaultCode: `open Classical
 
 noncomputable section

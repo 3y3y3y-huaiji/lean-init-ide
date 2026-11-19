@@ -79,6 +79,7 @@ for (const rel of [
   if (!html.includes('<div id="app">')) fail(`dist/${rel} 缺少 #app 挂载点`);
   if (!html.includes('<meta name="lean-ssg"')) fail(`dist/${rel} 缺少 lean-ssg 标记`);
   if (!/<h1[^>]*>[^<]+<\/h1>/.test(html)) fail(`dist/${rel} 没有预渲染主标题 <h1>`);
+  if (!html.includes('application/ld+json')) fail(`dist/${rel} 缺少 JSON-LD 结构化数据`);
 }
 if (await exists(resolve(dist, '.vite'))) {
   fail('dist/.vite 清单目录未在构建后清理');

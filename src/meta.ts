@@ -1,3 +1,5 @@
+import runtimeManifest from '../config/lean4-runtime.json';
+
 /**
  * 页面级 SEO/分享元信息：canonical、og:url、og:locale，以及中英文 hreflang。
  *
@@ -5,6 +7,12 @@
  * 静态文件里只放语言无关的默认值。
  */
 export const SITE_ORIGIN = 'https://criticalthinking.de5.net';
+
+/** 站点分发的 Lean 运行时版本；以 runtime 清单为唯一事实来源。 */
+export const LEAN_RUNTIME_VERSION = runtimeManifest.runtime.replace(/ Init$/, '');
+
+/** 站点开源协议，页脚、JSON-LD 与 llms.txt 共用同一份文案。 */
+export const SITE_LICENSE = 'Apache-2.0 OR MulanPSL-2.0';
 
 type MetaOptions = {
   locale: 'zh' | 'en';

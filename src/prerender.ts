@@ -3,6 +3,7 @@ import { LESSON_CATALOG, type Locale } from './i18n';
 import { SITE_ORIGIN, swapLocalePath } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { canonicalRoutePath, FIRST_LESSON_SLUG, type Route } from './router';
+import { buildSoftwareApplicationJsonLd } from './seo';
 import { renderChallenge, renderChallenges } from './views/challenge';
 import { renderHome } from './views/home';
 import { escapeHtml } from './views/html';
@@ -127,6 +128,7 @@ export const injectPrerenderedHtml = (
     `<link rel="alternate" hreflang="en" href="${escapeHtml(altEn)}" />`,
     `<meta property="og:url" content="${escapeHtml(canonical)}" />`,
     `<meta property="og:locale" content="${ogLocale}" />`,
+    `<script type="application/ld+json">${buildSoftwareApplicationJsonLd()}</script>`,
   ].join('\n    ');
 
   const appHtml = renderStaticApp(route);

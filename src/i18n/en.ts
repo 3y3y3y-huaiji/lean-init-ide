@@ -1,3 +1,5 @@
+import { REPO_URL } from '../feedback';
+import { LEAN_RUNTIME_VERSION, SITE_LICENSE } from '../meta';
 import type { Messages } from './types';
 
 export const en: Messages = {
@@ -40,6 +42,14 @@ export const en: Messages = {
     lead: 'Not a regex mock, and not code shipped to a server: the full compiler and language server live in a Web Worker. Open the page and write your first proof in 30 seconds.',
     heroNote:
       'Unit tests only cover the cases you remembered to write. Lean uses mathematical logic to rule out every possible input at once, and the compiler stops you with a red line the moment a step breaks.',
+    factsTitle: 'Key facts',
+    facts: (lessons, challenges) => [
+      `${LEAN_RUNTIME_VERSION} compiler and language server compiled to WebAssembly, running in a browser Web Worker`,
+      'Init built in; Std and Batteries mount on demand. No Lean / Lake / Mathlib',
+      '100% client-side, zero backend; your code never leaves the browser',
+      `${lessons} bilingual lessons (Chinese + English) and ${challenges} math challenges`,
+      `Free and open source (${SITE_LICENSE}): ${REPO_URL}`,
+    ],
     ctaPrimary: 'Start the first lesson',
     continueCta: 'Continue learning',
     ctaSecondary: 'Open the playground',
@@ -192,6 +202,7 @@ export const en: Messages = {
   playground: {
     title: 'Lean playground',
     hint: 'The first run downloads about 102 MB of runtime; later visits use the persistent cache.',
+    summary: `Real ${LEAN_RUNTIME_VERSION} compiler · Init built in, Std / Batteries on demand · 100% client-side WebAssembly Worker · zero backend`,
     defaultCode: `open Classical
 
 noncomputable section

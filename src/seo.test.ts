@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES } from './challenges';
+import { REPO_URL } from './feedback';
 import { lessonsFor } from './i18n';
-import { SITE_ORIGIN } from './meta';
+import { LEAN_RUNTIME_VERSION, SITE_LICENSE, SITE_ORIGIN } from './meta';
 import { allStaticRoutes } from './prerender';
 import { canonicalRoutePath } from './router';
 import {
@@ -9,6 +10,7 @@ import {
   buildLlmsTxt,
   buildRobotsTxt,
   buildSitemapXml,
+  buildSoftwareApplicationJsonLd,
   escapeXml,
   NOT_INDEXED_PATHS,
   routeSourceFiles,
@@ -101,7 +103,41 @@ describe('SEO 产物生成', () => {
     expect(links).toContain(`${SITE_ORIGIN}/zh/`);
     expect(links).toContain(`${SITE_ORIGIN}/en/learn/what-is-lean`);
     expect(links).toContain(`${SITE_ORIGIN}/zh/challenges/${CHALLENGES[0]!.slug}`);
+    expect(llms).toContain('## Key facts');
+    expect(llms).toContain('## 关键事实');
+    expect(llms).toContain(LEAN_RUNTIME_VERSION);
+    expect(llms).toContain(SITE_LICENSE);
+    expect(llms).toContain(REPO_URL);
     expect(llms.endsWith('\n')).toBe(true);
+  });
+
+  it('SoftwareApplication JSON-LD 提供免费、在线地址、仓库与协议等结构化字段', () => {
+    const raw = buildSoftwareApplicationJsonLd();
+    expect(raw).not.toContain('</script>');
+    const data = JSON.parse(raw) as {
+      '@context': string;
+      '@type': string;
+      name: string;
+      url: string;
+      applicationCategory: string;
+      isAccessibleForFree: boolean;
+      offers: { price: string; priceCurrency: string };
+      codeRepository: string;
+      softwareVersion: string;
+      inLanguage: string[];
+      featureList: string[];
+    };
+    expect(data['@context']).toBe('https://schema.org');
+    expect(data['@type']).toBe('SoftwareApplication');
+    expect(data.name).toBe('Lean Init IDE');
+    expect(data.url).toBe(`${SITE_ORIGIN}/zh/`);
+    expect(data.applicationCategory).toBe('EducationalApplication');
+    expect(data.isAccessibleForFree).toBe(true);
+    expect(data.offers).toEqual({ '@type': 'Offer', price: '0', priceCurrency: 'CNY' });
+    expect(data.codeRepository).toBe(REPO_URL);
+    expect(data.softwareVersion).toBe(LEAN_RUNTIME_VERSION);
+    expect(data.inLanguage).toEqual(['zh-CN', 'en']);
+    expect(data.featureList.join(' ')).toContain('WebAssembly');
   });
 
   it('ai-catalog.json 输出合法的 ARD 清单 JSON', () => {

@@ -5,8 +5,9 @@
  * 而是复用 src/prerender.ts 的 allStaticRoutes，与预渲染页面保持同一份数据源。
  */
 import { CHALLENGES } from './challenges';
+import { REPO_URL } from './feedback';
 import { lessonsFor, messagesFor } from './i18n';
-import { SITE_ORIGIN } from './meta';
+import { LEAN_RUNTIME_VERSION, SITE_LICENSE, SITE_ORIGIN } from './meta';
 import { FIRST_LESSON_SLUG, type Route } from './router';
 
 export type SitemapEntry = {
@@ -57,10 +58,44 @@ export const buildRobotsTxt = (origin: string = SITE_ORIGIN): string =>
     '',
   ].join('\n');
 
+/** 站点级 SoftwareApplication JSON-LD：供搜索富媒体卡片与 AI 引擎结构化抽取共用。 */
+export const buildSoftwareApplicationJsonLd = (origin: string = SITE_ORIGIN): string => {
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Lean Init IDE',
+    alternateName: '浏览器里的 Lean 4 定理证明器',
+    url: `${origin}/zh/`,
+    description:
+      '在浏览器里运行真正的 Lean 4 编译器与语言服务器：WebAssembly + Web Worker，零后端，内置 Init，Std 与 Batteries 按需挂载。',
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'Any (modern web browser)',
+    browserRequirements:
+      'WebAssembly, Web Workers and SharedArrayBuffer (cross-origin isolation); Chromium-based browsers recommended',
+    inLanguage: ['zh-CN', 'en'],
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'CNY' },
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    codeRepository: REPO_URL,
+    softwareVersion: LEAN_RUNTIME_VERSION,
+    featureList: [
+      `${LEAN_RUNTIME_VERSION} compiler and language server compiled to WebAssembly`,
+      'Runs entirely in the browser in a Web Worker with no backend',
+      'Init built in; Std and Batteries mounted on demand',
+      'Bilingual courses, playground and math challenges; free and open source',
+    ],
+    keywords: ['Lean 4', 'theorem prover', 'WebAssembly', 'browser IDE', 'formal verification'],
+  };
+  // 直接内联进 <script>，转义 `<` 避免任何字符串提前闭合标签。
+  return JSON.stringify(data, null, 2).replaceAll('<', '\\u003c');
+};
+
 /** 生成符合 llmstxt.org 规范的站点摘要与结构化导航索引。 */
 export const buildLlmsTxt = (origin: string = SITE_ORIGIN): string => {
   const en = messagesFor('en');
   const zh = messagesFor('zh');
+  const lessonCount = lessonsFor('en').length;
+  const challengeCount = CHALLENGES.length;
   const lessonLines = (locale: 'en' | 'zh') =>
     lessonsFor(locale).map(
       (lesson) => `- [${lesson.title}](${origin}/${locale}/learn/${lesson.slug}): ${lesson.lead}`,
@@ -75,6 +110,22 @@ export const buildLlmsTxt = (origin: string = SITE_ORIGIN): string => {
     '# Lean Init IDE',
     '',
     `> ${en.home.lead}`,
+    '',
+    '## Key facts',
+    '',
+    `- Runtime: ${LEAN_RUNTIME_VERSION} compiler and language server, compiled to WebAssembly and running in a browser Web Worker.`,
+    '- Execution: 100% client-side with zero backend; code never leaves the browser.',
+    '- Libraries: Init built in; Std and Batteries load on demand. No Lean / Lake / Mathlib.',
+    `- Content: ${lessonCount} lessons per language (Chinese / English) and ${challengeCount} math challenges.`,
+    `- Free and open source (${SITE_LICENSE}): ${REPO_URL}`,
+    '',
+    '## 关键事实',
+    '',
+    `- 运行时：${LEAN_RUNTIME_VERSION} 编译器与语言服务器编译为 WebAssembly，在浏览器 Web Worker 内运行。`,
+    '- 执行方式：100% 浏览器端，零后端，代码不上传服务器。',
+    '- 库：内置 Init，Std 与 Batteries 按需挂载；不含 Lean / Lake / Mathlib。',
+    `- 内容：中英各 ${lessonCount} 节课程 + ${challengeCount} 道趣味数学挑战。`,
+    `- 免费开源（${SITE_LICENSE}）：${REPO_URL}`,
     '',
     '## Core Pages (English)',
     '',

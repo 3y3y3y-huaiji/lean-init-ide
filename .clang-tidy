@@ -1,0 +1,19 @@
+# 手写 C/C++ 的静态检查规则。
+# 只开能稳定落地、误报可控的检查；上游 runtime 的既有写法不在这里评判。
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-use-after-move,
+  bugprone-dangling-handle,
+  bugprone-sizeof-expression,
+  bugprone-signed-char-misuse,
+  cppcoreguidelines-owning-memory,
+  cppcoreguidelines-special-member-functions,
+  cppcoreguidelines-pro-type-const-cast,
+  modernize-use-nullptr,
+  modernize-use-override,
+  performance-unnecessary-copy-initialization
+
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'scripts/.*'
+FormatStyle: file

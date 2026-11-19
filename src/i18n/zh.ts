@@ -246,6 +246,8 @@ end
     severityInfo: '信息',
     abbreviationDetail: 'Unicode 缩写',
     backToLesson: '回到本课',
+    lessonNoticeTitle: '当前课时练习',
+    lessonNoticeHint: '查看提示',
     challengeNoticeTitle: '已从趣味挑战进入',
     challengeNoticeBody: '题面就在下方；如果本机已有编辑器草稿，我们不会自动覆盖。',
     challengeNoticeLoad: '载入本题骨架',

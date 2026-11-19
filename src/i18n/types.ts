@@ -235,6 +235,9 @@ export type Messages = {
     /** 反斜杠缩写候选的说明。 */
     abbreviationDetail: string;
     backToLesson: string;
+    /** Playground 通过 ?lesson= 载入课后练习时展示的本课题目与提示。 */
+    lessonNoticeTitle: string;
+    lessonNoticeHint: string;
     /** Playground 通过 ?challenge= 载入挑战题时的题面与草稿提示。 */
     challengeNoticeTitle: string;
     challengeNoticeBody: string;

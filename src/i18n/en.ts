@@ -253,6 +253,8 @@ end
     severityInfo: 'Info',
     abbreviationDetail: 'Unicode abbreviation',
     backToLesson: 'Back to lesson',
+    lessonNoticeTitle: 'Lesson exercise',
+    lessonNoticeHint: 'Show hint',
     challengeNoticeTitle: 'Opened from a math challenge',
     challengeNoticeBody:
       'The puzzle statement is below. If this browser already has an editor draft, it will not be overwritten silently.',

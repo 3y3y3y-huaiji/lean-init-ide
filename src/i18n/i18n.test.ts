@@ -49,12 +49,14 @@ describe('detectLocale', () => {
 
   it('prefers a remembered locale', async () => {
     localStorage.setItem('lean:locale', 'zh');
-    const { detectLocale } = await import('./index');
+    const { detectLocale, readLocalePreference } = await import('./index');
+    expect(readLocalePreference()).toBe('zh');
     expect(detectLocale()).toBe('zh');
   });
 
   it('falls back to English for non-Chinese browsers', async () => {
-    const { detectLocale } = await import('./index');
+    const { detectLocale, readLocalePreference } = await import('./index');
+    expect(readLocalePreference()).toBeNull();
     expect(detectLocale()).toBe('en');
   });
 
@@ -78,5 +80,40 @@ describe('detectLocale', () => {
 
     const enLessons = await loadLessons('en');
     expect(lessonsFor('en')).toBe(enLessons);
+  });
+});
+
+describe('shouldLocalizeRoot', () => {
+  const base = {
+    pathname: '/',
+    savedLocale: null,
+    webdriver: false,
+    userAgent: 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/131.0 Safari/537.36',
+    languages: ['zh-CN', 'zh'],
+  } as const;
+
+  it('中文浏览器且未手动选择语言时切到中文首页', async () => {
+    const { shouldLocalizeRoot } = await import('./index');
+    expect(shouldLocalizeRoot({ ...base })).toBe(true);
+    expect(shouldLocalizeRoot({ ...base, languages: ['zh-TW'] })).toBe(true);
+  });
+
+  it('英文浏览器留在英文首页', async () => {
+    const { shouldLocalizeRoot } = await import('./index');
+    expect(shouldLocalizeRoot({ ...base, languages: ['en-US', 'en'] })).toBe(false);
+  });
+
+  it('尊重用户手动选择过的语言', async () => {
+    const { shouldLocalizeRoot } = await import('./index');
+    expect(shouldLocalizeRoot({ ...base, savedLocale: 'en' })).toBe(false);
+    expect(shouldLocalizeRoot({ ...base, savedLocale: 'zh', languages: ['en-US'] })).toBe(true);
+  });
+
+  it('爬虫、自动化浏览器与非根路径都不触发客户端跳转', async () => {
+    const { shouldLocalizeRoot } = await import('./index');
+    expect(shouldLocalizeRoot({ ...base, userAgent: 'Mozilla/5.0 Googlebot/2.1' })).toBe(false);
+    expect(shouldLocalizeRoot({ ...base, userAgent: 'Mozilla/5.0 bingbot/2.0' })).toBe(false);
+    expect(shouldLocalizeRoot({ ...base, webdriver: true })).toBe(false);
+    expect(shouldLocalizeRoot({ ...base, pathname: '/zh/' })).toBe(false);
   });
 });

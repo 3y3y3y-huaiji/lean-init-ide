@@ -1,6 +1,12 @@
 import './index.css';
 import { applySourcePreference } from './asset-source';
-import { detectLocale, loadLessons, loadLocale } from './i18n';
+import {
+  detectLocale,
+  loadLessons,
+  loadLocale,
+  readLocalePreference,
+  shouldLocalizeRoot,
+} from './i18n';
 import { applyPageMeta, swapLocalePath } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { readCompleted, readProgress } from './progress';
@@ -127,6 +133,21 @@ let resolution = resolveRoute(location.pathname, fallbackLocale);
 // 用 history.replaceState 原地规范化 URL，避免再发一次整页 HTML 请求增加 TTFB。
 if (resolution.kind === 'redirect') {
   history.replaceState(null, '', `${resolution.path}${location.search}${location.hash}`);
+  resolution = resolveRoute(location.pathname, fallbackLocale);
+}
+
+// 静态层始终输出英文首页给爬虫；真实中文用户且未手动选过语言时，
+// 在客户端静默切到 /zh/，保留地址里的查询串与锚点。
+if (
+  shouldLocalizeRoot({
+    pathname: location.pathname,
+    savedLocale: readLocalePreference(),
+    webdriver: navigator.webdriver === true,
+    userAgent: navigator.userAgent,
+    languages: navigator.languages?.length ? navigator.languages : [navigator.language],
+  })
+) {
+  history.replaceState(null, '', `/zh/${location.search}${location.hash}`);
   resolution = resolveRoute(location.pathname, fallbackLocale);
 }
 

@@ -71,16 +71,49 @@ export const otherLocale = (locale: Locale): Locale => (locale === 'zh' ? 'en' :
 
 export const localeLabel = (locale: Locale): string => (locale === 'zh' ? '中文' : 'English');
 
-export const detectLocale = (): Locale => {
-  let saved: string | null = null;
+/** 读取用户手动选择过的语言；没有手动选择时返回 null。 */
+export const readLocalePreference = (): Locale | null => {
   try {
-    saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved === 'zh' || saved === 'en' ? saved : null;
   } catch {
     // 忽略隐私模式下的存储异常。
+    return null;
   }
-  if (saved === 'zh' || saved === 'en') return saved;
+};
+
+export const detectLocale = (): Locale => {
+  const saved = readLocalePreference();
+  if (saved) return saved;
   const languages = navigator.languages?.length ? navigator.languages : [navigator.language];
   return languages.some((language) => language.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
+};
+
+const CRAWLER_UA =
+  /bot|crawler|spider|crawling|googlebot|bingbot|baiduspider|yandex|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|embedly|pinterest|whatsapp|telegrambot/i;
+
+export type RootLocaleInput = {
+  pathname: string;
+  /** 用户手动选择过的语言；null 表示从未选择。 */
+  savedLocale: Locale | null;
+  /** 自动化浏览器（含 Playwright）通常为 true，不应触发语言跳转。 */
+  webdriver: boolean;
+  userAgent: string;
+  languages: readonly string[];
+};
+
+/**
+ * 根路径是否应该由客户端静默切到中文首页。
+ *
+ * 静态层始终给爬虫英文首页；这里只服务真实中文用户，
+ * 并且尊重用户手动选择过的语言偏好。
+ */
+export const shouldLocalizeRoot = (input: RootLocaleInput): boolean => {
+  if (input.pathname !== '/' || input.savedLocale === 'en') return false;
+  if (input.webdriver || CRAWLER_UA.test(input.userAgent)) return false;
+  // 手动选过中文的用户回到根路径时也直接进中文首页。
+  if (input.savedLocale === 'zh') return true;
+  return input.languages.some((language) => language.toLowerCase().startsWith('zh'));
 };
 
 export const rememberLocale = (locale: Locale) => {

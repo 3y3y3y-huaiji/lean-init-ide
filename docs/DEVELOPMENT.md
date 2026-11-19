@@ -38,6 +38,10 @@ pnpm exec vitest run src/lsp-patches.test.ts
 `patch:lsp` 会从 npm registry 下载对应版本、校验 tarball 完整性、应用补丁并更新
 `pnpm-workspace.yaml`，不依赖 `pnpm patch-commit`，避开它在 Windows 上的临时目录清理问题。
 
+升级后还要回归课程页的诊断过滤：`src/views/lesson.ts` 的 `dropSpuriousRedeclarations` 用来掩盖
+FileWorker 偶发重复精化导致的「already declared」假阳性。先确认上游是否已修复；已修复就删除这段
+过滤并更新相关单测，未修复则保留。
+
 ## 质量门禁
 
 > **PR 阶段无需本地跑全套检查**：提 PR 后会由 `.github/workflows/ci.yml`（`CI · 应用`）在 GitHub Actions 上自动执行下列完整门禁与 E2E，合并前等待 Actions 检查全绿即可。

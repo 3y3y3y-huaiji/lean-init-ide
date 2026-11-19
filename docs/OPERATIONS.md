@@ -63,6 +63,8 @@ pnpm run smoke -- --origin=https://lean-init-ide.pages.dev
 已知平台行为：Cloudflare Pages 会用自己的边缘 TTL 覆盖静态资源的 `Cache-Control`，
 `public/_headers` 里给 `/sw.js` 写的 `no-cache` 未必生效（实测 `max-age=14400`）。
 浏览器对 Service Worker 脚本有独立缓存策略，影响有限，但更新延迟属于可预期范围。
+SW 只在首次安装时 `skipWaiting`；已有旧版本时等所有受控页面关闭再激活，避免旧页面被
+新清单的资产字节接管。发版后仍停留在旧标签页的用户会继续使用旧 SW，关闭标签页后生效。
 
 ## 访问控制与成本保护
 

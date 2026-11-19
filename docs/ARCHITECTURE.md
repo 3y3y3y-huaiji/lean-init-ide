@@ -46,6 +46,22 @@ Init 与 wasm 以 zstd（level 19）重新压缩，运行时从 136.45 MiB 降�
 worker 启动时用 `public/vendor/zstddec.mjs` 的同源 wasm 解码，解压后的字节与上游 gzip 完全一致。
 一次完整加载约产生 26 个分片请求（约 102 MiB ÷ 4 MiB）。没有缓存时全部回源，命中缓存后重复访问的成本接近零。
 
+### 运行时缓存的归属
+
+约 102MB 的「持久缓存」不在 Service Worker 层：
+
+- `src/sw.ts` 的分片与整文件请求都显式使用 `cache: 'no-store'`，组装成 Blob 后直接返回内存中的
+  `Response`。SW 的 CacheStorage 只存 `?source=` 强制源偏好（`lean-source`），不缓存资产字节。
+- wasm32 的运行时缓存由 `@wasm-idle/core` 管理（`src/components/lean-panel.ts` 传入的
+  `persistentCache`），落在 CacheStorage 的 `wasm-idle-assets-v1:<namespace>`；IndexedDB 只存元数据，
+  body 缺失时按未命中处理。预算按设备分档：标准 512MiB、低内存 128MiB（`src/device.ts`）。
+- 实验性 wasm64 由 `src/lean-wasm64-runtime.ts` 直接写 CacheStorage，命名空间为
+  `wasm-idle-assets-v1:wasm64:<cacheKey>`，命中后仍逐资产校验字节数与 SHA-256。
+- 清理入口是 `src/runtime-cache.ts` 的 `clearRuntimeCache`（设置里的「清除运行时缓存」与 `?fresh`），
+  只删 `wasm-idle-assets-v1:` 前缀，保留站点偏好。
+
+排查缓存问题时看 `wasm-idle-assets-v1:*`，不要误以为 `sw.js` 缓存了大文件。
+
 访问控制、限流与资产维护的操作方式见 [OPERATIONS](OPERATIONS.md)。
 
 ### 实验性 wasm64

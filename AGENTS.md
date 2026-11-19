@@ -39,7 +39,7 @@
 
 1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改这些文件必须同步 `bytes` 与 `sha256`、更换 `cacheKey`、重新上传 R2；边缘缓存按 URL 缓存一年（`immutable`），不换版本键用户会继续拿到旧对象。
 2. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`，否则 `SharedArrayBuffer` 与 wasm 线程模型不可用。
-3. **只用一个域名。** 不要引入第二个可访问 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名等于让用户重下 102 MB。
+3. **只用一个域名。** 不要引入第二个可访问 origin。运行时持久缓存（CacheStorage）与 localStorage 按 origin 隔离，双域名等于让用户重下 102 MB。
 4. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 5. **CSP 不能删这几项。** `'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入）、`static.cloudflareinsights.com`（Web Analytics）、`connect-src` 里的 `https://*.modelscope.cn`（镜像回退）与 `data:`（zstddec 内嵌 wasm）。
 6. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时不含 Lean / Lake / Mathlib，引用会编译失败。
@@ -53,7 +53,7 @@
 - `connect-src` 漏掉魔搭域名会让镜像回退静默失败；Cloudflare Web Analytics 会注入第三方 beacon，并可能同时出现 Pages 与 zone 两个 token。
 - 走代理时 curl 会先写 `200 Connection Established`；解析状态码必须取最后一个真实 HTTP 行。
 - `pnpm audit` 走默认镜像会 405，需要 `--registry=https://registry.npmjs.org`。
-- 课程页的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删，也不要搬到 playground（那里需要看到真实重复声明）。
+- 课程页的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删，也不要搬到 playground（那里需要看到真实重复声明）。升级 `@wasm-idle/lsp` 时先确认上游是否已修复该假阳性，修复后再删。
 - `src/components/lean-panel.ts` 因 rollup 无法解析其类型语法，被排除出 v8 覆盖率；不要把可测纯逻辑塞进装配层。
 - Analytics Engine binding 尚未声明，指标目前只写 Workers Logs；要启用需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`。
 
@@ -61,7 +61,7 @@
 
 - `src/main.ts` 只做路由、语言、主题装配；业务逻辑放 `views/` 或独立模块。
 - `src/views/` 只产出字符串并绑定事件；不要在渲染函数里发请求或读全局状态。
-- `src/sw.ts` 只做资产分片下载与缓存，不写业务逻辑。
+- `src/sw.ts` 只做资产分片下载与组装，不持久化资产（分片请求 `cache: 'no-store'`）；102MB 持久缓存归 `@wasm-idle/core` 的 CacheStorage，不写业务逻辑。
 - `src/asset-source.ts` 只做页面侧 `?source=` 强制源开关，不要做成持久化的用户设置。
 - `src/device.ts` 不改 wasm 内存上限，1 GiB 是导入峰值所需。
 - `functions/cdn/` 不放宽白名单，不移除 Range 处理；`functions/api/` 不放宽字段校验，不回显原始请求体。

@@ -27,6 +27,35 @@ export const LEAN_PIN: LeanPin = {
   bootstrapSha256: '0a0a3208617e9eab92f1041efa83ad94d405e69d172fb654a62dbfa9fbc5313b',
 };
 
+/**
+ * 解析实际使用的 pin：默认取 `LEAN_PIN`，允许用 `LEAN_PIN_*` 环境变量整体覆盖。
+ *
+ * 覆盖只用于本地试验另一版 Lean；CI 的缓存键绑定 `hashFiles('scripts/pin-lean.ts')`，
+ * 正式升级必须改 `LEAN_PIN` 并让缓存失效，否则会混用旧产物。
+ */
+export const resolveLeanPin = (env: NodeJS.ProcessEnv = process.env): LeanPin => {
+  const overrides = {
+    version: env.LEAN_PIN_VERSION,
+    commit: env.LEAN_PIN_COMMIT,
+    bootstrapUrl: env.LEAN_PIN_BOOTSTRAP_URL,
+    bootstrapSha256: env.LEAN_PIN_BOOTSTRAP_SHA256,
+  };
+  const provided = Object.values(overrides).filter((value) => value !== undefined && value !== '');
+  if (provided.length === 0) return LEAN_PIN;
+  if (provided.length !== 4) {
+    throw new Error(
+      'LEAN_PIN_* 覆盖必须同时提供 LEAN_PIN_VERSION / LEAN_PIN_COMMIT / ' +
+        'LEAN_PIN_BOOTSTRAP_URL / LEAN_PIN_BOOTSTRAP_SHA256',
+    );
+  }
+  return {
+    version: overrides.version as string,
+    commit: overrides.commit as string,
+    bootstrapUrl: overrides.bootstrapUrl as string,
+    bootstrapSha256: overrides.bootstrapSha256 as string,
+  };
+};
+
 export interface PinResult {
   readonly cropped: boolean;
   readonly sectionsBefore: number;
@@ -49,7 +78,7 @@ export const cropEventLoopPatch = (
   return { patch: kept.join(''), before: sections.length, after: kept.length };
 };
 
-export const pinLean = (root: string, pin: LeanPin = LEAN_PIN): PinResult => {
+export const pinLean = (root: string, pin: LeanPin = resolveLeanPin()): PinResult => {
   const repoRoot = requireDir(root, 'repoRoot');
   const producer = requireDir(
     join(repoRoot, 'wasm-llvm', 'producer', 'lean-browser'),
@@ -80,14 +109,15 @@ export const pinLean = (root: string, pin: LeanPin = LEAN_PIN): PinResult => {
 const main = (): void => {
   const parsed = parseArgs(process.argv.slice(2), {});
   const [root] = expectPositionals(parsed, 1, 'node scripts/pin-lean.ts <repoRoot>');
-  const result = pinLean(root ?? '');
+  const pin = resolveLeanPin();
+  const result = pinLean(root ?? '', pin);
   console.log(
     result.cropped
       ? `裁剪 event_loop.cpp：${result.sectionsBefore} -> ${result.sectionsAfter} 段`
       : '补丁里没有 event_loop.cpp，保持原样',
   );
   console.log(
-    `pinned Lean ${LEAN_PIN.version} @ ${LEAN_PIN.commit.slice(0, 8)}, bootstrap ${LEAN_PIN.bootstrapSha256.slice(0, 12)}`,
+    `pinned Lean ${pin.version} @ ${pin.commit.slice(0, 8)}, bootstrap ${pin.bootstrapSha256.slice(0, 12)}`,
   );
 };
 

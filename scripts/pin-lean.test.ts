@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CliError } from './lib/cli.ts';
-import { LEAN_PIN, cropEventLoopPatch, pinLean } from './pin-lean.ts';
+import { LEAN_PIN, cropEventLoopPatch, pinLean, resolveLeanPin } from './pin-lean.ts';
 
 const PATCH = [
   'diff --git a/src/runtime/uv/event_loop.cpp b/src/runtime/uv/event_loop.cpp',
@@ -55,6 +55,31 @@ describe('cropEventLoopPatch', () => {
     const { patch, before, after } = cropEventLoopPatch('diff --git a/a b/a\n');
     expect(before).toBe(after);
     expect(patch).toBe('diff --git a/a b/a\n');
+  });
+});
+
+describe('resolveLeanPin', () => {
+  it('没有 LEAN_PIN_* 时使用默认 pin', () => {
+    expect(resolveLeanPin({})).toEqual(LEAN_PIN);
+  });
+
+  it('四个环境变量齐全时整体覆盖', () => {
+    const pin = resolveLeanPin({
+      LEAN_PIN_VERSION: 'v9.9.9',
+      LEAN_PIN_COMMIT: 'deadbeef',
+      LEAN_PIN_BOOTSTRAP_URL: 'https://example.com/lean.tar.zst',
+      LEAN_PIN_BOOTSTRAP_SHA256: 'abc123',
+    });
+    expect(pin).toEqual({
+      version: 'v9.9.9',
+      commit: 'deadbeef',
+      bootstrapUrl: 'https://example.com/lean.tar.zst',
+      bootstrapSha256: 'abc123',
+    });
+  });
+
+  it('只给一部分时直接报错，避免版本与引导包错配', () => {
+    expect(() => resolveLeanPin({ LEAN_PIN_VERSION: 'v9.9.9' })).toThrowError(/必须同时提供/);
   });
 });
 

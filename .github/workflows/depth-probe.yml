@@ -30,7 +30,7 @@ on:
         required: false
         default: ''
       whnf_audit:
-        description: 下载 Lean 4.36.0-rc2 发行包并复核 WHNF 热点环的尾调用
+        description: 下载 scripts/pin-lean.ts 指定的 Lean 发行包并复核 WHNF 热点环的尾调用
         type: boolean
         required: false
         default: false
@@ -199,6 +199,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
       - name: 安装 zstd 与 wabt
         run: sudo apt-get update && sudo apt-get install -y zstd wabt
 
@@ -217,13 +221,26 @@ jobs:
           source emsdk/emsdk_env.sh
           emcc --version | head -n 2
 
-      # 官方 Linux 发行包自带 olean，`lean -c` 不需要全量编译。
-      - name: 下载 Lean 4.36.0-rc2（发行包 + 源码）
+      # 版本统一从 scripts/pin-lean.ts 读取，升级时不改这里。
+      - name: 解析 Lean pin
+        id: lean
         run: |
-          curl -fL --retry 3 -o lean.tar.zst \
-            https://github.com/leanprover/lean4/releases/download/v4.36.0-rc2/lean-4.36.0-rc2-linux.tar.zst
+          # shellcheck disable=SC2016 # 单引号里是 JS 模板字符串，由 node 自己展开。
+          node -e 'import("./scripts/pin-lean.ts").then((m) => {
+            const p = m.resolveLeanPin();
+            console.log(`version=${p.version}`);
+            console.log(`bootstrap=${p.bootstrapUrl}`);
+          })' >> "$GITHUB_OUTPUT"
+
+      # 官方 Linux 发行包自带 olean，`lean -c` 不需要全量编译。
+      - name: 下载 Lean ${{ steps.lean.outputs.version }}（发行包 + 源码）
+        env:
+          VERSION: ${{ steps.lean.outputs.version }}
+          BOOTSTRAP_URL: ${{ steps.lean.outputs.bootstrap }}
+        run: |
+          curl -fL --retry 3 -o lean.tar.zst "$BOOTSTRAP_URL"
           curl -fL --retry 3 -o lean-src.tar.gz \
-            https://github.com/leanprover/lean4/archive/refs/tags/v4.36.0-rc2.tar.gz
+            "https://github.com/leanprover/lean4/archive/refs/tags/v${VERSION}.tar.gz"
           mkdir -p work/lean-dist work/lean-src
           zstd -d --stdout lean.tar.zst | tar -xf - -C work/lean-dist --strip-components=1
           tar -xzf lean-src.tar.gz -C work/lean-src --strip-components=1
@@ -321,6 +338,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
       - name: 安装 zstd、wabt 与 patch
         run: sudo apt-get update && sudo apt-get install -y zstd wabt patch
 
@@ -339,12 +360,25 @@ jobs:
           source emsdk/emsdk_env.sh
           emcc --version | head -n 2
 
-      - name: 下载 Lean 4.36.0-rc2（发行包 + 源码）
+      # 版本统一从 scripts/pin-lean.ts 读取，升级时不改这里。
+      - name: 解析 Lean pin
+        id: lean
         run: |
-          curl -fL --retry 3 -o lean.tar.zst \
-            https://github.com/leanprover/lean4/releases/download/v4.36.0-rc2/lean-4.36.0-rc2-linux.tar.zst
+          # shellcheck disable=SC2016 # 单引号里是 JS 模板字符串，由 node 自己展开。
+          node -e 'import("./scripts/pin-lean.ts").then((m) => {
+            const p = m.resolveLeanPin();
+            console.log(`version=${p.version}`);
+            console.log(`bootstrap=${p.bootstrapUrl}`);
+          })' >> "$GITHUB_OUTPUT"
+
+      - name: 下载 Lean ${{ steps.lean.outputs.version }}（发行包 + 源码）
+        env:
+          VERSION: ${{ steps.lean.outputs.version }}
+          BOOTSTRAP_URL: ${{ steps.lean.outputs.bootstrap }}
+        run: |
+          curl -fL --retry 3 -o lean.tar.zst "$BOOTSTRAP_URL"
           curl -fL --retry 3 -o lean-src.tar.gz \
-            https://github.com/leanprover/lean4/archive/refs/tags/v4.36.0-rc2.tar.gz
+            "https://github.com/leanprover/lean4/archive/refs/tags/v${VERSION}.tar.gz"
           mkdir -p work/lean-dist work/lean-src
           zstd -d --stdout lean.tar.zst | tar -xf - -C work/lean-dist --strip-components=1
           tar -xzf lean-src.tar.gz -C work/lean-src --strip-components=1

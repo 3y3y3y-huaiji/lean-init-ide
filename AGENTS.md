@@ -48,7 +48,7 @@
 5. **CSP 不能删这几项。** `'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入）、`static.cloudflareinsights.com`（Web Analytics）、`connect-src` 里的 `https://*.modelscope.cn`（镜像回退）与 `data:`（zstddec 内嵌 wasm）。
 6. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时不含 Lean / Lake / Mathlib，引用会编译失败。
 7. **遥测不记录用户代码、cookie、设备指纹；任何上报失败必须静默。**
-8. **wasm64 的 Lean 版本只能从 `scripts/pin-lean.ts` 改。** 升级时必须同时重做三份栈补丁，并让 `scripts/wasm64-patch-equivalence.ts` 的差分门禁（官方原生 Lean vs 打补丁 wasm64）在 CI 通过；不能只改 pin 就发布。补丁必须与冻结的源码逐行匹配，`grep` 断言缺失应直接失败，禁止静默跳过。
+8. **wasm64 的 Lean 版本只有 `scripts/pin-lean.ts` 一个事实来源。** 默认值在 `LEAN_PIN`，`LEAN_PIN_*` 环境变量只用于本地/临时覆盖；正式升级必须改 `LEAN_PIN` 以让 `hashFiles(...)` 缓存键失效。升级时必须同时重做三份栈补丁，并让 `scripts/wasm64-patch-equivalence.ts` 的差分门禁（官方原生 Lean vs 打补丁 wasm64）在 CI 通过；不能只改 pin 就发布。补丁必须与当前 pin 的源码逐行匹配，`grep` 断言缺失应直接失败，禁止静默跳过。
 
 ## 非显式约束（S）
 

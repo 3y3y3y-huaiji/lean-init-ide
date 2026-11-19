@@ -9,9 +9,9 @@
 把 Lean 浏览器运行时从 wasm32 改成真 64 位 WebAssembly（Emscripten `MEMORY64=1`），复用官方 64 位 Init olean，跟随官方 Lean 版本。
 当前跟到 mathlib4 主线使用的工具链 **v4.36.0-rc2**（commit `b35cb10c`）。
 
-## 版本冻结
+## 版本 pin 与升级
 
-**唯一事实来源是 `scripts/pin-lean.ts` 的 `LEAN_PIN`**：
+默认版本写在 `scripts/pin-lean.ts` 的 `LEAN_PIN`，不是不可变常量：
 
 ```ts
 export const LEAN_PIN = {
@@ -22,12 +22,21 @@ export const LEAN_PIN = {
 };
 ```
 
+- **默认**：CI 与本地都读 `LEAN_PIN`，保证同一提交可复现。
+- **本地试验另一版**：同时设置 `LEAN_PIN_VERSION` / `LEAN_PIN_COMMIT` /
+  `LEAN_PIN_BOOTSTRAP_URL` / `LEAN_PIN_BOOTSTRAP_SHA256`（四个必须一起给，
+  少一个会直接报错），`pin-lean.ts` 会用它覆盖默认值。
+- **正式升级**：改 `LEAN_PIN` 后提交。runtime / cgen / objects / Mathlib 的缓存键
+  绑定 `hashFiles('scripts/pin-lean.ts')`，换版本时自动失效。
+
+环境变量适合临时验证；CI 正式升级必须落到 `LEAN_PIN`，否则缓存键不变，
+可能拿旧版生成的产物去配新运行时。
+
 `node scripts/pin-lean.ts <repoRoot>` 在执行 `fetch` 之前改写 wasm-llvm producer 的
 `manifest.json`（Lean 版本 / commit / 引导包 URL+sha256），并裁掉 4.36 已吸收的
-`event_loop.cpp` 补丁段。runtime / cgen / objects / Mathlib 的缓存键都绑定
-`hashFiles('scripts/pin-lean.ts')`，换版本时不会复用旧产物。
+`event_loop.cpp` 补丁段。
 
-三处栈补丁必须与这个 pin 的源码逐行匹配：
+三处栈补丁必须与当前 pin 的源码逐行匹配：
 
 | 补丁 | 目标 | 引入原因 |
 | --- | --- | --- |
@@ -35,7 +44,14 @@ export const LEAN_PIN = {
 | `scripts/patches/lean-whnf-stack.patch` | `src/Lean/Meta/WHNF.lean` | `whnfCore / whnfEasyCases / reduceRec` 非尾递归环 |
 | `scripts/patches/lean-simp-loop-stack.patch` | `src/Lean/Meta/Tactic/Simp/Main.lean` | 每个重写步压两层 `simpLoop` 帧 |
 
-升级 Lean 时必须同时重做这三份补丁并通过下面的差分门禁，不能只改 `LEAN_PIN`。
+升级清单（顺序不能反）：
+
+1. 改 `LEAN_PIN`（或先用四个环境变量验证目标版本）。
+2. 让三份补丁在新源码上 `patch -p1 --dry-run` 通过；锚点变了就重做补丁。
+3. 推送分支，等 smoke 的 `wasm64-patch-equivalence` 差分门禁通过。
+4. 资产上传前同步 `config/lean4-wasm64-runtime.json`、`src/i18n/` 与文档里的版本号。
+
+只改 `LEAN_PIN` 不重做补丁、或只改版本号不做差分门禁，都不算完成升级。
 
 ## 结论
 

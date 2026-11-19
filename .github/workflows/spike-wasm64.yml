@@ -1,7 +1,8 @@
-name: Runtime · Lean 4.36 wasm64 gate
+name: Runtime · Lean wasm64 gate
 
-# wasm64 运行时的构建与行为门禁。Lean 版本冻结在 scripts/pin-lean.ts 的
-# v4.36.0-rc2（commit b35cb10c），三处热点栈补丁在 fetch 后应用：
+# wasm64 运行时的构建与行为门禁。Lean 版本的唯一事实来源是 scripts/pin-lean.ts
+# （默认 v4.36.0-rc2，commit b35cb10c；可用 LEAN_PIN_* 环境变量整体覆盖），
+# 三处热点栈补丁在 fetch 后应用：
 #   lean-replace-fn-iterative.patch  src/kernel/replace_fn.cpp
 #   lean-whnf-stack.patch            src/Lean/Meta/WHNF.lean
 #   lean-simp-loop-stack.patch       src/Lean/Meta/Tactic/Simp/Main.lean
@@ -113,9 +114,9 @@ jobs:
         run: pnpm run test:spike:coverage
 
       - name: GitHub Actions 语法检查
-        run: |
-          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color -shellcheck=
+        # 与 ci.yml 用同一个固定版本镜像，并保留 shellcheck：
+        # 只关掉 shellcheck 会漏掉 run 脚本里的真实告警，PR 仍会被 CI 拦下。
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
 
   prepare:
     needs: lint
@@ -188,7 +189,7 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
           node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
-          # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
+          # 跟 mathlib4 主线工具链对齐（版本见 scripts/pin-lean.ts），官方 olean 与 mathlib 缓存才能复用。
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       - name: 缓存 Lean 源码与引导包
@@ -316,7 +317,7 @@ jobs:
           git clone --depth 1 https://github.com/seo-rii/wasm-llvm.git wasm-llvm
           bash scripts/patch-wasm64.sh "$GITHUB_WORKSPACE"
           node "$GITHUB_WORKSPACE/scripts/ci/patch-symtab.ts" wasm-llvm/producer/lean-browser/scripts/gen-symtab.py
-          # 跟 mathlib4 当前工具链对齐（v4.36.0-rc2），官方 olean 与 mathlib 缓存才能复用。
+          # 跟 mathlib4 主线工具链对齐（版本见 scripts/pin-lean.ts），官方 olean 与 mathlib 缓存才能复用。
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       - name: 恢复 Lean 源码与引导包
@@ -816,7 +817,7 @@ jobs:
           echo "mathlib toolchain: $(cat work/mathlib/mathlib4/lean-toolchain 2>/dev/null || echo missing)"
           echo "mathlib head: $(git -C work/mathlib/mathlib4 rev-parse HEAD 2>/dev/null || echo missing)"
           mkdir -p work/mathlib/mathlib4/.lake/packages
-          while read -r url rev name; do
+          while read -r _ _ name; do
             [ -z "${name:-}" ] && continue
             if [ -d "work/mathlib/$name" ]; then
               ln -sfn "$PWD/work/mathlib/$name" "work/mathlib/mathlib4/.lake/packages/$name"
@@ -1152,18 +1153,24 @@ jobs:
 
       - name: 输出并保存 wasm64 清单
         run: |
+          # 版本统一从 scripts/pin-lean.ts 读取，升级时不改这里。
+          LEAN_PIN_VERSION="$(node -e 'import("./scripts/pin-lean.ts").then((m) => process.stdout.write(m.resolveLeanPin().version))')"
+          export LEAN_PIN_VERSION
+          # shellcheck disable=SC2016 # 单引号里是 JS 模板字符串，由 node 自己展开。
           node -e '
             const fs = require("fs");
             const path = "./runtime/wasm64-runtime-manifest.json";
+            const version = process.env.LEAN_PIN_VERSION;
+            if (!version) throw new Error("LEAN_PIN_VERSION 为空");
             const m = JSON.parse(fs.readFileSync(path, "utf8"));
             if (m.leanVersion === "build/release/stage1") {
-              m.leanVersion = "4.36.0-rc2";
-              m.runtime = "Lean 4.36.0-rc2 Init (wasm64 experimental)";
+              m.leanVersion = version;
+              m.runtime = `Lean ${version} Init (wasm64 experimental)`;
               m.fallback = {
                 label: "GitHub release",
-                baseUrl: "https://github.com/3y3y3y-huaiji/lean-init-ide/releases/download/runtime-v4.36.0-rc2-wasm64/",
+                baseUrl: `https://github.com/3y3y3y-huaiji/lean-init-ide/releases/download/runtime-v${version}-wasm64/`,
               };
-              for (const a of m.assets) a.key = "wasm-lean4/4.36.0-rc2-wasm64/" + a.name;
+              for (const a of m.assets) a.key = `wasm-lean4/${version}-wasm64/` + a.name;
             }
             if (!m.mirror) {
               m.mirror = {
@@ -1196,6 +1203,7 @@ jobs:
             exit 0
           fi
           command -v aws >/dev/null || (sudo apt-get update && sudo apt-get install -y awscli)
+          # shellcheck disable=SC2016 # 单引号里是 JS 模板字符串，由 node 自己展开。
           node -e '
             const fs = require("fs");
             const path = require("path");
@@ -1249,6 +1257,7 @@ jobs:
             exit 0
           fi
           command -v git-lfs >/dev/null || (sudo apt-get update && sudo apt-get install -y git-lfs)
+          # shellcheck disable=SC2016 # 单引号里是 JS 模板字符串，由 node 自己展开。
           node -e '
             const fs = require("fs");
             const path = require("path");

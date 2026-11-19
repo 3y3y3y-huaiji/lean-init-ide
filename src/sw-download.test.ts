@@ -308,6 +308,26 @@ describe('downloadRanges', () => {
     expect(new Uint8Array(parts[0]!)).toEqual(body);
     expect(seen).toEqual([4]);
   });
+
+  it('响应体缺少流式 reader 且字节数不符时抛错', async () => {
+    const fakeResponse = {
+      status: 206,
+      body: null,
+      arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
+    } as unknown as Response;
+
+    await expect(
+      downloadRanges(
+        base({
+          total: 4,
+          chunkBytes: 4,
+          retries: 0,
+          maxSplitDepth: 0,
+          fetchImpl: vi.fn(async () => fakeResponse),
+        }),
+      ),
+    ).rejects.toThrow('returned 2 bytes');
+  });
 });
 
 describe('downloadStream', () => {

@@ -492,4 +492,37 @@ describe('loadWasm64Runtime', () => {
       'https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs',
     ]);
   });
+
+  it('HTTP 非 2xx 或字节长度不符时把具体原因写入失败汇总', async () => {
+    const glue = new TextEncoder().encode('glue-bytes');
+    const manifest: Wasm64Manifest = {
+      cacheKey: 'bad-http-len',
+      leanVersion: '4.36.0-rc2',
+      runtime: 'test',
+      mirror: {
+        label: '魔搭镜像',
+        baseUrl: 'https://modelscope.cn/datasets/test/resolve/master/',
+        prefix: 'wasm-lean4/4.36.0-rc2-wasm64',
+      },
+      assets: [
+        {
+          name: WASM64_GLUE,
+          key: `wasm-lean4/4.36.0-rc2-wasm64/${WASM64_GLUE}`,
+          bytes: glue.byteLength,
+          sha256: await sha256Hex(glue),
+        },
+      ],
+    };
+    let call = 0;
+    const fetchImpl = (async () => {
+      call += 1;
+      if (call === 1) return new Response('unavailable', { status: 503 });
+      return new Response(new Uint8Array([1, 2]), { status: 200 });
+    }) as typeof fetch;
+
+    const err = await loadWasm64Runtime({ manifest, fetchImpl }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain('HTTP 503');
+    expect((err as Error).message).toContain('length 2 !=');
+  });
 });

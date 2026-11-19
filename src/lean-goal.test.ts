@@ -29,6 +29,9 @@ describe('plainGoal 错误分类', () => {
     ).toBe(true);
     expect(isTransientGoalError({ code: -32800 })).toBe(true);
     expect(isTransientGoalError({ code: -32801 })).toBe(true);
+    expect(isTransientGoalError({ code: -32603 })).toBe(true);
+    expect(isTransientGoalError({ message: 'connection is disposed' })).toBe(true);
+    expect(isTransientGoalError('not connected')).toBe(true);
     expect(isTransientGoalError(new Error('Lean session stopped'))).toBe(true);
   });
 

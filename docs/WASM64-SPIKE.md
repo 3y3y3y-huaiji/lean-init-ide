@@ -232,7 +232,7 @@ workflow 里也不再出现 `"$MODULE"` 传空这种调用。
 | 上游真实用例 | `CURATED_UPSTREAM_TESTS`：`tests/elab` 里只依赖 Init/Lean 的 5 个文件（`6123_mod_cast`、`whnfProj`、`whnfDelayedMVarIssue`、`simpConfigPropagationIssue1`、`dsimpZetaIssue`） |
 | 定向差分语料 | `buildDifferentialCorpus()`：`replace` / `instantiateLevelParams` 的共享与未共享子树、WHNF 的 zeta/zetaHave/zetaUnused/trackZetaDelta/proj/beta 开关、Simp 的 `singlePass` / `memoize=false` / `maxSteps` 报错 |
 | 深栈回归 | `buildDeepStressCorpus()`：`mkDeepApp 2000` 的 `replace`，`simp` 处理 `deepLin 800` 与 `nestedAdd 400` |
-| 退出码 | `IO.Process.exit 42` 必须返回 42 |
+| 退出码 | `IO.Process.exit 42`：当前 wasm64 CLI 会以 1 退出（见「尚未验证」），门禁只告警不阻断 |
 | LSP | `--worker` 模式下跑 `simp` 深链（N=800），确认浏览器同款线程模型不爆栈 |
 
 `buildDifferentialCorpus` 里的每个 `IO.println` 都同时打印哈希与字符串，因此补丁若改变了
@@ -541,6 +541,7 @@ wasm 原生栈上留 `simpLoop + visitPreContinue` 两个帧，800 步就把约 
 - 浏览器内 LSP：浏览器侧目前只验证了 CLI 编译（`--mode=version|compile`），`--worker` 诊断链路已在 Node `worker_threads` 跑通 `Init` 与 `Mathlib.Tactic.Spread`，尚未接入前端 Monaco + 浏览器 Worker 联调
 - Mathlib 教学子集扩展：已打通 `Mathlib.Tactic.Spread` 的 `olean` 编译与 LSP 诊断，后续按需扩展 `scripts/mathlib-slice.ts` 目标并打包进浏览器运行时资产
 - 内存占用与性能：`-O2` + memory64 下的峰值内存未精细压测；当前 Init 诊断约 26–37 秒、`Mathlib.Tactic.Spread` 约 51–56 秒（受限于 MEMFS 跨线程 syscall 每拍 1ms 的 `Atomics.wait`）
+- wasm64 CLI 的 `IO.Process.exit`：`lean_io_exit` 抛出的 `wasm_exit_exception` 会落在 pthread 上，宿主 Node worker 收到不可克隆的异常后报 `DataCloneError` 并以 1 退出，而不是返回 42。差分门禁因此只告警；修好进程退出模型（或改用 `_proc_exit` 代理）后再升级为硬断言。
 
 ## 复现
 

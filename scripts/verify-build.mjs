@@ -61,6 +61,9 @@ if (!(await exists(indexPath))) {
   if (!/<style>[\s\S]+<\/style>/.test(indexHtml)) {
     fail('index.html 缺少内联 <style> 样式');
   }
+  // 根路径由 `_redirects` 回落到 index.html，必须和预渲染页一样带有可抓取的标题。
+  if (!indexHtml.includes('<meta name="lean-ssg"')) fail('index.html 缺少 lean-ssg 标记');
+  if (!/<h1[^>]*>[^<]+<\/h1>/.test(indexHtml)) fail('index.html 没有预渲染主标题 <h1>');
 }
 for (const rel of [
   'zh/index.html',

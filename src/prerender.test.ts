@@ -68,6 +68,12 @@ describe('SSG 预渲染', () => {
     expect(html).toContain(`>${lessonsFor('en')[0]!.title}</h1>`);
   });
 
+  it('首页预渲染恰好包含一个 H1，保证根路径回落到 index.html 时可被索引', () => {
+    const html = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'home', locale: 'zh' });
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toContain(`>${messagesFor('zh').home.title}</h1>`);
+  });
+
   it('playground 预渲染设置 body data-page=playground 且不含空壳 h1 缺失问题', () => {
     const html = injectPrerenderedHtml(BASE_TEMPLATE, { page: 'playground', locale: 'zh' });
     expect(html).toContain('<body data-page="playground">');

@@ -2,9 +2,14 @@
 
 # Lean Init IDE
 
-Run a real Lean 4.35.0 theorem prover in your browser. A Monaco editor plus the full language server,
-all inside a Web Worker — not a regex mock, and not code shipped to a server. Open the page, write
-proofs, read diagnostics and inspect goals; your code never leaves the browser.
+**A real theorem prover, running in your browser.**
+
+Not a demo, not a regex mock, and your code is never quietly shipped to a server. Lean 4.35.0 is
+compiled to WebAssembly and packed into a Web Worker together with the full language server. You write
+a proof, the compiler judges it on the spot — and your code never leaves your machine.
+
+One wrong step and it stops you with a red underline; get it right and it just replies `no goals`.
+That feeling of having a machine catch a hole in your logic is worth trying once.
 
 Live: <https://criticalthinking.de5.net> (fallback: <https://lean-init-ide.pages.dev>)
 
@@ -18,15 +23,15 @@ Open <https://criticalthinking.de5.net>, pick a lesson, press **Run**.
 - Low-memory devices (`navigator.deviceMemory ≤ 4`) do not auto-download; press **Start Lean** yourself.
 - Reading lessons does not require starting the engine; the runtime only loads when you press **Run**.
 
-## Why this is not just another sandbox
+## How it differs from yet another sandbox
 
 Unit tests only cover the cases you remembered to write. Lean uses mathematical logic to rule out
-every possible input at once, and the compiler stops you with a red line the moment a step breaks.
+every possible input at once.
 
 - **A real compiler, not a mock.** Lean 4.35.0 is compiled to WebAssembly, so parsing, elaboration and
   diagnostics all happen in the page. No regex ever decides whether a proof is valid.
 - **Live diagnostics and goals.** The LSP publishes diagnostics once typing settles, and the goal panel
-  follows your cursor inside a proof.
+  follows your cursor inside a proof — you can see how far you are from the answer.
 - **Init + Std + Batteries, split into packs.** Only Init downloads by default; engineering lessons
   mount Std and Batteries on demand and release them when they are no longer needed.
 - **27 lessons, three paths.** From absolute basics to real data structures and state machines, every
@@ -136,10 +141,27 @@ Run the full gate before committing; commands and coverage thresholds are in
 
 ## Contributing
 
+Here is how to make it better:
+
 - Read [AGENTS.md](AGENTS.md) first: hard constraints, module boundaries and known traps (in Chinese).
 - One concern per commit; lesson code must stay within what the runtime can load (Init, plus Std /
   Batteries for engineering lessons).
 - User-visible copy must be added in both languages; a parity test enforces the key set.
+
+## Contact
+
+Please use the public channels first, so others can find the answer and maintainers do not repeat
+themselves:
+
+- **Found a bug, a wrong lesson, or want a feature** → open an [Issue](https://github.com/3y3y3y-huaiji/lean-init-ide/issues)
+  with reproduction steps or a page link.
+- **Already know how to fix it** → send a [Pull Request](https://github.com/3y3y3y-huaiji/lean-init-ide/pulls);
+  read [AGENTS.md](AGENTS.md) before you start.
+- **Anything else** (partnerships, licensing, security reports and other things that should not be
+  public) → email <sumingkai1@outlook.com>.
+
+In short: if an Issue or PR can handle it, skip the email; keep the inbox for what genuinely should
+not be discussed in public.
 
 ## Docs
 

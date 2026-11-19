@@ -15,8 +15,8 @@ const codeBlockHead =
 
 const tocLink = (active: boolean) =>
   active
-    ? 'flex min-h-10 items-center rounded-lg bg-accent-soft px-2.5 py-2 text-[13px] leading-snug text-fg no-underline'
-    : 'flex min-h-10 items-center rounded-lg px-2.5 py-2 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
+    ? 'flex min-h-10 max-[900px]:min-h-11 items-center rounded-lg bg-accent-soft px-2.5 py-2 text-[13px] leading-snug text-fg no-underline'
+    : 'flex min-h-10 max-[900px]:min-h-11 items-center rounded-lg px-2.5 py-2 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
 
 const noteClass = (tone: 'info' | 'warn' | undefined) =>
   tone === 'warn'
@@ -98,7 +98,7 @@ const renderBlocks = (
       if (block.kind === 'goal') {
         return `
           <div class="my-5 rounded-xl border border-line bg-panel-soft px-4 py-3">
-            <p class="m-0 mb-2 text-[10px] font-[650] uppercase tracking-[0.08em] text-muted">${escapeHtml(goalLabel)}</p>
+            <p class="m-0 mb-2 text-xs font-[650] uppercase tracking-[0.08em] text-muted">${escapeHtml(goalLabel)}</p>
             <pre class="m-0 overflow-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.7] text-fg"><code>${escapeHtml(block.text)}</code></pre>
           </div>`;
       }
@@ -106,7 +106,7 @@ const renderBlocks = (
       if (block.kind === 'details') {
         return `
           <details class="my-4 rounded-lg border border-line bg-panel-soft px-4 py-3">
-            <summary class="cursor-pointer text-[13px] font-semibold text-fg">${renderInlineCode(block.summary)}</summary>
+            <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-semibold text-fg">${renderInlineCode(block.summary)}</summary>
             <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${renderInlineCode(block.text)}</p>
           </details>`;
       }
@@ -151,7 +151,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         .map((lesson, i) => ({ lesson, i }))
         .filter(({ lesson }) => trackOf(lesson) === track);
       if (entries.length === 0) return '';
-      const heading = `<li class="mt-2 px-2.5 pb-1 pt-2 text-[10px] font-[650] uppercase tracking-[0.08em] text-muted first:mt-0 first:pt-0">${escapeHtml(t.tracks[track].title)}</li>`;
+      const heading = `<li class="mt-2 px-2.5 pb-1 pt-2 text-xs font-[650] uppercase tracking-[0.08em] text-muted first:mt-0 first:pt-0">${escapeHtml(t.tracks[track].title)}</li>`;
       return (
         heading +
         entries
@@ -170,7 +170,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
 
   const mobileToc = `
     <details class="group mb-6 rounded-xl border border-line bg-panel px-3 py-2 min-[1041px]:hidden">
-      <summary class="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-1 text-sm text-fg [&::-webkit-details-marker]:hidden">
+      <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-1 text-sm text-fg [&::-webkit-details-marker]:hidden">
         <span>${escapeHtml(t.tocTitle)}</span>
         <span class="flex items-center gap-2 font-mono text-xs text-muted">${String(
           index + 1,
@@ -221,7 +221,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${
           page.exercise.hint
             ? `<details class="mb-4 rounded-lg border border-line bg-panel px-4 py-3">
-                 <summary class="cursor-pointer text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
+                 <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
                  <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${renderInlineCode(page.exercise.hint)}</p>
                </details>`
             : ''
@@ -254,7 +254,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       >
         <div class="flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px]">
           <h2 class="m-0 text-xs font-[650] uppercase tracking-[0.07em] text-muted">${escapeHtml(t.goalPanelTitle)}</h2>
-          <span data-role="lesson-goal-badge" class="font-mono text-[11px] tabular-nums text-accent">${
+          <span data-role="lesson-goal-badge" class="font-mono text-xs tabular-nums text-accent">${
             goalSteps.length > 0 ? escapeHtml(t.goalStepLabel(1, goalSteps.length)) : ''
           }</span>
         </div>
@@ -274,7 +274,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
           </div>
           ${
             page.exercise
-              ? `<a class="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-[650] text-accent no-underline transition hover:bg-accent hover:text-accent-contrast" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(t.goalOpenPlayground)} →</a>`
+              ? `<a class="mt-3 inline-flex min-h-10 max-[900px]:min-h-11 w-full items-center justify-center rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-[650] text-accent no-underline transition hover:bg-accent hover:text-accent-contrast" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(t.goalOpenPlayground)} →</a>`
               : ''
           }
         </div>
@@ -285,7 +285,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       <nav class="sticky top-[84px] max-h-[calc(100vh-100px)] overflow-auto max-[1040px]:hidden" aria-label="${escapeHtml(t.tocTitle)}">
         <div class="mb-2 flex items-baseline justify-between gap-2 px-2.5">
           <p class="m-0 text-xs uppercase tracking-[0.08em] text-muted">${escapeHtml(t.tocTitle)}</p>
-          <span data-role="toc-progress" class="font-mono text-[10px] tabular-nums text-muted"></span>
+          <span data-role="toc-progress" class="font-mono text-xs tabular-nums text-muted"></span>
         </div>
         <ol class="m-0 list-none space-y-0.5 p-0">${toc}</ol>
       </nav>
@@ -400,14 +400,14 @@ const renderRunFailure = (
   title.textContent = t.runCrashed;
 
   const detail = document.createElement('p');
-  detail.className = 'mb-2 mt-1 break-words font-mono text-[11px] leading-normal text-muted';
+  detail.className = 'mb-2 mt-1 break-words font-mono text-xs leading-normal text-muted';
   detail.textContent = message;
 
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.role = 'restart-lean';
   button.className =
-    'cursor-pointer rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg transition hover:border-line-strong disabled:cursor-progress disabled:opacity-55';
+    'inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg transition hover:border-line-strong disabled:cursor-progress disabled:opacity-55';
   button.textContent = t.restartLean;
   const markRestartFailed = () => {
     button.disabled = false;
@@ -466,8 +466,8 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
     exerciseStatus.hidden = false;
     exerciseStatus.textContent = done ? `✓ ${t.completedLabel}` : t.exerciseCompletionHint;
     exerciseStatus.className = done
-      ? 'inline-flex items-center rounded-full border border-ok/45 bg-ok/10 px-2.5 py-0.5 text-[11px] font-[650] text-ok'
-      : 'w-full text-[11.5px] leading-normal text-muted';
+      ? 'inline-flex items-center rounded-full border border-ok/45 bg-ok/10 px-2.5 py-0.5 text-xs font-[650] text-ok'
+      : 'w-full text-xs leading-normal text-muted';
   }
 
   const goalPanel = root.querySelector<HTMLElement>('[data-role="lesson-goal-panel"]');

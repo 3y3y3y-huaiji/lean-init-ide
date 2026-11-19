@@ -40,12 +40,12 @@
   --line-strong: #c3cad9;
   --fg: #1a1f2b;
   --muted: #5c6575;
-  --accent: #3b5bdb;
-  --accent-soft: rgba(59, 91, 219, 0.1);
+  --accent: #3250c8;
+  --accent-soft: rgba(50, 80, 200, 0.1);
   --accent-contrast: #ffffff;
-  --ok: #1f8a55;
-  --warn: #a86800;
-  --err: #c03434;
+  --ok: #136b3f;
+  --warn: #855200;
+  --err: #b32626;
   --editor-bg: #ffffff;
   --shadow: 0 18px 40px rgba(21, 32, 64, 0.12);
 }

@@ -117,7 +117,7 @@ export const renderHome = (
         <p data-role="demo-note" class="mt-2 mb-4 text-sm leading-relaxed text-muted">${escapeHtml(demoStep.note)}</p>
         <div class="flex flex-wrap gap-2">
           <button class="${buttonClass}" type="button" data-role="demo-next">${demo.next}</button>
-          <button class="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
+          <button class="inline-flex min-h-10 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
         </div>
       </div>
     </section>`;
@@ -130,7 +130,7 @@ export const renderHome = (
       <p class="mt-0 mb-3 max-w-[640px] text-sm leading-relaxed text-muted">${t.heroNote}</p>
       <p data-role="seo-facts" class="mt-0 mb-6.5 max-w-[640px] text-xs leading-relaxed text-muted">
         ${escapeHtml(t.facts(LESSON_CATALOG.length))}
-        <a class="text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${escapeHtml(t.factsRepo)}</a>
+        <a class="inline-flex min-h-7 items-center text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${escapeHtml(t.factsRepo)}</a>
       </p>
       <div class="flex flex-wrap gap-3">
         <a class="${buttonClass}" data-home-cta="primary" href="/${locale}/learn/${target}">${cta}</a>

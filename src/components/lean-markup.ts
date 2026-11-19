@@ -36,7 +36,7 @@ export const diagnosticLocationClass = (severity?: number) =>
   }`;
 
 export const diagnosticBadgeClass = (severity?: number) =>
-  `whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-[650] leading-none ${
+  `whitespace-nowrap rounded border px-1.5 py-0.5 text-xs font-[650] leading-none ${
     severity === 2
       ? 'border-warn/40 bg-warn/10 text-warn'
       : severity === 1 || severity === undefined
@@ -101,11 +101,11 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       ${
         compact
           ? ''
-          : `<div data-role="mobile-actions" class="flex shrink-0 items-center gap-1 border-b border-line bg-panel-soft px-2 py-1.5 min-[901px]:hidden">
+          : `<div data-role="mobile-actions" class="flex shrink-0 items-center gap-1.5 border-b border-line bg-panel-soft px-2 py-1.5 min-[901px]:hidden">
                <button type="button" class="${toolbarButtonClass}" data-role="select-all">${t.selectAll}</button>
                <button type="button" class="${toolbarButtonClass}" data-role="copy-selection" disabled>${t.copySelection}</button>
                <button type="button" class="${toolbarButtonClass}" data-role="paste">${t.paste}</button>
-               <span data-role="clip-hint" role="status" aria-live="polite" class="ml-1 min-w-0 truncate text-[11px] text-muted"></span>
+               <span data-role="clip-hint" role="status" aria-live="polite" class="ml-1 min-w-0 truncate text-xs text-muted"></span>
              </div>`
       }
       <div class="relative min-h-0 flex-1" data-role="editor">
@@ -164,7 +164,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
         <div
           data-role="goal-statement"
           hidden
-          class="truncate border-b border-line px-3.5 py-1.5 font-mono text-[11.5px] leading-[1.5] text-muted"
+          class="truncate border-b border-line px-3.5 py-1.5 font-mono text-xs leading-[1.5] text-muted"
         ></div>
         <pre
           data-role="goal"
@@ -182,14 +182,14 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
           class="mx-2 mt-2 rounded-lg border border-err/45 bg-err/10 px-2.5 py-2 text-[12.5px] leading-normal"
         >
           <p data-role="load-failure-title" class="m-0 font-[650] text-err"></p>
-          <p data-role="load-failure-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
-          <p data-role="load-failure-error" class="m-0 mb-2 break-words font-mono text-[10.5px] leading-normal text-muted"></p>
+          <p data-role="load-failure-detail" class="mt-1 mb-2 text-xs leading-normal text-muted"></p>
+          <p data-role="load-failure-error" class="m-0 mb-2 break-words font-mono text-xs leading-normal text-muted"></p>
           <div data-role="load-failure-actions" class="flex flex-wrap gap-2">
-            <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="github">${t.sourceGithub}</button>
-            <button class="cursor-pointer rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] text-muted hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="auto">${t.sourceAuto}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="github">${t.sourceGithub}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-muted hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="auto">${t.sourceAuto}</button>
           </div>
         </div>
         <div
@@ -199,10 +199,10 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
           class="mx-2 mt-2 rounded-lg border border-err/45 bg-err/10 px-2.5 py-2 text-[12.5px] leading-normal"
         >
           <p data-role="crash-title" class="m-0 font-[650] text-err"></p>
-          <p data-role="crash-detail" class="mt-1 mb-2 text-[11.5px] leading-normal text-muted"></p>
+          <p data-role="crash-detail" class="mt-1 mb-2 text-xs leading-normal text-muted"></p>
           <div class="flex flex-wrap gap-2">
-            <button class="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="crash-restart">${t.restartLean}</button>
-            <button class="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:text-fg" type="button" data-role="crash-copy">${t.copyError}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="crash-restart">${t.restartLean}</button>
+            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:text-fg" type="button" data-role="crash-copy">${t.copyError}</button>
           </div>
         </div>
         <div
@@ -215,7 +215,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
           <span aria-hidden="true" class="text-[13px] font-bold leading-[1.4]">✓</span>
           <span class="min-w-0">
             <strong data-role="run-ok-title" class="font-[650]"></strong>
-            <span data-role="run-ok-detail" class="block text-[11.5px] text-muted"></span>
+            <span data-role="run-ok-detail" class="block text-xs text-muted"></span>
           </span>
         </div>
         <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2 max-[900px]:max-h-[280px]">
@@ -225,7 +225,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       ${
         compact
           ? `<details data-panel="log" class="${panelClass(true)} shrink-0">
-               <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-[10px] font-normal normal-case tracking-normal">${t.expand}</span></summary>
+               <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-xs font-normal normal-case tracking-normal">${t.expand}</span></summary>
                <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
              </details>`
           : `<section data-panel="log" class="${panelClass(false)} flex-1">
@@ -257,8 +257,8 @@ export const renderLeanMarkup = (
   const start = `<button class="${buttonClass} max-[400px]:px-3" type="button" data-role="start">${t.start}</button>`;
 
   const panelToggle = (key: string, label: string) => `
-    <label class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
-      <input type="checkbox" data-panel-toggle="${key}" checked class="accent-[var(--accent)]" />
+    <label class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
+      <input type="checkbox" data-panel-toggle="${key}" checked class="size-4 accent-[var(--accent)]" />
       <span>${label}</span>
     </label>`;
 
@@ -267,7 +267,7 @@ export const renderLeanMarkup = (
       <summary
         class="${
           iconOnly
-            ? 'flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg'
+            ? 'flex size-9 max-[900px]:size-11 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg'
             : `${ghostButtonClass} cursor-pointer list-none`
         }"
         title="${t.panelsTitle}"
@@ -280,7 +280,7 @@ export const renderLeanMarkup = (
         }
       </summary>
       <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
-        <p class="m-0 mb-1 px-1.5 text-[10px] uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
+        <p class="m-0 mb-1 px-1.5 text-xs uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
         ${panelToggle('goal', t.goalTitle)}
         ${panelToggle('diagnostics', t.diagnosticsTitle)}
         ${panelToggle('log', t.logTitle)}
@@ -296,14 +296,14 @@ export const renderLeanMarkup = (
       <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-64 rounded-xl border border-line bg-panel p-2">
         <div class="flex items-center justify-between gap-2 px-1.5 py-1 text-[13px]">
           <span class="min-w-0 truncate">Init</span>
-          <span class="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] text-muted">${t.libraryBuiltin}</span>
+          <span class="shrink-0 rounded border border-line px-1.5 py-0.5 text-xs text-muted">${t.libraryBuiltin}</span>
         </div>
         ${runtimeExtensions
           .map(
             (extension) => `
           <div class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
-            <label class="flex min-w-0 cursor-pointer items-center gap-1.5" title="${t.libraryDefault}">
-              <input type="checkbox" class="accent-[var(--accent)]" data-library-default="${extension.id}" aria-label="${t.libraryDefault}" />
+            <label class="flex min-h-9 max-[900px]:min-h-11 min-w-0 cursor-pointer items-center gap-2">
+              <input type="checkbox" class="size-4 shrink-0 accent-[var(--accent)]" data-library-default="${extension.id}" aria-label="${t.libraryDefault}" />
               <span class="min-w-0 truncate">${extension.label}</span>
             </label>
             <button type="button" class="${toolbarButtonClass}" data-library="${extension.id}" data-state="idle">${t.libraryLoad}</button>
@@ -316,7 +316,7 @@ export const renderLeanMarkup = (
           disabled
           class="${toolbarButtonClass} mt-1 w-full"
         >${t.libraryReleaseAll}</button>
-        <p class="m-0 mt-1 px-1.5 text-[11px] leading-normal text-muted">${t.librariesHint}</p>
+        <p class="m-0 mt-1 px-1.5 text-xs leading-normal text-muted">${t.librariesHint}</p>
       </div>
     </details>`;
 
@@ -328,9 +328,9 @@ export const renderLeanMarkup = (
       </summary>
       <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-72 rounded-xl border border-line bg-panel p-2.5">
         <!-- 实验性运行时默认折叠在高级设置里，普通访客只看到稳定的 wasm32 -->
-        <p data-role="runtime-arch-label" class="m-0 mb-1.5 px-1 text-[11px] font-[650] uppercase tracking-[0.06em] text-muted">${t.runtimeTitle}: wasm32</p>
+        <p data-role="runtime-arch-label" class="m-0 mb-1.5 px-1 text-xs font-[650] uppercase tracking-[0.06em] text-muted">${t.runtimeTitle}: wasm32</p>
         <!-- 实验性提醒：默认走稳定的 wasm32，wasm64 仅作实验试用，不可作生产依赖 -->
-        <div role="note" class="mb-2 rounded-lg border border-warn/45 bg-warn/10 px-2.5 py-2 text-[11px] leading-relaxed text-fg">
+        <div role="note" class="mb-2 rounded-lg border border-warn/45 bg-warn/10 px-2.5 py-2 text-xs leading-relaxed text-fg">
           ${t.runtimeExperimentalWarning}
         </div>
         <div class="flex flex-col gap-1" role="radiogroup" aria-label="${t.runtimeTitle}">
@@ -340,7 +340,7 @@ export const renderLeanMarkup = (
             aria-checked="true"
             data-runtime-arch="wasm32"
             data-active="true"
-            class="flex w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft data-[active=true]:border-accent data-[active=true]:bg-accent/10 data-[active=true]:font-[650]"
+            class="flex min-h-9 max-[900px]:min-h-11 w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft data-[active=true]:border-accent data-[active=true]:bg-accent/10 data-[active=true]:font-[650]"
           >${t.runtimeWasm32}</button>
           <button
             type="button"
@@ -348,10 +348,10 @@ export const renderLeanMarkup = (
             aria-checked="false"
             data-runtime-arch="wasm64"
             data-active="false"
-            class="flex w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-50 data-[active=true]:border-warn data-[active=true]:bg-warn/10 data-[active=true]:font-[650]"
+            class="flex min-h-9 max-[900px]:min-h-11 w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-50 data-[active=true]:border-warn data-[active=true]:bg-warn/10 data-[active=true]:font-[650]"
           >${t.runtimeWasm64}</button>
         </div>
-        <p data-role="runtime-arch-note" class="m-0 mt-2 px-1 text-[11px] leading-normal text-muted"></p>
+        <p data-role="runtime-arch-note" class="m-0 mt-2 px-1 text-xs leading-normal text-muted"></p>
       </div>
     </details>`;
 
@@ -370,7 +370,7 @@ export const renderLeanMarkup = (
             <p class="mt-1.5 mb-0 text-xs text-muted">${t.hint}</p>
             <p data-role="seo-facts" class="mt-1 mb-0 text-xs leading-relaxed text-muted">
               ${t.facts(LESSON_CATALOG.length)}
-              <a class="text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.factsRepo}</a>
+              <a class="inline-flex min-h-7 items-center text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.factsRepo}</a>
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2 max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
@@ -397,7 +397,7 @@ export const renderLeanMarkup = (
     <section data-ssr-markup="compact" class="flex h-full flex-col overflow-hidden rounded-[14px] border border-line bg-panel">
       <div class="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
         <div class="flex min-w-0 flex-col">
-          <span class="m-0 truncate text-[10px] uppercase tracking-[0.12em] text-accent">Lean 4 · Init+Std+Batteries</span>
+          <span class="m-0 truncate text-xs uppercase tracking-[0.12em] text-accent">Lean 4 · Init+Std+Batteries</span>
           <strong class="truncate text-sm">${t.title}</strong>
         </div>
         <div class="flex shrink-0 items-center gap-2">${status}${panelsMenu(true)}${start}</div>
@@ -405,7 +405,7 @@ export const renderLeanMarkup = (
       <div class="h-[3px] shrink-0 bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
       ${renderWorkspace(t, true)}
       <div class="shrink-0 px-3.5 pb-3 pt-1.5 text-right text-xs">
-        <a class="text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
+        <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
       </div>
     </section>
   `;

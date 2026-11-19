@@ -93,7 +93,7 @@ describe('页面骨架渲染', () => {
 
     expect(html).toContain('data-theme-icon');
     expect(html).toContain('data-theme-text');
-    expect(html).toContain('max-[900px]:size-10');
+    expect(html).toContain('max-[900px]:size-11');
     expect(html).toContain('aria-label="设置"');
     expect(html).toContain('>EN<');
   });

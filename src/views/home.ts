@@ -98,9 +98,16 @@ export const renderHome = (
 
   const demo = t.demo;
   const demoStep = demo.steps[0]!;
+  const demoLabels = demo.steps.map((_, index) => demo.stepLabel(index + 1, demo.steps.length));
   const demoSection = `
     <section class="mt-[clamp(36px,5vw,56px)]">
-      <div class="rounded-2xl border border-accent bg-accent-soft p-6" data-role="home-demo">
+      <div
+        class="rounded-2xl border border-accent bg-accent-soft p-6"
+        data-role="home-demo"
+        data-demo-step="0"
+        data-demo-steps="${escapeHtml(JSON.stringify(demo.steps))}"
+        data-demo-labels="${escapeHtml(JSON.stringify(demoLabels))}"
+      >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h2 class="m-0 text-[17px] font-bold">${demo.title}</h2>
           <span data-role="demo-count" class="font-mono text-xs tabular-nums text-muted">${demo.stepLabel(1, demo.steps.length)}</span>
@@ -199,10 +206,14 @@ export const hydrateHome = (
   const noteEl = demo.querySelector<HTMLElement>('[data-role="demo-note"]');
   const nextEl = demo.querySelector<HTMLButtonElement>('[data-role="demo-next"]');
   const resetEl = demo.querySelector<HTMLButtonElement>('[data-role="demo-reset"]');
-  let step = 0;
+  const parsedStep = Number(demo.dataset.demoStep ?? 0);
+  let step = Number.isFinite(parsedStep)
+    ? Math.max(0, Math.min(steps.length - 1, Math.trunc(parsedStep)))
+    : 0;
 
   const paint = () => {
     const current = steps[step] ?? steps[0]!;
+    demo.dataset.demoStep = String(step);
     if (goalEl) goalEl.textContent = current.goal;
     if (noteEl) noteEl.textContent = current.note;
     if (countEl) countEl.textContent = t.demo.stepLabel(step + 1, steps.length);

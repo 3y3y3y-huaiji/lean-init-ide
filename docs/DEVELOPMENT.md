@@ -40,7 +40,7 @@ pnpm exec vitest run src/lsp-patches.test.ts
 
 ## wasm64 运行时与栈补丁
 
-wasm64 构建链、Lean 版本冻结（4.36.0-rc2）与三处栈补丁只在
+wasm64 构建链、Lean 版本 pin（默认 4.36.0-rc2，可用 `LEAN_PIN_*` 覆盖）与三处栈补丁只在
 `.github/workflows/spike-wasm64.yml` 里跑，本地只做静态检查与门禁单测：
 
 ```bash

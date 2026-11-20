@@ -18,6 +18,7 @@
 | `/cdn` 网关、缓存、Range | `functions/cdn/`；`src/cdn-range.ts`；`docs/OPERATIONS.md`「访问控制与成本保护」 |
 | 前端、课程、i18n | `src/views/`；`src/i18n/`；`docs/DEVELOPMENT.md` |
 | CI、部署、冒烟 | `docs/CI.md`；`docs/OPERATIONS.md`「部署与冒烟」 |
+| wasm64 构建、栈补丁、差分门禁 | `docs/WASM64-SPIKE.md`；`scripts/pin-lean.ts`；`scripts/wasm64-patch-equivalence.ts` |
 
 ## 强联动文件（R）
 
@@ -32,19 +33,24 @@
 | `public/_headers` | `scripts/verify-build.mjs`、`scripts/smoke.mjs`、`scripts/local-gateway.mjs`、`index.html` 的内联脚本哈希 |
 | `wrangler.toml` | `functions/cdn/` 的 `LEAN_ASSETS` binding；production / preview 两份 `[[env.*.r2_buckets]]` |
 | `patches/` 或清单哈希 | `pnpm-workspace.yaml` 的 `patchedDependencies`；`pnpm run patch:lsp`；`src/lsp-patches.test.ts` |
+| `scripts/pin-lean.ts` 的 `LEAN_PIN` | `scripts/patches/lean-*.patch`（三份补丁必须匹配该源码）、`.github/workflows/spike-wasm64.yml` 的缓存键与 `deep` 分支、`docs/WASM64-SPIKE.md` |
+| `scripts/patches/lean-*.patch` | 对应的 `grep` 断言、`.github/workflows/spike-wasm64.yml` 的 runtime / cgen / objects 缓存键、`scripts/wasm64-patch-equivalence.ts` 的差分语料 |
+| `scripts/wasm64-patch-equivalence.ts` | `.github/workflows/spike-wasm64.yml` 的 smoke job；新增栈补丁时先补差分用例 |
 
-原则：先改单一事实来源，再沿右列同步。资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`。
+原则：先改单一事实来源，再沿右列同步。资产清单只有 `config/lean4-runtime.json`；资产源解析只有 `src/asset-sources.mjs`；Range 语义只有 `src/cdn-range.ts`；wasm64 的 Lean 版本只有 `scripts/pin-lean.ts`。
 
 ## 硬红线（物理/平台）
 
 1. **资产字节不可漂移。** `scripts/assets/**` 在 `.gitattributes` 里标记为 `-text`，禁止文本转换。改这些文件必须同步 `bytes` 与 `sha256`、更换 `cacheKey`、重新上传 R2；边缘缓存按 URL 缓存一年（`immutable`），不换版本键用户会继续拿到旧对象。
 2. **跨源隔离不能破坏。** 页面响应必须带 `Cross-Origin-Opener-Policy: same-origin` 与 `Cross-Origin-Embedder-Policy: require-corp`，否则 `SharedArrayBuffer` 与 wasm 线程模型不可用。
-3. **只用一个域名。** 不要引入第二个可访问 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名等于让用户重下 102 MB。
+3. **只用一个域名。** 不要引入第二个可访问 origin。运行时持久缓存（CacheStorage）与 localStorage 按 origin 隔离，双域名等于让用户重下 102 MB。
 4. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 5. **CSP 不能删这几项。** `'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入）、`static.cloudflareinsights.com`（Web Analytics）、`connect-src` 里的 `https://*.modelscope.cn`（镜像回退）与 `data:`（zstddec 内嵌 wasm）。
 6. **课程内容只能落在运行时可加载的范围内。** wasm32 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。实验性 wasm64 额外提供 Std / Lean 核心与 Mathlib 教学子集（`config/lean4-wasm64-runtime.json` 的 `extensions`），但**没有完整 Mathlib**；引用未打包的 `Mathlib.*` 模块仍会编译失败。
 7. **遥测不记录用户代码、cookie、设备指纹；任何上报失败必须静默。**
-8. **扩展库与架构绑定，且不参与基础 cacheKey。** wasm32 的 olean 是 `flags=0` 自建版，wasm64 必须用官方 `flags=1`（GMP）版本；不要把同一份 `assets` 同时挂到两个架构。扩展资产 URL 带 `h=<sha256>`，更新扩展包**不要**改基础 `cacheKey`——那会让用户重下 100MB 的 Init 运行包。
+8. **wasm64 的 Lean 版本只有 `scripts/pin-lean.ts` 一个事实来源。** 默认值在 `LEAN_PIN`，`LEAN_PIN_*` 环境变量只用于本地/临时覆盖；正式升级必须改 `LEAN_PIN` 以让 `hashFiles(...)` 缓存键失效。升级时必须同时重做三份栈补丁，并让 `scripts/wasm64-patch-equivalence.ts` 的差分门禁（官方原生 Lean vs 打补丁 wasm64）在 CI 通过；不能只改 pin 就发布。补丁必须与当前 pin 的源码逐行匹配，`grep` 断言缺失应直接失败，禁止静默跳过。
+9. **差分门禁只容忍「退出期已知 trap」，不要放宽成「退出码不一致也放行」。** 判据是 `isKnownExitTrap`（stderr 命中 `emscripten_builtin_free` / `lean_dec_ref_cold`）**且** stdout 与原版 Lean 逐字节一致；先重跑一次，复现才降级成告警。stdout 有任何差异、或 stderr 是别的崩溃（爆栈、`Maximum call stack`）都必须红。理由与复现记录见 `docs/WASM64-SPIKE.md`「尚未验证」。
+10. **扩展库与架构绑定，且不参与基础 cacheKey。** wasm32 的 olean 是 `flags=0` 自建版，wasm64 必须用官方 `flags=1`（GMP）版本；不要把同一份 `assets` 同时挂到两个架构。扩展资产 URL 带 `h=<sha256>`，更新扩展包**不要**改基础 `cacheKey`——那会让用户重下 100MB 的 Init 运行包。
 
 ## 非显式约束（S）
 
@@ -54,7 +60,7 @@
 - `connect-src` 漏掉魔搭域名会让镜像回退静默失败；Cloudflare Web Analytics 会注入第三方 beacon，并可能同时出现 Pages 与 zone 两个 token。
 - 走代理时 curl 会先写 `200 Connection Established`；解析状态码必须取最后一个真实 HTTP 行。
 - `pnpm audit` 走默认镜像会 405，需要 `--registry=https://registry.npmjs.org`。
-- 课程页的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删，也不要搬到 playground（那里需要看到真实重复声明）。
+- 课程页的 `dropSpuriousRedeclarations` 只过滤代码里出现一次的名字；不要删，也不要搬到 playground（那里需要看到真实重复声明）。升级 `@wasm-idle/lsp` 时先确认上游是否已修复该假阳性，修复后再删。
 - `src/components/lean-panel.ts` 因 rollup 无法解析其类型语法，被排除出 v8 覆盖率；不要把可测纯逻辑塞进装配层。
 - Analytics Engine binding 尚未声明，指标目前只写 Workers Logs；要启用需在 production / preview 同时加 `[[env.*.analytics_engine_datasets]]`。
 
@@ -62,7 +68,7 @@
 
 - `src/main.ts` 只做路由、语言、主题装配；业务逻辑放 `views/` 或独立模块。
 - `src/views/` 只产出字符串并绑定事件；不要在渲染函数里发请求或读全局状态。
-- `src/sw.ts` 只做资产分片下载与缓存，不写业务逻辑。
+- `src/sw.ts` 只做资产分片下载与组装，不持久化资产（分片请求 `cache: 'no-store'`）；102MB 持久缓存归 `@wasm-idle/core` 的 CacheStorage，不写业务逻辑。
 - `src/asset-source.ts` 只做页面侧 `?source=` 强制源开关，不要做成持久化的用户设置。
 - `src/device.ts` 不改 wasm 内存上限，1 GiB 是导入峰值所需。
 - `functions/cdn/` 不放宽白名单，不移除 Range 处理；`functions/api/` 不放宽字段校验，不回显原始请求体。

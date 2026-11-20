@@ -1,0 +1,6 @@
+# 只用于仓库里的手写 C/C++（目前是 scripts/depth-probe）。
+# 上游 Lean runtime 与 `lean -c` 生成的 C 不参与格式化。
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 100
+SortIncludes: Never

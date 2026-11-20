@@ -4,7 +4,7 @@
 // GitHub Release 只做归档与构建期回退：Release 下载没有 CORS 头，浏览器不会使用它。
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { collectOleanManifest } from './ci/gen-olean-manifest.ts';
 import {
   CliError,
@@ -18,6 +18,7 @@ import {
 import { isMainModule } from './lib/entry.ts';
 import { requireDir, requireFile } from './lib/fs-guards.ts';
 import { packLibrary } from './pack-lean-lib.ts';
+import type { Wasm64ExtensionEntry } from './package-wasm64-extensions.ts';
 
 export interface Wasm64AssetEntry {
   readonly name: string;
@@ -48,6 +49,7 @@ export interface Wasm64RuntimeManifest {
     readonly prefix?: string;
   };
   readonly assets: readonly Wasm64AssetEntry[];
+  readonly extensions?: readonly Wasm64ExtensionEntry[];
 }
 
 export interface PackageWasm64Options {
@@ -65,6 +67,10 @@ export interface PackageWasm64Options {
   readonly bucket?: string;
   readonly level?: number;
   readonly chunkBytes?: number;
+  /** package-wasm64-extensions.ts 产出的 extensions.json；存在时合并进清单。 */
+  readonly extensionsPath?: string;
+  /** 扩展包所在目录，默认取 extensionsPath 的目录。 */
+  readonly extensionsDir?: string;
 }
 
 const sha256 = (data: Uint8Array): string => createHash('sha256').update(data).digest('hex');
@@ -157,8 +163,38 @@ export const packageWasm64Runtime = (options: PackageWasm64Options): Wasm64Runti
     })),
   ];
 
+  // 扩展包不参与 cacheKey：否则新增 Mathlib 会让用户把 100MB 基础包全部重下。
+  // 扩展资产 URL 自带 `h=<sha256前12位>`，内容变化自然失效。
   const cacheSeed = assets.map((asset) => `${asset.name}:${asset.sha256}`).join('\n');
   const cacheKey = `w64-${sha256(Buffer.from(cacheSeed)).slice(0, 8)}`;
+
+  let extensions: Wasm64ExtensionEntry[] | undefined;
+  if (options.extensionsPath) {
+    const specPath = requireFile(options.extensionsPath, 'extensions');
+    const extDir = requireDir(options.extensionsDir ?? dirname(specPath), 'extensions dir');
+    extensions = JSON.parse(readFileSync(specPath, 'utf8')) as Wasm64ExtensionEntry[];
+    if (!Array.isArray(extensions) || extensions.length === 0) {
+      throw new CliError(`扩展清单为空: ${specPath}`);
+    }
+    for (const extension of extensions) {
+      if (!/^[a-z][a-z0-9-]*$/.test(extension.id)) {
+        throw new CliError(`扩展 id 非法: ${extension.id}`);
+      }
+      for (const asset of extension.assets) {
+        const source = requireFile(join(extDir, asset.source), `${extension.id}/${asset.name}`);
+        const bytes = readFileSync(source);
+        if (bytes.byteLength !== asset.bytes) {
+          throw new CliError(
+            `${extension.id}/${asset.name} 长度 ${bytes.byteLength} != 清单 ${asset.bytes}`,
+          );
+        }
+        if (sha256(bytes) !== asset.sha256) {
+          throw new CliError(`${extension.id}/${asset.name} SHA-256 与清单不一致`);
+        }
+        if (join(outDir, asset.name) !== source) copyFileSync(source, join(outDir, asset.name));
+      }
+    }
+  }
 
   const mirrorBaseUrl =
     options.mirrorBaseUrl ?? 'https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/';
@@ -179,13 +215,15 @@ export const packageWasm64Runtime = (options: PackageWasm64Options): Wasm64Runti
       ? { mirror: { label: mirrorLabel, baseUrl: mirrorBaseUrl, prefix: mirrorPrefix } }
       : {}),
     assets,
+    ...(extensions ? { extensions } : {}),
   };
 
   writeFileSync(
     join(outDir, 'wasm64-runtime-manifest.json'),
     `${JSON.stringify(manifest, null, 2)}\n`,
   );
-  const checksumLines = assets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n');
+  const allAssets = [...assets, ...(extensions?.flatMap((extension) => extension.assets) ?? [])];
+  const checksumLines = allAssets.map((asset) => `${asset.sha256}  ${asset.name}`).join('\n');
   writeFileSync(join(outDir, 'SHA256SUMS'), `${checksumLines}\n`);
 
   return manifest;
@@ -205,6 +243,8 @@ const SPEC: Record<string, FlagSpec> = {
   'mirror-prefix': { kind: 'string', valueName: 'prefix' },
   bucket: { kind: 'string', valueName: 'name' },
   level: { kind: 'number', valueName: 'n' },
+  extensions: { kind: 'string', valueName: 'file' },
+  'extensions-dir': { kind: 'string', valueName: 'dir' },
 };
 
 const main = (): void => {
@@ -230,6 +270,8 @@ const main = (): void => {
     mirrorPrefix: optionalString(parsed, 'mirror-prefix'),
     bucket: optionalString(parsed, 'bucket'),
     level,
+    extensionsPath: optionalString(parsed, 'extensions'),
+    extensionsDir: optionalString(parsed, 'extensions-dir'),
   });
   console.log(
     `packaged ${manifest.assets.length} wasm64 assets (cacheKey=${manifest.cacheKey}) -> ${requireString(parsed, 'out')}`,

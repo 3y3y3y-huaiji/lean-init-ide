@@ -42,8 +42,9 @@
 3. **只用一个域名。** 不要引入第二个可访问 origin。Service Worker 缓存与 localStorage 按 origin 隔离，双域名等于让用户重下 102 MB。
 4. **R2 binding 名固定为 `LEAN_ASSETS`。** `ASSETS` 是 Pages 内部静态资源服务的保留名，用了会报 `does not implement the method "get"`。
 5. **CSP 不能删这几项。** `'wasm-unsafe-eval'`（WebAssembly 编译）、`blob:`（Worker 动态导入）、`static.cloudflareinsights.com`（Web Analytics）、`connect-src` 里的 `https://*.modelscope.cn`（镜像回退）与 `data:`（zstddec 内嵌 wasm）。
-6. **课程内容只能落在运行时可加载的范围内。** 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。运行时不含 Lean / Lake / Mathlib，引用会编译失败。
+6. **课程内容只能落在运行时可加载的范围内。** wasm32 默认只有 Init；工程实战课依赖按需挂载的 Std / Batteries（`requiredExtensions`）。实验性 wasm64 额外提供 Std / Lean 核心与 Mathlib 教学子集（`config/lean4-wasm64-runtime.json` 的 `extensions`），但**没有完整 Mathlib**；引用未打包的 `Mathlib.*` 模块仍会编译失败。
 7. **遥测不记录用户代码、cookie、设备指纹；任何上报失败必须静默。**
+8. **扩展库与架构绑定，且不参与基础 cacheKey。** wasm32 的 olean 是 `flags=0` 自建版，wasm64 必须用官方 `flags=1`（GMP）版本；不要把同一份 `assets` 同时挂到两个架构。扩展资产 URL 带 `h=<sha256>`，更新扩展包**不要**改基础 `cacheKey`——那会让用户重下 100MB 的 Init 运行包。
 
 ## 非显式约束（S）
 

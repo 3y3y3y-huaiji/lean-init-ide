@@ -12,6 +12,8 @@ export { wasm64Available };
 
 export type Wasm64ServerOptions = {
   readonly manifest?: Wasm64Manifest;
+  /** 额外挂载的库 id（std / mathlib）；依赖会自动展开。 */
+  readonly extensions?: readonly string[];
   /** 线性内存实际增长时回调（字节）；接内存守卫。 */
   readonly onMemoryBytes?: (bytes: number) => void;
   /** 进程崩溃等终态错误。 */
@@ -30,6 +32,7 @@ export const createWasm64LanguageServer = async (
 ): Promise<LeanSessionServer> => {
   const runtime = await loadWasm64Runtime({
     ...(options.manifest ? { manifest: options.manifest } : {}),
+    ...(options.extensions ? { extensions: options.extensions } : {}),
     ...(options.onStage ? { onStage: options.onStage } : {}),
   });
   try {

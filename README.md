@@ -95,7 +95,8 @@
 
 ## 限制
 
-- 默认只带 **Init**；Std 与 Batteries 是可选扩展包，不含 Lean / Lake / Mathlib。
+- 默认（wasm32）只带 **Init**；Std 与 Batteries 是可选扩展包。
+- 实验性 wasm64 运行时可按需加载 **Std / Lean 核心** 与 **Mathlib 教学子集**（183 个模块，含 `Mathlib.Order.Basic`、`Mathlib.Tactic.Spread`），不是完整 Mathlib；默认仍走 wasm32。
 - 需要 cross-origin isolation（COOP/COEP）与 SharedArrayBuffer，Chromium 系浏览器体验最佳。
 
 ## 隐私

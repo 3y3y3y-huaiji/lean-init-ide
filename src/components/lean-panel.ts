@@ -56,10 +56,13 @@ import {
   writeRuntimeSession,
 } from '../settings';
 import {
+  extensionById,
   loadExtensionPacks,
   resolveExtensionIds,
   runtimeExtensions,
+  runtimeExtensionsFor,
   type ExtensionPacks,
+  type RuntimeArch,
   type RuntimeExtensionId,
 } from '../runtime-extensions';
 import { toMonacoCompletions, type LspCompletionResult } from '../lsp-completion';
@@ -1206,8 +1209,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     handleEngineStatus({ state: 'loading' });
     log(t.logWasm64Loading);
     const server = await createWasm64LanguageServer({
+      extensions: [...activeExtensions],
       onMemoryBytes: (bytes) => memoryGuard.reportBytes(bytes, 'event'),
       onError: (message) => handleEngineStatus({ state: 'error', message }),
+      onStage: (stage) => log(t.logWasm64Stage(stage)),
       startupTimeoutMs: 60 * 60_000,
     });
     handleEngineStatus({ state: 'ready' });
@@ -1675,9 +1680,9 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       return Promise.resolve(false);
     }
     startInflight = (async () => {
-      // 先恢复上一页选中的扩展库，确保 didOpen 时 extensionPacks 已经就绪。
-      // wasm64 只带 Init，跳过扩展包下载，避免无效的 75MB 网络与内存开销。
-      if (selectedArch !== 'wasm64') await restoreSavedExtensions();
+      // 先恢复上一页选中的扩展库，确保 didOpen 时扩展包已经就绪。
+      // wasm64 不做预下载：加载器会按 id 直接取包并挂载。
+      await restoreSavedExtensions();
       const started = await runStart();
       // 恢复期间用户可能已经点过库按钮，等这次启动结束后再串行处理排队的选择。
       void drainExtensionSelections();
@@ -1696,18 +1701,31 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const defaultCheckboxes = [...host.querySelectorAll<HTMLInputElement>('[data-library-default]')];
   const releaseAllEl = host.querySelector<HTMLButtonElement>('[data-role="release-all-libraries"]');
 
-  // wasm64 运行包只带 Init，扩展库选择必须整体置灰，避免下载 75MB 后仍报缺模块。
-  const librariesUnavailable = () => selectedArch === 'wasm64';
+  // wasm64 没有已发布的扩展包时，库菜单整体置灰；有 mathlib 等扩展时按架构分别显示。
+  const librariesUnavailable = () =>
+    selectedArch === 'wasm64' && runtimeExtensionsFor('wasm64').length === 0;
+
+  const archOfElement = (element: HTMLElement): RuntimeArch =>
+    (element.dataset.extensionArch as RuntimeArch | undefined) ?? 'wasm32';
+
+  const extensionAvailableOn = (arch: RuntimeArch, id: RuntimeExtensionId) =>
+    extensionById(id, arch)?.arch === arch;
+
+  const extensionAvailable = (id: RuntimeExtensionId) => extensionAvailableOn(selectedArch, id);
 
   const syncLibraryButtons = () => {
     for (const button of libraryButtons) {
       const id = button.dataset.library as RuntimeExtensionId;
-      const active = activeExtensions.has(id);
+      const visible = archOfElement(button) === selectedArch;
+      const row = button.closest<HTMLElement>('[data-extension-row]');
+      if (row) row.hidden = !visible;
+      button.hidden = !visible;
+      const active = visible && extensionAvailable(id) && activeExtensions.has(id);
       button.textContent = active ? t.libraryRelease : t.libraryLoad;
       button.dataset.state = active ? 'loaded' : 'idle';
       // 加载/重启期间保持可点：新的选择会排队，等当前重启结束后继续执行。
-      // wasm64 不支持扩展库，直接禁用而不是点了才报错。
-      button.disabled = librariesUnavailable();
+      // 当前架构没有这个扩展时直接禁用，而不是点了才报错。
+      button.disabled = librariesUnavailable() || !visible || !extensionAvailable(id);
     }
     if (releaseAllEl) releaseAllEl.disabled = activeExtensions.size === 0;
   };
@@ -1715,22 +1733,25 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const syncDefaultCheckboxes = () => {
     for (const input of defaultCheckboxes) {
       const id = input.dataset.libraryDefault as RuntimeExtensionId;
-      input.checked = defaultExtensions.has(id);
-      input.disabled = librariesUnavailable();
+      const visible = archOfElement(input) === selectedArch;
+      input.hidden = !visible;
+      input.checked = visible && extensionAvailable(id) && defaultExtensions.has(id);
+      input.disabled = librariesUnavailable() || !visible || !extensionAvailable(id);
     }
   };
 
   for (const input of defaultCheckboxes) {
     input.addEventListener('change', () => {
-      if (librariesUnavailable()) return;
+      if (librariesUnavailable() || archOfElement(input) !== selectedArch) return;
       const id = input.dataset.libraryDefault as RuntimeExtensionId;
       if (input.checked) {
         // 勾选 Batteries 时把依赖的 Std 一起勾上，避免启动时出现未勾选却已挂载。
-        for (const dependency of resolveExtensionIds([id])) defaultExtensions.add(dependency);
+        for (const dependency of resolveExtensionIds([id], selectedArch))
+          defaultExtensions.add(dependency);
       } else {
         defaultExtensions.delete(id);
         // 取消依赖库时，把依赖它的库一起取消。
-        for (const extension of runtimeExtensions) {
+        for (const extension of runtimeExtensionsFor(selectedArch)) {
           if (extension.requires.includes(id)) defaultExtensions.delete(extension.id);
         }
       }
@@ -1750,8 +1771,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const runtimeArchLabelEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-label"]');
   const runtimeArchNoteEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-note"]');
   const runtimeArchButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-runtime-arch]')];
-  // 扩展库只随 wasm32 提供；课程声明 requires 时 wasm64 无法完成本课。
-  const wasm64BlockedByExtensions = requiredExtensions.length > 0;
+  // 课程声明 requires 时，只有 wasm64 也发布了对应扩展包才能留在 wasm64。
+  const wasm64BlockedByExtensions = requiredExtensions.some(
+    (id) => !extensionAvailableOn('wasm64', id),
+  );
 
   const syncRuntimeArchUi = () => {
     if (runtimeArchLabelEl) {
@@ -1774,9 +1797,11 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
         ? t.runtimeWasm64Unsupported
         : !wasm64Published
           ? t.runtimeWasm64NotPublished
-          : wasm64BlockedByExtensions || selectedArch === 'wasm64'
+          : wasm64BlockedByExtensions
             ? t.runtimeWasm64NoLibraries
-            : '';
+            : selectedArch === 'wasm64'
+              ? t.runtimeWasm64AssetNote
+              : '';
     }
     // 运行时切换会改变扩展库可用性，两个菜单必须同步刷新。
     syncDefaultCheckboxes();
@@ -1806,13 +1831,14 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       if (nextArch === selectedArch) return;
       selectedArch = nextArch;
       setRuntimeArch(nextArch);
-      // wasm64 只带 Init：切过去时立刻释放已挂载的扩展包，避免白占 75MB。
-      if (nextArch === 'wasm64' && activeExtensions.size > 0) {
-        extensionPackCache.clear();
-        extensionPacks = {};
-        activeExtensions.clear();
-        desiredExtensions = new Set();
+      // 扩展包与架构绑定（wasm32 flags=0 / wasm64 官方 olean），切换时整体丢弃；
+      // 新架构没有的库（例如 wasm32 上的 mathlib）从选择里剔除，避免下次启动反复重试。
+      extensionPackCache.clear();
+      extensionPacks = {};
+      for (const id of [...activeExtensions]) {
+        if (!extensionAvailableOn(nextArch, id)) activeExtensions.delete(id);
       }
+      desiredExtensions = new Set(activeExtensions);
       // 运行包换了，上一轮“扩展库已恢复”的结论作废；切回 wasm32 时要重新挂载。
       restorePromise = null;
       syncRuntimeArchUi();
@@ -1838,12 +1864,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
    */
   const restoreSavedExtensions = (): Promise<void> => {
     if (restorePromise) return restorePromise;
-    const ids = resolveExtensionIds([
-      ...sessionExtensionIds,
-      ...defaultExtensions,
-      ...requiredExtensions,
-    ]);
+    const arch = selectedArch;
+    const ids = resolveExtensionIds(
+      [...sessionExtensionIds, ...defaultExtensions, ...requiredExtensions],
+      arch,
+    );
     if (ids.length === 0) {
+      restorePromise = Promise.resolve();
+      return restorePromise;
+    }
+    if (arch === 'wasm64') {
+      // wasm64 的包由运行时加载器统一下载并校验，这里只恢复选择集合。
+      activeExtensions.clear();
+      for (const id of ids) activeExtensions.add(id);
+      desiredExtensions = new Set(activeExtensions);
       restorePromise = Promise.resolve();
       return restorePromise;
     }
@@ -1877,9 +1911,23 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   const applyExtensionSelection = async (next: Set<RuntimeExtensionId>) => {
     const previous = new Set(activeExtensions);
-    const resolved = resolveExtensionIds(next);
+    const resolved = resolveExtensionIds(next, selectedArch);
     const resolvedSet = new Set(resolved);
     const wasActive = session.isReady || session.state === 'starting';
+    if (selectedArch === 'wasm64') {
+      // 包由 wasm64 加载器在 start() 里统一拉取、校验、解压；这里只更新选择集合并重启。
+      activeExtensions.clear();
+      for (const id of resolved) activeExtensions.add(id);
+      desiredExtensions = new Set(activeExtensions);
+      syncLibraryButtons();
+      if (wasActive) {
+        setStatus(t.libraryRestarting, 'loading');
+        stop();
+        await start();
+      }
+      persistRuntimeSession(session.isReady || session.state === 'starting');
+      return;
+    }
     try {
       for (const id of resolved) {
         if (extensionPackCache.has(id)) continue;
@@ -1950,13 +1998,13 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
   for (const button of libraryButtons) {
     button.addEventListener('click', () => {
-      if (librariesUnavailable()) return;
+      if (librariesUnavailable() || archOfElement(button) !== selectedArch) return;
       const id = button.dataset.library as RuntimeExtensionId;
       const next = new Set(desiredExtensions);
       if (next.has(id)) {
         next.delete(id);
         // 释放被依赖的库时，把依赖它的库一起释放。
-        for (const extension of runtimeExtensions) {
+        for (const extension of runtimeExtensionsFor(selectedArch)) {
           if (extension.requires.includes(id)) next.delete(extension.id);
         }
       } else {

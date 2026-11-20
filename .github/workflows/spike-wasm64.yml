@@ -30,6 +30,7 @@ on:
       - 'scripts/pack-lean-lib.ts'
       - 'scripts/pack-npm.ts'
       - 'scripts/package-wasm64-runtime.ts'
+      - 'scripts/package-wasm64-extensions.ts'
       - 'scripts/wasm64-*.ts'
       - 'scripts/check-cpp.sh'
       - 'package.json'
@@ -52,6 +53,7 @@ on:
       - 'scripts/pack-lean-lib.ts'
       - 'scripts/pack-npm.ts'
       - 'scripts/package-wasm64-runtime.ts'
+      - 'scripts/package-wasm64-extensions.ts'
       - 'scripts/wasm64-*.ts'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -983,6 +985,45 @@ jobs:
           test -f "work/mathlib-lib/$REL.olean" || { echo "缺少 $TARGET"; exit 1; }
           ls -l "work/mathlib-lib/$REL".*
 
+      # 扩展库与基础 Init 分开打包：用户只想要 Lean 4 核心时不必下载 Mathlib。
+      # 扩展包不参与 runtime cacheKey，新增/更新扩展不会让基础包缓存失效。
+      - name: 打包 wasm64 扩展库（Std/Lean 核心 + Mathlib 教学子集）
+        run: |
+          set -euo pipefail
+          VERSION="$(node -e 'import("./scripts/pin-lean.ts").then((m) => process.stdout.write(m.resolveLeanPin().version))')"
+          export VERSION
+          mkdir -p work/wasm64-ext
+          node - <<'NODE'
+          const fs = require('fs');
+          const extensions = [
+            {
+              id: 'std',
+              label: 'Std / Lean',
+              requires: [],
+              lib: 'work/olean32',
+              roots: ['Std', 'Lean', 'Lake'],
+              prefix: 'lean-std-64',
+            },
+          ];
+          if (fs.existsSync('work/mathlib-lib/Mathlib')) {
+            extensions.push({
+              id: 'mathlib',
+              label: 'Mathlib',
+              requires: ['std'],
+              lib: 'work/mathlib-lib',
+              roots: ['Mathlib'],
+              prefix: 'lean-mathlib-64',
+            });
+          }
+          const keyPrefix = `wasm-lean4/${process.env.VERSION}-wasm64/extensions`;
+          fs.writeFileSync(
+            'work/wasm64-ext/spec.json',
+            `${JSON.stringify({ keyPrefix, level: 19, extensions }, null, 2)}\n`,
+          );
+          NODE
+          node scripts/package-wasm64-extensions.ts --spec work/wasm64-ext/spec.json --out work/wasm64-ext
+          ls -lh work/wasm64-ext
+
       # 完整诊断链路：initialize → didOpen → publishDiagnostics。
       # watchdog 模式的 didOpen 会 Process.spawn（wasm 不支持），所以按 SDK 的做法直接起文件 worker。
       # Mathlib 是实验项，允许失败；Init 的硬门禁已经在 smoke 里。
@@ -1058,14 +1099,16 @@ jobs:
 
       - name: 打包实验性 wasm64 运行时资产（Init 64位 + release-lsp）
         run: |
-          VERSION="$(node -e 'import("./scripts/pin-lean.ts").then((m) => process.stdout.write(m.LEAN_PIN.version))')"
+          VERSION="$(node -e 'import("./scripts/pin-lean.ts").then((m) => process.stdout.write(m.resolveLeanPin().version))')"
           node scripts/package-wasm64-runtime.ts \
             --glue work/release-lsp/lean-lsp-adapted.mjs \
             --wasm work/release-lsp/lean-lsp.wasm \
             --wasm-zst work/release-lsp/lean-lsp.wasm.zst \
             --lib work/olean32 \
             --out work/wasm64-runtime \
-            --lean-version "$VERSION"
+            --lean-version "$VERSION" \
+            --extensions work/wasm64-ext/extensions.json \
+            --extensions-dir work/wasm64-ext
           ls -lh work/wasm64-runtime
 
       - name: 保存实验性 wasm64 运行时产物
@@ -1171,6 +1214,14 @@ jobs:
                 baseUrl: `https://github.com/3y3y3y-huaiji/lean-init-ide/releases/download/runtime-v${version}-wasm64/`,
               };
               for (const a of m.assets) a.key = `wasm-lean4/${version}-wasm64/` + a.name;
+              for (const e of m.extensions || []) {
+                for (const a of e.assets) {
+                  a.key = a.key.replace(
+                    "wasm-lean4/build/release/stage1-wasm64/",
+                    `wasm-lean4/${version}-wasm64/`,
+                  );
+                }
+              }
             }
             if (!m.mirror) {
               m.mirror = {
@@ -1211,7 +1262,11 @@ jobs:
             const manifest = JSON.parse(fs.readFileSync("./runtime/wasm64-runtime-manifest.json", "utf8"));
             const bucket = process.env.R2_BUCKET || manifest.bucket || "lean4-ide-releases";
             const endpoint = process.env.R2_ENDPOINT;
-            for (const asset of manifest.assets) {
+            const allAssets = [
+              ...manifest.assets,
+              ...(manifest.extensions || []).flatMap((extension) => extension.assets),
+            ];
+            for (const asset of allAssets) {
               const filePath = path.join("./runtime", asset.source);
               const stat = fs.statSync(filePath);
               if (stat.size !== asset.bytes) {
@@ -1294,13 +1349,21 @@ jobs:
             }
             fs.writeFileSync(attrPath, attrs);
 
-            const targetDir = path.join(work, prefix);
-            fs.mkdirSync(targetDir, { recursive: true });
-            for (const asset of manifest.assets) {
-              fs.copyFileSync(path.join("./runtime", asset.source), path.join(targetDir, asset.name));
+            const allAssets = [
+              ...manifest.assets,
+              ...(manifest.extensions || []).flatMap((extension) => extension.assets),
+            ];
+            // 按 asset.key 落盘：扩展包在 <prefix>/extensions/<id>/ 下，不能平铺到 prefix 根。
+            for (const asset of allAssets) {
+              if (!asset.key.startsWith(`${prefix}/`)) {
+                throw new Error(`asset key ${asset.key} 不在 mirror prefix ${prefix} 下`);
+              }
+              const target = path.join(work, asset.key);
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              fs.copyFileSync(path.join("./runtime", asset.source), target);
             }
             if (fs.existsSync("./runtime/SHA256SUMS")) {
-              fs.copyFileSync("./runtime/SHA256SUMS", path.join(targetDir, "SHA256SUMS"));
+              fs.copyFileSync("./runtime/SHA256SUMS", path.join(work, prefix, "SHA256SUMS"));
             }
 
             execFileSync("git", ["add", "-A"], { cwd: work, stdio: "inherit", env });

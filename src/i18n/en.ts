@@ -379,7 +379,7 @@ end
     runtimeExperimentalWarning:
       'Experimental notice: stable wasm32 (1 GiB limit) is the production default. wasm64 is experimental, may be unstable or unsupported across browsers, and must not be used for production — switch manually only to try it.',
     runtimeWasm64NoLibraries:
-      'The wasm64 runtime ships Init only, so Std / Batteries are disabled. Switch back to wasm32 to use extension libraries.',
+      'This lesson needs an extension library that has no wasm64 build yet. Switch back to wasm32 to use it.',
     logRuntimeAutoStable:
       'This lesson needs an extension library; switched back to the stable wasm32 runtime',
     libraryQuickFix: (library) => `Enable ${library} and switch to the stable runtime`,
@@ -387,10 +387,11 @@ end
     runtimeWasm64Unsupported:
       'Memory64 is not supported in this browser; staying on the stable wasm32 runtime',
     runtimeWasm64AssetNote:
-      'Experimental note: wasm64 loads a separate 64-bit Lean 4.36.0-rc2 + Init runtime for manual trial only (not for production). Std / Batteries extension packs are available on wasm32 only.',
+      'Experimental note: wasm64 uses a separate 64-bit Lean 4.36.0-rc2 runtime and can load the Std / Lean core and a Mathlib teaching subset from the libraries menu. Manual trial only, not for production.',
     runtimeWasm64NotPublished:
       'No published wasm64 runtime assets are configured yet; falling back to stable wasm32',
     logWasm64Loading: 'Loading experimental wasm64 runtime pack (64-bit Lean 4.36.0-rc2 + Init)…',
+    logWasm64Stage: (stage) => `wasm64 asset: ${stage}`,
     logRuntimeArchSelected: (arch) => `Runtime preference switched to ${arch}`,
   },
   reference: {

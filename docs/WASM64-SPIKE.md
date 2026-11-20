@@ -468,10 +468,57 @@ wasm 原生栈上留 `simpLoop + visitPreContinue` 两个帧，800 步就把约 
 它改的是 Lean 源码，计入 cgen / objects 缓存键；CI 的 link 校验会确认
 `simpLoopStep` 真的进了 wasm，缺失就失败。
 
+## 扩展库：Std/Lean 核心与 Mathlib（2026-11-21）
+
+目标从「能跑 Init」推进到「浏览器里能 `import Mathlib.*`」。做法不是把 Mathlib 塞进基础包，
+而是把它变成按需加载的扩展库：
+
+| 扩展 | 内容 | 来源 | 前缀 |
+| --- | --- | --- | --- |
+| `std` | `Std` / `Lean` / `Lake` | 官方 64 位 olean（`work/olean32`） | `lean-std-64` |
+| `mathlib` | `Mathlib` 教学子集（183 个模块，`Mathlib.Order.Basic` / `Mathlib.Tactic.Spread` 闭包） | wasm64 自己编译的 `work/mathlib-lib` | `lean-mathlib-64` |
+
+基础 Init 的 8 个分片与清单结构不变；扩展写进 `wasm64-runtime-manifest.json` 的
+`extensions[]`（`id` / `label` / `requires` / `assets`）。浏览器加载器按 `requires`
+展开依赖（`mathlib` → `std`），把每个扩展的 `*.index.json` 与分片一起挂进 MEMFS。
+worker 不再只认 `Init` 前缀，而是遍历所有索引，并把跨库重复路径视为启动错误。
+
+两个容易踩的点：
+
+- **扩展包不参与 `cacheKey`**。`cacheKey` 只由基础资产（glue / wasm / Init 分片 / index）决定，
+  否则加一个 Mathlib 会让所有用户把 100MB 基础包重下。扩展资产 URL 单独带
+  `h=<sha256 前 12 位>`，包内容一变 URL 就变，缓存自然失效。
+- **扩展按架构隔离**。wasm32 的 Std/Batteries 是 `flags=0` 的自建 olean，wasm64 必须用官方
+  `flags=1`（GMP）版本；前端 `runtimeExtensions` 因此带 `arch`，切架构时清空已挂载的包。
+
+打包命令（CI 的 `deep` 作业自动执行）：
+
+```bash
+node scripts/package-wasm64-extensions.ts \
+  --spec work/wasm64-ext/spec.json \
+  --out work/wasm64-ext
+node scripts/package-wasm64-runtime.ts ... \
+  --extensions work/wasm64-ext/extensions.json \
+  --extensions-dir work/wasm64-ext
+```
+
+`spec.json` 由 workflow 生成：`std` 永远打包；`mathlib` 仅在 `work/mathlib-lib/Mathlib`
+存在时加入（Mathlib 编译是 `continue-on-error`，缺失时扩展清单自动降级为只有 std）。
+发布作业把 `manifest.assets` 与 `manifest.extensions[].assets` 一起上传 R2 / 魔搭，
+魔搭按 `asset.key` 落盘到 `<prefix>/extensions/<id>/`，不再平铺到 prefix 根。
+
+当前限制：
+
+- 这是 **教学子集**，不是完整 Mathlib。完整 Mathlib 的 olean 是 GB 级，浏览器预算放不下；
+  需要更多模块时改 `scripts/mathlib-slice.ts` 的 targets / optional / 上限后重跑 deep。
+- 扩展包只装 `olean` / `.olean.server` / `.olean.private` / `.ilean`，不含 `.ir`。
+  诊断与 import 不需要 IR；若以后要在 Mathlib 上大量 `#eval`，需要把 IR 一起打包（体积约翻倍）。
+- 首次加载 = 基础包 102MB + std 包 + Mathlib 包；`wasm64` 仍是实验开关，默认生产路径是 wasm32。
+
 ## 尚未验证
 
 - 浏览器内 LSP：浏览器侧目前只验证了 CLI 编译（`--mode=version|compile`），`--worker` 诊断链路已在 Node `worker_threads` 跑通 `Init` 与 `Mathlib.Tactic.Spread`，尚未接入前端 Monaco + 浏览器 Worker 联调
-- Mathlib 教学子集扩展：已打通 `Mathlib.Tactic.Spread` 的 `olean` 编译与 LSP 诊断，后续按需扩展 `scripts/mathlib-slice.ts` 目标并打包进浏览器运行时资产
+- Mathlib 教学子集扩展：已打通 `Mathlib.Tactic.Spread` 的 `olean` 编译与 LSP 诊断；扩展包（std/mathlib）的浏览器端挂载已实现，待 deep 构建发布后做真机验收
 - 内存占用与性能：`-O2` + memory64 下的峰值内存未精细压测；当前 Init 诊断约 26–37 秒、`Mathlib.Tactic.Spread` 约 51–56 秒（受限于 MEMFS 跨线程 syscall 每拍 1ms 的 `Atomics.wait`）
 
 ## 复现

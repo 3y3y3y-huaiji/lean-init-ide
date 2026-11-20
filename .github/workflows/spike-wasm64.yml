@@ -958,7 +958,7 @@ jobs:
           const extensions = [
             {
               id: 'std',
-              label: 'Std / Lean 核心',
+              label: 'Std / Lean',
               requires: [],
               lib: 'work/olean32',
               roots: ['Std', 'Lean', 'Lake'],
@@ -968,7 +968,7 @@ jobs:
           if (fs.existsSync('work/mathlib-lib/Mathlib')) {
             extensions.push({
               id: 'mathlib',
-              label: 'Mathlib 教学子集',
+              label: 'Mathlib',
               requires: ['std'],
               lib: 'work/mathlib-lib',
               roots: ['Mathlib'],

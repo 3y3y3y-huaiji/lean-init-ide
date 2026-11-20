@@ -68,6 +68,40 @@ describe('unpackLibrary', () => {
     expect([...files[0]!.bytes]).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
+  it('同时展开基础库与扩展库索引，并拒绝跨库重复条目', () => {
+    const baseIndex = {
+      chunks: [{ path: 'base.zst', offset: 0, uncompressedBytes: 2 }],
+      files: [{ path: 'Init/A.olean', offset: 0, bytes: 2 }],
+    };
+    const mathlibIndex = {
+      chunks: [{ path: 'math.zst', offset: 0, uncompressedBytes: 3 }],
+      files: [{ path: 'Mathlib/Order/Basic.olean', offset: 0, bytes: 3 }],
+    };
+    const library = {
+      'lean-init-64.index.json': encodeIndex(baseIndex),
+      'lean-mathlib-64.index.json': encodeIndex(mathlibIndex),
+      base: new Uint8Array([1, 2]),
+      math: new Uint8Array([7, 8, 9]),
+    };
+
+    const files = unpackLibrary(library);
+    expect(files.map((file) => file.path)).toEqual(['Init/A.olean', 'Mathlib/Order/Basic.olean']);
+    expect([...files[1]!.bytes]).toEqual([7, 8, 9]);
+
+    // 同一个路径出现在两个库里会互相覆盖，必须启动即失败。
+    expect(() =>
+      unpackLibrary({
+        'lean-init-64.index.json': encodeIndex(baseIndex),
+        'lean-mathlib-64.index.json': encodeIndex({
+          chunks: [{ path: 'math.zst', offset: 0, uncompressedBytes: 3 }],
+          files: [{ path: 'Init/A.olean', offset: 0, bytes: 3 }],
+        }),
+        base: new Uint8Array([1, 2]),
+        math: new Uint8Array([7, 8, 9]),
+      }),
+    ).toThrow(/重复/);
+  });
+
   it('索引缺失或长度不符时拒绝启动', () => {
     expect(() => unpackLibrary({})).toThrow(/索引缺失/);
 

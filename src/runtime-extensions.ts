@@ -1,4 +1,5 @@
 import runtimeManifest from '../config/lean4-runtime.json';
+import wasm64RuntimeManifest from '../config/lean4-wasm64-runtime.json';
 import { assetSources } from './asset-sources.mjs';
 
 /**
@@ -19,12 +20,16 @@ type ExtensionAsset = {
   contentType: string;
 };
 
-export type RuntimeExtensionId = 'std' | 'batteries';
+export type RuntimeArch = 'wasm32' | 'wasm64';
+
+export type RuntimeExtensionId = 'std' | 'batteries' | 'mathlib';
 
 export type RuntimeExtension = {
   id: RuntimeExtensionId;
   label: string;
   requires: RuntimeExtensionId[];
+  /** 扩展包只对指定架构有效；wasm32 的 Std 是 32 位 olean，wasm64 不能复用。 */
+  arch: RuntimeArch;
   assets: ExtensionAsset[];
 };
 
@@ -40,20 +45,43 @@ export type ExtensionPacks = Record<string, ArrayBufferLike>;
 
 type Manifest = Parameters<typeof assetSources>[0] & { extensions?: RuntimeExtension[] };
 
-const manifest = runtimeManifest as unknown as Manifest;
+const wasm32Manifest = runtimeManifest as unknown as Manifest;
+const wasm64Manifest = wasm64RuntimeManifest as unknown as Manifest;
 
-export const runtimeExtensions: RuntimeExtension[] = manifest.extensions ?? [];
+/**
+ * 两个运行时的可选库合并成一份目录：按钮按架构过滤，同一个 id 在不同架构下
+ * 指向不同的 olean 包（wasm32 flags=0，wasm64 官方 GMP flags=1）。
+ */
+export const runtimeExtensions: RuntimeExtension[] = [
+  ...(wasm32Manifest.extensions ?? []).map((extension) => ({
+    ...extension,
+    arch: 'wasm32' as const,
+  })),
+  ...(wasm64Manifest.extensions ?? []).map((extension) => ({
+    ...extension,
+    arch: 'wasm64' as const,
+  })),
+];
 
-export const extensionById = (id: RuntimeExtensionId) =>
+export const runtimeExtensionsFor = (arch: RuntimeArch): RuntimeExtension[] =>
+  runtimeExtensions.filter((extension) => extension.arch === arch);
+
+export const extensionById = (id: RuntimeExtensionId, arch: RuntimeArch = 'wasm32') =>
+  runtimeExtensions.find((extension) => extension.id === id && extension.arch === arch) ??
   runtimeExtensions.find((extension) => extension.id === id);
 
-/** 把依赖闭包展开，例如 Batteries 需要先挂 Std。 */
-export const resolveExtensionIds = (ids: Iterable<RuntimeExtensionId>): RuntimeExtensionId[] => {
+/** 把依赖闭包展开，例如 Batteries 需要先挂 Std、Mathlib 需要先挂 Lean 核心。 */
+export const resolveExtensionIds = (
+  ids: Iterable<RuntimeExtensionId>,
+  arch: RuntimeArch = 'wasm32',
+): RuntimeExtensionId[] => {
   const resolved = new Set<RuntimeExtensionId>();
   const visit = (id: RuntimeExtensionId) => {
     if (resolved.has(id)) return;
+    const extension = extensionById(id, arch);
+    if (!extension || extension.arch !== arch) return;
     resolved.add(id);
-    for (const dependency of extensionById(id)?.requires ?? []) visit(dependency);
+    for (const dependency of extension.requires) visit(dependency);
   };
   for (const id of ids) visit(id);
   return [...resolved];
@@ -83,7 +111,7 @@ const getDecoder = () => {
   return decoderPromise;
 };
 
-const fetchAsset = async (asset: ExtensionAsset) => {
+const fetchAsset = async (asset: ExtensionAsset, manifest: Manifest = wasm32Manifest) => {
   // 扩展包只发布在 R2/魔搭：用 zstd 标记跳过 GitHub Release 回退。
   const sources = assetSources(manifest, { ...asset, encoding: 'zstd' }, undefined, {
     includeMirror: true,
@@ -114,10 +142,14 @@ const fetchAsset = async (asset: ExtensionAsset) => {
 export const loadExtensionPacks = async (
   ids: Iterable<RuntimeExtensionId>,
   onProgress?: (ratio: number, label: string) => void,
+  arch: RuntimeArch = 'wasm32',
 ): Promise<ExtensionPacks> => {
   const selected = [...ids]
-    .map((id) => extensionById(id))
-    .filter((extension): extension is RuntimeExtension => extension !== undefined);
+    .map((id) => extensionById(id, arch))
+    .filter(
+      (extension): extension is RuntimeExtension =>
+        extension !== undefined && extension.arch === arch,
+    );
   const total = selected.reduce(
     (sum, extension) => sum + extension.assets.reduce((bytes, asset) => bytes + asset.bytes, 0),
     0,

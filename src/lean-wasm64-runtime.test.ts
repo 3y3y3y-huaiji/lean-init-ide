@@ -176,7 +176,7 @@ describe('loadWasm64Runtime', () => {
         bytes: 10,
         sha256: 'cd'.repeat(32),
       }),
-    ).toBe('/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck1');
+    ).toBe('/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck1&h=cdcdcdcdcdcd');
   });
 
   const cacheManifest = async () => {
@@ -484,11 +484,11 @@ describe('loadWasm64Runtime', () => {
     const domesticUrls = wasm64CandidateUrls(manifest, glue, true);
     expect(domesticUrls).toEqual([
       'https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs',
-      '/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck2',
+      '/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck2&h=cdcdcdcdcdcd',
     ]);
     const overseasUrls = wasm64CandidateUrls(manifest, glue, false);
     expect(overseasUrls).toEqual([
-      '/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck2',
+      '/cdn/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs?r=ck2&h=cdcdcdcdcdcd',
       'https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs',
     ]);
   });
@@ -524,5 +524,127 @@ describe('loadWasm64Runtime', () => {
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toContain('HTTP 503');
     expect((err as Error).message).toContain('length 2 !=');
+  });
+  it('按 id 展开扩展依赖，把扩展索引与分片一起挂载', async () => {
+    const glue = new TextEncoder().encode('export default () => ({});');
+    const wasm = new Uint8Array([0x00, 0x61, 0x73, 0x6d]);
+    const baseIndex = new TextEncoder().encode(JSON.stringify({ chunks: [], files: [] }));
+    const stdIndex = new TextEncoder().encode(JSON.stringify({ chunks: [], files: [] }));
+    const mathlibIndex = new TextEncoder().encode(JSON.stringify({ chunks: [], files: [] }));
+    const basePack = new Uint8Array([1]);
+    const stdPack = new Uint8Array([2, 3]);
+    const mathlibPack = new Uint8Array([4, 5, 6]);
+    const asset = async (name: string, bytes: Uint8Array) => ({
+      name,
+      key: `wasm-lean4/4.36.0-rc2-wasm64/${name}`,
+      bytes: bytes.byteLength,
+      sha256: await sha256Hex(bytes),
+    });
+    const manifest: Wasm64Manifest = {
+      cacheKey: 'ext-test',
+      leanVersion: '4.36.0-rc2',
+      runtime: 'test',
+      assets: [
+        await asset(WASM64_GLUE, glue),
+        await asset(WASM64_WASM, wasm),
+        await asset(WASM64_INDEX, baseIndex),
+        await asset('lean-init-64-00.pack.zst.bin', basePack),
+      ],
+      extensions: [
+        {
+          id: 'std',
+          label: 'Std / Lean 核心',
+          requires: [],
+          assets: [
+            await asset('lean-std-64.index.json', stdIndex),
+            await asset('lean-std-64-00.pack.zst.bin', stdPack),
+          ],
+        },
+        {
+          id: 'mathlib',
+          label: 'Mathlib 教学子集',
+          requires: ['std'],
+          assets: [
+            await asset('lean-mathlib-64.index.json', mathlibIndex),
+            await asset('lean-mathlib-64-00.pack.zst.bin', mathlibPack),
+          ],
+        },
+      ],
+    };
+    const requests: string[] = [];
+    const fetchImpl = (async (input: unknown) => {
+      const url = String(input);
+      requests.push(url);
+      const name = url.split('/').pop()?.split('?')[0] ?? '';
+      const file = [
+        [WASM64_GLUE, glue],
+        [WASM64_WASM, wasm],
+        [WASM64_INDEX, baseIndex],
+        ['lean-init-64-00.pack.zst.bin', basePack],
+        ['lean-std-64.index.json', stdIndex],
+        ['lean-std-64-00.pack.zst.bin', stdPack],
+        ['lean-mathlib-64.index.json', mathlibIndex],
+        ['lean-mathlib-64-00.pack.zst.bin', mathlibPack],
+      ].find(([candidate]) => candidate === name);
+      return file
+        ? new Response(file[1] as unknown as BodyInit, { status: 200 })
+        : new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    const runtime = await loadWasm64Runtime({ manifest, extensions: ['mathlib'], fetchImpl });
+
+    expect(Object.keys(runtime.library).sort()).toEqual([
+      'lean-init-64-00.pack',
+      'lean-init-64.index.json',
+      'lean-mathlib-64-00.pack',
+      'lean-mathlib-64.index.json',
+      'lean-std-64-00.pack',
+      'lean-std-64.index.json',
+    ]);
+    expect(runtime.library['lean-mathlib-64-00.pack']).toEqual(mathlibPack);
+    expect(requests.some((url) => url.includes('lean-mathlib-64-00.pack'))).toBe(true);
+  });
+
+  it('未知扩展 id 被忽略，不会伪造挂载', async () => {
+    const glue = new TextEncoder().encode('glue');
+    const wasm = new Uint8Array([0x00, 0x61, 0x73, 0x6d]);
+    const index = new TextEncoder().encode(JSON.stringify({ chunks: [], files: [] }));
+    const manifest: Wasm64Manifest = {
+      cacheKey: 'unknown-ext',
+      leanVersion: '4.36.0-rc2',
+      runtime: 'test',
+      assets: [
+        {
+          name: WASM64_GLUE,
+          key: `x/${WASM64_GLUE}`,
+          bytes: glue.byteLength,
+          sha256: await sha256Hex(glue),
+        },
+        {
+          name: WASM64_WASM,
+          key: `x/${WASM64_WASM}`,
+          bytes: wasm.byteLength,
+          sha256: await sha256Hex(wasm),
+        },
+        {
+          name: WASM64_INDEX,
+          key: `x/${WASM64_INDEX}`,
+          bytes: index.byteLength,
+          sha256: await sha256Hex(index),
+        },
+      ],
+    };
+    const runtime = await loadWasm64Runtime({
+      manifest,
+      extensions: ['nope'],
+      fetchImpl: (async (input: unknown) => {
+        const name = String(input).split('/').pop()?.split('?')[0];
+        if (name === WASM64_GLUE) return new Response(glue, { status: 200 });
+        if (name === WASM64_WASM) return new Response(wasm, { status: 200 });
+        if (name === WASM64_INDEX) return new Response(index, { status: 200 });
+        return new Response('missing', { status: 404 });
+      }) as typeof fetch,
+    });
+    expect(Object.keys(runtime.library)).toEqual([WASM64_INDEX]);
   });
 });

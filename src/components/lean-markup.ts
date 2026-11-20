@@ -301,12 +301,12 @@ export const renderLeanMarkup = (
         ${runtimeExtensions
           .map(
             (extension) => `
-          <div class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
+          <div class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft" data-extension-row="${extension.id}" data-extension-arch="${extension.arch}">
             <label class="flex min-h-9 max-[900px]:min-h-11 min-w-0 cursor-pointer items-center gap-2">
-              <input type="checkbox" class="size-4 shrink-0 accent-[var(--accent)]" data-library-default="${extension.id}" aria-label="${t.libraryDefault}" />
+              <input type="checkbox" class="size-4 shrink-0 accent-[var(--accent)]" data-library-default="${extension.id}" data-extension-arch="${extension.arch}" aria-label="${t.libraryDefault}" />
               <span class="min-w-0 truncate">${extension.label}</span>
             </label>
-            <button type="button" class="${toolbarButtonClass}" data-library="${extension.id}" data-state="idle">${t.libraryLoad}</button>
+            <button type="button" class="${toolbarButtonClass}" data-library="${extension.id}" data-extension-arch="${extension.arch}" data-state="idle">${t.libraryLoad}</button>
           </div>`,
           )
           .join('')}

@@ -369,6 +369,7 @@ export type Messages = {
     runtimeWasm64AssetNote: string;
     runtimeWasm64NotPublished: string;
     logWasm64Loading: string;
+    logWasm64Stage: (stage: string) => string;
     logRuntimeArchSelected: (arch: string) => string;
   };
   privacy: {

@@ -363,16 +363,16 @@ end
     runtimeWasm64: 'wasm64（实验性）',
     runtimeExperimentalWarning:
       '实验性提醒：默认使用稳定版 wasm32（1 GiB 上限）。wasm64 目前为实验性功能，可能存在不稳定或浏览器兼容性问题，请勿作为生产环境使用，仅建议手动切换试用。',
-    runtimeWasm64NoLibraries:
-      'wasm64 运行包只含 Init，Std / Batteries 扩展库已禁用；需要扩展库时请切回 wasm32。',
+    runtimeWasm64NoLibraries: '本课依赖的扩展库还没有 wasm64 版本；需要它时请切回 wasm32。',
     logRuntimeAutoStable: '本课需要扩展库，已自动切回稳定版 wasm32 运行时',
     libraryQuickFix: (library) => `一键启用 ${library} 并切回稳定运行时`,
     libraryQuickFixDone: (library) => `已启用 ${library}，正在重启 Lean…`,
     runtimeWasm64Unsupported: '当前浏览器不支持 Memory64，将继续使用 wasm32 运行时',
     runtimeWasm64AssetNote:
-      '实验性提醒：wasm64（64 位 Memory64）将加载独立 64 位 Lean 4.36.0-rc2 + Init 运行包，仅作手动试用，请勿用于生产；Std / Batteries 扩展库仅随 wasm32 提供。',
+      '实验性提醒：wasm64（64 位 Memory64）使用独立 64 位 Lean 4.36.0-rc2 运行包，可在扩展库菜单加载 Std / Lean 核心与 Mathlib 教学子集；仅作手动试用，请勿用于生产。',
     runtimeWasm64NotPublished: '当前未配置已发布的 wasm64 运行包，本次将继续使用稳定版 wasm32',
     logWasm64Loading: '正在加载实验性 wasm64 运行包（64 位 Lean 4.36.0-rc2 + Init）…',
+    logWasm64Stage: (stage) => `wasm64 资产：${stage}`,
     logRuntimeArchSelected: (arch) => `已切换运行时偏好：${arch}`,
   },
   reference: {

@@ -29,6 +29,17 @@ export type Wasm64Asset = {
   readonly uncompressedSha256?: string;
 };
 
+/**
+ * 可选库（Std/Lean 核心、Mathlib 教学子集）。assets 与基础资产同格式：
+ * `<prefix>.index.json` + 若干 `<prefix>-XX.pack.zst.bin`，挂载逻辑由 worker 统一处理。
+ */
+export type Wasm64Extension = {
+  readonly id: string;
+  readonly label: string;
+  readonly requires?: readonly string[];
+  readonly assets: readonly Wasm64Asset[];
+};
+
 export type Wasm64Manifest = {
   readonly cacheKey: string;
   readonly leanVersion: string;
@@ -37,6 +48,7 @@ export type Wasm64Manifest = {
   readonly fallback?: { readonly label: string; readonly baseUrl: string };
   readonly mirror?: { readonly label: string; readonly baseUrl: string; readonly prefix?: string };
   readonly assets: readonly Wasm64Asset[];
+  readonly extensions?: readonly Wasm64Extension[];
 };
 
 export const wasm64Manifest = manifestJson as unknown as Wasm64Manifest;
@@ -44,6 +56,32 @@ export const wasm64Manifest = manifestJson as unknown as Wasm64Manifest;
 /** 清单里没有资产 = 还没发布；此时切到 wasm64 只会回退 wasm32，绝不伪造数据。 */
 export const isWasm64Published = (manifest: Wasm64Manifest = wasm64Manifest): boolean =>
   manifest.assets.length > 0;
+
+export const wasm64ExtensionList = (
+  manifest: Wasm64Manifest = wasm64Manifest,
+): readonly Wasm64Extension[] => manifest.extensions ?? [];
+
+export const wasm64ExtensionById = (
+  id: string,
+  manifest: Wasm64Manifest = wasm64Manifest,
+): Wasm64Extension | undefined => wasm64ExtensionList(manifest).find((item) => item.id === id);
+
+/** 展开依赖闭包，例如 Mathlib 需要先挂 Std/Lean 核心；未知 id 直接忽略。 */
+export const resolveWasm64ExtensionIds = (
+  ids: Iterable<string>,
+  manifest: Wasm64Manifest = wasm64Manifest,
+): string[] => {
+  const resolved = new Set<string>();
+  const visit = (id: string): void => {
+    if (resolved.has(id)) return;
+    const extension = wasm64ExtensionById(id, manifest);
+    if (!extension) return;
+    resolved.add(id);
+    for (const dependency of extension.requires ?? []) visit(dependency);
+  };
+  for (const id of ids) visit(id);
+  return [...resolved];
+};
 
 export const WASM64_GLUE = 'lean-lsp-adapted.mjs';
 export const WASM64_WASM = 'lean-lsp.wasm.zst';
@@ -62,6 +100,8 @@ export type LoadedWasm64Runtime = {
 
 export type LoadWasm64Options = {
   readonly manifest?: Wasm64Manifest;
+  /** 需要额外挂载的库 id（依赖会自动展开）；空数组 = 只带 Init。 */
+  readonly extensions?: readonly string[];
   readonly fetchImpl?: typeof fetch;
   readonly createZstd?: () => Promise<ZstdDecoder>;
   readonly onStage?: (stage: string) => void;
@@ -89,12 +129,14 @@ const defaultZstd = async (): Promise<ZstdDecoder> => {
 };
 
 export const wasm64AssetUrl = (manifest: Wasm64Manifest, asset: Wasm64Asset): string =>
-  asset.ranged
-    ? `/wasm-lean4-64/${asset.name}?v=${asset.sha256}`
-    : `/cdn/${asset.key}?r=${manifest.cacheKey}`;
+  asset.ranged ? `/wasm-lean4-64/${asset.name}?v=${asset.sha256}` : wasm64CdnUrl(manifest, asset);
 
+/**
+ * 同源网关 URL。`h` 用资产自身哈希做版本键：扩展包的 key 是按名字固定的，
+ * 只带 runtime 的 cacheKey 会在扩展包更新后继续命中旧缓存。
+ */
 export const wasm64CdnUrl = (manifest: Wasm64Manifest, asset: Wasm64Asset): string =>
-  `/cdn/${asset.key}?r=${manifest.cacheKey}`;
+  `/cdn/${asset.key}?r=${manifest.cacheKey}&h=${asset.sha256.slice(0, 12)}`;
 
 const isDomesticClient = (): boolean => {
   const nav = (globalThis as { navigator?: { languages?: readonly string[]; language?: string } })
@@ -140,7 +182,10 @@ export const wasm64CandidateUrls = (
     if (!urls.includes(source.url)) urls.push(source.url);
   }
   const cdn = wasm64CdnUrl(manifest, asset);
-  if (!urls.includes(cdn)) urls.push(cdn);
+  // assetSources 给的 /cdn/ 不带 h 参数；按 key 替换成带哈希的版本，既去重又能让扩展包更新后失效。
+  const cdnIndex = urls.findIndex((url) => url.startsWith(`/cdn/${asset.key}`));
+  if (cdnIndex >= 0) urls[cdnIndex] = cdn;
+  else urls.push(cdn);
   return urls;
 };
 
@@ -261,9 +306,25 @@ export const loadWasm64Runtime = async (
     return decoded;
   };
 
+  const selectedExtensions = resolveWasm64ExtensionIds(options.extensions ?? [], manifest).map(
+    (id) => {
+      const extension = wasm64ExtensionById(id, manifest);
+      if (!extension) throw new Error(`wasm64 清单缺少扩展 ${id}`);
+      return extension;
+    },
+  );
+  const extensionAssets = selectedExtensions.flatMap((extension) => extension.assets);
+  // 扩展资产名必须与基础资产不重名，否则 payload 会互相覆盖。
+  const assetNames = new Set(manifest.assets.map((asset) => asset.name));
+  for (const asset of extensionAssets) {
+    if (assetNames.has(asset.name)) throw new Error(`wasm64 扩展资产重名: ${asset.name}`);
+    assetNames.add(asset.name);
+  }
+  const allAssets = [...manifest.assets, ...extensionAssets];
+
   // 受限并发下载；任何一个失败立即整体失败，不使用残缺资产。
   const payload = new Map<string, Uint8Array>();
-  const queue = [...manifest.assets];
+  const queue = [...allAssets];
   const workerCount = Math.max(1, Math.min(options.concurrency ?? 4, queue.length));
   await Promise.all(
     Array.from({ length: workerCount }, async () => {
@@ -294,7 +355,12 @@ export const loadWasm64Runtime = async (
   const indexAsset = requireAsset(manifest, WASM64_INDEX);
   const indexBytes = take(indexAsset.name);
   const library: Record<string, Uint8Array> = { [WASM64_INDEX]: share(indexBytes) };
-  for (const asset of manifest.assets) {
+  for (const extension of selectedExtensions) {
+    const asset = extension.assets.find((item) => item.name.endsWith('.index.json'));
+    if (!asset) throw new Error(`wasm64 扩展 ${extension.id} 缺少索引资产`);
+    library[asset.name] = share(take(asset.name));
+  }
+  for (const asset of allAssets) {
     if (!asset.name.endsWith('.pack.zst.bin')) continue;
     library[asset.name.replace(/\.zst\.bin$/, '')] = share(take(asset.name));
   }

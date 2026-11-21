@@ -4,6 +4,7 @@
  * 渲染函数不读 location、不写 localStorage，SSG 与运行时回退共用；
  * 只有 mountChallenge 里才绑定编辑器与剪贴板，符合 views 层的边界约定。
  */
+import { applyChallengeTactic } from '../challenge-action';
 import { countGoalTargets } from '../challenge-goal';
 import { ChallengeProgressStore } from '../challenge-progress';
 import {
@@ -21,6 +22,7 @@ import {
   analyzeProofStyle,
   isChallengeSolved,
   solvedChallengeTiers,
+  type ChallengeMode,
   type ChallengeSpec,
   type ProofBadge,
 } from '../exercise';
@@ -53,6 +55,33 @@ export const challengeDraftKey = (slug: string): string => draftKeyFor(`challeng
 const playgroundLink = (locale: Locale, slug: string): string =>
   `/${locale}/playground?challenge=${encodeURIComponent(slug)}`;
 
+/** 四大主题游乐区固定顺序，空区不渲染。 */
+const MODE_ORDER: readonly ChallengeMode[] = ['classic', 'verdict', 'bugfix', 'bounty'];
+
+/** 每个展区一套静态 Tailwind 类，保证 JIT 能扫描到。 */
+const SECTION_STYLE: Record<ChallengeMode, { frame: string; accent: string; chip: string }> = {
+  classic: {
+    frame: 'border-accent/40',
+    accent: 'text-accent',
+    chip: 'border-accent/30 bg-accent-soft text-accent',
+  },
+  verdict: {
+    frame: 'border-warn/40',
+    accent: 'text-warn',
+    chip: 'border-warn/40 bg-warn/10 text-warn',
+  },
+  bugfix: {
+    frame: 'border-err/35',
+    accent: 'text-err',
+    chip: 'border-err/35 bg-err/10 text-err',
+  },
+  bounty: {
+    frame: 'border-ok/40',
+    accent: 'text-ok',
+    chip: 'border-ok/40 bg-ok/10 text-ok',
+  },
+};
+
 /**
  * 零基础导览：先说明 Lean 在做什么，再给出「读题 → 看 Goal → 补证明」三步。
  * 默认展开，避免小白直接面对一块没有任何上下文的编辑器。
@@ -79,13 +108,14 @@ const renderIntro = (locale: Locale): string => {
 
 const challengeCard = (locale: Locale, challenge: Challenge, index: number): string => {
   const t = messagesFor(locale).challenges;
+  const style = SECTION_STYLE[challenge.mode];
   return `
-    <article data-challenge-slug="${escapeHtml(challenge.slug)}" class="flex flex-col rounded-2xl border border-line bg-panel p-5">
+    <article data-challenge-slug="${escapeHtml(challenge.slug)}" class="flex flex-col rounded-xl border border-line bg-panel-soft p-4">
       <div class="mb-2 flex items-center justify-between gap-2">
         <p class="m-0 text-xs uppercase tracking-[0.08em] text-muted">0${index + 1}</p>
-        <span class="rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-[11px] font-[650] text-accent">${escapeHtml(t.modes[challenge.mode])}</span>
+        <span class="rounded-full border px-2 py-0.5 text-[11px] font-[650] ${style.chip}">${escapeHtml(t.modes[challenge.mode])}</span>
       </div>
-      <h2 class="m-0 mb-2 text-[17px] font-bold">${escapeHtml(challenge.title[locale])}</h2>
+      <h3 class="m-0 mb-2 text-[16px] font-bold">${escapeHtml(challenge.title[locale])}</h3>
       <p class="m-0 mb-3 flex-1 text-sm leading-relaxed text-muted">${escapeHtml(challenge.summary[locale])}</p>
       <p data-role="card-badges" class="m-0 mb-3 text-xs leading-relaxed text-ok"></p>
       <div class="flex flex-wrap gap-2">
@@ -97,6 +127,28 @@ const challengeCard = (locale: Locale, challenge: Challenge, index: number): str
 
 export const renderChallenges = (locale: Locale): string => {
   const t = messagesFor(locale).challenges;
+  const sections = MODE_ORDER.map((mode) => {
+    const items = CHALLENGES.filter((challenge) => challenge.mode === mode);
+    if (items.length === 0) return '';
+    const style = SECTION_STYLE[mode];
+    return `
+      <section
+        data-challenge-section="${mode}"
+        class="rounded-2xl border ${style.frame} bg-panel p-[clamp(14px,2vw,22px)]"
+      >
+        <header class="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div class="min-w-0">
+            <h2 class="m-0 text-[clamp(20px,2.4vw,26px)] tracking-[-0.01em] ${style.accent}">${escapeHtml(t.modes[mode])}</h2>
+            <p class="mt-1.5 mb-0 max-w-[680px] text-sm leading-relaxed text-muted">${escapeHtml(t.modeLeads[mode])}</p>
+          </div>
+          <span class="rounded-full border px-2.5 py-1 text-xs font-[650] ${style.chip}">${escapeHtml(t.modeCount(items.length))}</span>
+        </header>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">${items
+          .map((challenge, index) => challengeCard(locale, challenge, index))
+          .join('')}</div>
+      </section>`;
+  }).join('');
+
   return `
     <section class="max-w-[760px]">
       <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
@@ -113,8 +165,8 @@ export const renderChallenges = (locale: Locale): string => {
     <section class="mt-[clamp(24px,3.4vw,36px)] max-w-[760px]">${renderIntro(locale)}</section>
     <section
       data-role="challenge-list"
-      class="mt-[clamp(28px,4vw,44px)] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5"
-    >${CHALLENGES.map((challenge, index) => challengeCard(locale, challenge, index)).join('')}</section>
+      class="mt-[clamp(28px,4vw,44px)] flex flex-col gap-4"
+    >${sections}</section>
   `;
 };
 
@@ -168,6 +220,35 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
     )
     .join('');
 
+  const verdictSwitch =
+    challenge.mode === 'verdict' && challenge.verdictBranches
+      ? `
+      <section
+        data-role="verdict-switch"
+        class="mt-4 max-w-[760px] rounded-2xl border border-warn/40 bg-panel-soft p-4"
+      >
+        <p class="m-0 text-[15px] font-bold text-warn">${escapeHtml(detail.verdictTitle)}</p>
+        <p class="mt-1.5 mb-0 text-sm leading-relaxed text-muted">${escapeHtml(detail.verdictHint)}</p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="${ghostButtonClass}"
+            data-role="verdict-branch"
+            data-branch="true"
+            aria-pressed="false"
+          >${escapeHtml(detail.verdictTrue)}</button>
+          <button
+            type="button"
+            class="${ghostButtonClass}"
+            data-role="verdict-branch"
+            data-branch="false"
+            aria-pressed="false"
+          >${escapeHtml(detail.verdictFalse)}</button>
+        </div>
+        <p class="mt-2 mb-0 text-xs leading-relaxed text-muted">${escapeHtml(detail.verdictNoSpoiler)}</p>
+      </section>`
+      : '';
+
   return `
     <section data-role="challenge" class="pb-4">
       <a class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 items-center text-[13px] text-muted no-underline hover:text-accent" href="${challengesPath(locale)}">${detail.back}</a>
@@ -178,6 +259,8 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
       </div>
 
       <div class="mt-4 max-w-[760px]">${renderIntro(locale)}</div>
+
+      ${verdictSwitch}
 
       <div class="mt-4 flex flex-wrap items-center gap-2">
         <a class="${ghostButtonClass}" href="${playgroundLink(locale, challenge.slug)}">${detail.openInPlayground}</a>
@@ -395,7 +478,29 @@ export const mountChallenge = async (
   for (const button of root.querySelectorAll<HTMLButtonElement>('[data-tactic-index]')) {
     const tactic = challenge.tactics[Number(button.dataset.tacticIndex)];
     if (!tactic) continue;
-    button.addEventListener('click', () => panel.insert(tactic.insert));
+    button.addEventListener('click', () => {
+      // 不再盲目 insert 到第 1 行第 1 列：先把当前代码读出来，
+      // 再按出招卡声明的 action 智能替换 sorry 或整段载入完整解法。
+      const next = applyChallengeTactic(readCode(), tactic, locale);
+      panel.setCode(next, { focus: true });
+      if (panelHost.dataset.mode === 'solution') delete panelHost.dataset.mode;
+    });
+  }
+
+  const branchButtons = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('[data-role="verdict-branch"]'),
+  );
+  for (const button of branchButtons) {
+    const branch = button.dataset.branch === 'false' ? 'falseStarter' : 'trueStarter';
+    button.addEventListener('click', () => {
+      const starter = challenge.verdictBranches?.[branch];
+      if (!starter) return;
+      panel.setCode(starter[locale], { focus: true });
+      panelHost.dataset.mode = 'starter';
+      for (const other of branchButtons) {
+        other.setAttribute('aria-pressed', String(other === button));
+      }
+    });
   }
 
   const copyButton = root.querySelector<HTMLButtonElement>('[data-role="copy-link"]');

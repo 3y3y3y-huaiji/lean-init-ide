@@ -128,6 +128,15 @@ export type Messages = {
       bugfix: string;
       bounty: string;
     };
+    /** 四大主题区各自的一句话玩法说明。 */
+    modeLeads: {
+      classic: string;
+      verdict: string;
+      bugfix: string;
+      bounty: string;
+    };
+    /** 每个展区右上角的题量徽章。 */
+    modeCount: (count: number) => string;
     /** 三类流派勋章的显示名。 */
     badgeLabels: {
       automation: string;
@@ -150,6 +159,12 @@ export type Messages = {
       goalsNone: string;
       tacticsTitle: string;
       tacticsHint: string;
+      /** 真假审判庭：先选立场的开关。 */
+      verdictTitle: string;
+      verdictHint: string;
+      verdictTrue: string;
+      verdictFalse: string;
+      verdictNoSpoiler: string;
       copyLink: string;
       copyLinkDone: string;
       copyLinkFailed: string;

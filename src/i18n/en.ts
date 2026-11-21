@@ -118,6 +118,16 @@ export const en: Messages = {
       bugfix: '🔧 Contract Hunt',
       bounty: '👑 Open Conjecture Hall',
     },
+    modeLeads: {
+      classic:
+        'Many proofs, one puzzle: mix automation, hand-written rewriting and term-mode construction by playing different cards, and collect all three style badges.',
+      verdict:
+        'No spoilers: choose “true” or “false” first, then settle it with a proof or a counterexample.',
+      bugfix:
+        'The checker is already running: patch the function or the premise like a production bug and turn the red theorem green.',
+      bounty: 'From a one-minute bronze/silver bounty up to the century-old open conjectures.',
+    },
+    modeCount: (count) => `${count} ${count === 1 ? 'puzzle' : 'puzzles'}`,
     badgeLabels: {
       automation: '⚡ Overkill',
       handcrafted: '🛠️ Artisan',
@@ -137,8 +147,8 @@ export const en: Messages = {
           text: 'Whatever follows “⊢” is what Lean still wants you to prove. Move the cursor through the proof and the goal updates.',
         },
         {
-          title: '3. Close the gap with tactics',
-          text: 'A tactic button inserts a name into the code; fill in its arguments as the comments suggest. Stuck? Expand the reference solution and compare step by step.',
+          title: '3. Play a card',
+          text: 'One click on a play card replaces the sorry in the editor with a complete, compilable proof—no keyboard needed.',
         },
       ],
       codeNote:
@@ -149,9 +159,15 @@ export const en: Messages = {
       goalsRemaining: (count) => `${count} goal${count === 1 ? '' : 's'} left to prove`,
       goalsNone:
         'No goals right now: put the cursor inside the proof and the Goal panel updates live',
-      tacticsTitle: 'Tactics for this challenge',
+      tacticsTitle: 'Play cards: one click writes the sorry for you',
       tacticsHint:
-        'Click a tactic name to insert it at the cursor; one line below explains what each one does.',
+        'Click any play card: it smartly replaces the first sorry in the editor with a complete proof. If there is no sorry left, it replaces the current theorem’s proof instead.',
+      verdictTitle: 'Pick a stance first',
+      verdictHint:
+        'The prompt does not reveal the answer. Load the template for one stance; you can switch back at any time.',
+      verdictTrue: '⚖️ I judge it TRUE: try to prove it',
+      verdictFalse: '🔨 I judge it FALSE: build a counterexample',
+      verdictNoSpoiler: 'Both stances are clickable; Lean’s green light decides the truth.',
       copyLink: 'Copy share link',
       copyLinkDone: 'Link copied',
       copyLinkFailed: 'Copy failed—please copy from the address bar',

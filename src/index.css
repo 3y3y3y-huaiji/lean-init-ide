@@ -17,6 +17,13 @@
   display: none !important;
 }
 
+/* 真假审判庭：当前选中的立场按钮高亮，其余保持 ghost 样式。 */
+[data-role='verdict-branch'][aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 :root {
   color-scheme: dark;
   --bg: #0d1016;

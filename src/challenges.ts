@@ -7,6 +7,10 @@
  * 骨架与解法里的证明代码在中英文之间保持一致，只有「--」注释按语言翻译；
  * `challenges.test.ts` 会剥掉注释后逐题比对，防止两种语言悄悄写成不同的证明。
  *
+ * 出招卡（`ChallengeTactic`）不再插入 `'rcases '` 这类半截语法：
+ * 每张卡的 `insert` 都是一份完整、可独立编译的 Lean 文件，点击后由视图层
+ * 通过 `panel.getCode()` + `panel.setCode()` 智能替换，玩家不敲键盘也能通关。
+ *
  * 约束：所有代码只使用 Lean 4.35.0 `Init`，不得引入 Mathlib / Lake / Std。
  */
 import type { ChallengeMode } from './exercise';
@@ -18,11 +22,18 @@ export type LocalizedText = {
 };
 
 export type ChallengeTactic = {
-  /** 按钮上显示的文案，通常是 Lean 战术名。 */
+  /** 出招卡上显示的文案。 */
   label: string;
-  /** 点击后插入编辑器光标处的片段。 */
-  insert: string;
-  /** 给零基础用户的一句话解释：这个策略在做什么。 */
+  /** 点击后写入编辑器的完整 Lean 代码（双语注释随语言切换）。 */
+  insert: LocalizedText;
+  /**
+   * 出招方式：
+   * - `set-code`：整段替换编辑器代码（本数据源默认使用，保证一次点击就能独立编译）；
+   * - `replace-sorry`：只把第一个未注释的 `sorry` 换成 `insert`，
+   *   若已经没有 sorry，则替换最后一条定理的证明部分。
+   */
+  action?: 'replace-sorry' | 'set-code';
+  /** 给零基础用户的一句话解释：这张卡在做什么。 */
   description: LocalizedText;
 };
 
@@ -30,6 +41,14 @@ export type ChallengeBountySlots = {
   bronze: string;
   silver: string;
   legend: string;
+};
+
+/** 真假审判庭的两套独立立场模板，避免把两个带 sorry 的候选塞进同一块编辑器。 */
+export type ChallengeVerdictBranches = {
+  /** 「我判它为真」：尝试证明的模板。 */
+  trueStarter: LocalizedText;
+  /** 「我判它为假」：构造反例的模板。 */
+  falseStarter: LocalizedText;
 };
 
 export type Challenge = {
@@ -40,102 +59,163 @@ export type Challenge = {
   title: LocalizedText;
   /** 卡片与 meta description 用的一句话说明。 */
   summary: LocalizedText;
-  /** 面向非程序员的通俗题干背景。 */
+  /** 面向非程序员的通俗题干背景；真假审判庭的题干严禁剧透真假。 */
   body: LocalizedText;
   hint: LocalizedText;
   /** 预填到编辑器里的骨架代码，带逐步讲解注释。 */
   starter: LocalizedText;
   /** 标准参考解法，必须能在 Init 环境下零错误通过。 */
   solution: LocalizedText;
-  /** 编辑器旁的常用策略快捷按钮。 */
+  /** 出招卡：每张都是完整可编译代码或可智能替换的证明片段。 */
   tactics: readonly ChallengeTactic[];
   /** 真假审判庭：正确候选与错误候选的定理名。 */
   verdict?: { correct: string; wrong: string };
+  /** 真假审判庭：两个独立立场模板。 */
+  verdictBranches?: ChallengeVerdictBranches;
   /** 契约漏洞猎人：必须原样保留的核心结论片段。 */
   requiredConclusion?: string;
   /** 悬赏厅：三层槽位的定理名。 */
   bounty?: ChallengeBountySlots;
 };
 
-/** 策略说明按名字复用：同一策略在不同题里含义一致，只是拆的对象不同。 */
-const TACTIC_GUIDE = {
-  rcases: {
-    zh: '拆开「存在某个数」或「并且」的假设，把里面的数和一个等式拿出来用。',
-    en: 'Unpack an “exists some number” or “and” assumption to get the number and its equation.',
-  },
-  exact: {
-    zh: '手里已经有完全符合条件的证明时，直接交给 Lean 结束目标。',
-    en: 'Hand Lean a proof that already matches the goal exactly.',
-  },
-  grind: {
-    zh: '自动处理加减乘除等式与矛盾，通常放在最后一步收尾。',
-    en: 'Automatically closes arithmetic equalities and contradictions; usually the last step.',
-  },
-  intro: {
-    zh: '把「如果……那么……」的前提，或「不成立」的假设，引入成已知条件。',
-    en: 'Bring an implication premise, or the assumption inside a negation, into scope.',
-  },
-  rw: {
-    zh: '按一条等式改写目标，把左边换成右边。',
-    en: 'Rewrite the goal with an equation, replacing one side by the other.',
-  },
-  simp: {
-    zh: '用定义和现成引理自动化简目标。',
-    en: 'Simplify the goal with definitions and existing lemmas.',
-  },
-  omega: {
-    zh: '自动证明加减与乘常数的线性算术命题。',
-    en: 'Prove linear arithmetic goals with addition, subtraction and constant multiplication.',
-  },
-  induction: {
-    zh: '对自然数做归纳：先证 0 的情况，再假设 n 成立去证 n + 1。',
-    en: 'Induct on a natural number: prove the base case, then assume n and prove n + 1.',
-  },
-  rfl: {
-    zh: '两边按定义算出来一模一样时，用它直接结束目标。',
-    en: 'Use it when both sides compute to the same thing by definition.',
-  },
-  decide: {
-    zh: '把具体数值的判定交给编译器逐项算完，适合验证小例子。',
-    en: 'Let the compiler compute a concrete decision; ideal for checking small examples.',
-  },
-  unfold: {
-    zh: '把一个定义原地展开，让目标露出真正的 if / 分支结构。',
-    en: 'Unfold a definition in place so the goal exposes its real if / branch structure.',
-  },
-  by_cases: {
-    zh: '按一个条件是否成立分成两路，分别证明两条分支都满足目标。',
-    en: 'Split into the cases where a condition holds or fails, then prove the goal in each.',
-  },
-  refine: {
-    zh: '先交出证明骨架里的关键参数，剩下的子目标稍后再补。',
-    en: 'Hand over the key arguments of a proof skeleton first and fill the remaining subgoals later.',
-  },
-  constructor: {
-    zh: '目标是一个「并且」时，把它拆成两个子目标分别证明。',
-    en: 'When the goal is an “and”, split it into two subgoals and prove each.',
-  },
-};
+const text = (zh: string, en: string): LocalizedText => ({ zh, en });
 
-const tactic = (
+/** 出招卡：insert 默认是一份完整文件，点击后整段载入。 */
+const card = (
   label: string,
-  insert: string,
-  guide: keyof typeof TACTIC_GUIDE,
+  description: LocalizedText,
+  code: LocalizedText | string,
 ): ChallengeTactic => ({
   label,
-  insert,
-  description: TACTIC_GUIDE[guide],
+  insert: typeof code === 'string' ? text(code, code) : code,
+  action: 'set-code',
+  description,
 });
 
-const evenDef = {
-  zh: '-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k\ndef Even (n : Nat) : Prop := ∃ k, n = 2 * k',
-  en: '-- Even n means "n is even": there is a natural number k with n = 2 * k\ndef Even (n : Nat) : Prop := ∃ k, n = 2 * k',
-};
+const evenDef = text(
+  '-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k\ndef Even (n : Nat) : Prop := ∃ k, n = 2 * k',
+  '-- Even n means "n is even": there is a natural number k with n = 2 * k\ndef Even (n : Nat) : Prop := ∃ k, n = 2 * k',
+);
 
-const oddDef = {
-  zh: '-- Odd n 表示「n 是奇数」：存在某个自然数 k，使 n = 2 * k + 1\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1',
-  en: '-- Odd n means "n is odd": there is a natural number k with n = 2 * k + 1\ndef Odd (n : Nat) : Prop := ∃ k, n = 2 * k + 1',
-};
+const EVEN_DEF = 'def Even (n : Nat) : Prop := ∃ k, n = 2 * k';
+
+const MOD_EVEN_DEF = 'def Even (n : Nat) : Prop := n % 2 = 0';
+const MOD_ODD_DEF = 'def Odd (n : Nat) : Prop := n % 2 = 1';
+const IS_EVEN_DEF = 'def isEven (n : Nat) : Bool := n % 2 == 0';
+
+const DOUBLE_DEF = 'def double : Nat → Nat\n  | 0 => 0\n  | n + 1 => double n + 2';
+
+const EVEN_PLUS_EVEN_HEADER =
+  'theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :\n    Even (a + b)';
+
+const DOUBLE_HEADER = 'theorem double_eq_two_mul (n : Nat) : double n = 2 * n';
+
+const NAT_SUB_CONCLUSION = '(counter_a - counter_b) + counter_b ≠ counter_a';
+
+const EVEN_SUM_CONCLUSION =
+  'isEven (counter_a + counter_b) = true ∧ (isEven counter_a = false ∨ isEven counter_b = false)';
+
+/** 自然数减法反例：完整文件，玩家只改两个自然数或点出招卡。 */
+const natSubCounter = (a: number, b: number): LocalizedText =>
+  text(
+    `-- 反例：a = ${a}，b = ${b}
+-- 因为 b > a，a - b 被截断成 0，所以 (a - b) + b = b ≠ a
+abbrev counter_a : Nat := ${a}
+abbrev counter_b : Nat := ${b}
+
+-- 裁判机自动验算你的反例（无需修改下方代码）：
+theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
+  decide
+`,
+    `-- Counterexample: a = ${a}, b = ${b}
+-- Since b > a, a - b truncates to 0, so (a - b) + b = b ≠ a
+abbrev counter_a : Nat := ${a}
+abbrev counter_b : Nat := ${b}
+
+-- The judge checks your counterexample automatically (do not edit below):
+theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
+  decide
+`,
+  );
+
+/** 偶数和反例：完整文件，两个加数都填奇数即可翻车。 */
+const evenSumCounter = (a: number, b: number): LocalizedText =>
+  text(
+    `-- 反例：a = ${a}，b = ${b}
+-- 两个奇数相加是偶数，但每个加数本身都不是偶数
+${IS_EVEN_DEF}
+
+abbrev counter_a : Nat := ${a}
+abbrev counter_b : Nat := ${b}
+
+-- 裁判机自动验算你的反例（无需修改下方代码）：
+theorem verdict_false :
+    isEven (counter_a + counter_b) = true ∧
+      (isEven counter_a = false ∨ isEven counter_b = false) := by
+  decide
+`,
+    `-- Counterexample: a = ${a}, b = ${b}
+-- Two odd numbers add up to an even number, but neither addend is even
+${IS_EVEN_DEF}
+
+abbrev counter_a : Nat := ${a}
+abbrev counter_b : Nat := ${b}
+
+-- The judge checks your counterexample automatically (do not edit below):
+theorem verdict_false :
+    isEven (counter_a + counter_b) = true ∧
+      (isEven counter_a = false ∨ isEven counter_b = false) := by
+  decide
+`,
+  );
+
+const COLLATZ_DEFS = `-- 考拉兹过程：偶数折半，奇数乘 3 加 1
+def collatzStep (n : Nat) : Nat :=
+  if n % 2 = 0 then n / 2 else 3 * n + 1
+
+-- 从 n 出发，走 k 步是否到达 1
+def collatzReach (n : Nat) : Nat → Prop
+  | 0 => n = 1
+  | k + 1 => collatzReach (collatzStep n) k`;
+
+const COLLATZ_BRONZE = `theorem tier_bronze : collatzStep (collatzStep 6) = 10 := by
+  decide`;
+
+const COLLATZ_SILVER = `theorem tier_silver (n : Nat) : collatzStep (2 * (n + 1)) = n + 1 := by
+  unfold collatzStep
+  have hmod : (2 * (n + 1)) % 2 = 0 := by omega
+  rw [ite_eq_left hmod]
+  omega`;
+
+const GOLDBACH_DEFS = `-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k
+def Even (n : Nat) : Prop := ∃ k, n = 2 * k
+
+-- 只用试除法的素数判定：n 是否有 2 .. n-1 之间的因子
+def hasProperDivisor (n : Nat) : Nat → Bool
+  | 0 => false
+  | 1 => false
+  | d + 2 => if n % (d + 2) = 0 then true else hasProperDivisor n (d + 1)
+
+def isPrime (n : Nat) : Bool :=
+  decide (2 ≤ n) && !hasProperDivisor n (n - 1)`;
+
+const GOLDBACH_BRONZE = `theorem tier_bronze :
+    isPrime 2 = true ∧ isPrime 3 = true ∧ isPrime 7 = true ∧
+      4 = 2 + 2 ∧ 10 = 3 + 7 := by
+  decide`;
+
+const GOLDBACH_SILVER = `theorem tier_silver (n : Nat) :
+    ∃ a b : Nat, 2 * (n + 1) = a + b ∧ Even a ∧ Even b := by
+  refine ⟨2, 2 * n, by omega, ⟨1, rfl⟩, ⟨n, rfl⟩⟩`;
+
+const VERDICT_NEUTRAL_STARTER = text(
+  `-- 先在上方选择你的立场，再动手：
+--   ⚖️ 我判它为真 → 载入「尝试证明」模板
+--   🔨 我判它为假 → 载入「举反例」模板`,
+  `-- Pick a stance above first:
+--   ⚖️ I judge it TRUE → load the "try to prove it" template
+--   🔨 I judge it FALSE → load the "build a counterexample" template`,
+);
 
 export const CHALLENGES: readonly Challenge[] = [
   {
@@ -151,8 +231,8 @@ export const CHALLENGES: readonly Challenge[] = [
       en: 'An even number can be written as 2 × some integer: 2, 4, 6… are all even. Add two of them—4 + 6 = 10—and the result is still even. That is not a coincidence; it holds for every pair of even numbers. Your job is to make Lean derive that rule from the definition.',
     },
     hint: {
-      zh: '先把两个「存在某个 k」拆开，得到 a = 2x、b = 2y。要证明 a + b 是偶数，只需要指出新的 k 是 x + y。',
-      en: 'Unpack both “there exists some k” assumptions to get a = 2x and b = 2y. To show a + b is even, you only need to name the new k as x + y.',
+      zh: '先拆开两个「存在某个 k」假设，得到 a = 2x、b = 2y；新的 k 取 x + y。三张出招卡分别用 grind、纯 rw 和项式构造完成同一件事。',
+      en: 'Unpack both “there exists some k” assumptions to get a = 2x and b = 2y; the new k is x + y. The three cards finish it with grind, pure rw, or a proof term.',
     },
     starter: {
       zh: `${evenDef.zh}
@@ -207,9 +287,48 @@ theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
 `,
     },
     tactics: [
-      tactic('rcases', 'rcases ', 'rcases'),
-      tactic('exact', 'exact ', 'exact'),
-      tactic('grind', 'grind', 'grind'),
+      card(
+        '⚡ 自动流：grind 收尾',
+        text(
+          '拆开两个偶数后，把剩下的乘法等式整段交给 grind。',
+          'Unpack both evens, then hand the remaining multiplication equality to grind.',
+        ),
+        `${EVEN_DEF}
+
+${EVEN_PLUS_EVEN_HEADER} := by
+  rcases ha with ⟨x, rfl⟩
+  rcases hb with ⟨y, rfl⟩
+  exact ⟨x + y, by grind⟩
+`,
+      ),
+      card(
+        '🛠️ 手工流：只写 rw',
+        text(
+          '不用自动化，只用一条乘法分配律 rw 把等式改写整齐。',
+          'No automation: a single distributivity rewrite tidies the equality.',
+        ),
+        `${EVEN_DEF}
+
+${EVEN_PLUS_EVEN_HEADER} := by
+  rcases ha with ⟨x, rfl⟩
+  rcases hb with ⟨y, rfl⟩
+  exact ⟨x + y, by rw [Nat.mul_add]⟩
+`,
+      ),
+      card(
+        'λ 极客流：项式构造',
+        text(
+          '不写 by，直接用 Exists.elim 交出证明项，点亮类型论极客勋章。',
+          'No by block: build the proof term directly with Exists.elim.',
+        ),
+        `${EVEN_DEF}
+
+${EVEN_PLUS_EVEN_HEADER} :=
+  Exists.elim ha fun x hx =>
+    Exists.elim hb fun y hy =>
+      ⟨x + y, by rw [hx, hy, Nat.mul_add]⟩
+`,
+      ),
     ],
   },
   {
@@ -225,8 +344,8 @@ theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
       en: 'Put 3 apples and 4 apples together and the total is 7 no matter which pile you count first. This “commutativity of addition” looks obvious, yet mathematics still proves it. Lean’s Init already ships the general proof; you just need to invoke it.',
     },
     hint: {
-      zh: '`Nat.add_comm a b` 的类型正是 `a + b = b + a`。用 `rw [Nat.add_comm]` 就能把目标改写成两边相同。',
-      en: '`Nat.add_comm a b` has exactly the type `a + b = b + a`. Use `rw [Nat.add_comm]` to turn the goal into two identical sides.',
+      zh: '`Nat.add_comm a b` 的类型正是 `a + b = b + a`。出招卡分别展示 omega、rw 和直接给出证明项三种写法。',
+      en: '`Nat.add_comm a b` has exactly the type `a + b = b + a`. The cards show omega, rw, and a direct proof term.',
     },
     starter: {
       zh: `-- 目标：证明 a + 2 = 2 + a
@@ -257,9 +376,36 @@ theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
 `,
     },
     tactics: [
-      tactic('rw [Nat.add_comm]', 'rw [Nat.add_comm]', 'rw'),
-      tactic('simp', 'simp', 'simp'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '⚡ 自动流：omega',
+        text(
+          '不点名任何引理，让 omega 自己看出两边相等。',
+          'Do not name a lemma; let omega notice both sides are equal.',
+        ),
+        `theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
+  omega
+`,
+      ),
+      card(
+        '🛠️ 手工流：rw [Nat.add_comm]',
+        text(
+          '明确调用交换律，把左边改写成右边。',
+          'Call commutativity explicitly to rewrite the left side into the right one.',
+        ),
+        `theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
+  rw [Nat.add_comm]
+`,
+      ),
+      card(
+        'λ 极客流：直接给证明项',
+        text(
+          '把 Nat.add_comm 的实例本身当作证明，完全不用 by。',
+          'Use the Nat.add_comm instance itself as the proof, with no by block.',
+        ),
+        `theorem add_two_swap (a : Nat) : a + 2 = 2 + a :=
+  Nat.add_comm a 2
+`,
+      ),
     ],
   },
   {
@@ -267,69 +413,129 @@ theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
     mode: 'classic',
     title: { zh: '一个数能同时是奇数和偶数吗？', en: 'Can a number be odd and even at once?' },
     summary: {
-      zh: '用反证法说明：若 n 同时等于 2x 与 2y + 1，等式两边会差出一个 1。',
-      en: 'Argue by contradiction: if n equals both 2x and 2y + 1, the two expressions differ by exactly 1.',
+      zh: '用余数定义奇偶：同一个数除以 2 不可能既余 0 又余 1。',
+      en: 'Define parity by remainders: one number cannot leave both remainder 0 and remainder 1 modulo 2.',
     },
     body: {
       zh: '一个整数要么是奇数，要么是偶数，不可能两边都占。这个「显然」的事实，恰好是练习反证法的好例子：先假设它同时成立，再让 Lean 发现矛盾。',
       en: 'An integer is either odd or even, never both. This “obvious” fact is a perfect exercise in proof by contradiction: assume both hold, then let Lean expose the contradiction.',
     },
     hint: {
-      zh: '先用 `intro` 把「同时成立」的假设拿进来，再 `rcases` 拆出两条等式，最后交给 `grind` 处理整数矛盾。',
-      en: 'Use `intro` to bring the “both hold” assumption into scope, `rcases` it into the two equations, then hand the arithmetic contradiction to `grind`.',
+      zh: '先用 `intro` 拿进「同时成立」的假设，再用 `rcases` 拆成 n % 2 = 0 与 n % 2 = 1；把前者代进后者就得到 0 = 1。',
+      en: 'Use `intro` to bring the “both hold” assumption into scope, `rcases` it into n % 2 = 0 and n % 2 = 1, then substitute the first into the second to get 0 = 1.',
     },
     starter: {
-      zh: `${evenDef.zh}
-${oddDef.zh}
+      zh: `-- Even n 表示「n 除以 2 余 0」
+def Even (n : Nat) : Prop := n % 2 = 0
+-- Odd n 表示「n 除以 2 余 1」
+def Odd (n : Nat) : Prop := n % 2 = 1
 
 -- ¬ P 读作「P 不成立」：先假设 P，再推出矛盾
 -- Even n ∧ Odd n 读作「n 既是偶数又是奇数」
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   -- 第 1 步：intro h，把「假设它同时成立」拿进来
-  -- 第 2 步：rcases h，拆出 n = 2 * x 与 n = 2 * y + 1
-  -- 第 3 步：grind 会发现这两个等式不可能同时成立
+  -- 第 2 步：rcases h，拆出 n % 2 = 0 与 n % 2 = 1
+  -- 第 3 步：同一个数除以 2 不可能同时余 0 和余 1
   sorry
 `,
-      en: `${evenDef.en}
-${oddDef.en}
+      en: `-- Even n means "n leaves remainder 0 modulo 2"
+def Even (n : Nat) : Prop := n % 2 = 0
+-- Odd n means "n leaves remainder 1 modulo 2"
+def Odd (n : Nat) : Prop := n % 2 = 1
 
 -- ¬ P reads "P does not hold": assume P, then derive a contradiction
 -- Even n ∧ Odd n reads "n is both even and odd"
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   -- Step 1: intro h, bringing the "both hold" assumption into scope
-  -- Step 2: rcases h into n = 2 * x and n = 2 * y + 1
-  -- Step 3: grind will show the two equations cannot both hold
+  -- Step 2: rcases h into n % 2 = 0 and n % 2 = 1
+  -- Step 3: one number cannot leave both remainder 0 and remainder 1
   sorry
 `,
     },
     solution: {
-      zh: `${evenDef.zh}
-${oddDef.zh}
+      zh: `-- Even n 表示「n 除以 2 余 0」
+def Even (n : Nat) : Prop := n % 2 = 0
+-- Odd n 表示「n 除以 2 余 1」
+def Odd (n : Nat) : Prop := n % 2 = 1
 
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   -- 假设「n 同时是偶数和奇数」
   intro h
-  -- 拆成 n = 2 * x 与 n = 2 * y + 1
-  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩
-  -- 两个等式不可能同时成立，grind 负责找出矛盾
-  grind
+  -- 拆成 n % 2 = 0 与 n % 2 = 1
+  rcases h with ⟨he, ho⟩
+  simp only [Even, Odd] at he ho
+  -- 把 he 代进 ho，得到 0 = 1
+  rw [he] at ho
+  -- 0 不可能等于 1
+  exact Nat.succ_ne_zero 0 ho.symm
 `,
-      en: `${evenDef.en}
-${oddDef.en}
+      en: `-- Even n means "n leaves remainder 0 modulo 2"
+def Even (n : Nat) : Prop := n % 2 = 0
+-- Odd n means "n leaves remainder 1 modulo 2"
+def Odd (n : Nat) : Prop := n % 2 = 1
 
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   -- Assume "n is both even and odd"
   intro h
-  -- Split it into n = 2 * x and n = 2 * y + 1
-  rcases h with ⟨⟨x, hx⟩, ⟨y, hy⟩⟩
-  -- The two equations cannot both hold; grind finds the contradiction
-  grind
+  -- Split it into n % 2 = 0 and n % 2 = 1
+  rcases h with ⟨he, ho⟩
+  simp only [Even, Odd] at he ho
+  -- Substitute he into ho to get 0 = 1
+  rw [he] at ho
+  -- 0 cannot equal 1
+  exact Nat.succ_ne_zero 0 ho.symm
 `,
     },
     tactics: [
-      tactic('intro', 'intro ', 'intro'),
-      tactic('rcases', 'rcases ', 'rcases'),
-      tactic('grind', 'grind', 'grind'),
+      card(
+        '🛠️ 手工流：代换后收尾',
+        text(
+          '把余 0 的等式代进余 1 的等式，再用 0 ≠ 1 结束。',
+          'Substitute the remainder-0 equation into the remainder-1 equation, then use 0 ≠ 1.',
+        ),
+        `${MOD_EVEN_DEF}
+${MOD_ODD_DEF}
+
+theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
+  intro h
+  rcases h with ⟨he, ho⟩
+  simp only [Even, Odd] at he ho
+  rw [he] at ho
+  exact Nat.succ_ne_zero 0 ho.symm
+`,
+      ),
+      card(
+        '⚡ 自动流：omega 判矛盾',
+        text(
+          '同样代换出 0 = 1，让 omega 直接说「这不可能」。',
+          'Substitute to 0 = 1 exactly the same way, then let omega declare it impossible.',
+        ),
+        `${MOD_EVEN_DEF}
+${MOD_ODD_DEF}
+
+theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
+  intro h
+  rcases h with ⟨he, ho⟩
+  simp only [Even, Odd] at he ho
+  rw [he] at ho
+  omega
+`,
+      ),
+      card(
+        'λ 极客流：一行项式',
+        text(
+          '用函数直接消费「同时成立」的证据，全程没有 by。',
+          'Consume the “both hold” evidence with a function; there is no by at all.',
+        ),
+        `${MOD_EVEN_DEF}
+${MOD_ODD_DEF}
+
+theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) :=
+  fun ⟨he, ho⟩ =>
+    Nat.succ_ne_zero 0
+      (Eq.trans (Eq.symm (show n % 2 = 0 from he)) (show n % 2 = 1 from ho)).symm
+`,
+      ),
     ],
   },
   {
@@ -348,7 +554,7 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
       en: 'Stand on step 0 and climb two steps at a time: one step lands on 2, three steps land on 6. For any number of steps n the position should be 2n. Rules about “one step after another” are exactly what induction is for.',
     },
     hint: {
-      zh: '对 n 做归纳。n = 0 时两边都是 0；n + 1 时，先展开一步得到 `double n + 2`，再用归纳假设替换 `double n`。',
+      zh: '对 n 做归纳。n = 0 时两边都是 0；n + 1 时先展开一步得到 `double n + 2`，再用归纳假设替换 `double n`。',
       en: 'Induct on n. At n = 0 both sides are 0; at n + 1, unfold one step to get `double n + 2`, then replace `double n` with the induction hypothesis.',
     },
     starter: {
@@ -416,10 +622,55 @@ theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
 `,
     },
     tactics: [
-      tactic('induction', 'induction n with\n  | zero => rfl\n  | succ n ih =>\n    ', 'induction'),
-      tactic('rfl', 'rfl', 'rfl'),
-      tactic('rw', 'rw [', 'rw'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '⚡ 自动流：归纳 + omega',
+        text(
+          '标准归纳：起点 rfl，递推里展开一步再让 omega 收尾。',
+          'Standard induction: rfl at the base, unfold one step and let omega finish the successor case.',
+        ),
+        `${DOUBLE_DEF}
+
+${DOUBLE_HEADER} := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    have h : double (n + 1) = double n + 2 := rfl
+    rw [h, ih]
+    omega
+`,
+      ),
+      card(
+        '🛠️ 手工流：只用 rw',
+        text(
+          '不调用自动化，用乘法分配律把 2 * (n + 1) 改写整齐。',
+          'No automation: use distributivity to tidy 2 * (n + 1).',
+        ),
+        `${DOUBLE_DEF}
+
+${DOUBLE_HEADER} := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    have h : double (n + 1) = double n + 2 := rfl
+    rw [h, ih, Nat.mul_succ]
+`,
+      ),
+      card(
+        'λ 极客流：Nat.rec 项式',
+        text(
+          '用自然数递归器直接写出证明项，不写 induction。',
+          'Write the proof term with the natural-number recursor instead of induction.',
+        ),
+        `${DOUBLE_DEF}
+
+${DOUBLE_HEADER} :=
+  @Nat.rec (fun n => double n = 2 * n)
+    rfl
+    (fun n ih => by
+      rw [show double (n + 1) = double n + 2 from rfl, ih, Nat.mul_succ])
+    n
+`,
+      ),
     ],
   },
   {
@@ -430,57 +681,78 @@ theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
       en: 'Does natural subtraction satisfy (a - b) + b = a?',
     },
     summary: {
-      zh: '保留你觉得正确的那一个签名，证出它；另一个候选可能是假命题。',
-      en: 'Keep the signature you believe is true and prove it; the other candidate may be false.',
+      zh: '先减后加，看似一定回到原点；但自然数没有负数。请选择立场，用证明或反例定案。',
+      en: 'Subtract then add: it looks like you always return to the start. But natural numbers have no negatives. Pick a stance and settle it with a proof or a counterexample.',
     },
     body: {
-      zh: '在整数里，先减后加一定回到原点；但自然数没有负数，0 - 1 会被截断成 0。于是 (0 - 1) + 1 = 1，并不等于 0。审判庭给出两个候选，你只需要保留并证出正确的那一个。',
-      en: 'With integers, subtracting then adding always returns to the start. Natural numbers have no negatives, so 0 - 1 is truncated to 0. Thus (0 - 1) + 1 = 1, not 0. The court offers two candidates; keep and prove the correct one.',
+      zh: '在整数里，先减后加必然回到原点；可自然数只有 0 和正数，规则未必照搬。你的直觉站哪一边？题干不告诉你答案——先选「我判它为真」试着证明，或选「我判它为假」亲手找一个翻车的例子。',
+      en: 'With integers, subtracting then adding always returns to the start; but natural numbers start at 0, so the rule may not carry over unchanged. Which way does your intuition lean? The prompt does not reveal the answer—choose “true” and try to prove it, or choose “false” and hunt for a counterexample.',
     },
     hint: {
-      zh: '先找反例：a = 0、b = 1 时左边是 1，右边是 0。确认候选 B 为真后，删掉候选 A，用 decide 检查这个具体反例。',
-      en: 'Look for a counterexample first: with a = 0 and b = 1 the left side is 1 while the right side is 0. Once candidate B looks true, delete candidate A and use decide to check the concrete counterexample.',
+      zh: '如果判假：先让 b 比 a 大，看看 a - b 会变成什么。反例分支里只改两个 `abbrev` 的数字即可，上面的出招卡能直接填好。',
+      en: 'If you judge it false: make b larger than a and watch what a - b becomes. In the counterexample branch you only edit two `abbrev` numbers; the cards above can fill them for you.',
     },
-    starter: {
-      zh: `-- 自然数减法在「不够减」时会截断到 0
--- 候选 A：减法普遍满足 (a - b) + b = a
-theorem verdict_true (a b : Nat) : (a - b) + b = a := by
-  -- 如果找不到证明，也许这个候选根本不成立
-  sorry
-
--- 候选 B：存在一组数让等式失败
-theorem verdict_false : ∃ a b : Nat, (a - b) + b ≠ a := by
-  -- 提示：试试 a = 0、b = 1
-  sorry
-`,
-      en: `-- Natural subtraction truncates at 0 when there is "not enough to subtract"
--- Candidate A: subtraction always satisfies (a - b) + b = a
-theorem verdict_true (a b : Nat) : (a - b) + b = a := by
-  -- If you cannot find a proof, maybe this candidate is simply false
-  sorry
-
--- Candidate B: some pair of numbers makes the equation fail
-theorem verdict_false : ∃ a b : Nat, (a - b) + b ≠ a := by
-  -- Hint: try a = 0 and b = 1
-  sorry
-`,
-    },
-    solution: {
-      zh: `-- 候选 B 成立：0 - 1 被截断为 0，所以 (0 - 1) + 1 = 1 ≠ 0
--- 只保留正确候选，错误候选要从文件里删掉
-theorem verdict_false : ∃ a b : Nat, (a - b) + b ≠ a := ⟨0, 1, by decide⟩
-`,
-      en: `-- Candidate B is true: 0 - 1 truncates to 0, so (0 - 1) + 1 = 1 ≠ 0
--- Keep only the correct candidate and delete the false one from the file
-theorem verdict_false : ∃ a b : Nat, (a - b) + b ≠ a := ⟨0, 1, by decide⟩
-`,
-    },
+    starter: VERDICT_NEUTRAL_STARTER,
+    solution: natSubCounter(0, 1),
     verdict: { correct: 'verdict_false', wrong: 'verdict_true' },
-    requiredConclusion: '∃ a b : Nat, (a - b) + b ≠ a',
+    verdictBranches: {
+      trueStarter: text(
+        `-- 自然数减法在「不够减」时会截断到 0
+-- 你判它为真：尝试证明它对所有自然数都成立
+theorem verdict_true (a b : Nat) : (a - b) + b = a := by
+  sorry
+`,
+        `-- Natural subtraction truncates at 0 when there is "not enough to subtract"
+-- You judge it TRUE: try to prove it for all natural numbers
+theorem verdict_true (a b : Nat) : (a - b) + b = a := by
+  sorry
+`,
+      ),
+      falseStarter: text(
+        `-- 填入你认为能让 (a - b) + b = a 翻车的两个自然数：
+abbrev counter_a : Nat := 5
+abbrev counter_b : Nat := 3
+
+-- 裁判机自动验算你的反例（无需修改下方代码）：
+theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
+  decide
+`,
+        `-- Fill in two natural numbers that you think break (a - b) + b = a:
+abbrev counter_a : Nat := 5
+abbrev counter_b : Nat := 3
+
+-- The judge checks your counterexample automatically (do not edit below):
+theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
+  decide
+`,
+      ),
+    },
+    requiredConclusion: NAT_SUB_CONCLUSION,
     tactics: [
-      tactic('decide', 'decide', 'decide'),
-      tactic('exact', 'exact ', 'exact'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '🃏 填入反例 a=0, b=1',
+        text(
+          '0 - 1 被截断成 0，于是左边是 1、右边是 0，反例成立。',
+          '0 - 1 truncates to 0, so the left side is 1 while the right side is 0.',
+        ),
+        natSubCounter(0, 1),
+      ),
+      card(
+        '🃏 再试 a=1, b=2',
+        text(
+          '换一组更大的数，同样因为 b > a 而截断，反例依然成立。',
+          'Try a larger pair; b > a still triggers truncation, so the counterexample holds.',
+        ),
+        natSubCounter(1, 2),
+      ),
+      card(
+        '🃏 再试 a=7, b=9',
+        text(
+          '把两个数字拉大，验证反例不是偶然。',
+          'Scale the numbers up to check the counterexample is not a fluke.',
+        ),
+        natSubCounter(7, 9),
+      ),
     ],
   },
   {
@@ -491,71 +763,189 @@ theorem verdict_false : ∃ a b : Nat, (a - b) + b ≠ a := ⟨0, 1, by decide�
       en: 'If a + b is even, must both a and b be even?',
     },
     summary: {
-      zh: '两个奇数相加也能得到偶数；审判庭要求你找出这个反例并保留正确候选。',
-      en: 'Two odd numbers can add up to an even number; find that counterexample and keep the correct candidate.',
+      zh: '和是偶数，加数就一定都是偶数吗？先别急着下结论，选立场后用证明或反例定案。',
+      en: 'If a sum is even, must every addend be even? Do not jump to a conclusion: pick a stance, then settle it with a proof or a counterexample.',
     },
     body: {
-      zh: '4 + 6 = 10 是偶数，两个加数也都是偶数；但 1 + 1 = 2 同样是偶数，加数却都是奇数。所以「和是偶数」并不足以推出两个加数都是偶数。请在两个候选里保留正确的那一个。',
-      en: '4 + 6 = 10 is even and both addends are even; but 1 + 1 = 2 is also even while both addends are odd. So “the sum is even” does not imply both addends are even. Keep the correct candidate.',
+      zh: '4 + 6 = 10 是偶数，两个加数也都是偶数；这很容易让人以为「和偶 ⇒ 加数偶」。但直觉给出的规律，未必覆盖所有组合。题干不剧透真假——判真就尝试证明，判假就找出让结论翻车的两个数。',
+      en: '4 + 6 = 10 is even, and both addends are even; that makes “even sum ⇒ even addends” feel obvious. But a rule suggested by intuition need not cover every combination. The prompt does not spoil the truth value—judge it true and try to prove it, or judge it false and find two numbers that break it.',
     },
     hint: {
-      zh: '反例取 a = 1、b = 1：和 1 + 1 是偶数，但 1 不是偶数。拆开 Even 1 会得到 1 = 2 * x，omega 会发现矛盾。',
-      en: 'Take a = 1 and b = 1: the sum 1 + 1 is even, but 1 is not. Unpacking Even 1 gives 1 = 2 * x, and omega exposes the contradiction.',
+      zh: '如果判假：两个奇数相加会得到什么？反例分支里只改两个 `abbrev` 的数字，`decide` 会自动验算。',
+      en: 'If you judge it false: what do two odd numbers add up to? In the counterexample branch you only edit two `abbrev` numbers, and `decide` verifies them automatically.',
     },
-    starter: {
-      zh: `-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k
-def Even (n : Nat) : Prop := ∃ k, n = 2 * k
-
--- 候选 A：和是偶数时，两个加数都是偶数
-theorem verdict_true (a b : Nat) : Even (a + b) → Even a ∧ Even b := by
-  sorry
-
--- 候选 B：存在和为偶数、但加数不全是偶数的例子
-theorem verdict_false : ∃ a b : Nat, Even (a + b) ∧ ¬ (Even a ∧ Even b) := by
-  -- 提示：两个 1 相加就是最简单的反例
-  sorry
-`,
-      en: `-- Even n means "n is even": there is a natural number k with n = 2 * k
-def Even (n : Nat) : Prop := ∃ k, n = 2 * k
-
--- Candidate A: when the sum is even, both addends are even
-theorem verdict_true (a b : Nat) : Even (a + b) → Even a ∧ Even b := by
-  sorry
-
--- Candidate B: some even sum has addends that are not both even
-theorem verdict_false : ∃ a b : Nat, Even (a + b) ∧ ¬ (Even a ∧ Even b) := by
-  -- Hint: two 1s are the simplest counterexample
-  sorry
-`,
-    },
-    solution: {
-      zh: `-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k
-def Even (n : Nat) : Prop := ∃ k, n = 2 * k
-
--- 候选 B 成立：1 + 1 = 2 是偶数，但 1 不是偶数
-theorem verdict_false : ∃ a b : Nat, Even (a + b) ∧ ¬ (Even a ∧ Even b) := by
-  refine ⟨1, 1, ⟨1, by decide⟩, ?_⟩
-  intro h
-  rcases h with ⟨⟨x, hx⟩, _⟩
-  omega
-`,
-      en: `-- Even n means "n is even": there is a natural number k with n = 2 * k
-def Even (n : Nat) : Prop := ∃ k, n = 2 * k
-
--- Candidate B is true: 1 + 1 = 2 is even, but 1 is not even
-theorem verdict_false : ∃ a b : Nat, Even (a + b) ∧ ¬ (Even a ∧ Even b) := by
-  refine ⟨1, 1, ⟨1, by decide⟩, ?_⟩
-  intro h
-  rcases h with ⟨⟨x, hx⟩, _⟩
-  omega
-`,
-    },
+    starter: VERDICT_NEUTRAL_STARTER,
+    solution: evenSumCounter(1, 1),
     verdict: { correct: 'verdict_false', wrong: 'verdict_true' },
-    requiredConclusion: '∃ a b : Nat, Even (a + b) ∧ ¬ (Even a ∧ Even b)',
+    verdictBranches: {
+      trueStarter: text(
+        `-- isEven n 用计算的方式判断 n 是否为偶数
+${IS_EVEN_DEF}
+
+-- 你判它为真：两个加数的和是偶数，是否足以推出两个加数都是偶数？
+theorem verdict_true (a b : Nat) :
+    isEven (a + b) = true → isEven a = true ∧ isEven b = true := by
+  sorry
+`,
+        `-- isEven n decides whether n is even by computation
+${IS_EVEN_DEF}
+
+-- You judge it TRUE: does an even sum force both addends to be even?
+theorem verdict_true (a b : Nat) :
+    isEven (a + b) = true → isEven a = true ∧ isEven b = true := by
+  sorry
+`,
+      ),
+      falseStarter: text(
+        `-- isEven n 用计算的方式判断 n 是否为偶数
+${IS_EVEN_DEF}
+
+-- 填入你怀疑的两个加数：它们要满足「和是偶数，但至少一个不是偶数」
+abbrev counter_a : Nat := 2
+abbrev counter_b : Nat := 2
+
+-- 裁判机自动验算你的反例（无需修改下方代码）：
+theorem verdict_false :
+    isEven (counter_a + counter_b) = true ∧
+      (isEven counter_a = false ∨ isEven counter_b = false) := by
+  decide
+`,
+        `-- isEven n decides whether n is even by computation
+${IS_EVEN_DEF}
+
+-- Fill in two addends that make the sum even while at least one is not even:
+abbrev counter_a : Nat := 2
+abbrev counter_b : Nat := 2
+
+-- The judge checks your counterexample automatically (do not edit below):
+theorem verdict_false :
+    isEven (counter_a + counter_b) = true ∧
+      (isEven counter_a = false ∨ isEven counter_b = false) := by
+  decide
+`,
+      ),
+    },
+    requiredConclusion: EVEN_SUM_CONCLUSION,
     tactics: [
-      tactic('rcases', 'rcases ', 'rcases'),
-      tactic('refine', 'refine ', 'refine'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '🃏 填入反例 a=1, b=1',
+        text(
+          '1 + 1 = 2 是偶数，但两个加数都是奇数。',
+          '1 + 1 = 2 is even, yet both addends are odd.',
+        ),
+        evenSumCounter(1, 1),
+      ),
+      card(
+        '🃏 再试 a=3, b=3',
+        text(
+          '换一对奇数，和仍然是偶数，反例依旧成立。',
+          'Another pair of odd numbers still sums to an even number.',
+        ),
+        evenSumCounter(3, 3),
+      ),
+      card(
+        '🃏 再试 a=5, b=7',
+        text(
+          '把数字拉大，验证反例不是偶然。',
+          'Scale the numbers up to check the counterexample is not a fluke.',
+        ),
+        evenSumCounter(5, 7),
+      ),
+    ],
+  },
+  {
+    slug: 'double-negation',
+    mode: 'verdict',
+    title: {
+      zh: '否定两次，命题会变回原样吗？',
+      en: 'Does negating twice restore the original statement?',
+    },
+    summary: {
+      zh: '「不成立的不成立」到底等于成立，还是比成立更弱？先选立场，再让 Lean 给出裁决。',
+      en: 'Does “not not true” mean true, or something weaker? Pick a stance and let Lean decide.',
+    },
+    body: {
+      zh: '生活中「我不是不同意」往往不等于「我同意」，语气、语境都会削弱双重否定。但逻辑里的「不成立的不成立」只关心真假本身。题干不告诉你是真命题还是假命题：判真就尝试一行证明，判假就去找一个能推翻它的命题。',
+      en: 'In everyday speech, “I don’t disagree” is weaker than “I agree”—tone and context water down the double negative. Logic, however, only cares about truth and falsity. The prompt does not say whether this is true: judge it true and try a one-line proof, or judge it false and hunt for a proposition that breaks it.',
+    },
+    hint: {
+      zh: '如果判真：把「P 不成立」当作新假设，它会直接和已知的 P 冲突。三张出招卡分别展示分步、项式和自动写法。',
+      en: 'If you judge it true: treat “P does not hold” as a new assumption; it immediately clashes with the known P. The three cards show a step-by-step proof, a term, and an automatic proof.',
+    },
+    starter: VERDICT_NEUTRAL_STARTER,
+    solution: text(
+      `-- 判真：P 成立时，「P 不成立」会直接与 h 冲突
+-- 把「P 不成立」拿进来，它其实是一个从 P 推出矛盾的函数
+theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  intro hn
+  exact hn h
+`,
+      `-- Judged true: when P holds, “P does not hold” clashes directly with h
+-- Bring in "P does not hold"; it is a function from P to a contradiction
+theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  intro hn
+  exact hn h
+`,
+    ),
+    verdict: { correct: 'verdict_true', wrong: 'verdict_false' },
+    verdictBranches: {
+      trueStarter: text(
+        `-- 你判它为真：只要 P 成立，说「P 不成立」本身就不成立
+theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  sorry
+`,
+        `-- You judge it TRUE: if P holds, saying "P does not hold" is itself impossible
+theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  sorry
+`,
+      ),
+      falseStarter: text(
+        `-- 你判它为假：试着找出一个命题 P，使「否定两次」成立、但 P 本身不成立
+-- 如果找不到，就切回「⚖️ 我判它为真」
+theorem verdict_false : ∃ P : Prop, ¬¬P ∧ ¬P := by
+  sorry
+`,
+        `-- You judge it FALSE: find a proposition P where double negation holds but P fails
+-- If you cannot find one, switch back to "⚖️ I judge it TRUE"
+theorem verdict_false : ∃ P : Prop, ¬¬P ∧ ¬P := by
+  sorry
+`,
+      ),
+    },
+    requiredConclusion: '(P : Prop) (h : P) : ¬¬P',
+    tactics: [
+      card(
+        '🛠️ 分步流：intro + exact',
+        text(
+          '先把「P 不成立」拿进来，再把手里的 P 丢给它。',
+          'Bring in “P does not hold”, then hand it the known P.',
+        ),
+        `-- 判真：P 成立时，「P 不成立」会直接与 h 冲突
+theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  intro hn
+  exact hn h
+`,
+      ),
+      card(
+        'λ 极客流：一行函数',
+        text(
+          '整条证明就是一个把 h 交给否定假设的函数。',
+          'The whole proof is a function that hands h to the negated assumption.',
+        ),
+        `theorem verdict_true (P : Prop) (h : P) : ¬¬P :=
+  fun hn => hn h
+`,
+      ),
+      card(
+        '⚡ 自动流：grind',
+        text(
+          '不解释步骤，让 grind 自己发现两条假设互相矛盾。',
+          'Skip the steps and let grind discover the contradiction.',
+        ),
+        `theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  grind
+`,
+      ),
     ],
   },
   {
@@ -574,8 +964,8 @@ theorem verdict_false : ∃ a b : Nat, Even (a + b) ∧ ¬ (Even a ∧ Even b) :
       en: 'An interval clamp keeps x inside [lo, hi]: lift it to lo when too small, press it to hi when too large. The skeleton neither assumes lo ≤ hi nor returns the right branch values. You may fix the implementation or add the missing premise, as long as the core conclusion stays intact.',
     },
     hint: {
-      zh: '先补 `h : lo ≤ hi`，否则 lo = 5、hi = 1 时结论直接为假；再检查两个 if 分支是否分别返回 lo 和 hi。',
-      en: 'Add `h : lo ≤ hi` first, otherwise the claim is false when lo = 5 and hi = 1; then check that the two if branches return lo and hi respectively.',
+      zh: '先补 `h : lo ≤ hi`，否则 lo = 5、hi = 1 时结论直接为假；再检查两个 if 分支是否分别返回 lo 和 hi。出招卡会直接载入修好的完整文件。',
+      en: 'Add `h : lo ≤ hi` first, otherwise the claim is false when lo = 5 and hi = 1; then check that the two if branches return lo and hi respectively. The cards load a complete fixed file.',
     },
     starter: {
       zh: `-- 区间裁剪：把 x 限制在 [lo, hi] 内
@@ -635,9 +1025,66 @@ theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
     },
     requiredConclusion: 'lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi',
     tactics: [
-      tactic('unfold', 'unfold ', 'unfold'),
-      tactic('by_cases', 'by_cases ', 'by_cases'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '🔧 修分支 + 补前提',
+        text(
+          '把两个 if 分支换回 lo / hi，并补上 lo ≤ hi 的前提。',
+          'Swap the two if branches back to lo / hi and add the lo ≤ hi premise.',
+        ),
+        `def clamp (lo hi x : Nat) : Nat :=
+  if x < lo then lo else if hi < x then hi else x
+
+theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
+    lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi := by
+  by_cases h1 : x < lo
+  · simp only [clamp, ite_eq_left h1]
+    exact ⟨Nat.le_refl lo, h⟩
+  · by_cases h2 : hi < x
+    · simp only [clamp, ite_eq_right h1, ite_eq_left h2]
+      exact ⟨h, Nat.le_refl hi⟩
+    · simp only [clamp, ite_eq_right h1, ite_eq_right h2]
+      constructor <;> omega
+`,
+      ),
+      card(
+        '🩹 用 split 拆 if',
+        text(
+          '展开 clamp 后让 split 自动分成三段，再分别处理。',
+          'Unfold clamp and let split produce the three cases, then handle each.',
+        ),
+        `def clamp (lo hi x : Nat) : Nat :=
+  if x < lo then lo else if hi < x then hi else x
+
+theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
+    lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi := by
+  unfold clamp
+  split
+  · exact ⟨Nat.le_refl lo, h⟩
+  · split
+    · exact ⟨h, Nat.le_refl hi⟩
+    · omega
+`,
+      ),
+      card(
+        '⚡ 自动流：simp 拆完再 omega',
+        text(
+          '用 simp 配合分支假设展开目标，最后交给 omega。',
+          'Use simp with the branch hypotheses to unfold the goal, then finish with omega.',
+        ),
+        `def clamp (lo hi x : Nat) : Nat :=
+  if x < lo then lo else if hi < x then hi else x
+
+theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
+    lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi := by
+  unfold clamp
+  by_cases h1 : x < lo
+  · simp [h1, h]
+  · by_cases h2 : hi < x
+    · simp [h1, h2, h]
+    · simp [h1, h2]
+      omega
+`,
+      ),
     ],
   },
   {
@@ -751,9 +1198,41 @@ theorem tier_silver (n : Nat) : collatzStep (2 * (n + 1)) = n + 1 := by
     },
     bounty: { bronze: 'tier_bronze', silver: 'tier_silver', legend: 'tier_legend' },
     tactics: [
-      tactic('decide', 'decide', 'decide'),
-      tactic('unfold', 'unfold ', 'unfold'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '🏅 一键点亮铜牌 + 银牌',
+        text(
+          '铜牌交给 decide，银牌展开一步后交给 omega，两枚一起拿下。',
+          'decide takes bronze, and omega finishes silver after one unfold—both badges at once.',
+        ),
+        `${COLLATZ_DEFS}
+
+${COLLATZ_BRONZE}
+
+${COLLATZ_SILVER}
+`,
+      ),
+      card(
+        '🥉 只拿铜牌',
+        text(
+          '只验证 6 → 3 → 10 这个具体例子，银牌留给自己。',
+          'Verify only the concrete example 6 → 3 → 10 and leave silver for later.',
+        ),
+        `${COLLATZ_DEFS}
+
+${COLLATZ_BRONZE}
+`,
+      ),
+      card(
+        '🥈 只拿银牌',
+        text(
+          '跳过铜牌，直接证明所有偶数 2 * (n + 1) 一步折半。',
+          'Skip bronze and prove that every even 2 * (n + 1) halves in one step.',
+        ),
+        `${COLLATZ_DEFS}
+
+${COLLATZ_SILVER}
+`,
+      ),
     ],
   },
   {
@@ -889,9 +1368,41 @@ theorem tier_silver (n : Nat) :
     },
     bounty: { bronze: 'tier_bronze', silver: 'tier_silver', legend: 'tier_legend' },
     tactics: [
-      tactic('decide', 'decide', 'decide'),
-      tactic('refine', 'refine ', 'refine'),
-      tactic('omega', 'omega', 'omega'),
+      card(
+        '🏅 一键点亮铜牌 + 银牌',
+        text(
+          '铜牌让 decide 试除，银牌拆成 2 与 2 * n，两枚一起拿下。',
+          'decide trial-divides for bronze, and silver splits into 2 and 2 * n—both at once.',
+        ),
+        `${GOLDBACH_DEFS}
+
+${GOLDBACH_BRONZE}
+
+${GOLDBACH_SILVER}
+`,
+      ),
+      card(
+        '🥉 只拿铜牌',
+        text(
+          '只验证 4 = 2 + 2 与 10 = 3 + 7 的素性，银牌留给自己。',
+          'Verify only the primality behind 4 = 2 + 2 and 10 = 3 + 7.',
+        ),
+        `${GOLDBACH_DEFS}
+
+${GOLDBACH_BRONZE}
+`,
+      ),
+      card(
+        '🥈 只拿银牌',
+        text(
+          '跳过铜牌，直接证明每个偶数都能拆成两个偶数。',
+          'Skip bronze and prove directly that every even number splits into two evens.',
+        ),
+        `${GOLDBACH_DEFS}
+
+${GOLDBACH_SILVER}
+`,
+      ),
     ],
   },
 ];

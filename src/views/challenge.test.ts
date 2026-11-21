@@ -27,6 +27,10 @@ describe('挑战列表渲染', () => {
       const intro = messagesFor(locale).challenges.intro;
       expect(html).toContain(`data-role="challenge-list"`);
       expect(html).toContain(`data-role="challenge-intro"`);
+      for (const mode of ['classic', 'verdict', 'bugfix', 'bounty'] as const) {
+        expect(html, mode).toContain(`data-challenge-section="${mode}"`);
+        expect(html, mode).toContain(escapeHtml(messagesFor(locale).challenges.modeLeads[mode]));
+      }
       expect(html).toContain(escapeHtml(intro.title));
       expect(html).toContain(escapeHtml(intro.body));
       for (const step of intro.steps) expect(html).toContain(escapeHtml(step.title));
@@ -157,7 +161,7 @@ describe('挑战页挂载', () => {
     );
   });
 
-  it('点击快捷策略把片段插入编辑器', async () => {
+  it('点击出招卡会通过 getCode + setCode 智能替换，而不是盲目 insert', async () => {
     document.body.innerHTML = renderChallenge('zh', challenge.slug);
     await mountChallenge(document.body, 'zh', challenge.slug);
     const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
@@ -166,7 +170,39 @@ describe('挑战页挂载', () => {
     expect(buttons).toHaveLength(challenge.tactics.length);
 
     buttons[0]!.click();
-    expect(panel.insert).toHaveBeenCalledWith(challenge.tactics[0]!.insert);
+    expect(panel.getCode).toHaveBeenCalled();
+    expect(panel.setCode).toHaveBeenCalledWith(challenge.tactics[0]!.insert.zh, { focus: true });
+    expect(panel.insert).not.toHaveBeenCalled();
+  });
+
+  it('真假审判庭渲染两个立场按钮，点击后载入对应独立模板', async () => {
+    const verdict = CHALLENGES.find((item) => item.slug === 'nat-sub-trap')!;
+    document.body.innerHTML = renderChallenge('zh', verdict.slug);
+    await mountChallenge(document.body, 'zh', verdict.slug);
+
+    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
+    const buttons = document.body.querySelectorAll<HTMLButtonElement>(
+      '[data-role="verdict-branch"]',
+    );
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]!.dataset.branch).toBe('true');
+    expect(buttons[1]!.dataset.branch).toBe('false');
+    expect(buttons[0]!.textContent).toBe(messagesFor('zh').challenges.detail.verdictTrue);
+    expect(buttons[1]!.textContent).toBe(messagesFor('zh').challenges.detail.verdictFalse);
+
+    buttons[1]!.click();
+    expect(panel.setCode).toHaveBeenCalledWith(verdict.verdictBranches!.falseStarter.zh, {
+      focus: true,
+    });
+    expect(buttons[1]!.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0]!.getAttribute('aria-pressed')).toBe('false');
+
+    buttons[0]!.click();
+    expect(panel.setCode).toHaveBeenCalledWith(verdict.verdictBranches!.trueStarter.zh, {
+      focus: true,
+    });
+    expect(buttons[0]!.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[1]!.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('载入参考解法并标记面板模式', async () => {

@@ -70,6 +70,11 @@ const boot = async (route: Route, root: HTMLElement) => {
         await mountChallenge(root, route.locale, route.slug);
         break;
       }
+      case 'challenges': {
+        const { mountChallenges } = await import('./views/challenge');
+        mountChallenges(root, route.locale);
+        break;
+      }
       default:
         break;
     }
@@ -101,8 +106,9 @@ const boot = async (route: Route, root: HTMLElement) => {
       break;
     }
     case 'challenges': {
-      const { renderChallenges } = await import('./views/challenge');
+      const { renderChallenges, mountChallenges } = await import('./views/challenge');
       content = renderChallenges(route.locale);
+      mount = () => mountChallenges(root, route.locale);
       break;
     }
     case 'challenge': {

@@ -131,7 +131,7 @@ const baseTitle = (route: Route): string => {
       case 'privacy':
         return '隐私说明：Lean 4 在线环境收集哪些匿名数据';
       case 'challenges':
-        return 'Lean 4 趣味数学挑战：亲手证明 6 道经典数学题';
+        return 'Lean 4 趣味挑战：在证明游乐场里亲手通关经典数学题与未解猜想';
       case 'lesson': {
         const lessons = lessonsFor(route.locale);
         return (

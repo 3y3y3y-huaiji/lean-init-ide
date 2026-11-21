@@ -76,9 +76,9 @@ export const en: Messages = {
     courseCta: 'Start learning',
     pathsTitle: 'Three learning paths',
     pathMeta: (count) => `${count} lessons`,
-    challengesTitle: 'Math challenges',
+    challengesTitle: 'Proof Arcade',
     challengesBody:
-      'Six classic puzzles explained for non-programmers. No setup: open one and prove it in the browser. It sits beside the courses and shares the same Lean runtime.',
+      'The Proof Arcade: classic puzzles explained for non-programmers, plus truth courts, contract repairs and open-conjecture bounties. No setup: open one and prove it in the browser. It sits beside the courses and shares the same Lean runtime.',
     challengesCta: 'Take a challenge',
     demo: {
       title: 'Five seconds first: a proof makes the goal shrink, line by line',
@@ -104,9 +104,25 @@ export const en: Messages = {
   },
   challenges: {
     eyebrow: 'Math challenges',
-    title: 'Prove six classic puzzles in Lean',
-    lead: 'Every puzzle starts with a plain-language question: what makes a number even, why swapping addends changes nothing, and why nothing can be both odd and even. No programming background is needed—the "--" comments in the code walk you through it.',
+    title: 'Play the Proof Arcade in Lean',
+    lead: 'A plain-language Lean arcade with four arenas: Free Arena, Truth Court, Contract Hunt and Open Conjecture Hall. Every puzzle starts with a human question, and the "--" comments walk you through the code. No programming background is needed.',
     cardCta: 'Start the challenge',
+    summary: {
+      solved: (done, total) => `Solved ${done} / ${total}`,
+      badges: (automation, handcrafted, termMode) =>
+        `Style badges: ⚡ ${automation} · 🛠️ ${handcrafted} · λ ${termMode}`,
+    },
+    modes: {
+      classic: '⚡ Free Arena',
+      verdict: '⚖️ Truth Court',
+      bugfix: '🔧 Contract Hunt',
+      bounty: '👑 Open Conjecture Hall',
+    },
+    badgeLabels: {
+      automation: '⚡ Overkill',
+      handcrafted: '🛠️ Artisan',
+      termMode: 'λ Type Theorist',
+    },
     editorTitle: 'Proof practice',
     intro: {
       title: 'First time here? 30 seconds to understand this page',
@@ -149,6 +165,20 @@ export const en: Messages = {
       feedbackHint: 'Something wrong with this puzzle? Feedback includes the current challenge.',
       feedbackBug: 'Report a bug',
       feedbackIssueTitle: (title) => `[Challenge] ${title}`,
+      solvedTitle: 'Challenge cleared!',
+      solvedBadges: (badges) => `Earned this run: ${badges}`,
+      solvedTiers: (tiers) => `Bounty progress: ${tiers}`,
+      bestChars: (count) => `Best record: ${count} chars`,
+      copyCard: 'Copy result card',
+      copyCardDone: 'Result card copied',
+      copyCardFailed: 'Copy failed—please select the text manually',
+      tierLabels: {
+        bronze: '🥉 Bronze',
+        silver: '🥈 Silver',
+        legend: '👑 Legend',
+      },
+      shareText: (title, badges, chars) =>
+        `I cleared "${title}" in the Lean Proof Arcade\nStyle: ${badges}\nBest: ${chars} chars`,
     },
   },
   lesson: {

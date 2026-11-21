@@ -116,6 +116,24 @@ export type Messages = {
     title: string;
     lead: string;
     cardCta: string;
+    /** 列表页顶部的通关与流派勋章统计。 */
+    summary: {
+      solved: (done: number, total: number) => string;
+      badges: (automation: number, handcrafted: number, termMode: number) => string;
+    };
+    /** 四大主题区的模式标签。 */
+    modes: {
+      classic: string;
+      verdict: string;
+      bugfix: string;
+      bounty: string;
+    };
+    /** 三类流派勋章的显示名。 */
+    badgeLabels: {
+      automation: string;
+      handcrafted: string;
+      termMode: string;
+    };
     /** 详情页里包裹 Lean 编辑器的标题，避免与题目本身重复。 */
     editorTitle: string;
     /** 第一次进入挑战区的零基础导览：Lean 是什么、页面怎么玩。 */
@@ -145,6 +163,20 @@ export type Messages = {
       feedbackHint: string;
       feedbackBug: string;
       feedbackIssueTitle: (title: string) => string;
+      /** 通关横幅与战绩卡片。 */
+      solvedTitle: string;
+      solvedBadges: (badges: string) => string;
+      solvedTiers: (tiers: string) => string;
+      bestChars: (count: number) => string;
+      copyCard: string;
+      copyCardDone: string;
+      copyCardFailed: string;
+      tierLabels: {
+        bronze: string;
+        silver: string;
+        legend: string;
+      };
+      shareText: (title: string, badges: string, chars: number) => string;
     };
   };
   lesson: {

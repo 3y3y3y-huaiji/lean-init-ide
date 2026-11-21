@@ -74,9 +74,9 @@ export const zh: Messages = {
     courseCta: '开始学习',
     pathsTitle: '三条学习路径',
     pathMeta: (count) => `${count} 节课`,
-    challengesTitle: '趣味数学挑战',
+    challengesTitle: '证明游乐场',
     challengesBody:
-      '6 道非程序员也能看懂的经典数学题：不用装环境，点开就能在浏览器里亲手证明。与系统课程并列，共用同一套 Lean 运行时。',
+      '证明游乐场：非程序员也能看懂的经典数学题，还能挑战真假审判、契约修复与未解猜想悬赏。不用装环境，点开就能在浏览器里亲手证明。与系统课程并列，共用同一套 Lean 运行时。',
     challengesCta: '去挑战',
     demo: {
       title: '先看 5 秒：证明就是让目标一行行消失',
@@ -102,9 +102,25 @@ export const zh: Messages = {
   },
   challenges: {
     eyebrow: '趣味数学挑战',
-    title: '用 Lean 亲手证明 6 道经典数学题',
-    lead: '每道题都从一句人话开始：什么是偶数、为什么交换加法不改变结果、为什么一个数不能同时是奇数又是偶数。不需要编程基础，代码里的「--」注释会一步步带你看懂。',
+    title: '用 Lean 亲手通关证明游乐场',
+    lead: '四大主题区：自由竞技场、真假审判庭、契约漏洞猎人与人类未解猜想厅。每道题都从一句人话开始，代码里的「--」注释会一步步带你看懂；不需要编程基础。',
     cardCta: '开始挑战',
+    summary: {
+      solved: (done, total) => `已通关 ${done} / ${total} 关`,
+      badges: (automation, handcrafted, termMode) =>
+        `流派勋章：⚡ ${automation} · 🛠️ ${handcrafted} · λ ${termMode}`,
+    },
+    modes: {
+      classic: '⚡ 自由竞技场',
+      verdict: '⚖️ 真假审判庭',
+      bugfix: '🔧 契约漏洞猎人',
+      bounty: '👑 人类未解猜想厅',
+    },
+    badgeLabels: {
+      automation: '⚡ 降维打击',
+      handcrafted: '🛠️ 古典手艺人',
+      termMode: 'λ 类型论极客',
+    },
     editorTitle: '证明练习',
     intro: {
       title: '第一次来？30 秒看懂这一页',
@@ -145,6 +161,20 @@ export const zh: Messages = {
       feedbackHint: '这道题哪里不对劲？反馈会自动带上当前挑战。',
       feedbackBug: '题目有误',
       feedbackIssueTitle: (title) => `[挑战] ${title}`,
+      solvedTitle: '本关已通关！',
+      solvedBadges: (badges) => `本次点亮：${badges}`,
+      solvedTiers: (tiers) => `悬赏进度：${tiers}`,
+      bestChars: (count) => `最短纪录：${count} 字符`,
+      copyCard: '复制战绩卡片',
+      copyCardDone: '战绩卡片已复制',
+      copyCardFailed: '复制失败，请手动选择文本',
+      tierLabels: {
+        bronze: '🥉 铜牌',
+        silver: '🥈 银牌',
+        legend: '👑 传说',
+      },
+      shareText: (title, badges, chars) =>
+        `我在 Lean 证明游乐场通关了「${title}」\n流派：${badges}\n最短：${chars} 字符`,
     },
   },
   lesson: {

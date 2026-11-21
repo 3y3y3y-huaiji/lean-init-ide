@@ -269,6 +269,84 @@ describe('createLeanMemoryGuard', () => {
     await guard.pollOnce();
     expect(guard.getSnapshot().processing).toBe(false);
   });
+
+  it('支持 L1 预警分级（单周期仅触发一次）及 L2/L3 迁移与 reset 重置', () => {
+    const warnings: MemoryThresholdEvent[] = [];
+    const softs: MemoryThresholdEvent[] = [];
+    const hards: MemoryThresholdEvent[] = [];
+    const guard = createLeanMemoryGuard({
+      maxBytes: 1000 * MIB,
+      onWarning: (event) => warnings.push(event),
+      onSoftLimit: (event) => softs.push(event),
+      onHardLimit: (event) => hards.push(event),
+    });
+
+    expect(guard.getSnapshot().level).toBe('normal');
+    expect(guard.getSnapshot().warningBytes).toBe(600 * MIB);
+
+    guard.reportBytes(600 * MIB, 'event');
+    expect(guard.getSnapshot().level).toBe('warning');
+    expect(warnings).toHaveLength(1);
+    expect(softs).toHaveLength(0);
+
+    // 同一周期仍在预警区间不重复告警。
+    guard.reportBytes(680 * MIB, 'poll');
+    expect(warnings).toHaveLength(1);
+
+    // 升至 L2 软阈值，再降回预警区间也不会补发预警。
+    guard.reportBytes(740 * MIB, 'event');
+    expect(guard.getSnapshot().level).toBe('soft');
+    expect(softs).toHaveLength(1);
+
+    // 升至 L3 硬阈值。
+    guard.reportBytes(910 * MIB, 'event');
+    expect(guard.getSnapshot().level).toBe('hard');
+    expect(hards).toHaveLength(1);
+
+    // reset 后回到 normal，新一轮 L1 仍可触发。
+    guard.reset();
+    expect(guard.getSnapshot().level).toBe('normal');
+    guard.reportBytes(620 * MIB, 'event');
+    expect(guard.getSnapshot().level).toBe('warning');
+    expect(warnings).toHaveLength(2);
+  });
+
+  it('setMaxBytes 可动态更新天花板与阈值并校验非法值；自定义较小软阈值自动推导预警比例', () => {
+    const guard = createLeanMemoryGuard({
+      maxBytes: 1000 * MIB,
+      softThresholdRatio: 0.4,
+      onHardLimit: () => {},
+    });
+    expect(guard.getSnapshot().warningBytes).toBe(Math.round(1000 * MIB * 0.4 * 0.85));
+
+    guard.reportBytes(450 * MIB, 'event');
+    expect(guard.getSnapshot().level).toBe('soft');
+    expect(guard.getSnapshot().needsRecycle).toBe(true);
+
+    // 切换至更大天花板后，当前水位低于新的预警线则自动回到 normal。
+    guard.setMaxBytes(2000 * MIB);
+    expect(guard.getSnapshot().maxBytes).toBe(2000 * MIB);
+    expect(guard.getSnapshot().softBytes).toBe(800 * MIB);
+    expect(guard.getSnapshot().level).toBe('normal');
+    expect(guard.getSnapshot().needsRecycle).toBe(false);
+
+    // 仅在 warning 与 soft 之间时降回 warning 并取消 needsRecycle。
+    guard.setMaxBytes(1200 * MIB);
+    expect(guard.getSnapshot().level).toBe('warning');
+    expect(guard.getSnapshot().needsRecycle).toBe(false);
+
+    expect(() => guard.setMaxBytes(0)).toThrow(RangeError);
+    expect(() => guard.setMaxBytes(Number.NaN)).toThrow(RangeError);
+
+    expect(() =>
+      createLeanMemoryGuard({
+        maxBytes: 1000 * MIB,
+        warningThresholdRatio: 0.72,
+        softThresholdRatio: 0.72,
+        onHardLimit: () => {},
+      }),
+    ).toThrow(RangeError);
+  });
 });
 
 describe('sampleBrowserMemoryBytes', () => {

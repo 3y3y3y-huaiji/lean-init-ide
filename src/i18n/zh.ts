@@ -116,6 +116,14 @@ export const zh: Messages = {
       bugfix: '🔧 契约漏洞猎人',
       bounty: '👑 人类未解猜想厅',
     },
+    modeLeads: {
+      classic:
+        '一题多解：自由混搭「自动化 / 手工推导 / 函数式构造」，点不同出招卡就能切换流派、刷齐三枚勋章。',
+      verdict: '不剧透真假：先由你切换立场「判真 / 判假」，再用证明或反例一锤定音。',
+      bugfix: '证明器已就位，像修线上 Bug 一样修补函数或前提，让亮红灯的定理变绿。',
+      bounty: '从 1 分钟可破的铜牌 / 银牌悬赏，一直仰望困扰人类百年的终极未解猜想。',
+    },
+    modeCount: (count) => `${count} 道`,
     badgeLabels: {
       automation: '⚡ 降维打击',
       handcrafted: '🛠️ 古典手艺人',
@@ -135,8 +143,8 @@ export const zh: Messages = {
           text: '「⊢」后面就是 Lean 等你证明的结论。把光标放进证明里，它会跟着光标实时变化。',
         },
         {
-          title: '③ 用策略补上证明',
-          text: '点策略按钮会把名字插进代码，再按注释提示补参数；卡住时可以展开「参考解法」逐步对照。',
+          title: '③ 用出招卡补上证明',
+          text: '点一张出招卡，它会自动把编辑器里的 sorry 换成完整可编译的证明；不敲键盘也能通关。',
         },
       ],
       codeNote:
@@ -146,8 +154,14 @@ export const zh: Messages = {
       back: '← 返回挑战列表',
       goalsRemaining: (count) => `当前还剩 ${count} 个待证目标`,
       goalsNone: '当前没有待证目标：把光标放进证明里，Goal 面板会实时更新',
-      tacticsTitle: '这道题会用到的策略',
-      tacticsHint: '点策略名会把它插到光标处；下面一句话说明每个策略在做什么。',
+      tacticsTitle: '出招卡：点一下就替你把 sorry 写完',
+      tacticsHint:
+        '点任意一张出招卡，会把编辑器里的第一个 sorry 智能替换成完整证明；如果已经没有 sorry，就替换当前定理的证明部分。',
+      verdictTitle: '先选立场，再动手',
+      verdictHint: '题干不会告诉你真假。选一个立场载入对应模板；选错了也能随时切回来。',
+      verdictTrue: '⚖️ 我判它为真：尝试证明定理',
+      verdictFalse: '🔨 我判它为假：举出反例推翻',
+      verdictNoSpoiler: '两个立场都能点，真相由 Lean 的绿灯决定。',
       copyLink: '复制本关分享链接',
       copyLinkDone: '链接已复制',
       copyLinkFailed: '复制失败，请从地址栏复制',

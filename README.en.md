@@ -101,10 +101,12 @@ possible input at once.
 
 If you would rather start from a classic puzzle than lesson one:
 
-- `/zh/challenges` and `/en/challenges` sit beside the courses. Every challenge has its own shareable
-  URL at `/<lang>/challenges/<slug>` and uses the same runtime and Service Worker cache.
-- Each page keeps a live Goal panel plus one-click `rfl` / `intro` / `rw` / `simp` / `omega` tactic
-  buttons. The starter code only depends on `Init`.
+- `/zh/challenges` and `/en/challenges` group puzzles into four themed zones: ⚡ Free Arena, ⚖️ Truth
+  Court, 🔧 Contract Hunt, and 👑 Open Conjecture Hall. Every challenge has its own shareable URL at
+  `/<lang>/challenges/<slug>` and uses the same runtime and Service Worker cache.
+- “Play cards” replace the editor’s `sorry` with a complete, compilable proof. Truth Court asks you to
+  choose a true/false stance first, then loads an independent template—so mouse-only play works with
+  zero syntax knowledge. Starter code only depends on `Init`.
 - Prefer the full editor? Open `/<lang>/playground?challenge=<slug>`; the prompt stays pinned above the
   editor and an existing local draft is never overwritten silently.
 

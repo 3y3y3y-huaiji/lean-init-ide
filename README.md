@@ -89,8 +89,8 @@
 
 不想按顺序从第 01 课学起，也可以直接挑一道经典数学题动手：
 
-- `/zh/challenges`、`/en/challenges` 与系统课程并列，每道题提供独立可分享链接 `/<lang>/challenges/<slug>`，共用同一套运行时与 Service Worker 缓存。
-- 页面自带实时 Goal 面板与 `rfl` / `intro` / `rw` / `simp` / `omega` 快捷策略按钮，骨架只依赖 `Init`。
+- `/zh/challenges`、`/en/challenges` 按「⚡ 自由竞技场 / ⚖️ 真假审判庭 / 🔧 契约漏洞猎人 / 👑 人类未解猜想厅」四大主题分区，每道题提供独立可分享链接 `/<lang>/challenges/<slug>`，共用同一套运行时与 Service Worker 缓存。
+- 点击「出招卡」会把编辑器里的 `sorry` 智能替换成完整可编译的证明；真假审判庭先选「判真 / 判假」的独立立场模板，零语法门槛也能纯点鼠标通关。骨架只依赖 `Init`。
 - 点击跳转 `/<lang>/playground?challenge=<slug>` 会在顶部固定保留题面，本机已有个人草稿时不会静默覆盖。
 
 ## 限制

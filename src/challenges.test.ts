@@ -16,12 +16,12 @@ describe('挑战数据源', () => {
     for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
-  it('四大主题区合计至少 8 道题，且每道的双语文案都齐全', () => {
-    expect(CHALLENGES.length).toBeGreaterThanOrEqual(8);
-    expect(CHALLENGES.length).toBeLessThanOrEqual(9);
+  it('四大主题区合计至少 10 道题，且每道的双语文案都齐全', () => {
+    expect(CHALLENGES.length).toBeGreaterThanOrEqual(10);
+    expect(CHALLENGES.length).toBeLessThanOrEqual(11);
     const counts = { classic: 0, verdict: 0, bugfix: 0, bounty: 0 };
     for (const challenge of CHALLENGES) counts[challenge.mode] += 1;
-    expect(counts).toEqual({ classic: 4, verdict: 2, bugfix: 1, bounty: 2 });
+    expect(counts).toEqual({ classic: 4, verdict: 3, bugfix: 1, bounty: 2 });
     for (const challenge of CHALLENGES) {
       for (const locale of ['zh', 'en'] as const) {
         expect(
@@ -47,7 +47,24 @@ describe('挑战数据源', () => {
   it('骨架留有 sorry，参考解法不含 sorry 且不引入 Mathlib / Lake', () => {
     for (const challenge of CHALLENGES) {
       for (const locale of ['zh', 'en'] as const) {
-        expect(challenge.starter[locale], `${challenge.slug}.starter.${locale}`).toContain('sorry');
+        if (challenge.mode === 'verdict') {
+          // 真假审判庭的题干不预置候选定理，立场模板各自独立。
+          expect(challenge.starter[locale], `${challenge.slug}.starter.${locale}`).not.toMatch(
+            /verdict_(?:true|false)/,
+          );
+          expect(
+            challenge.verdictBranches?.trueStarter[locale],
+            `${challenge.slug}.trueStarter.${locale}`,
+          ).toContain('verdict_true');
+          expect(
+            challenge.verdictBranches?.falseStarter[locale],
+            `${challenge.slug}.falseStarter.${locale}`,
+          ).toContain('verdict_false');
+        } else {
+          expect(challenge.starter[locale], `${challenge.slug}.starter.${locale}`).toContain(
+            'sorry',
+          );
+        }
         expect(challenge.solution[locale], `${challenge.slug}.solution.${locale}`).not.toMatch(
           /\bsorry\b/,
         );
@@ -99,13 +116,29 @@ describe('挑战数据源', () => {
     }
   });
 
-  it('每道题都提供可插入编辑器的快捷策略，并附一句白话解释', () => {
+  it('出招卡是完整 Lean 文件，不再出现半截语法', () => {
+    const halfSyntax =
+      /^(?:rcases|exact|refine|unfold|by_cases|rw\s*\[|intro|induction|simp|omega|decide)\s*$/;
     for (const challenge of CHALLENGES) {
       expect(challenge.tactics.length, challenge.slug).toBeGreaterThanOrEqual(3);
       for (const tactic of challenge.tactics) {
         expect(tactic.label.trim().length).toBeGreaterThan(0);
-        expect(tactic.insert.length).toBeGreaterThan(0);
+        expect(tactic.action, `${challenge.slug}.${tactic.label}`).toMatch(
+          /^(?:replace-sorry|set-code)$/,
+        );
         for (const locale of ['zh', 'en'] as const) {
+          const insert = tactic.insert[locale];
+          expect(
+            insert.trim().length,
+            `${challenge.slug}.${tactic.label}.${locale}`,
+          ).toBeGreaterThan(0);
+          expect(insert, `${challenge.slug}.${tactic.label}.${locale}`).not.toMatch(halfSyntax);
+          expect(insert, `${challenge.slug}.${tactic.label}.${locale}`).toMatch(
+            /\b(?:theorem|lemma|def)\b/,
+          );
+          expect(insert, `${challenge.slug}.${tactic.label}.${locale}`).not.toMatch(
+            /Mathlib|Lake|\bsorry\b/,
+          );
           expect(
             tactic.description[locale].trim().length,
             `${challenge.slug}.${tactic.label}.${locale}`,
@@ -118,21 +151,48 @@ describe('挑战数据源', () => {
   it('每种判题模式都带上对应的通关契约', () => {
     for (const challenge of CHALLENGES) {
       if (challenge.mode === 'classic') continue;
-      expect(challenge.starter.zh, challenge.slug).toContain('sorry');
+      if (challenge.mode !== 'verdict') {
+        expect(challenge.starter.zh, challenge.slug).toContain('sorry');
+      }
     }
 
     const verdicts = CHALLENGES.filter((challenge) => challenge.mode === 'verdict');
-    expect(verdicts.map((challenge) => challenge.slug)).toEqual(['nat-sub-trap', 'even-sum-split']);
+    expect(verdicts.map((challenge) => challenge.slug)).toEqual([
+      'nat-sub-trap',
+      'even-sum-split',
+      'double-negation',
+    ]);
     for (const challenge of verdicts) {
-      expect(challenge.verdict?.correct, challenge.slug).toBe('verdict_false');
-      expect(challenge.verdict?.wrong, challenge.slug).toBe('verdict_true');
+      expect(challenge.verdict, challenge.slug).toBeTruthy();
       expect(challenge.requiredConclusion, challenge.slug).toBeTruthy();
+      expect(challenge.verdictBranches, challenge.slug).toBeTruthy();
       for (const locale of ['zh', 'en'] as const) {
-        expect(challenge.solution[locale], challenge.slug).toContain('verdict_false');
         expect(challenge.solution[locale], challenge.slug).toContain(
-          challenge.requiredConclusion ?? '',
+          challenge.verdict?.correct ?? '',
         );
+        expect(challenge.solution[locale].replace(/\s+/g, ' '), challenge.slug).toContain(
+          (challenge.requiredConclusion ?? '').replace(/\s+/g, ' '),
+        );
+        expect(
+          challenge.verdictBranches?.trueStarter[locale],
+          `${challenge.slug}.trueStarter.${locale}`,
+        ).toContain('theorem verdict_true');
+        expect(
+          challenge.verdictBranches?.falseStarter[locale],
+          `${challenge.slug}.falseStarter.${locale}`,
+        ).toContain('theorem verdict_false');
       }
+    }
+
+    // 至少一道假命题（举反例）和一道真命题（一行证真）。
+    expect(verdicts.some((challenge) => challenge.verdict?.correct === 'verdict_false')).toBe(true);
+    expect(verdicts.some((challenge) => challenge.verdict?.correct === 'verdict_true')).toBe(true);
+
+    // 反例题必须做到零语法门槛：只改 abbrev 的数字，decide 自动验算。
+    for (const slug of ['nat-sub-trap', 'even-sum-split']) {
+      const challenge = verdicts.find((item) => item.slug === slug);
+      expect(challenge?.verdictBranches?.falseStarter.zh, slug).toContain('abbrev counter_');
+      expect(challenge?.verdictBranches?.falseStarter.zh, slug).toContain('decide');
     }
 
     const bugfix = CHALLENGES.filter((challenge) => challenge.mode === 'bugfix');

@@ -135,6 +135,35 @@ const fetchFromSources = async (asset) => {
   throw new Error(`all sources failed for ${asset.name}: ${lastError?.message ?? lastError}`);
 };
 
+/**
+ * 构建期在 Node 下额外尝试拉取 GitHub Release 中已预压好的同名 zstd 分片，
+ * 避免直接回退 130MB gzip 现场重压缩；失败时记录告警并返回 null。
+ */
+const fetchPrecompressedFallback = async (asset) => {
+  if (!manifest.fallback?.baseUrl || !asset.name) return null;
+  try {
+    const url = new URL(asset.name, manifest.fallback.baseUrl).href;
+    const response = await fetchWithRetry(url, {
+      headers: { 'Accept-Encoding': 'identity' },
+      redirect: 'follow',
+    });
+    if (!response.ok) {
+      console.warn(
+        `warn   ${asset.name} <- ${manifest.fallback.label} (precompressed): HTTP ${response.status}`,
+      );
+      return null;
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    verify(asset, data);
+    return { data, label: manifest.fallback.label };
+  } catch (error) {
+    console.warn(
+      `warn   ${asset.name} <- ${manifest.fallback.label} (precompressed): ${error.message ?? error}`,
+    );
+    return null;
+  }
+};
+
 mkdirSync(outDir, { recursive: true });
 
 let downloaded = 0;
@@ -165,19 +194,24 @@ for (const asset of assetsToPrepare) {
     data = readFileSync(path.join(root, asset.local));
     verify(asset, data);
   } else if (asset.encoding === 'zstd') {
-    // 优先直接拉取已发布在 CDN / 魔搭的预压缩 .gz.bin，避免每次无意义下载 130MB .gz 再重压缩；
-    // 只有当直接拉取失败（如首次构建新版本）时，才回退到上游 gzip 现场转压。
+    // 优先尝试镜像/主源直接拉取已压缩分片，或者同时把 GitHub Release 的预压缩同名文件作为 Node 构建期直连源，
+    // 只有直接拉取未命中时，才回退到上游 gzip 现场转压。
     try {
       ({ data, label } = await fetchFromSources(asset));
     } catch (directError) {
-      if (!asset.upstream || !asset.upstreamBytes || !asset.upstreamSha256) {
-        throw directError;
+      const precompressed = await fetchPrecompressedFallback(asset);
+      if (precompressed) {
+        ({ data, label } = precompressed);
+      } else {
+        if (!asset.upstream || !asset.upstreamBytes || !asset.upstreamSha256) {
+          throw directError;
+        }
+        console.warn(
+          `warn   ${asset.name} 预压缩直连未命中（${directError.message ?? directError}），回退上游 gzip 转压`,
+        );
+        data = toZstd(asset, await fetchUpstream(asset));
+        label = 'upstream gzip -> zstd';
       }
-      console.warn(
-        `warn   ${asset.name} 预压缩直连未命中（${directError.message ?? directError}），回退上游 gzip 转压`,
-      );
-      data = toZstd(asset, await fetchUpstream(asset));
-      label = 'upstream gzip -> zstd';
     }
   } else {
     ({ data, label } = await fetchFromSources(asset));

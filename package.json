@@ -19,6 +19,7 @@
     "gateway": "node scripts/local-gateway.mjs",
     "e2e": "node scripts/e2e-lean.mjs",
     "e2e:lessons": "node scripts/e2e-lessons.mjs",
+    "e2e:ui": "node scripts/e2e-ui.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.sw.json --noEmit && tsc -p tsconfig.functions.json --noEmit",
     "typecheck:spike": "tsc -p tsconfig.spike.json",
     "lint": "eslint .",

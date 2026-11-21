@@ -21,17 +21,22 @@ jobs:
   changes:
     name: 变更分类
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       docs_only: ${{ steps.detect.outputs.docs_only }}
       workflows: ${{ steps.detect.outputs.workflows }}
       static: ${{ steps.detect.outputs.static }}
       test: ${{ steps.detect.outputs.test }}
+      deps: ${{ steps.detect.outputs.deps }}
+      spike_scripts: ${{ steps.detect.outputs.spike_scripts }}
       build: ${{ steps.detect.outputs.build }}
+      ui: ${{ steps.detect.outputs.ui }}
       smoke: ${{ steps.detect.outputs.smoke }}
       full_lessons: ${{ steps.detect.outputs.full_lessons }}
       content: ${{ steps.detect.outputs.content }}
       lessons: ${{ steps.detect.outputs.lessons }}
       challenges: ${{ steps.detect.outputs.challenges }}
+      deployable: ${{ steps.detect.outputs.deployable }}
       lesson_slugs: ${{ steps.detect.outputs.lesson_slugs }}
       challenge_slugs: ${{ steps.detect.outputs.challenge_slugs }}
     steps:
@@ -51,6 +56,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.static == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数
@@ -71,12 +77,19 @@ jobs:
         run: pnpm run typecheck
       - name: 资产清单结构
         run: pnpm run verify:manifest
+      - name: Spike 脚本静态检查
+        if: needs.changes.outputs.spike_scripts == 'true'
+        run: |
+          pnpm run format:check:spike
+          pnpm run lint:spike
+          pnpm run typecheck:spike
 
   actionlint:
     name: Actions 工作流静态检查
     needs: changes
     if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       # 固定版本，避免 latest 变更导致流水线突然变红。
@@ -88,6 +101,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数
@@ -102,6 +116,9 @@ jobs:
       - run: pnpm install --frozen-lockfile --prefer-offline
       # 覆盖率阈值写在 vitest.config.ts，低于阈值即失败。
       - run: pnpm test
+      - name: Spike 脚本单元测试
+        if: needs.changes.outputs.spike_scripts == 'true'
+        run: pnpm run test:spike
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -115,6 +132,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数
@@ -141,14 +159,62 @@ jobs:
           retention-days: 1
 
   # 浏览器 E2E 按改动分档：
-  # - 运行时 / 资产 / LSP 改动：启动冒烟 + 全量课程（分片并行）
-  # - 仅课程或挑战内容改动：只跑改动到的条目
-  # - 其它应用代码：只跑启动冒烟
+  # - 运行时 / 资产 / LSP 改动：启动冒烟 + 多视口 UI + 全量课程（分片并行）
+  # - 仅课程或挑战内容 / 视图改动：多视口 UI + 改动到的条目或金丝雀
+  # - 纯 UI / 样式 / 文案改动：仅跑多视口 UI 契约（~20s，不拉 102MB WASM）
+  # - 编辑器 / 状态类应用代码：多视口 UI + 启动冒烟
+  e2e-ui:
+    name: 浏览器端到端（多视口 UI 契约）
+    needs: [changes, build]
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: 主机参数
+        uses: ./.github/actions/host-info
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.18.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - name: 启动本地等价网关
+        run: |
+          node scripts/local-gateway.mjs > /tmp/gateway.log 2>&1 &
+          for _ in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:4174/__health >/dev/null; then
+              exit 0
+            fi
+            sleep 0.2
+          done
+          cat /tmp/gateway.log
+          exit 1
+      - name: 多视口 UI 契约（手机 / 平板 / 桌面）
+        env:
+          LEAN_E2E_CHANNEL: chrome
+        run: node scripts/e2e-ui.mjs
+      - name: 失败时保留网关日志
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-ui-gateway-log
+          path: /tmp/gateway.log
+          retention-days: 3
+          if-no-files-found: ignore
+
   e2e-smoke:
     name: 浏览器端到端（启动与诊断）
     needs: [changes, build]
     if: needs.changes.outputs.smoke == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数
@@ -177,6 +243,7 @@ jobs:
     needs: [changes, build]
     if: needs.changes.outputs.full_lessons == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       # 分片数要同时改 matrix 长度与下面的 LEAN_E2E_SHARDS。
@@ -211,12 +278,13 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
-  # 只是改了某几节课 / 挑战题：只跑改动到的条目，不碰运行时。
+  # 只是改了某几节课 / 挑战题 / 视图金丝雀：只跑命中条目，不碰全量。
   e2e-lessons-changed:
     name: 浏览器端到端（变更课程）
     needs: [changes, build]
     if: needs.changes.outputs.full_lessons != 'true' && needs.changes.outputs.content == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数
@@ -247,19 +315,21 @@ jobs:
   # 由这个聚合 job 对外汇报同名结果，避免每次拆分都去改仓库设置。
   e2e-gate:
     name: 浏览器端到端
-    needs: [changes, e2e-smoke, e2e-lessons-full, e2e-lessons-changed]
+    needs: [changes, e2e-ui, e2e-smoke, e2e-lessons-full, e2e-lessons-changed]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: 汇总 E2E 结果
         env:
           CHANGES: ${{ needs.changes.result }}
+          UI: ${{ needs.e2e-ui.result }}
           SMOKE: ${{ needs.e2e-smoke.result }}
           FULL: ${{ needs.e2e-lessons-full.result }}
           CHANGED: ${{ needs.e2e-lessons-changed.result }}
         run: |
-          echo "changes=$CHANGES smoke=$SMOKE full=$FULL changed=$CHANGED"
-          case "$CHANGES $SMOKE $FULL $CHANGED" in
+          echo "changes=$CHANGES ui=$UI smoke=$SMOKE full=$FULL changed=$CHANGED"
+          case "$CHANGES $UI $SMOKE $FULL $CHANGED" in
             *failure*|*cancelled*) echo "E2E 未通过"; exit 1 ;;
           esac
           echo "E2E 通过（未触发的档位为 skipped）"
@@ -267,9 +337,10 @@ jobs:
   audit:
     name: 依赖审计
     needs: changes
-    # 只有会进构建产物的改动才可能影响依赖面；纯文档 / 纯工作流改动直接跳过。
-    if: needs.changes.outputs.build == 'true'
+    # 只有依赖清单（package.json / pnpm-lock.yaml / pnpm-workspace.yaml）变更才重跑审计。
+    if: needs.changes.outputs.deps == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数

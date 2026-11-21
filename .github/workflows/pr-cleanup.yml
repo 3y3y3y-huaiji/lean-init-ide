@@ -1,0 +1,40 @@
+name: Cleanup · 自动删除已合并 PR 分支
+run-name: Cleanup · ${{ github.event.pull_request.head.ref }}
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete-branch:
+    name: 删除已合并 PR 临时分支
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 清理远端临时分支
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          case "$HEAD_REF" in
+            main|release/*|spike/*)
+              echo "受保护分支，跳过删除: $HEAD_REF"
+              exit 0
+              ;;
+          esac
+          encoded_ref=$(node -e "process.stdout.write(encodeURIComponent(process.env.HEAD_REF).replace(/%2F/g, '/'))")
+          if gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_ref}" 2>/tmp/del.err; then
+            echo "已删除分支: $HEAD_REF"
+          elif grep -qiE "Reference does not exist|Not Found|422|404" /tmp/del.err; then
+            echo "分支已被删除或不存在: $HEAD_REF"
+          else
+            cat /tmp/del.err
+            exit 1
+          fi

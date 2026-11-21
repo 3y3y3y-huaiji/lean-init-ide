@@ -14,8 +14,6 @@ on:
       - 'scripts/depth-probe/**'
       - 'scripts/patches/lean-whnf-stack.patch'
       - 'scripts/lib/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
       - 'tsconfig.spike.json'
       - '.github/workflows/depth-probe.yml'
   workflow_dispatch:
@@ -76,9 +74,7 @@ jobs:
         run: pnpm run format:check:spike
 
       - name: GitHub Actions 语法检查
-        run: |
-          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color -shellcheck=
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
 
   probe:
     needs: lint

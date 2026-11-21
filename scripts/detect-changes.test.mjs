@@ -16,7 +16,10 @@ const flags = (paths) => {
     workflowsOnly: result.workflowsOnly,
     static: result.static,
     test: result.test,
+    deps: result.deps,
+    spikeScripts: result.spikeScripts,
     build: result.build,
+    ui: result.ui,
     smoke: result.smoke,
     fullLessons: result.fullLessons,
     content: result.content,
@@ -24,53 +27,101 @@ const flags = (paths) => {
     lessons: result.lessons,
     challenges: result.challenges,
     app: result.app,
+    deployable: result.deployable,
+    canaryLesson: result.canaryLesson,
+    canaryChallenge: result.canaryChallenge,
   };
 };
 
 describe('CI 变更分类', () => {
-  it('纯文档改动不进 install / build / e2e', () => {
+  it('纯文档改动不进 install / build / e2e，也不触发部署', () => {
     const result = flags(['docs/ARCHITECTURE.md', 'README.en.md', 'AGENTS.md']);
     expect(result.docsOnly).toBe(true);
     expect(result.static).toBe(false);
     expect(result.test).toBe(false);
+    expect(result.deps).toBe(false);
+    expect(result.spikeScripts).toBe(false);
     expect(result.build).toBe(false);
+    expect(result.ui).toBe(false);
     expect(result.smoke).toBe(false);
     expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(false);
   });
 
-  it('纯工作流改动只跑 actionlint', () => {
+  it('纯工作流改动只跑 actionlint，不触发部署', () => {
     const result = flags(['.github/workflows/ci.yml']);
     expect(result.workflowsOnly).toBe(true);
     expect(result.static).toBe(false);
     expect(result.test).toBe(false);
     expect(result.build).toBe(false);
+    expect(result.ui).toBe(false);
+    expect(result.deployable).toBe(false);
   });
 
-  it('测试文件改动只跑静态检查与单测', () => {
+  it('测试文件改动只跑静态检查与单测，不触发部署', () => {
     const result = flags(['src/cdn-range.test.ts']);
     expect(result.static).toBe(true);
     expect(result.test).toBe(true);
     expect(result.build).toBe(false);
+    expect(result.ui).toBe(false);
     expect(result.smoke).toBe(false);
+    expect(result.deployable).toBe(false);
   });
 
-  it('课程内容改动触发增量课程 E2E，不触发启动冒烟', () => {
+  it('仅修改 spike TS 脚本时走 spike 静态检查与单测，不进前端构建或部署', () => {
+    const result = flags(['scripts/pin-lean.ts', 'scripts/wasm64-patch-equivalence.ts']);
+    expect(result.static).toBe(true);
+    expect(result.test).toBe(true);
+    expect(result.spikeScripts).toBe(true);
+    expect(result.build).toBe(false);
+    expect(result.ui).toBe(false);
+    expect(result.smoke).toBe(false);
+    expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(false);
+  });
+
+  it('纯 UI / 样式 / 文案改动走轻量多视口 UI E2E，不启动 102MB WASM 冒烟', () => {
+    for (const path of [
+      'src/index.css',
+      'src/views/home.ts',
+      'src/views/layout.ts',
+      'src/i18n/zh.ts',
+      'src/i18n/en.ts',
+      'src/i18n/lessons-en.ts',
+      'scripts/generate-seo.mjs',
+    ]) {
+      const result = flags([path]);
+      expect(result.build, path).toBe(true);
+      expect(result.ui, path).toBe(true);
+      expect(result.smoke, path).toBe(false);
+      expect(result.fullLessons, path).toBe(false);
+      expect(result.deps, path).toBe(false);
+      expect(result.deployable, path).toBe(true);
+    }
+  });
+
+  it('课程内容改动触发增量课程 E2E 与 UI E2E，不触发启动冒烟', () => {
     const result = flags(['src/i18n/lessons-zh.ts']);
     expect(result.content).toBe(true);
     expect(result.lessons).toBe(true);
     expect(result.build).toBe(true);
+    expect(result.ui).toBe(true);
     expect(result.smoke).toBe(false);
     expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(true);
   });
 
-  it('挑战内容改动同样走增量 E2E', () => {
+  it('挑战内容改动同样走增量 E2E 与 UI E2E', () => {
     const result = flags(['src/challenges.ts']);
     expect(result.content).toBe(true);
     expect(result.challenges).toBe(true);
+    expect(result.ui).toBe(true);
+    expect(result.smoke).toBe(false);
     expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(true);
   });
 
-  it('运行时 / 资产 / LSP 改动才触发全量 E2E 与冒烟', () => {
+  it('运行时 / 资产 / LSP 改动才触发全量 E2E、UI E2E 与冒烟', () => {
     for (const path of [
       'src/sw.ts',
       'src/lsp-completion.ts',
@@ -81,16 +132,62 @@ describe('CI 变更分类', () => {
     ]) {
       const result = flags([path]);
       expect(result.runtime, path).toBe(true);
+      expect(result.ui, path).toBe(true);
       expect(result.smoke, path).toBe(true);
       expect(result.fullLessons, path).toBe(true);
+      expect(result.deployable, path).toBe(true);
     }
   });
 
-  it('其它应用代码只触发冒烟，不跑课程', () => {
+  it('改动课程视图触发金丝雀课程 E2E + UI E2E，不触发 102MB 冒烟和全量课程', () => {
     const result = flags(['src/views/lesson.ts']);
     expect(result.app).toBe(true);
+    expect(result.ui).toBe(true);
+    expect(result.content).toBe(true);
+    expect(result.canaryLesson).toBe(true);
+    expect(result.canaryChallenge).toBe(false);
+    expect(result.smoke).toBe(false);
+    expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(true);
+  });
+
+  it('改动挑战视图触发金丝雀挑战 E2E + UI E2E，不触发 102MB 冒烟和全量课程', () => {
+    const result = flags(['src/views/challenge.ts']);
+    expect(result.app).toBe(true);
+    expect(result.ui).toBe(true);
+    expect(result.content).toBe(true);
+    expect(result.canaryChallenge).toBe(true);
+    expect(result.canaryLesson).toBe(false);
+    expect(result.smoke).toBe(false);
+    expect(result.fullLessons).toBe(false);
+  });
+
+  it('改动 lean-panel 同时触发启动冒烟及课程/挑战金丝雀', () => {
+    const result = flags(['src/components/lean-panel.ts']);
+    expect(result.app).toBe(true);
+    expect(result.ui).toBe(true);
+    expect(result.smoke).toBe(true);
+    expect(result.canaryLesson).toBe(true);
+    expect(result.canaryChallenge).toBe(true);
+    expect(result.fullLessons).toBe(false);
+  });
+
+  it('改动依赖文件触发 deps 审计与启动冒烟，不触发全量课程', () => {
+    const result = flags(['package.json', 'pnpm-lock.yaml']);
+    expect(result.deps).toBe(true);
+    expect(result.build).toBe(true);
+    expect(result.ui).toBe(true);
     expect(result.smoke).toBe(true);
     expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(true);
+  });
+
+  it('改动 e2e-ui 脚本只触发构建与 UI E2E，不触发部署', () => {
+    const result = flags(['scripts/e2e-ui.mjs']);
+    expect(result.build).toBe(true);
+    expect(result.ui).toBe(true);
+    expect(result.smoke).toBe(false);
+    expect(result.deployable).toBe(false);
   });
 
   it('课程目录或加载器变化时回退到全量', () => {
@@ -104,7 +201,12 @@ describe('CI 变更分类', () => {
   it('空改动按全量处理，宁可多跑不漏跑', () => {
     const result = flags([]);
     expect(result.runtime).toBe(true);
+    expect(result.ui).toBe(true);
+    expect(result.smoke).toBe(true);
     expect(result.fullLessons).toBe(true);
+    expect(result.deps).toBe(true);
+    expect(result.spikeScripts).toBe(true);
+    expect(result.deployable).toBe(true);
   });
 });
 

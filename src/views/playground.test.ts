@@ -79,7 +79,8 @@ describe('playground 页面', () => {
 
     const notice = document.body.querySelector<HTMLElement>('[data-role="lesson-notice"]')!;
     expect(notice.textContent).toContain('当前课时练习');
-    expect(notice.textContent).toContain('two_add_two');
+    expect(notice.textContent).toContain('nat_add_zero');
+    expect(notice.textContent).toContain('return_given');
 
     history.replaceState(null, '', '/zh/playground');
     document.body.innerHTML = renderPlayground('zh');

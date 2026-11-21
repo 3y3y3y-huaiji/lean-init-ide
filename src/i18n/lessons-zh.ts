@@ -75,33 +75,44 @@ export const lessonsZh: LessonPage[] = [
     track: 'intro',
     navTitle: '02 · 第一个零漏洞证明',
     title: '你的第一个零漏洞证明',
-    lead: '不用背术语，这一节只做三件小事：分清「规则」与「答案」，再用 rfl 让裁判当场盖章。',
+    lead: '不用背术语：读懂条件与目标分界线，再用 rfl 和 exact 让裁判盖章过关。',
     blocks: [
       {
         kind: 'p',
-        text: '平时做验算，代一两个数试试就算完了，难免会漏掉反例。`rfl` 不靠猜：它让 Lean 当场把等号两边按规则算到底，只要化简结果一模一样，才算零漏洞过关。',
+        text: '上一节我们验证了具体的 `2 + 2 = 4`。真正做证明时，定理往往带着「未知量」和「已知条件」——不仅对某一个数字成立，而是对任意输入都成立。',
       },
       {
         kind: 'p',
-        text: '盯住右侧 Goal 面板：`⊢` 上面是你手里已经拿到的条件（这一题暂时是空的），`⊢` 下面就是裁判要你交出的结论。每走一步，看 `⊢` 有没有变短甚至清空。',
+        text: '盯住右侧 Goal 面板：`⊢` 上面是你手里拿到的前提和变量，`⊢` 下面才是裁判要你交出的目标。每执行一行策略，`⊢` 会实时更新。',
       },
-      { kind: 'code', code: '#check Nat.add\n#eval 2 + 3' },
+      { kind: 'code', code: '#check (3 + 1 = 4)\n#eval 3 + 1' },
       {
         kind: 'p',
-        text: '点「运行」后，输出区会出现两行结果：`Nat.add` 那一行告诉你「这是一条什么运算规则」（收两个自然数、返回一个自然数），`#eval` 那一行则是「真正算出来的得数」（5）。',
+        text: '先温习一眼规则与算值：`#check` 看一条等式命题长什么样，`#eval` 直接算出得数；这一块不打开证明状态。',
       },
-      { kind: 'code', code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl' },
+      {
+        kind: 'code',
+        code: 'theorem add_zero_right (n : Nat) : n + 0 = n := by\n  rfl',
+      },
       {
         kind: 'p',
-        text: '在 Lean 里，像「2 + 2 = 4」这样的一条判断就是一道待解答的题面，而证明就是能严丝合缝交差的凭证。只要等号两边算完完全相同，`rfl` 就是这张现成的通行证。',
+        text: '即使 `n` 是任意自然数，写成 `:= by` 后，一行 `rfl` 也能收工——因为加法定义里 `+ 0` 本身就化简为 `n`。',
+      },
+      {
+        kind: 'code',
+        code: 'theorem use_given (P : Prop) (hp : P) : P := by\n  exact hp',
+      },
+      {
+        kind: 'p',
+        text: '如果条件就握在手里怎么办？`(hp : P)` 放在冒号左边，意味着裁判已经把 `hp` 发到了 `⊢` 上方；`exact hp` 就是「把手里一模一样的这张牌交出去」。',
       },
       {
         kind: 'goal',
-        text: '证明开始：⊢ 2 + 2 = 4\n执行 rfl：没有剩余目标\n\n`#check` 那一行只是在问「这是一条什么规则或命题」，不会留下待证目标。',
+        text: '证明开始：P : Prop, hp : P ⊢ P\n说明：冒号前声明的 `hp : P` 会出现在 `⊢` 上方，作为已知条件。\n执行 exact hp：没有剩余目标\n说明：`exact hp` 直接把手里与目标完全一致的证据交差，证明完成。',
       },
       {
         kind: 'note',
-        text: '动手跑一次：把 `rfl` 改成 `rfl 1`，看报错怎样提示 `rfl` 不需要你额外喂数字。再把 `2 + 2` 改成 `2 + 3`，看看两边算完不一样时，`⊢` 下面会留下什么。',
+        text: '动手跑一次：把 `exact hp` 改成 `exact P`，看报错怎么区分「命题本身 (`P`)」与「命题成立的证据 (`hp`)」；再试着把 `n + 0` 改成 `0 + n`。',
         tone: 'warn',
       },
       {
@@ -111,15 +122,16 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: '一句话带走：`rfl` 只认「等号两边化简后一模一样」；需要用到前提条件或一步步推理时，后面会学新招式。',
+        text: '一句话带走：等号两边化简后完全一致用 `rfl`；手头已经有现成证据与目标一样用 `exact`。',
       },
     ],
     exercise: {
       title: '练习',
-      body: '把 `#eval 2 + 3` 改成你喜欢的算式，再把 `two_add_two` 里的 `sorry` 换成 `rfl`，观察目标如何清零。',
-      hint: '`#check` 用来看规则（类型），`#eval` 用来直接算结果；`two_add_two` 用 `:= by` 展开了证明步骤，填上 `rfl` 就会由化简直接过关。',
+      body: '证明 `nat_add_zero`（任意自然数加 `0`）和 `return_given`（直接交出已知条件），体会 `rfl` 与 `exact` 的分工。',
+      hint: '`nat_add_zero` 等号两边按定义化简相等，填 `rfl`；`return_given` 已有前提 `hq : Q`，填 `exact hq` 即可。',
       cta: '在编辑器中动手',
-      starter: '#check Nat.mul\n#eval 6 * 7\n\ntheorem two_add_two : 2 + 2 = 4 := by\n  sorry\n',
+      starter:
+        'theorem nat_add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem return_given (Q : Prop) (hq : Q) : Q := by\n  sorry\n',
     },
   },
   {
@@ -127,52 +139,68 @@ export const lessonsZh: LessonPage[] = [
     track: 'intro',
     navTitle: '03 · 写一个证明函数',
     title: '写一个 if…then… 风格的证明函数',
-    lead: '把「如果 P 那么 Q」看成一条推理链：只要前提属实，结论就必须跟着成立。',
+    lead: '把「如果 P 那么 Q」变成两招接力：用 intro 接假设，用 apply 一步步倒推。',
     blocks: [
       {
         kind: 'p',
-        text: '生活里最常见的推理是「如果下雨，地就会湿」。Lean 里的 `P → Q` 就是这句话：输入一个「P 成立」的证据，输出一个「Q 成立」的证据。',
+        text: '生活里最常见的推理是「如果下雨，地就会湿」。Lean 里的 `P → Q` 就是这句话：只要假设 `P` 成立，你就能交出 `Q` 成立的证据。',
       },
       {
         kind: 'p',
-        text: '右侧 `⊢` 下面是 `P → P`，意思是裁判要你交一条推理：假设 P 成立，推出 P 成立。`intro h` 就是把前提接进手里。',
+        text: '右侧 `⊢` 下面是 `P → P`。和上节不同，这次 `P` 还没发到你手里，它还在箭头左边，所以要先用 `intro` 把前提收进上下文。',
       },
       { kind: 'code', code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h' },
       {
         kind: 'p',
-        text: '`intro h` 把目标 `P → P` 变成「已有假设 `h : P`，要证 `P`」；`exact h` 直接把手里的牌打出去交差。',
+        text: '`intro h` 把目标 `P → P` 变成「已有假设 `h : P`，要证 `P`」；接着就是上节刚学的 `exact h`。',
       },
       {
         kind: 'goal',
-        text: '证明开始：⊢ P → P\n执行 intro h：h : P ⊢ P\n执行 exact h：没有剩余目标',
+        text: '证明开始：⊢ P → P\n说明：目标带箭头 `→`，前提还在左边，无法直接交差。\n执行 intro h：h : P ⊢ P\n说明：`intro h` 把左边的 `P` 收到 `⊢` 上方并命名为 `h`。\n执行 exact h：没有剩余目标\n说明：目标缩成 `P`，正好与已知假设 `h` 相同，`exact h` 结束。',
       },
       {
         kind: 'code',
-        code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  exact h2 (h1 hp)',
+        code: 'theorem apply_once (P Q : Prop) (hp : P) (h : P → Q) : Q := by\n  apply h\n  exact hp',
       },
       {
         kind: 'p',
-        text: '推理可以串起来：如果下雨→地湿，地湿→路滑，那么下雨→路滑。两个箭头接在一起，就是把第一段推理的结论喂给第二段。',
+        text: '有前提之后，怎么使用一条「如果…那么…」规则？`apply h` 会对照目标 `⊢ Q`，把目标倒推回规则的前提 `⊢ P`，接着 `exact hp` 收尾。',
+      },
+      {
+        kind: 'goal',
+        text: '证明开始：hp : P, h : P → Q ⊢ Q\n说明：手里有原料 `hp : P` 和推理规则 `h : P → Q`。\n执行 apply h：hp : P, h : P → Q ⊢ P\n说明：`apply h` 把「要证 `Q`」变成「只需先交出 `P`」。\n执行 exact hp：没有剩余目标\n说明：把手里的 `hp` 交出去，推理闭合。',
+      },
+      {
+        kind: 'code',
+        code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  apply h2\n  apply h1\n  exact hp',
+      },
+      {
+        kind: 'p',
+        text: '两条规则接起来也一样拆解：先 `intro hp` 接住 `P`，再从终点的 `h2` 一步步倒推到 `h1`，每行 `⊢` 都看得见目标在缩短。',
+      },
+      {
+        kind: 'goal',
+        text: '证明开始：h1 : P → Q, h2 : Q → R ⊢ P → R\n说明：目标是蕴含式 `P → R`，先准备拆箭头。\n执行 intro hp：hp : P ⊢ R\n说明：`P` 进上下文，`⊢` 只剩结论 `R`。\n执行 apply h2：hp : P ⊢ Q\n说明：套用 `h2 : Q → R`，目标退回 `Q`。\n执行 apply h1：hp : P ⊢ P\n说明：套用 `h1 : P → Q`，目标退回 `P`。\n执行 exact hp：没有剩余目标\n说明：`hp : P` 直接闭合最后目标。',
       },
       {
         kind: 'note',
-        text: '动手跑一次：把第二个 `exact h2 (h1 hp)` 改成 `exact h1 (h2 hp)`，看 Lean 怎么因为「类型对不上」拒绝你。',
+        text: '动手跑一次：把 `trans_imp` 里的 `apply h2` 和 `apply h1` 调换顺序，看 Lean 怎么提示「目标要的是 `R`，但 `h1` 只能推出 `Q`」。',
         tone: 'warn',
       },
       {
         kind: 'details',
-        summary: 'intro 到底做了什么？',
-        text: '目标 `P → Q` 是一个函数类型。`intro h` 相当于「假设给我一个 P 的证明，我叫它 h」，然后目标只剩 Q。它不是证明假设 P，而是把箭头左边变成新的已知条件。',
+        summary: 'intro、apply 和函数写法 exact h2 (h1 hp) 是什么关系？',
+        text: '目标 `P → Q` 是函数类型，`intro h` 把箭头左边收成前提；`apply` 从结论逆推，把新目标拆到你能直接用 `exact` 收尾为止。熟悉后也可以一行写成 `exact h2 (h1 hp)`（正着把 `hp` 先喂给 `h1` 再喂给 `h2`），两种写法完全等价。',
       },
       {
         kind: 'note',
-        text: '一句话带走：目标出现 `→`，第一步几乎总是 `intro`，把箭头左边抓进手里。',
+        text: '一句话带走：目标有 `→` 先 `intro` 接参数；要用 `→` 规则推结论就 `apply`，倒推到手里有的假设用 `exact`。',
       },
     ],
     exercise: {
       title: '练习',
-      body: '证明 `chain`：`(P → Q) → (Q → R) → P → R`，也就是把 `trans_imp` 的前提写成箭头形式。',
-      hint: '目标全是箭头，先连续 `intro`，把 `(P → Q)`、`(Q → R)` 和 `P` 都拿进来；最后把第一个前提的输出喂给第二个前提。',
+      body: '证明 `chain`：`(P → Q) → (Q → R) → P → R`，也就是箭头版的三段串联推理。',
+      hint: '先用 `intro h1 h2 hp` 把三条条件一次收进上下文；接着照正文顺序 `apply h2`、`apply h1`、`exact hp`（也可以直接写 `exact h2 (h1 hp)`）。',
       cta: '在编辑器中动手',
       starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
     },
@@ -272,7 +300,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'goal',
-        text: 'a + 0 = a：⊢ a + 0 = a，rfl 直接关闭\n\n0 + a = a：\nzero 分支：⊢ 0 + 0 = 0，rfl\nsucc 分支：ih : 0 + a = a\n目标：⊢ 0 + succ a = succ a',
+        text: 'a + 0 = a：⊢ a + 0 = a\n说明：加法对第二个参数递归，右边是 0 可以直接用 `rfl` 关闭。\n0 + a = a：⊢ 0 + a = a\nzero 分支：⊢ 0 + 0 = 0\n说明：第一张骨牌倒下，直接 `rfl`。\nsucc 分支：ih : 0 + a = a\n目标：⊢ 0 + succ a = succ a\n说明：前一张骨牌已倒（`ih`），下一节和第 07 节将详细展开 `simp` / `rw` 如何把归纳假设代进去。',
       },
       {
         kind: 'p',
@@ -284,11 +312,11 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: '`zero` 分支里 `simp` 把 `0 + b` 化简成 `b`；`succ` 分支里 `Nat.succ_add` 把 `succ a + b` 变成 `succ (a + b)`，再用归纳假设 `ih` 改写。',
+        text: '`zero` 分支里先预览一下自动化归约 `simp`（第 06–07 节会系统讲解 `rw` 和 `simp`），它把 `0 + b` 化成 `b`；`succ` 分支里 `Nat.succ_add` 把 `succ a + b` 变成 `succ (a + b)`，再用 `ih` 收尾。',
       },
       {
         kind: 'goal',
-        text: 'induction a 前：⊢ a + b = b + a\nzero 分支：⊢ 0 + b = b + 0，simp 收尾\nsucc 分支：ih : a + b = b + a\n目标：⊢ succ a + b = b + succ a',
+        text: 'induction a 前：⊢ a + b = b + a\nzero 分支：⊢ 0 + b = b + 0\n说明：先用 `simp` 消除 `+ 0` 与 `0 +` 的结构差。\nsucc 分支：ih : a + b = b + a\n目标：⊢ succ a + b = b + succ a\n说明：先靠两条结构引理把 `succ` 抽出来，再代换 `ih`。',
       },
       {
         kind: 'note',
@@ -610,7 +638,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'goal',
-        text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases：得到 x、y 与 hx : a = 2 * x、hy : b = 2 * y\nrefine ⟨x + y, ?_⟩：把新的 witness 交出去\n剩下的等式用 rw 和 ring 收尾',
+        text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases：得到 x、y 与 hx : a = 2 * x、hy : b = 2 * y\nrefine ⟨x + y, ?_⟩：把新的 witness 交出去\n剩下的等式用 rw 和 grind 收尾',
       },
       {
         kind: 'code',
@@ -642,7 +670,7 @@ export const lessonsZh: LessonPage[] = [
     exercise: {
       title: '练习',
       body: '把「偶数 + 偶数还是偶数」用中文写一遍，再逐句翻译成 Lean 策略；先证 `even_eight`，再证 `even_sum`。',
-      hint: '先 `rcases` 拆两个定义，再给出新的 witness `x + y`，最后用 `rw` / `ring` 收尾。',
+      hint: '先 `rcases` 拆两个定义，再给出新的 witness `x + y`，最后用 `rw` 和 `grind` 收尾。',
       cta: '在编辑器中动手',
       starter:
         'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_eight : Even 8 := by\n  sorry\n\ntheorem even_sum (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
@@ -696,14 +724,14 @@ export const lessonsZh: LessonPage[] = [
       {
         kind: 'details',
         summary: '从 List 到数学：怎么把 ∣ 拆开？',
-        text: '`rcases h with ⟨k, rfl⟩` 会直接把目标里的 `b` 替换成 `a * k`，所以后面经常能直接 `rfl` 或 `ring`。`rfl` 能成立，是因为替换后两边变成了同一个表达式。',
+        text: '`rcases h with ⟨k, rfl⟩` 会直接把目标里的 `b` 替换成 `a * k`，所以后面经常能直接 `rfl` 或 `rw [Nat.mul_assoc]` 收尾。`rfl` 能成立，是因为替换后两边变成了同一个表达式。',
       },
       { kind: 'note', text: '一句话带走：`a ∣ b` 就是 `∃ k, b = a * k`；证明它，交 witness。' },
     ],
     exercise: {
       title: '练习',
       body: '证明 `dvd_mul_right`：「如果 `a ∣ b`，那么 `a ∣ b * c`」。',
-      hint: '`rcases h with ⟨k, rfl⟩`，然后交出新 witness `k * c`，用 `ring` 或 `rfl` 收尾。',
+      hint: '`rcases h with ⟨k, rfl⟩`，然后交出新 witness `k * c`，用 `rw [Nat.mul_assoc]`（或 `grind`）收尾。',
       cta: '在编辑器中动手',
       starter: 'theorem dvd_mul_right (a b c : Nat) (h : a ∣ b) : a ∣ b * c := by\n  sorry\n',
     },
@@ -741,7 +769,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'goal',
-        text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases ha with ⟨x, rfl⟩：a 被替换成 2 * x\nrcases hb with ⟨y, rfl⟩：b 被替换成 2 * y\n交 witness x + y，再用 ring 收尾',
+        text: '证明开始：⊢ Even (a + b)，展开即 ⊢ ∃ k, a + b = 2 * k\nrcases ha with ⟨x, rfl⟩：a 被替换成 2 * x\nrcases hb with ⟨y, rfl⟩：b 被替换成 2 * y\n交 witness x + y，再用 grind 收尾',
       },
       {
         kind: 'code',
@@ -758,7 +786,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: '动手跑一次：把 `even_add_even` 里的 witness 从 `x + y` 改成 `x + y + 1`，看 `ring` 为什么不再通过。',
+        text: '动手跑一次：把 `even_add_even` 里的 witness 从 `x + y` 改成 `x + y + 1`，看 `grind` 为什么不再通过。',
         tone: 'warn',
       },
       {
@@ -956,7 +984,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: '动手跑一次：把 `subset_trans` 里的 `exact h2 (h1 hx)` 改成 `exact h1 (h2 hx)`，看类型为什么对不上。',
+        text: '动手跑一次：把 `subset_trans` 里的 `exact h2 x (h1 x hx)` 改成 `exact h1 x (h2 x hx)`，看类型为什么对不上。',
         tone: 'warn',
       },
       {
@@ -1032,11 +1060,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `bijective_id`：恒等函数 `fun x => x` 是双射。',
-      hint: '单射和满射都直接从定义出发：`intro a b h` 后用 `exact h`；满射的 witness 直接取目标值本身。',
+      body: '证明 `surjective_comp`：两个满射函数的复合仍然是满射函数。',
+      hint: '先 `intro c`；依次用 `rcases hg c with ⟨b, hb⟩` 和 `rcases hf b with ⟨a, ha⟩` 找出原像，再用 `exact ⟨a, by rw [ha, hb]⟩` 收尾。',
       cta: '在编辑器中动手',
       starter:
-        'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  sorry\n',
+        'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
     },
   },
   {
@@ -1141,11 +1169,10 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '用强归纳证明 `fib_lt_two_pow`：`fib n ≤ 2 ^ n`，体会两个归纳假设分别用在哪里。',
-      hint: '先展开 `fib (k + 2)`，再分别对 `k` 和 `k + 1` 使用强归纳假设；最后用 `Nat.pow_succ` 或 `omega` 收尾。',
+      body: '用强归纳证明 `coin_2_3`：任何大于等于 2 的整数 `n + 2` 都能用 2 元和 3 元硬币凑出来（`∃ a b, n + 2 = 2 * a + 3 * b`）。',
+      hint: '套用 `induction n using Nat.strongRecOn with | ind n ih => match n with`：`0 => exact ⟨1, 0, rfl⟩`，`1 => exact ⟨0, 1, rfl⟩`，`k + 2 =>` 借用更小一步的 `ih k (by grind)`，再多加一枚 2 元硬币（`⟨a + 1, b, by grind⟩`）。',
       cta: '在编辑器中动手',
-      starter:
-        'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  sorry\n',
+      starter: 'theorem coin_2_3 (n : Nat) : ∃ a b : Nat, n + 2 = 2 * a + 3 * b := by\n  sorry\n',
     },
   },
   {
@@ -1181,19 +1208,19 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: '有序性的证明留作练习；先证成员保持，再证有序，是这类证明的常见拆法。',
+        text: '完整证明不再留 `sorry`：`sorted_insert` 按空表、单元素、至少两个元素三种模式分类讨论，再由 `sort_sorted` 一行串联起来；最后在练习里自己补全 `mem_sort`。',
       },
       {
         kind: 'goal',
-        text: 'sorted_insert 要证：Sorted xs → Sorted (insertNat x xs)\nnil 分支：⊢ Sorted [x]，simp [insertNat, Sorted] 收尾\ncons 分支：分 x ≤ y 与 x > y 两种情况，各自维护有序性',
+        text: 'sorted_insert 要证：Sorted xs → Sorted (insertNat x xs)\n空表 []：⊢ Sorted [x]\n说明：simp [insertNat, Sorted] 直接关闭。\n单元素 [y]：分 x ≤ y 与 ¬ x ≤ y\n说明：前两种元素大小关系各自满足相邻 ≤。\n至少两元素 y :: z :: zs：先拆分 hyz : y ≤ z 与 htail : Sorted (z :: zs)\n说明：若 x > z，说明 x 该放进更后面，递归调用 sorted_insert x (z :: zs) htail 维持尾部有序。',
       },
       {
         kind: 'code',
-        code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih',
+        code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) : (xs : List Nat) → Sorted xs → Sorted (insertNat x xs)\n  | [], _ => by simp [insertNat, Sorted]\n  | [y], _ => by\n    by_cases hxy : x ≤ y\n    · simp [insertNat, hxy, Sorted]\n    · have hyx : y ≤ x := by grind\n      simp [insertNat, hxy, Sorted, hyx]\n  | y :: z :: zs, h => by\n    rcases h with ⟨hyz, htail⟩\n    by_cases hxy : x ≤ y\n    · simp [insertNat, hxy, Sorted, hyz, htail]\n    · by_cases hxz : x ≤ z\n      · have hyx : y ≤ x := by grind\n        simp [insertNat, hxy, hxz, Sorted, hyx, htail]\n      · have ih := sorted_insert x (z :: zs) htail\n        simp [insertNat, hxz] at ih\n        simp [insertNat, hxy, hxz, Sorted, hyz, ih]\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih',
       },
       {
         kind: 'note',
-        text: '动手跑一次：把 `sorted_insert` 里的一个 `sorry` 删掉但不补证明，看 Lean 报什么；再把它改成 `exact h`，看类型为什么不对。',
+        text: '动手跑一次：把 `sorted_insert` 第三个分支里的 `have hyx : y ≤ x := by grind` 删掉，看为什么必须交出 `¬ x ≤ y` 推出的反方向不等式。',
         tone: 'warn',
       },
       {
@@ -1208,11 +1235,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '补完 `sorted_insert` 里两个 `sorry`，让 `sort_sorted` 不再依赖未完成的证明。',
-      hint: '`cons` 分支先 `by_cases hxy : x ≤ y`：成立时把 `x` 放前面，用 `h` 拆出有序性；不成立时递归插入尾部，再用归纳假设。',
+      body: '正文已经证出了 `Sorted (sort xs)` 和 `mem_insertNat`；轮到你补完规格的另一半——证明 `mem_sort`：排序前后列表里的元素集合完全一致。',
+      hint: '对 `xs` 做列表归纳：`nil` 分支用 `simp [sort]`；`cons` 分支把 `sort (y :: ys)` 展开后用上现成的 `mem_insertNat` 和归纳假设 `ih`。',
       cta: '在编辑器中动手',
       starter:
-        'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih\n',
+        'def insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem mem_insertNat (x y : Nat) (xs : List Nat) :\n    y ∈ insertNat x xs ↔ y = x ∨ y ∈ xs := by\n  induction xs with\n  | nil =>\n    unfold insertNat\n    simp\n  | cons z zs ih =>\n    unfold insertNat\n    by_cases h : x ≤ z\n    · simp [h]\n    · simp [h, ih, or_left_comm]\n\ntheorem mem_sort (x : Nat) (xs : List Nat) : x ∈ sort xs ↔ x ∈ xs := by\n  sorry\n',
     },
   },
   {
@@ -1557,7 +1584,7 @@ export const lessonsZh: LessonPage[] = [
       },
       {
         kind: 'code',
-        code: 'import Std.Data.TreeMap\n\nopen Std\n\ndef prices : TreeMap Nat String compare :=\n  TreeMap.empty.insert 3 "c" |>.insert 1 "a" |>.insert 2 "b"\n\n#check prices',
+        code: 'import Std.Data.TreeMap\n\nopen Std\n\ndef prices : TreeMap Nat String compare :=\n  TreeMap.empty.insert 3 "c" |>.insert 1 "a" |>.insert 2 "b"\n\n#check prices\n#check @TreeMap.getElem?_erase_self',
       },
       {
         kind: 'p',
@@ -1596,11 +1623,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明 `lookup_after_insert`：`TreeMap` 插入后立刻查找能拿到刚插入的值。',
-      hint: '直接 `simp`；如果卡住，先 `#check TreeMap.getElem?_insert` 看插入规则长什么样。',
+      body: '正文已证插入后查找的定理 `tree_lookup_after_insert`；练习请你证明删除自己的 key 后查不到：`tree_erase_self`。',
+      hint: '直接 `simp` 就会自动调用 `TreeMap.getElem?_erase_self` 化简成 `none = none`。',
       cta: '在编辑器中动手',
       starter:
-        'import Std.Data.TreeMap\n\nopen Std\n\ntheorem lookup_after_insert (t : TreeMap Nat Nat compare) (k v : Nat) :\n    (t.insert k v)[k]? = some v := by\n  sorry\n',
+        'import Std.Data.TreeMap\n\nopen Std\n\ntheorem tree_erase_self (t : TreeMap Nat Nat compare) (k : Nat) :\n    (t.erase k)[k]? = none := by\n  sorry\n',
     },
   },
   {
@@ -1739,11 +1766,11 @@ export const lessonsZh: LessonPage[] = [
     ],
     exercise: {
       title: '练习',
-      body: '证明任意合法转账下总余额守恒。',
-      hint: '先 `simp [transfer, balance, HashMap.getD_insert, h.symm]`，再用 `Nat.add_assoc`、`Nat.add_right_comm` 和 `Nat.sub_add_cancel hbal` 收尾。',
+      body: '除了 `total_conserved`，账本还有一个等价关键不变量：转账不能改写第三方账户。请证明 `balance_other_after_transfer`。',
+      hint: '展开 `transfer`、`balance` 与 `HashMap.getD_insert`，用 `hs.symm` 和 `hd.symm` 排除掉 `src` 与 `dst` 即可：`simp [transfer, balance, HashMap.getD_insert, hs.symm, hd.symm]`。',
       cta: '在编辑器中动手',
       starter:
-        'import Std.Data.HashMap\n\nopen Std\n\nabbrev Ledger := HashMap Nat Nat\n\ndef balance (m : Ledger) (k : Nat) : Nat := m.getD k 0\n\ndef transfer (m : Ledger) (src dst amt : Nat) : Ledger :=\n  (m.insert src (balance m src - amt)).insert dst (balance m dst + amt)\n\ntheorem total_conserved (m : Ledger) (src dst amt : Nat) (h : src ≠ dst)\n    (hbal : amt ≤ balance m src) :\n    balance (transfer m src dst amt) src + balance (transfer m src dst amt) dst\n      = balance m src + balance m dst := by\n  sorry\n',
+        'import Std.Data.HashMap\n\nopen Std\n\nabbrev Ledger := HashMap Nat Nat\n\ndef balance (m : Ledger) (k : Nat) : Nat := m.getD k 0\n\ndef transfer (m : Ledger) (src dst amt : Nat) : Ledger :=\n  (m.insert src (balance m src - amt)).insert dst (balance m dst + amt)\n\ntheorem balance_other_after_transfer (m : Ledger) (src dst other amt : Nat)\n    (hs : other ≠ src) (hd : other ≠ dst) :\n    balance (transfer m src dst amt) other = balance m other := by\n  sorry\n',
     },
   },
 ];

@@ -548,4 +548,86 @@ describe('课程页交互绑定', () => {
     expect(badgeEl.textContent).toBe(t.goalLive);
     expect(textEl.textContent).toBe(t.goalNoRemaining);
   });
+
+  it('Goal 步骤切换会高亮左侧代码行，点击代码行也会同步跳回对应步骤', () => {
+    const panel = makePanel();
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'implication');
+    bindLesson(document.body, 'zh', 'implication');
+
+    const goalPanel = document.body.querySelector<HTMLElement>('[data-role="lesson-goal-panel"]')!;
+    const locEl = document.body.querySelector<HTMLElement>('[data-role="lesson-goal-step-label"]')!;
+    const nextBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-role="lesson-goal-next"]',
+    )!;
+
+    const initialActive = document.body.querySelector<HTMLElement>(
+      '[data-role="code-block"] [data-active-line="true"]',
+    );
+    expect(initialActive).not.toBeNull();
+    expect(locEl.hidden).toBe(false);
+
+    nextBtn.click();
+    expect(goalPanel.dataset.goalStep).toBe('1');
+    const secondActive = document.body.querySelector<HTMLElement>(
+      '[data-role="code-block"] [data-active-line="true"]',
+    );
+    expect(secondActive).not.toBe(initialActive);
+
+    const linkedLines = Array.from(
+      document.body.querySelectorAll<HTMLElement>('[data-role="code-block"] [data-step-index]'),
+    );
+    expect(linkedLines.length).toBeGreaterThan(1);
+    const firstLinked = linkedLines[0]!;
+    firstLinked.click();
+    expect(goalPanel.dataset.goalStep).toBe(firstLinked.dataset.stepIndex);
+    expect(firstLinked.dataset.activeLine).toBe('true');
+  });
+
+  it('运行代码块期间显示 Checking 状态，完成后分别展示编译报错或运行输出', async () => {
+    let finish!: (list: LspDiagnostic[]) => void;
+    const panel = makePanel();
+    panel.run
+      .mockImplementationOnce(
+        () =>
+          new Promise<LspDiagnostic[]>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([diagnostic('type mismatch')])
+      .mockResolvedValueOnce([
+        {
+          severity: 3,
+          message: '2',
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        },
+      ]);
+    createLeanPanel.mockReturnValue(panel);
+    document.body.innerHTML = renderLesson('zh', 'first-proof');
+    bindLesson(document.body, 'zh', 'first-proof');
+
+    const t = messagesFor('zh').lesson;
+    const badgeEl = document.body.querySelector<HTMLElement>('[data-role="lesson-goal-badge"]')!;
+    const textEl = document.body.querySelector<HTMLElement>('[data-role="lesson-goal-text"]')!;
+    const runBtn = document.body.querySelector<HTMLButtonElement>('button[data-run-index="0"]')!;
+
+    runBtn.click();
+    expect(badgeEl.textContent).toBe(t.goalLive);
+    expect(textEl.textContent).toBe(t.goalChecking);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    finish([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(badgeEl.textContent).toBe(t.goalOutput);
+
+    runBtn.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(badgeEl.textContent).toBe(t.goalError);
+    expect(textEl.textContent).toContain('type mismatch');
+
+    runBtn.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(badgeEl.textContent).toBe(t.goalOutput);
+    expect(textEl.textContent).toContain('2');
+  });
 });

@@ -75,33 +75,44 @@ export const lessonsEn: LessonPage[] = [
     track: 'intro',
     navTitle: '02 · Your first proof',
     title: 'Your first leak-proof proof',
-    lead: 'No jargon to memorize: tell a rule apart from an answer, then let rfl earn the referee’s stamp.',
+    lead: 'Read assumptions above `⊢` and the target below it, then open step mode with `:= by` to use `rfl` and `exact`.',
     blocks: [
       {
         kind: 'p',
-        text: 'Quick spot-checks with a couple of numbers only show those samples worked. `rfl` does not guess: it makes Lean simplify both sides by the rules until they are visibly identical.',
+        text: 'In Lesson 01 we checked concrete `2 + 2 = 4`. Real theorems carry symbols and assumptions so one proof holds for every input, not just one test number.',
       },
       {
         kind: 'p',
-        text: 'Watch the Goal panel on the right: above `⊢` are the cards in your hand (empty for now), and below `⊢` is the conclusion the referee wants. After each move, check whether `⊢` shrank or cleared.',
+        text: 'Watch the Goal panel on the right: assumptions and variables sit above `⊢`, while the conclusion the referee wants sits below `⊢`. As you step through tactics, `⊢` updates live.',
       },
-      { kind: 'code', code: '#check Nat.add\n#eval 2 + 3' },
+      { kind: 'code', code: '#check (3 + 1 = 4)\n#eval 3 + 1' },
       {
         kind: 'p',
-        text: 'Click Run and the output shows two things: `Nat.add` tells you what kind of rule it is (two natural numbers in, one natural number out), while `#eval` gives the actual calculated answer (5).',
+        text: 'A quick recap before proving: `#check` inspects the statement type and `#eval` computes a value; neither opens a proof goal.',
       },
-      { kind: 'code', code: '#check (2 + 2 = 4)\nexample : 2 + 2 = 4 := rfl' },
+      {
+        kind: 'code',
+        code: 'theorem add_zero_right (n : Nat) : n + 0 = n := by\n  rfl',
+      },
       {
         kind: 'p',
-        text: 'In Lean, a statement like “2 + 2 = 4” is the question sheet, and a proof is a valid answer that satisfies the referee. Whenever both sides simplify to the exact same value, `rfl` fills out that sheet on the spot.',
+        text: 'Even when `n` is an unknown natural number, opening step mode with `:= by` and running `rfl` closes it immediately because `+ 0` simplifies to `n` by definition.',
+      },
+      {
+        kind: 'code',
+        code: 'theorem use_given (P : Prop) (hp : P) : P := by\n  exact hp',
+      },
+      {
+        kind: 'p',
+        text: 'What if the answer is already given as an assumption? Anything before `:` like `(hp : P)` sits above `⊢`, and `exact hp` hands that matching evidence straight to the referee.',
       },
       {
         kind: 'goal',
-        text: 'Start: ⊢ 2 + 2 = 4\nAfter rfl: no goals left\n\nThe `#check` line only asks what rule or statement a name stands for; it leaves no proof goal for the referee.',
+        text: 'Start: P : Prop, hp : P ⊢ P\nNote: `(hp : P)` declared before `:` appears above `⊢` as an assumption in your hand.\nAfter exact hp: no goals left\nNote: `exact hp` turns in evidence matching the target `P`, clearing the Goal panel.',
       },
       {
         kind: 'note',
-        text: 'Run it once, then change `rfl` to `rfl 1` to see Lean tell you `rfl` takes no extra inputs. Then change `2 + 2` to `2 + 3` and see what stays below `⊢` when the two sides do not match.',
+        text: 'Run it once: change `exact hp` to `exact P` to see Lean distinguish a statement (`Prop`) from evidence (`hp : P`), then try changing `n + 0` to `0 + n`.',
         tone: 'warn',
       },
       {
@@ -111,15 +122,16 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: 'One takeaway: `rfl` only settles equalities whose two sides simplify to the same thing; anything that uses assumptions or multiple reasoning steps uses other moves.',
+        text: 'One takeaway: use `rfl` when both sides reduce identically, and `exact` when a hypothesis already matches the goal.',
       },
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Change `#eval 2 + 3` to an expression you like, then replace `sorry` in `two_add_two` with `rfl` and watch the goal clear.',
-      hint: 'Use `#check` to inspect the rule (type) and `#eval` to compute a value; `two_add_two` opens step mode with `:= by`, and `rfl` finishes it by simplification.',
+      body: 'Prove `nat_add_zero` (adding `0` on the right) and `return_given` (turning in an existing assumption) to practice `rfl` and `exact`.',
+      hint: 'In `nat_add_zero`, both sides simplify to the same term, so use `rfl`; in `return_given`, you already have `hq : Q`, so finish with `exact hq`.',
       cta: 'Try it in the editor',
-      starter: '#check Nat.mul\n#eval 6 * 7\n\ntheorem two_add_two : 2 + 2 = 4 := by\n  sorry\n',
+      starter:
+        'theorem nat_add_zero (a : Nat) : a + 0 = a := by\n  sorry\n\ntheorem return_given (Q : Prop) (hq : Q) : Q := by\n  sorry\n',
     },
   },
   {
@@ -127,52 +139,68 @@ export const lessonsEn: LessonPage[] = [
     track: 'intro',
     navTitle: '03 · Write a proof function',
     title: 'Write an if…then… proof function',
-    lead: 'Read “if P then Q” as a chain of reasoning: whenever the premise holds, the conclusion must follow.',
+    lead: 'Turn “if P then Q” into a relay of two moves: `intro` brings assumptions in, and `apply` steps backward through rules.',
     blocks: [
       {
         kind: 'p',
-        text: 'The everyday example is “if it rains, the ground gets wet”. Lean’s `P → Q` is exactly that sentence: give it a proof that P holds and it returns a proof that Q holds.',
+        text: 'The everyday example is “if it rains, the ground gets wet”. Lean’s `P → Q` means: whenever `P` holds, you can produce evidence for `Q`.',
       },
       {
         kind: 'p',
-        text: 'Below `⊢` is `P → P`: the referee wants a chain of reasoning, “assume P, conclude P”. `intro h` takes the premise into your hand.',
+        text: 'Below `⊢` is `P → P`. Unlike Lesson 02, `P` is not above `⊢` yet—it sits on the left of the arrow—so you start with `intro` to bring it into your assumptions.',
       },
       { kind: 'code', code: 'theorem id_imp (P : Prop) : P → P := by\n  intro h\n  exact h' },
       {
         kind: 'p',
-        text: '`intro h` turns the goal `P → P` into “assume `h : P`, prove `P`”; `exact h` plays the card in your hand and finishes.',
+        text: '`intro h` moves the left side of `P → P` above `⊢` as `h : P`, leaving goal `P` for `exact h`.',
       },
       {
         kind: 'goal',
-        text: 'Start: ⊢ P → P\nAfter intro h: h : P ⊢ P\nAfter exact h: no goals left',
+        text: 'Start: ⊢ P → P\nNote: The goal still has an arrow `→`, so we cannot turn in a proof directly.\nAfter intro h: h : P ⊢ P\nNote: `intro h` moves `P` above `⊢` under the name `h`.\nAfter exact h: no goals left\nNote: The target matches `h`, so `exact h` closes the goal.',
       },
       {
         kind: 'code',
-        code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  exact h2 (h1 hp)',
+        code: 'theorem apply_once (P Q : Prop) (hp : P) (h : P → Q) : Q := by\n  apply h\n  exact hp',
       },
       {
         kind: 'p',
-        text: 'Implications compose: if rain→wet ground and wet ground→slippery, then rain→slippery. Two arrows in a row mean the conclusion of the first reasoning step feeds the second.',
+        text: 'Once you have assumptions, how do you use an implication rule? `apply h` matches `h : P → Q` against the goal `Q`, replacing it with its premise `⊢ P`, which `exact hp` closes.',
+      },
+      {
+        kind: 'goal',
+        text: 'Start: hp : P, h : P → Q ⊢ Q\nNote: You hold input `hp : P` and rule `h : P → Q`.\nAfter apply h: hp : P, h : P → Q ⊢ P\nNote: `apply h` works backward from the rule’s conclusion, asking only for `P`.\nAfter exact hp: no goals left\nNote: Handing over `hp` completes the step.',
+      },
+      {
+        kind: 'code',
+        code: 'theorem trans_imp (P Q R : Prop) (h1 : P → Q) (h2 : Q → R) : P → R := by\n  intro hp\n  apply h2\n  apply h1\n  exact hp',
+      },
+      {
+        kind: 'p',
+        text: 'Chaining two implications follows the same rhythm: `intro hp` takes `P`, then `apply h2` and `apply h1` step backward from `R` to `Q` and then to `P`.',
+      },
+      {
+        kind: 'goal',
+        text: 'Start: h1 : P → Q, h2 : Q → R ⊢ P → R\nNote: The goal starts with an arrow, so prepare to introduce `P`.\nAfter intro hp: hp : P ⊢ R\nNote: `hp : P` is now in scope and the target is `R`.\nAfter apply h2: hp : P ⊢ Q\nNote: Applying `h2 : Q → R` shrinks the goal to `Q`.\nAfter apply h1: hp : P ⊢ P\nNote: Applying `h1 : P → Q` shrinks the goal to `P`.\nAfter exact hp: no goals left\nNote: `hp` matches `⊢ P` directly.',
       },
       {
         kind: 'note',
-        text: 'Run it once, then change `exact h2 (h1 hp)` to `exact h1 (h2 hp)` and read how Lean refuses because the types do not line up.',
+        text: 'Run it once, then swap `apply h2` and `apply h1` in `trans_imp` and watch Lean reject `h1` because the goal asks for `R`, not `Q`.',
         tone: 'warn',
       },
       {
         kind: 'details',
-        summary: 'What does intro actually do?',
-        text: 'The goal `P → Q` is a function type. `intro h` means “assume I am given a proof of P; call it h”, and the goal becomes Q. It does not prove P; it moves the left side of the arrow into your assumptions.',
+        summary: 'How do intro, apply and exact h2 (h1 hp) relate?',
+        text: '`P → Q` is a function type. `intro` brings the left side in as a parameter, while `apply` steps backward from the conclusion until `exact` matches a hypothesis. Once comfortable, you can compress `apply h2; apply h1; exact hp` into one forward term: `exact h2 (h1 hp)`.',
       },
       {
         kind: 'note',
-        text: 'One takeaway: when the goal is an arrow, the first move is almost always `intro` to grab the left side.',
+        text: 'One takeaway: use `intro` when the goal has `→`, `apply` to step backward along a rule, and `exact` when a hypothesis fits.',
       },
     ],
     exercise: {
       title: 'Exercise',
       body: 'Prove `chain`: `(P → Q) → (Q → R) → P → R`, the arrow-only version of `trans_imp`.',
-      hint: 'The goal is all arrows, so `intro` repeatedly to bring `(P → Q)`, `(Q → R)` and `P` into scope; then feed the output of the first premise into the second.',
+      hint: 'Use `intro h1 h2 hp` to pull all three premises into scope, then follow `apply h2`, `apply h1`, `exact hp` (or compactly `exact h2 (h1 hp)`).',
       cta: 'Try it in the editor',
       starter: 'theorem chain (P Q R : Prop) : (P → Q) → (Q → R) → P → R := by\n  sorry\n',
     },
@@ -272,7 +300,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'goal',
-        text: 'a + 0 = a: ⊢ a + 0 = a, closed by rfl\n\n0 + a = a:\nzero branch: ⊢ 0 + 0 = 0, rfl\nsucc branch: ih : 0 + a = a\ngoal: ⊢ 0 + succ a = succ a',
+        text: 'a + 0 = a: ⊢ a + 0 = a\nNote: Addition recurses on the second argument, so adding 0 on the right closes immediately with `rfl`.\n0 + a = a: ⊢ 0 + a = a\nzero branch: ⊢ 0 + 0 = 0\nNote: The base domino falls immediately with `rfl`.\nsucc branch: ih : 0 + a = a\ngoal: ⊢ 0 + succ a = succ a\nNote: Assuming the previous domino fell (`ih`), Lessons 06 and 07 unpack `rw` and `simp` to substitute `ih` inside.',
       },
       {
         kind: 'p',
@@ -284,11 +312,11 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: 'In the `zero` branch `simp` reduces `0 + b` to `b`; in the `succ` branch `Nat.succ_add` rewrites `succ a + b` to `succ (a + b)`, and then the induction hypothesis `ih` takes over.',
+        text: 'In `zero` we preview `simp` (covered in detail in Lessons 06–07) to reduce `0 + b` and `b + 0`; in `succ`, `Nat.succ_add` and `Nat.add_succ` pull `succ` outside before applying `ih`.',
       },
       {
         kind: 'goal',
-        text: 'Before induction a: ⊢ a + b = b + a\nzero branch: ⊢ 0 + b = b + 0, closed by simp\nsucc branch: ih : a + b = b + a\ngoal: ⊢ succ a + b = b + succ a',
+        text: 'Before induction a: ⊢ a + b = b + a\nzero branch: ⊢ 0 + b = b + 0\nNote: `simp` simplifies both `0 + b` and `b + 0`.\nsucc branch: ih : a + b = b + a\ngoal: ⊢ succ a + b = b + succ a\nNote: Pull `succ` to the outside with the helper lemmas, then close using `ih`.',
       },
       {
         kind: 'note',
@@ -616,7 +644,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'goal',
-        text: 'Start: ⊢ Even (a + b), which unfolds to ⊢ ∃ k, a + b = 2 * k\nrcases: get x, y and hx : a = 2 * x, hy : b = 2 * y\nrefine ⟨x + y, ?_⟩: hand over the new witness\nFinish the equality with rw and ring',
+        text: 'Start: ⊢ Even (a + b), which unfolds to ⊢ ∃ k, a + b = 2 * k\nrcases: get x, y and hx : a = 2 * x, hy : b = 2 * y\nrefine ⟨x + y, ?_⟩: hand over the new witness\nFinish the equality with rw and grind',
       },
       {
         kind: 'code',
@@ -648,7 +676,7 @@ export const lessonsEn: LessonPage[] = [
     exercise: {
       title: 'Exercise',
       body: 'Write “even + even is even” in plain English first, then translate it sentence by sentence into Lean tactics; prove `even_eight` first, then `even_sum`.',
-      hint: '`rcases` both definitions, provide the new witness `x + y`, then finish with `rw` / `ring`.',
+      hint: '`rcases` both definitions, provide the new witness `x + y`, then finish with `rw` and `grind`.',
       cta: 'Try it in the editor',
       starter:
         'def Even (n : Nat) : Prop := ∃ k, n = 2 * k\n\ntheorem even_eight : Even 8 := by\n  sorry\n\ntheorem even_sum (a b : Nat) (ha : Even a) (hb : Even b) : Even (a + b) := by\n  sorry\n',
@@ -702,7 +730,7 @@ export const lessonsEn: LessonPage[] = [
       {
         kind: 'details',
         summary: 'From List to math: how do I unpack ∣?',
-        text: '`rcases h with ⟨k, rfl⟩` replaces `b` in the goal with `a * k`, which is why `rfl` or `ring` often finishes immediately. `rfl` works because both sides become literally the same expression.',
+        text: '`rcases h with ⟨k, rfl⟩` replaces `b` in the goal with `a * k`, which is why `rfl` or `rw [Nat.mul_assoc]` often finishes immediately. `rfl` works because both sides become literally the same expression.',
       },
       {
         kind: 'note',
@@ -712,7 +740,7 @@ export const lessonsEn: LessonPage[] = [
     exercise: {
       title: 'Exercise',
       body: 'Prove `dvd_mul_right`: if `a ∣ b`, then `a ∣ b * c`.',
-      hint: '`rcases h with ⟨k, rfl⟩`, hand over the new witness `k * c`, and finish with `ring` or `rfl`.',
+      hint: '`rcases h with ⟨k, rfl⟩`, hand over the new witness `k * c`, and finish with `rw [Nat.mul_assoc]` (or `grind`).',
       cta: 'Try it in the editor',
       starter: 'theorem dvd_mul_right (a b c : Nat) (h : a ∣ b) : a ∣ b * c := by\n  sorry\n',
     },
@@ -750,7 +778,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'goal',
-        text: 'Start: ⊢ Even (a + b), i.e. ⊢ ∃ k, a + b = 2 * k\nrcases ha with ⟨x, rfl⟩: replace a by 2 * x\nrcases hb with ⟨y, rfl⟩: replace b by 2 * y\nHand over witness x + y, then finish with ring',
+        text: 'Start: ⊢ Even (a + b), i.e. ⊢ ∃ k, a + b = 2 * k\nrcases ha with ⟨x, rfl⟩: replace a by 2 * x\nrcases hb with ⟨y, rfl⟩: replace b by 2 * y\nHand over witness x + y, then finish with grind',
       },
       {
         kind: 'code',
@@ -770,7 +798,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: 'Run it once, then change the witness in `even_add_even` from `x + y` to `x + y + 1` and see why `ring` stops closing the goal.',
+        text: 'Run it once, then change the witness in `even_add_even` from `x + y` to `x + y + 1` and see why `grind` stops closing the goal.',
         tone: 'warn',
       },
       {
@@ -971,7 +999,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: 'Run it once, then change `exact h2 (h1 hx)` in `subset_trans` to `exact h1 (h2 hx)` and see why the types no longer match.',
+        text: 'Run it once, then change `exact h2 x (h1 x hx)` in `subset_trans` to `exact h1 x (h2 x hx)` and see why the types no longer match.',
         tone: 'warn',
       },
       {
@@ -1053,11 +1081,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `bijective_id`: the identity function `fun x => x` is bijective.',
-      hint: 'Both directions follow directly from the definitions: `intro a b h` then `exact h` for injectivity; for surjectivity, use the target value itself as the witness.',
+      body: 'Prove `surjective_comp`: the composition of two surjective functions is surjective.',
+      hint: 'Start with `intro c`, unpack preimages with `rcases hg c with ⟨b, hb⟩` and `rcases hf b with ⟨a, ha⟩`, and finish with `exact ⟨a, by rw [ha, hb]⟩`.',
       cta: 'Try it in the editor',
       starter:
-        'def Injective {α β : Type} (f : α → β) : Prop := ∀ a b, f a = f b → a = b\n\ndef Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ndef Bijective {α β : Type} (f : α → β) : Prop := Injective f ∧ Surjective f\n\ntheorem bijective_id {α : Type} : Bijective (fun x : α => x) := by\n  sorry\n',
+        'def Surjective {α β : Type} (f : α → β) : Prop := ∀ b, ∃ a, f a = b\n\ntheorem surjective_comp {α β γ : Type} (f : α → β) (g : β → γ)\n    (hf : Surjective f) (hg : Surjective g) : Surjective (fun x => g (f x)) := by\n  sorry\n',
     },
   },
   {
@@ -1171,11 +1199,10 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Use strong induction to prove `fib_lt_two_pow`: `fib n ≤ 2 ^ n`, and notice where each of the two hypotheses is used.',
-      hint: 'Unfold `fib (k + 2)`, then apply the strong hypothesis to `k` and to `k + 1`; finish with `Nat.pow_succ` or `omega`.',
+      body: 'Use strong induction to prove `coin_2_3`: every integer `n + 2 ≥ 2` can be paid using 2-cent and 3-cent coins (`∃ a b, n + 2 = 2 * a + 3 * b`).',
+      hint: 'Use `induction n using Nat.strongRecOn with | ind n ih => match n with`: `0 => exact ⟨1, 0, rfl⟩`, `1 => exact ⟨0, 1, rfl⟩`, and for `k + 2` borrow `ih k (by grind)` and add one more 2-cent coin (`⟨a + 1, b, by grind⟩`).',
       cta: 'Try it in the editor',
-      starter:
-        'def fib : Nat → Nat\n  | 0 => 0\n  | 1 => 1\n  | n + 2 => fib n + fib (n + 1)\n\ntheorem fib_lt_two_pow (n : Nat) : fib n ≤ 2 ^ n := by\n  sorry\n',
+      starter: 'theorem coin_2_3 (n : Nat) : ∃ a b : Nat, n + 2 = 2 * a + 3 * b := by\n  sorry\n',
     },
   },
   {
@@ -1211,19 +1238,19 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'note',
-        text: 'The sortedness proof is left as an exercise; proving membership first and sortedness second is the usual split for this kind of theorem.',
+        text: 'This proof leaves zero `sorry`s: `sorted_insert` splits on empty, singleton, and two-or-more elements, `sort_sorted` chains it once per element, and you complete `mem_sort` in the exercise.',
       },
       {
         kind: 'goal',
-        text: 'sorted_insert must prove: Sorted xs → Sorted (insertNat x xs)\nnil branch: ⊢ Sorted [x], closed by simp [insertNat, Sorted]\ncons branch: split on x ≤ y and maintain sortedness in each case',
+        text: 'sorted_insert must prove: Sorted xs → Sorted (insertNat x xs)\nEmpty []: ⊢ Sorted [x]\nNote: `simp [insertNat, Sorted]` closes it immediately.\nSingleton [y]: split on x ≤ y vs ¬ x ≤ y\nNote: Each two-element result checks one adjacent `≤`.\nTwo+ elements y :: z :: zs: unpack hyz : y ≤ z and htail : Sorted (z :: zs)\nNote: When x > z, recurse structurally via `sorted_insert x (z :: zs) htail` to keep the tail sorted.',
       },
       {
         kind: 'code',
-        code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih',
+        code: 'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) : (xs : List Nat) → Sorted xs → Sorted (insertNat x xs)\n  | [], _ => by simp [insertNat, Sorted]\n  | [y], _ => by\n    by_cases hxy : x ≤ y\n    · simp [insertNat, hxy, Sorted]\n    · have hyx : y ≤ x := by grind\n      simp [insertNat, hxy, Sorted, hyx]\n  | y :: z :: zs, h => by\n    rcases h with ⟨hyz, htail⟩\n    by_cases hxy : x ≤ y\n    · simp [insertNat, hxy, Sorted, hyz, htail]\n    · by_cases hxz : x ≤ z\n      · have hyx : y ≤ x := by grind\n        simp [insertNat, hxy, hxz, Sorted, hyx, htail]\n      · have ih := sorted_insert x (z :: zs) htail\n        simp [insertNat, hxz] at ih\n        simp [insertNat, hxy, hxz, Sorted, hyz, ih]\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih',
       },
       {
         kind: 'note',
-        text: 'Run it once, then delete one `sorry` in `sorted_insert` without filling it in and read the error; then replace it with `exact h` and see why the type is wrong.',
+        text: 'Run it once, then delete `have hyx : y ≤ x := by grind` in the third branch of `sorted_insert` to see why `¬ x ≤ y` must explicitly provide the flipped inequality `y ≤ x`.',
         tone: 'warn',
       },
       {
@@ -1238,11 +1265,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Fill in the two `sorry`s in `sorted_insert` so `sort_sorted` no longer depends on unfinished proofs.',
-      hint: 'In the `cons` branch, `by_cases hxy : x ≤ y`: if it holds, put `x` first and unpack sortedness from `h`; otherwise recurse into the tail and use the induction hypothesis.',
+      body: 'The lesson already proves `Sorted (sort xs)` and `mem_insertNat`; complete the second half of the spec by proving `mem_sort`, showing `sort` preserves list membership.',
+      hint: 'Induct on `xs`: the `nil` branch simplifies with `simp [sort]`, and the `cons` branch rewrites `sort (y :: ys)` using `mem_insertNat` and the induction hypothesis `ih`.',
       cta: 'Try it in the editor',
       starter:
-        'def Sorted : List Nat → Prop\n  | [] => True\n  | [_] => True\n  | x :: y :: rest => x ≤ y ∧ Sorted (y :: rest)\n\ndef insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem sorted_insert (x : Nat) (xs : List Nat) (h : Sorted xs) :\n    Sorted (insertNat x xs) := by\n  induction xs with\n  | nil => simp [insertNat, Sorted]\n  | cons y ys ih =>\n    by_cases hxy : x ≤ y\n    · sorry\n    · sorry\n\ntheorem sort_sorted (xs : List Nat) : Sorted (sort xs) := by\n  induction xs with\n  | nil => simp [sort, Sorted]\n  | cons x xs ih =>\n    simp [sort]\n    exact sorted_insert x (sort xs) ih\n',
+        'def insertNat (x : Nat) : List Nat → List Nat\n  | [] => [x]\n  | y :: ys => if x ≤ y then x :: y :: ys else y :: insertNat x ys\n\ndef sort : List Nat → List Nat\n  | [] => []\n  | x :: xs => insertNat x (sort xs)\n\ntheorem mem_insertNat (x y : Nat) (xs : List Nat) :\n    y ∈ insertNat x xs ↔ y = x ∨ y ∈ xs := by\n  induction xs with\n  | nil =>\n    unfold insertNat\n    simp\n  | cons z zs ih =>\n    unfold insertNat\n    by_cases h : x ≤ z\n    · simp [h]\n    · simp [h, ih, or_left_comm]\n\ntheorem mem_sort (x : Nat) (xs : List Nat) : x ∈ sort xs ↔ x ∈ xs := by\n  sorry\n',
     },
   },
   {
@@ -1593,7 +1620,7 @@ export const lessonsEn: LessonPage[] = [
       },
       {
         kind: 'code',
-        code: 'import Std.Data.TreeMap\n\nopen Std\n\ndef prices : TreeMap Nat String compare :=\n  TreeMap.empty.insert 3 "c" |>.insert 1 "a" |>.insert 2 "b"\n\n#check prices',
+        code: 'import Std.Data.TreeMap\n\nopen Std\n\ndef prices : TreeMap Nat String compare :=\n  TreeMap.empty.insert 3 "c" |>.insert 1 "a" |>.insert 2 "b"\n\n#check prices\n#check @TreeMap.getElem?_erase_self',
       },
       {
         kind: 'p',
@@ -1632,11 +1659,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove `lookup_after_insert`: a `TreeMap` lookup immediately after insertion returns the inserted value.',
-      hint: 'Plain `simp` should do it; if you get stuck, `#check TreeMap.getElem?_insert` to see the insert rule.',
+      body: 'The lesson proves `tree_lookup_after_insert`; now prove deletion removes a key cleanly: `tree_erase_self`.',
+      hint: 'Plain `simp` applies `TreeMap.getElem?_erase_self` and reduces both sides to `none = none`.',
       cta: 'Try it in the editor',
       starter:
-        'import Std.Data.TreeMap\n\nopen Std\n\ntheorem lookup_after_insert (t : TreeMap Nat Nat compare) (k v : Nat) :\n    (t.insert k v)[k]? = some v := by\n  sorry\n',
+        'import Std.Data.TreeMap\n\nopen Std\n\ntheorem tree_erase_self (t : TreeMap Nat Nat compare) (k : Nat) :\n    (t.erase k)[k]? = none := by\n  sorry\n',
     },
   },
   {
@@ -1775,11 +1802,11 @@ export const lessonsEn: LessonPage[] = [
     ],
     exercise: {
       title: 'Exercise',
-      body: 'Prove total-balance conservation for every legal transfer.',
-      hint: 'Start with `simp [transfer, balance, HashMap.getD_insert, h.symm]`, then finish with `Nat.add_assoc`, `Nat.add_right_comm` and `Nat.sub_add_cancel hbal`.',
+      body: 'Alongside `total_conserved`, a ledger must also leave unrelated accounts untouched: prove `balance_other_after_transfer`.',
+      hint: 'Unfold `transfer`, `balance` and `HashMap.getD_insert`, using `hs.symm` and `hd.symm` to rule out `src` and `dst`: `simp [transfer, balance, HashMap.getD_insert, hs.symm, hd.symm]`.',
       cta: 'Try it in the editor',
       starter:
-        'import Std.Data.HashMap\n\nopen Std\n\nabbrev Ledger := HashMap Nat Nat\n\ndef balance (m : Ledger) (k : Nat) : Nat := m.getD k 0\n\ndef transfer (m : Ledger) (src dst amt : Nat) : Ledger :=\n  (m.insert src (balance m src - amt)).insert dst (balance m dst + amt)\n\ntheorem total_conserved (m : Ledger) (src dst amt : Nat) (h : src ≠ dst)\n    (hbal : amt ≤ balance m src) :\n    balance (transfer m src dst amt) src + balance (transfer m src dst amt) dst\n      = balance m src + balance m dst := by\n  sorry\n',
+        'import Std.Data.HashMap\n\nopen Std\n\nabbrev Ledger := HashMap Nat Nat\n\ndef balance (m : Ledger) (k : Nat) : Nat := m.getD k 0\n\ndef transfer (m : Ledger) (src dst amt : Nat) : Ledger :=\n  (m.insert src (balance m src - amt)).insert dst (balance m dst + amt)\n\ntheorem balance_other_after_transfer (m : Ledger) (src dst other amt : Nat)\n    (hs : other ≠ src) (hd : other ≠ dst) :\n    balance (transfer m src dst amt) other = balance m other := by\n  sorry\n',
     },
   },
 ];

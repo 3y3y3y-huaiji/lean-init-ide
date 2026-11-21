@@ -450,15 +450,20 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       if (menu.open) clampMenuPopover(menu);
     }
   };
+  const syncMenuPopover = (menu: HTMLDetailsElement) => {
+    if (menu.open) {
+      closeMenus(menu);
+    }
+    clampMenuPopover(menu);
+  };
   window.addEventListener('resize', onWindowResize);
   for (const menu of menuEls) {
-    menu.addEventListener('toggle', () => {
-      if (menu.open) {
-        closeMenus(menu);
-        clampMenuPopover(menu);
-      } else {
-        clampMenuPopover(menu);
-      }
+    menu.addEventListener('toggle', () => syncMenuPopover(menu));
+    menu.querySelector('summary')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      // 同步翻转 open 并立即计算视口偏移，避免 `<details>` 异步 toggle 造成首帧溢出闪烁。
+      menu.open = !menu.open;
+      syncMenuPopover(menu);
     });
   }
   const onDocumentPointerDown = (event: PointerEvent) => {

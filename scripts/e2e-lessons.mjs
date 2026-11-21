@@ -18,6 +18,8 @@
  */
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
+import { CHALLENGES } from '../src/challenges.ts';
+import { LESSON_CATALOG } from '../src/i18n/lesson-catalog.ts';
 
 const port = Number(process.env.LEAN_GATEWAY_PORT ?? 4174);
 const origin = `http://127.0.0.1:${port}`;
@@ -29,44 +31,9 @@ const workers = Math.max(1, Math.min(4, Number(process.env.LEAN_E2E_WORKERS ?? 2
 const shards = Math.max(1, Math.min(8, Number(process.env.LEAN_E2E_SHARDS ?? 1) || 1));
 const shard = Math.min(shards, Math.max(1, Number(process.env.LEAN_E2E_SHARD ?? 1) || 1));
 
-const SLUGS = [
-  'what-is-lean',
-  'first-proof',
-  'implication',
-  'connectives',
-  'induction',
-  'rewrite',
-  'simp',
-  'quantifiers',
-  'list-structure',
-  'math-proof-style',
-  'math-divisibility',
-  'math-parity',
-  'math-gcd',
-  'math-primes',
-  'math-sets',
-  'math-functions',
-  'math-relations',
-  'math-strong-induction',
-  'code-sorting',
-  'code-sum',
-  'math-axioms',
-  'math-mathlib',
-  'eng-hashmap',
-  'eng-bitvec',
-  'eng-rbmap',
-  'eng-array-bounds',
-  'eng-state-machine',
-];
+export const SLUGS = LESSON_CATALOG.map((entry) => entry.slug);
 
-const CHALLENGE_SLUGS = [
-  'even-plus-even',
-  'odd-plus-odd',
-  'even-plus-odd',
-  'add-comm',
-  'not-even-and-odd',
-  'double-induction',
-];
+export const CHALLENGE_SLUGS = CHALLENGES.map((entry) => entry.slug);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

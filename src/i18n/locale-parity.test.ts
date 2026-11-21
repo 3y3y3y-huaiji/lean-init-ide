@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import e2eLessonsSource from '../../scripts/e2e-lessons.mjs?raw';
+import { SLUGS as E2E_LESSON_SLUGS } from '../../scripts/e2e-lessons.mjs';
 import { en } from './en';
 import { LESSON_CATALOG } from './lesson-catalog';
 import { lessonsEn } from './lessons-en';
@@ -84,10 +85,6 @@ describe('i18n 字典结构对齐', () => {
 
   it('e2e-lessons 脚本包含全部课程 slug', () => {
     const expectedSlugs = lessonsZh.map((lesson) => lesson.slug);
-
-    const match = /const SLUGS = \[([\s\S]*?)\];/.exec(e2eLessonsSource);
-    expect(match).not.toBeNull();
-    const e2eSlugs = Array.from(match![1]!.matchAll(/'([^']+)'/g), (m) => m[1]!);
-    expect(e2eSlugs).toEqual(expectedSlugs);
+    expect(E2E_LESSON_SLUGS).toEqual(expectedSlugs);
   });
 });

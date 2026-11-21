@@ -255,7 +255,9 @@ export class LeanSession {
       });
       connection.onNotification('$/lean/fileProgress', (params: RawFileProgress) => {
         const uri = params?.textDocument?.uri;
-        if (!uri) return;
+        if (!uri || uri.toLowerCase() !== this.uri.toLowerCase()) return;
+        const version = params?.textDocument?.version;
+        if (typeof version === 'number' && version !== this.version) return;
         this.options.onFileProgress?.({
           uri,
           processingCount: Array.isArray(params.processing) ? params.processing.length : 0,

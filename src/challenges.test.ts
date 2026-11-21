@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import e2eLessonsSource from '../scripts/e2e-lessons.mjs?raw';
+import { CHALLENGE_SLUGS } from '../scripts/e2e-lessons.mjs';
 import {
   challengeBySlug,
   challengePath,
@@ -112,13 +113,7 @@ describe('挑战数据源', () => {
   });
 
   it('E2E 脚本里的挑战 slug 清单与数据源保持一致', () => {
-    const match = e2eLessonsSource.match(/const CHALLENGE_SLUGS = \[([\s\S]*?)\];/);
-    expect(match).not.toBeNull();
-    const slugs = Array.from(
-      match![1]!.matchAll(/'([^']+)'/g),
-      (item: RegExpMatchArray) => item[1]!,
-    );
-    expect(slugs).toEqual(CHALLENGES.map((challenge) => challenge.slug));
+    expect(CHALLENGE_SLUGS).toEqual(CHALLENGES.map((challenge) => challenge.slug));
   });
 });
 

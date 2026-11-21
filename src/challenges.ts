@@ -608,12 +608,12 @@ def clamp (lo hi x : Nat) : Nat :=
 theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
     lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi := by
   by_cases h1 : x < lo
-  · simp only [clamp, if_pos h1]
-    exact ⟨le_refl lo, h⟩
+  · simp only [clamp, ite_eq_left h1]
+    exact ⟨Nat.le_refl lo, h⟩
   · by_cases h2 : hi < x
-    · simp only [clamp, if_neg h1, if_pos h2]
-      exact ⟨h, le_refl hi⟩
-    · simp only [clamp, if_neg h1, if_neg h2]
+    · simp only [clamp, ite_eq_right h1, ite_eq_left h2]
+      exact ⟨h, Nat.le_refl hi⟩
+    · simp only [clamp, ite_eq_right h1, ite_eq_right h2]
       constructor <;> omega
 `,
       en: `-- Fix the branches: return lo when too small, hi when too large
@@ -624,12 +624,12 @@ def clamp (lo hi x : Nat) : Nat :=
 theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
     lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi := by
   by_cases h1 : x < lo
-  · simp only [clamp, if_pos h1]
-    exact ⟨le_refl lo, h⟩
+  · simp only [clamp, ite_eq_left h1]
+    exact ⟨Nat.le_refl lo, h⟩
   · by_cases h2 : hi < x
-    · simp only [clamp, if_neg h1, if_pos h2]
-      exact ⟨h, le_refl hi⟩
-    · simp only [clamp, if_neg h1, if_neg h2]
+    · simp only [clamp, ite_eq_right h1, ite_eq_left h2]
+      exact ⟨h, Nat.le_refl hi⟩
+    · simp only [clamp, ite_eq_right h1, ite_eq_right h2]
       constructor <;> omega
 `,
     },
@@ -721,7 +721,7 @@ theorem tier_bronze : collatzStep (collatzStep 6) = 10 := by
 theorem tier_silver (n : Nat) : collatzStep (2 * (n + 1)) = n + 1 := by
   unfold collatzStep
   have hmod : (2 * (n + 1)) % 2 = 0 := by omega
-  rw [if_pos hmod]
+  rw [ite_eq_left hmod]
   omega
 
 -- 👑 传说层是完整猜想，作为悬赏保留，标准解法不尝试证明它
@@ -743,7 +743,7 @@ theorem tier_bronze : collatzStep (collatzStep 6) = 10 := by
 theorem tier_silver (n : Nat) : collatzStep (2 * (n + 1)) = n + 1 := by
   unfold collatzStep
   have hmod : (2 * (n + 1)) % 2 = 0 := by omega
-  rw [if_pos hmod]
+  rw [ite_eq_left hmod]
   omega
 
 -- 👑 The legend is the full conjecture, kept as an open bounty and not attempted here

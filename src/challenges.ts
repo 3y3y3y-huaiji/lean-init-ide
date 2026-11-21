@@ -463,11 +463,11 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   intro h
   -- 拆成 n % 2 = 0 与 n % 2 = 1
   rcases h with ⟨he, ho⟩
-  unfold Even Odd at he ho
+  simp only [Even, Odd] at he ho
   -- 把 he 代进 ho，得到 0 = 1
   rw [he] at ho
   -- 0 不可能等于 1
-  exact Nat.zero_ne_succ 0 ho
+  exact Nat.succ_ne_zero 0 ho.symm
 `,
       en: `-- Even n means "n leaves remainder 0 modulo 2"
 def Even (n : Nat) : Prop := n % 2 = 0
@@ -479,11 +479,11 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   intro h
   -- Split it into n % 2 = 0 and n % 2 = 1
   rcases h with ⟨he, ho⟩
-  unfold Even Odd at he ho
+  simp only [Even, Odd] at he ho
   -- Substitute he into ho to get 0 = 1
   rw [he] at ho
   -- 0 cannot equal 1
-  exact Nat.zero_ne_succ 0 ho
+  exact Nat.succ_ne_zero 0 ho.symm
 `,
     },
     tactics: [
@@ -499,9 +499,9 @@ ${MOD_ODD_DEF}
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   intro h
   rcases h with ⟨he, ho⟩
-  unfold Even Odd at he ho
+  simp only [Even, Odd] at he ho
   rw [he] at ho
-  exact Nat.zero_ne_succ 0 ho
+  exact Nat.succ_ne_zero 0 ho.symm
 `,
       ),
       card(
@@ -516,7 +516,7 @@ ${MOD_ODD_DEF}
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
   intro h
   rcases h with ⟨he, ho⟩
-  unfold Even Odd at he ho
+  simp only [Even, Odd] at he ho
   rw [he] at ho
   omega
 `,
@@ -532,8 +532,8 @@ ${MOD_ODD_DEF}
 
 theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) :=
   fun ⟨he, ho⟩ =>
-    Nat.zero_ne_succ 0
-      (Eq.trans (Eq.symm (show n % 2 = 0 from he)) (show n % 2 = 1 from ho))
+    Nat.succ_ne_zero 0
+      (Eq.trans (Eq.symm (show n % 2 = 0 from he)) (show n % 2 = 1 from ho)).symm
 `,
       ),
     ],
@@ -1078,12 +1078,10 @@ theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
     lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi := by
   unfold clamp
   by_cases h1 : x < lo
-  · simp [clamp, h1]
-    exact ⟨Nat.le_refl lo, h⟩
+  · simp [h1, h]
   · by_cases h2 : hi < x
-    · simp [clamp, h1, h2]
-      exact ⟨h, Nat.le_refl hi⟩
-    · simp [clamp, h1, h2]
+    · simp [h1, h2, h]
+    · simp [h1, h2]
       omega
 `,
       ),

@@ -105,7 +105,7 @@ applyPatch(
             }
             bytes = zstdDecoder.decode(new Uint8Array(delivered), receipt.uncompressed.bytes);
             if (bytes.length !== receipt.uncompressed.bytes ||
-                hex(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes))) !==
+                hex(await crypto.subtle.digest('SHA-256', bytes)) !==
                     receipt.uncompressed.sha256)
                 throw new Error(\`Lean \${name} decoded receipt mismatch.\`);
         }
@@ -122,6 +122,19 @@ applyPatch(
   'lean.FS.writeFile(path, file.bytes);',
   'lean.FS.writeFile(path, file.bytes, { canOwn: true });',
   'MEMFS canOwn (skip 415MB copy)',
+);
+
+/**
+ * 5a. --server 引导进程只用于完成 LSP initialize 握手，不执行文档精化。
+ *     跳过 unpackLibrary 可省去 bootstrap 对数千个 .olean 的 MEMFS 节点构建；
+ *     文档工作进程（--worker）仍完整挂载库。
+ */
+applyPatch(
+  path.join('lean4', 'runtime-worker.js'),
+  `\t\tfor (const file of unpackLibrary(data.library)) {`,
+  `\t\tconst isServerBootstrap = Array.isArray(data.args) && data.args.includes('--server');
+\t\tfor (const file of (isServerBootstrap ? [] : unpackLibrary(data.library))) {`,
+  'server bootstrap skips library mount',
 );
 
 /**
@@ -217,6 +230,8 @@ applyPatch(
 /**
  * 5c. 扩展包从页面侧下载完成后随 initOptions 传进 worker（SharedArrayBuffer），
  *     挂到 library；页面重开会话时即可生效。
+ *     解压全部资产后立刻置空 zstdDecoder：zstddec 解码 110MB lean.wasm 时内部
+ *     Wasm 线性内存会撑到 ~170MB，作为模块全局变量会永久驻留。
  */
 applyPatch(
   leanWorker,
@@ -225,6 +240,7 @@ applyPatch(
     bootstrap = startProcess(['-j2', '--server'], 8, (message) => {`,
   `        delete payload[name];
     }
+    zstdDecoder = undefined;
     for (const [name, buffer] of Object.entries(data.options.extensionPacks ?? {})) {
         const bytes = new Uint8Array(buffer);
         const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));

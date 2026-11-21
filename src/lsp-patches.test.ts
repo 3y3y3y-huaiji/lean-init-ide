@@ -34,4 +34,19 @@ describe('@wasm-idle/lsp 补丁', () => {
     expect(workerSource).toContain('@vite-ignore');
     expect(bundledRuntimeSource).toContain('"encoding": "zstd"');
   });
+
+  it('解压后释放 zstd 解码器的 Wasm 堆', () => {
+    expect(workerSource).toContain('zstdDecoder = undefined;');
+  });
+
+  it('zstd SHA-256 直接校验视图，不再深拷贝 110MB', () => {
+    expect(workerSource).toContain(
+      "if (bytes.length !== receipt.uncompressed.bytes ||\n                hex(await crypto.subtle.digest('SHA-256', bytes)) !==",
+    );
+  });
+
+  it('--server 引导进程跳过库文件挂载', () => {
+    expect(runtimeWorkerSource).toContain("data.args.includes('--server')");
+    expect(runtimeWorkerSource).toContain('isServerBootstrap ? [] : unpackLibrary(data.library)');
+  });
 });

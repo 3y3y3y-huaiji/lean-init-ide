@@ -92,23 +92,23 @@ const sha256Hex = async (bytes: ArrayBuffer) => {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
-let decoderPromise: Promise<{ decode: (data: Uint8Array, size: number) => Uint8Array }> | null =
-  null;
+type ZstdDecoder = {
+  init: () => Promise<void>;
+  decode: (data: Uint8Array, size: number) => Uint8Array;
+};
 
-const getDecoder = () => {
-  decoderPromise ??= (async () => {
-    const url = new URL('/vendor/zstddec.mjs', self.location.origin).href;
-    const { ZSTDDecoder } = (await import(/* @vite-ignore */ url)) as {
-      ZSTDDecoder: new () => {
-        init: () => Promise<void>;
-        decode: (d: Uint8Array, n: number) => Uint8Array;
-      };
-    };
-    const decoder = new ZSTDDecoder();
-    await decoder.init();
-    return decoder;
-  })();
-  return decoderPromise;
+/**
+ * 每次 loadExtensionPacks 独立创建解码器：zstddec 解压时内部 Wasm 线性内存会
+ * 撑到几十 MB，解压结束即可随引用消失被 GC 回收，不再作为模块级单例永久驻留。
+ */
+const createDecoder = async (): Promise<ZstdDecoder> => {
+  const url = new URL('/vendor/zstddec.mjs', self.location.origin).href;
+  const { ZSTDDecoder } = (await import(/* @vite-ignore */ url)) as {
+    ZSTDDecoder: new () => ZstdDecoder;
+  };
+  const decoder = new ZSTDDecoder();
+  await decoder.init();
+  return decoder;
 };
 
 const fetchAsset = async (asset: ExtensionAsset, manifest: Manifest = wasm32Manifest) => {
@@ -157,38 +157,44 @@ export const loadExtensionPacks = async (
 
   const packs: ExtensionPacks = {};
   let loaded = 0;
-  for (const extension of selected) {
-    onProgress?.(total === 0 ? 0 : loaded / total, extension.label);
-    const indexAsset = extension.assets.find((asset) => asset.name.endsWith('.index.json'));
-    if (!indexAsset) throw new Error(`${extension.label} 缺少索引资产`);
-    const indexBytes = await fetchAsset(indexAsset);
-    const index = JSON.parse(new TextDecoder().decode(indexBytes)) as PackIndex;
-    loaded += indexAsset.bytes;
-    const indexShared = new Uint8Array(new SharedArrayBuffer(indexBytes.byteLength));
-    indexShared.set(new Uint8Array(indexBytes));
-    packs[indexAsset.name] = indexShared.buffer;
-
-    const decoder = await getDecoder();
-    for (const chunk of index.chunks) {
-      const asset = extension.assets.find((item) => item.name === chunk.path);
-      if (!asset) throw new Error(`${extension.label} 缺少分片 ${chunk.path}`);
-      const compressed = await fetchAsset(asset);
-      loaded += asset.bytes;
+  const state: { decoder?: ZstdDecoder } = {};
+  try {
+    for (const extension of selected) {
       onProgress?.(total === 0 ? 0 : loaded / total, extension.label);
-      const raw = decoder.decode(new Uint8Array(compressed), chunk.uncompressedBytes);
-      if (raw.byteLength !== chunk.uncompressedBytes) {
-        throw new Error(
-          `${chunk.path} 解压后 ${raw.byteLength} 字节，期望 ${chunk.uncompressedBytes}`,
-        );
+      const indexAsset = extension.assets.find((asset) => asset.name.endsWith('.index.json'));
+      if (!indexAsset) throw new Error(`${extension.label} 缺少索引资产`);
+      const indexBytes = await fetchAsset(indexAsset);
+      const index = JSON.parse(new TextDecoder().decode(indexBytes)) as PackIndex;
+      loaded += indexAsset.bytes;
+      const indexShared = new Uint8Array(new SharedArrayBuffer(indexBytes.byteLength));
+      indexShared.set(new Uint8Array(indexBytes));
+      packs[indexAsset.name] = indexShared.buffer;
+
+      const decoder = state.decoder ?? (state.decoder = await createDecoder());
+      for (const chunk of index.chunks) {
+        const asset = extension.assets.find((item) => item.name === chunk.path);
+        if (!asset) throw new Error(`${extension.label} 缺少分片 ${chunk.path}`);
+        const compressed = await fetchAsset(asset);
+        loaded += asset.bytes;
+        onProgress?.(total === 0 ? 0 : loaded / total, extension.label);
+        const raw = decoder.decode(new Uint8Array(compressed), chunk.uncompressedBytes);
+        if (raw.byteLength !== chunk.uncompressedBytes) {
+          throw new Error(
+            `${chunk.path} 解压后 ${raw.byteLength} 字节，期望 ${chunk.uncompressedBytes}`,
+          );
+        }
+        if ((await sha256Hex(raw.buffer as ArrayBuffer)) !== chunk.uncompressedSha256) {
+          throw new Error(`${chunk.path} 解压后 SHA-256 不一致`);
+        }
+        const logicalName = chunk.path.replace(/\.gz(\.bin)?$/, '');
+        const shared = new Uint8Array(new SharedArrayBuffer(raw.byteLength));
+        shared.set(raw);
+        packs[logicalName] = shared.buffer;
       }
-      if ((await sha256Hex(raw.buffer as ArrayBuffer)) !== chunk.uncompressedSha256) {
-        throw new Error(`${chunk.path} 解压后 SHA-256 不一致`);
-      }
-      const logicalName = chunk.path.replace(/\.gz(\.bin)?$/, '');
-      const shared = new Uint8Array(new SharedArrayBuffer(raw.byteLength));
-      shared.set(raw);
-      packs[logicalName] = shared.buffer;
     }
+  } finally {
+    // 解压结束（无论成功或抛错）立刻放掉解码器引用，让主线程 zstddec 的 Wasm 堆可被回收。
+    state.decoder = undefined;
   }
   onProgress?.(1, '');
   return packs;

@@ -99,7 +99,7 @@ const main = async () => {
       if (!controlled) throw new Error('page is not controlled by the service worker');
     }
 
-    // 设置面板里可以直接选下载源，四个选项都要在，且默认回显「自动」。
+    // 设置面板里可以直接选有效下载源（自动 / 站点 CDN / 国内镜像），不包含浏览器侧不可用的 GitHub。
     await page.click('#settings-toggle');
     const sourceSetting = await page.evaluate(() => {
       const select = globalThis.document.querySelector('#asset-source');
@@ -110,9 +110,10 @@ const main = async () => {
     });
     if (
       sourceSetting.value !== 'auto' ||
-      ['auto', 'cdn', 'mirror', 'github'].some((mode) => !sourceSetting.options.includes(mode))
+      ['auto', 'cdn', 'mirror'].some((mode) => !sourceSetting.options.includes(mode)) ||
+      sourceSetting.options.includes('github')
     ) {
-      throw new Error(`设置里的下载源不完整: ${JSON.stringify(sourceSetting)}`);
+      throw new Error(`设置里的下载源不符合预期: ${JSON.stringify(sourceSetting)}`);
     }
     await page.click('#settings-toggle');
     console.log(`[${stamp()}] 设置里的下载源正常`);
@@ -333,9 +334,10 @@ const main = async () => {
       !failureUi.visible ||
       !failureUi.text.includes('运行时资产下载失败') ||
       !failureUi.text.includes('lean-init-00.pack.gz.bin') ||
-      ['cdn', 'mirror', 'github', 'auto'].some((mode) => !failureUi.sources.includes(mode))
+      ['cdn', 'mirror', 'auto'].some((mode) => !failureUi.sources.includes(mode)) ||
+      failureUi.sources.includes('github')
     ) {
-      throw new Error(`资产失败恢复入口不完整: ${JSON.stringify(failureUi)}`);
+      throw new Error(`资产失败恢复入口不符合预期: ${JSON.stringify(failureUi)}`);
     }
     console.log(`[${stamp()}] 资产失败换源入口正常`);
     await page.evaluate(() => globalThis.__hideLoadFailure());

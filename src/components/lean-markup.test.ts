@@ -24,9 +24,11 @@ describe('renderLeanMarkup', () => {
     expect(html).not.toContain('52dvh');
   });
 
-  it('全屏变体带手机端全选/复制/粘贴工具栏，紧凑变体不渲染', () => {
+  it('全屏变体带触控全选/复制/粘贴工具栏，紧凑变体不渲染', () => {
     const full = renderLeanMarkup('zh', 'full', messagesFor('zh').playground);
     expect(full).toContain('data-role="mobile-actions"');
+    expect(full).toContain('touch:flex');
+    expect(full).toContain('max-[1024px]:flex');
     expect(full).toContain('data-role="select-all"');
     expect(full).toContain('data-role="copy-selection"');
     expect(full).toContain('data-role="paste"');
@@ -62,7 +64,7 @@ describe('renderLeanMarkup', () => {
     expect(html).toContain('data-library="std"');
   });
 
-  it('完整变体提供默认 wasm32、实验性 wasm64 手动切换及醒目警告说明', () => {
+  it('完整变体提供默认 wasm32、实验性 wasm64 手动切换、安全菜单浮层及有效失败恢复源', () => {
     const t = messagesFor('zh').playground;
     const html = renderLeanMarkup('zh', 'full', t);
     expect(html).toContain('data-role="runtime-arch"');
@@ -70,6 +72,12 @@ describe('renderLeanMarkup', () => {
     expect(html).toContain('data-runtime-arch="wasm64"');
     expect(html).toContain(t.runtimeExperimentalWarning);
     expect(html).toContain('data-active="true"');
+    expect((html.match(/data-role="menu-popover"/g) ?? []).length).toBe(3);
+    expect(html).toContain('calc(100vw-24px)');
+    expect(html).toContain('data-source="cdn"');
+    expect(html).toContain('data-source="mirror"');
+    expect(html).toContain('data-source="auto"');
+    expect(html).not.toContain('data-source="github"');
   });
 
   it('按诊断级别区分位置与徽章样式', () => {
@@ -80,7 +88,7 @@ describe('renderLeanMarkup', () => {
     expect(diagnosticBadgeClass(2)).toContain('text-warn');
     expect(diagnosticBadgeClass(4)).toContain('text-accent');
     expect(panelClass(true)).toContain('max-h-[150px]');
-    expect(panelClass(false)).toContain('max-[900px]:max-h-[320px]');
+    expect(panelClass(false)).toContain('max-[1024px]:max-h-[320px]');
   });
 
   it('showEditorLoadFailure 展示错误提示与可重试按钮并更新状态胶囊', () => {

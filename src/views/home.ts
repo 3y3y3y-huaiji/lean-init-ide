@@ -117,7 +117,7 @@ export const renderHome = (
         <p data-role="demo-note" class="mt-2 mb-4 text-sm leading-relaxed text-muted">${escapeHtml(demoStep.note)}</p>
         <div class="flex flex-wrap gap-2">
           <button class="${buttonClass}" type="button" data-role="demo-next">${demo.next}</button>
-          <button class="inline-flex min-h-10 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
+          <button class="inline-flex min-h-10 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3.5 text-sm text-muted hover:text-fg" type="button" data-role="demo-reset">${demo.reset}</button>
         </div>
       </div>
     </section>`;

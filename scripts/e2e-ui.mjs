@@ -1,8 +1,8 @@
 /**
  * 轻量多视口 UI 契约 E2E（不下载、不启动 102MB Lean WASM）。
  *
- * 覆盖手机（390×844）、平板竖屏（820×1180）、平板横屏（1024×768）与桌面（1440×900），
- * 校验：页面零运行时错误、无根文档横向溢出、主标题唯一性、设置面板不越界、SSG 标记与 CLS < 0.05。
+ * 覆盖手机（390×844）、平板竖屏（820×1180）、平板横屏（1024×768 / 1180×820 触屏）与桌面（1440×900），
+ * 校验：页面零运行时错误、无根文档横向溢出、主标题唯一性、设置及编辑器下拉浮层不越界、触控工具栏显隐、下载源与 SSG/CLS。
  */
 import { chromium } from 'playwright-core';
 
@@ -16,6 +16,7 @@ const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844, hasTouch: true },
   { name: 'tablet-portrait', width: 820, height: 1180, hasTouch: true },
   { name: 'tablet-landscape', width: 1024, height: 768, hasTouch: true },
+  { name: 'tablet-landscape-wide', width: 1180, height: 820, hasTouch: true },
   { name: 'desktop', width: 1440, height: 900, hasTouch: false },
 ];
 
@@ -132,6 +133,10 @@ const main = async () => {
       });
 
       const page = await context.newPage();
+      if (vp.hasTouch) {
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      }
       page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
       page.on('console', (msg) => {
         if (msg.type() === 'error') errors.push(`console.error: ${msg.text()}`);
@@ -149,11 +154,60 @@ const main = async () => {
         await assertWithinViewport(page, '#settings-panel', `${vp.name} ${route} 设置面板`);
         await page.click('#settings-toggle');
 
-        // TODO(PR 2): 修复 Playground 下拉菜单移动端溢出及平板触控栏断点后，在此补充：
-        // - assertWithinViewport(page, '[data-role="runtime-arch"] > div', ...)
-        // - assertWithinViewport(page, '[data-role="libraries"] > div', ...)
-        // - assertWithinViewport(page, '[data-role="panels"] > div', ...)
-        // - 平板端 [data-role="mobile-actions"] 可见性断言
+        if (route === '/zh/playground') {
+          await page.waitForSelector('[data-role="editor"]');
+          await page.waitForTimeout(100);
+
+          for (const menuRole of ['runtime-arch', 'libraries', 'panels']) {
+            await page.click(`[data-role="${menuRole}"] summary`);
+            await assertWithinViewport(
+              page,
+              `[data-role="${menuRole}"] [data-role="menu-popover"]`,
+              `${vp.name} ${menuRole} 菜单`,
+            );
+          }
+          // 再次点击当前打开的 panels 收起，保持页面初始清洁状态。
+          await page.click('[data-role="panels"] summary');
+
+          const pgState = await page.evaluate(() => {
+            const doc = globalThis.document;
+            const mobileActions = doc.querySelector('[data-role="mobile-actions"]');
+            const mobileActionsDisplay = mobileActions
+              ? globalThis.getComputedStyle(mobileActions).display
+              : null;
+            const assetOptions = [...doc.querySelectorAll('#asset-source option')].map(
+              (option) => option.value,
+            );
+            const failureSources = [
+              ...doc.querySelectorAll('[data-role="load-failure-actions"] [data-source]'),
+            ].map((btn) => btn.dataset.source);
+            return { mobileActionsDisplay, assetOptions, failureSources };
+          });
+
+          const expectMobileActions = vp.hasTouch || vp.width <= 1024;
+          if (expectMobileActions && pgState.mobileActionsDisplay === 'none') {
+            throw new Error(
+              `${vp.name} 期望显示触控剪贴板栏 mobile-actions，实际 display=${pgState.mobileActionsDisplay}`,
+            );
+          }
+          if (!expectMobileActions && pgState.mobileActionsDisplay !== 'none') {
+            throw new Error(
+              `${vp.name} 期望隐藏 mobile-actions，实际 display=${pgState.mobileActionsDisplay}`,
+            );
+          }
+          if (JSON.stringify(pgState.assetOptions) !== JSON.stringify(['auto', 'cdn', 'mirror'])) {
+            throw new Error(
+              `${vp.name} 下载源下拉选项异常: ${JSON.stringify(pgState.assetOptions)}`,
+            );
+          }
+          if (
+            JSON.stringify(pgState.failureSources) !== JSON.stringify(['cdn', 'mirror', 'auto'])
+          ) {
+            throw new Error(
+              `${vp.name} 失败恢复源按钮异常: ${JSON.stringify(pgState.failureSources)}`,
+            );
+          }
+        }
       }
 
       if (errors.length > 0) {

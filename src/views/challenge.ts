@@ -44,7 +44,7 @@ const renderIntro = (locale: Locale): string => {
     .join('');
   return `
     <details data-role="challenge-intro" open class="rounded-2xl border border-line bg-panel p-5">
-      <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-sm font-[650]">${escapeHtml(t.title)}</summary>
+      <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-sm font-[650]">${escapeHtml(t.title)}</summary>
       <p class="mt-2 mb-0 max-w-[720px] text-sm leading-relaxed text-muted">${escapeHtml(t.body)}</p>
       <ol class="m-0 mt-3 grid list-none grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2 p-0">${steps}</ol>
       <p class="mt-3 mb-0 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-xs leading-relaxed text-fg">${escapeHtml(t.codeNote)}</p>
@@ -105,7 +105,7 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
 
   return `
     <section data-role="challenge" class="pb-4">
-      <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center text-[13px] text-muted no-underline hover:text-accent" href="${challengesPath(locale)}">${detail.back}</a>
+      <a class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 items-center text-[13px] text-muted no-underline hover:text-accent" href="${challengesPath(locale)}">${detail.back}</a>
       <div class="mt-3 max-w-[760px]">
         <p class="m-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
         <h1 class="mt-0 mb-3 text-[clamp(26px,4vw,38px)] tracking-[-0.02em]">${escapeHtml(challenge.title[locale])}</h1>
@@ -148,11 +148,11 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
 
       <div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5">
         <details data-role="hint" class="rounded-xl border border-line bg-panel p-4">
-          <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.hintLabel}</summary>
+          <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.hintLabel}</summary>
           <p class="mt-2 mb-0 text-sm leading-relaxed text-muted">${escapeHtml(challenge.hint[locale])}</p>
         </details>
         <details data-role="solution" class="rounded-xl border border-line bg-panel p-4">
-          <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.solutionTitle}</summary>
+          <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.solutionTitle}</summary>
           <p class="mt-2 mb-2 text-sm leading-relaxed text-muted">${detail.solutionHint}</p>
           <button class="${ghostButtonClass}" type="button" data-role="load-solution">${detail.loadSolution}</button>
           <pre class="mt-3 mb-0 overflow-auto rounded-lg border border-line bg-panel-soft p-3 font-mono text-xs leading-[1.65] text-fg"><code>${escapeHtml(

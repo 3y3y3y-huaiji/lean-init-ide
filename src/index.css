@@ -3,6 +3,13 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
+/* 触屏设备（手机与平板，不论横竖屏宽度）统一匹配此变体，保障 44px 触控热区与编辑器剪贴板工具栏可用。 */
+@custom-variant touch {
+  @media (pointer: coarse), (hover: none) {
+    @slot;
+  }
+}
+
 @source './**/*.ts';
 
 /* hidden 属性优先级高于 inline-flex 等 display 工具类，避免徽章/面板该藏时不藏。 */

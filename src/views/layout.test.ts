@@ -88,23 +88,25 @@ describe('页面骨架渲染', () => {
     expect(html).toContain(`${t.theme.label} · ${t.theme.dark}`);
   });
 
-  it('窄屏头部保留图标、短语言标记和无障碍名称', () => {
+  it('窄屏与平板头部保留图标、短语言标记和无障碍名称，且不渲染无效 GitHub 下载源', () => {
     const html = renderLayout('zh', 'home', '');
 
     expect(html).toContain('data-theme-icon');
     expect(html).toContain('data-theme-text');
-    expect(html).toContain('max-[900px]:size-11');
+    expect(html).toContain('max-[1024px]:size-11');
+    expect(html).toContain('touch:min-h-11');
     expect(html).toContain('aria-label="设置"');
     expect(html).toContain('>EN<');
+    expect(html).not.toContain('value="github"');
   });
 
-  it('窄屏头部保持层叠上下文，设置面板可在视口内滚动', () => {
+  it('窄屏与平板头部保持层叠上下文，设置面板可在视口内滚动', () => {
     const html = renderLayout('zh', 'home', '');
 
     // static 会让 backdrop-filter 的层叠上下文压不住下面的编辑器。
-    expect(html).toContain('max-[900px]:relative');
-    expect(html).toContain('max-[900px]:max-h-[calc(100dvh-160px)]');
-    expect(html).toContain('max-[900px]:overflow-y-auto');
+    expect(html).toContain('max-[1024px]:relative');
+    expect(html).toContain('max-[1024px]:max-h-[calc(100dvh-160px)]');
+    expect(html).toContain('max-[1024px]:overflow-y-auto');
   });
 });
 
@@ -268,12 +270,17 @@ describe('下载源设置', () => {
     postMessage.mockClear();
   });
 
-  it('回显已保存的下载源', async () => {
+  it('回显已保存的下载源，历史残留 github 值回落到 auto', async () => {
     stubCaches('mirror');
     mount('zh');
     const select = document.body.querySelector<HTMLSelectElement>('#asset-source')!;
 
     await vi.waitFor(() => expect(select.value).toBe('mirror'));
+
+    stubCaches('github');
+    mount('zh');
+    const selectFallback = document.body.querySelector<HTMLSelectElement>('#asset-source')!;
+    await vi.waitFor(() => expect(selectFallback.value).toBe('auto'));
   });
 
   it('选择具体源会写入并通知 Service Worker', async () => {

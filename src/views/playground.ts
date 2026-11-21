@@ -30,7 +30,7 @@ const renderLessonNotice = (locale: Locale, lesson: LessonPage): HTMLElement | n
   notice.className = 'border-b border-line bg-panel-soft gutter-x py-3';
   const hint = lesson.exercise.hint
     ? `<details class="mt-2 max-w-[820px] rounded-lg border border-line bg-panel px-3 py-2">
-         <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-xs font-[650] text-fg">${escapeHtml(t.lessonNoticeHint)}</summary>
+         <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-xs font-[650] text-fg">${escapeHtml(t.lessonNoticeHint)}</summary>
          <p class="mt-1 mb-0 text-xs leading-relaxed text-muted">${renderInlineCode(lesson.exercise.hint)}</p>
        </details>`
     : '';
@@ -60,8 +60,8 @@ const renderChallengeNotice = (
   notice.className = 'border-b border-line bg-panel-soft gutter-x py-3';
   const actions = hasDraft
     ? `<div class="mt-2 flex flex-wrap items-center gap-2">
-         <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1 text-xs font-[650] text-accent-contrast" type="button" data-role="challenge-load">${t.challengeNoticeLoad}</button>
-         <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 py-1 text-xs text-muted hover:text-fg" type="button" data-role="challenge-keep">${t.challengeNoticeKeep}</button>
+         <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1 text-xs font-[650] text-accent-contrast" type="button" data-role="challenge-load">${t.challengeNoticeLoad}</button>
+         <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 py-1 text-xs text-muted hover:text-fg" type="button" data-role="challenge-keep">${t.challengeNoticeKeep}</button>
          <span data-role="challenge-notice-status" role="status" aria-live="polite" class="text-xs text-muted"></span>
        </div>`
     : '';

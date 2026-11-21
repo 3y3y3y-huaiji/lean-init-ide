@@ -58,8 +58,8 @@ export const renderLayout = (
 
   const navLink = (isActive: boolean) =>
     isActive
-      ? 'inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-accent-soft px-3 py-1.5 text-sm text-fg no-underline min-[901px]:min-h-9 min-[901px]:px-2.5'
-      : 'inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg min-[901px]:min-h-9 min-[901px]:px-2.5';
+      ? 'inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-accent-soft px-3 py-1.5 text-sm text-fg no-underline min-[1025px]:min-h-9 min-[1025px]:px-2.5 touch:min-h-11'
+      : 'inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-muted no-underline hover:bg-panel-soft hover:text-fg min-[1025px]:min-h-9 min-[1025px]:px-2.5 touch:min-h-11';
 
   const nav = navItems
     .map(
@@ -76,49 +76,49 @@ export const renderLayout = (
   const compactLocale = other === 'en' ? 'EN' : '中';
 
   return `
-    <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[900px]:relative">
-      <div class="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-4 gap-y-2 gutter-x py-2.5 min-[901px]:py-3.5">
-        <a class="inline-flex min-h-9 min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline max-[900px]:min-h-11" href="${homeHref}">
+    <header class="sticky top-0 z-20 border-b border-line bg-bg/82 backdrop-blur-md max-[1024px]:relative">
+      <div class="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-4 gap-y-2 gutter-x py-2.5 min-[1025px]:py-3.5">
+        <a class="inline-flex min-h-9 min-w-0 items-center gap-2.5 whitespace-nowrap font-[650] text-fg no-underline max-[1024px]:min-h-11 touch:min-h-11" href="${homeHref}">
           <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-[17px] font-bold text-accent-contrast">λ</span>
           <span class="truncate">Lean Init IDE</span>
         </a>
         <nav class="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[640px]:order-3 max-[640px]:w-full min-[641px]:ml-2 min-[641px]:flex-1 min-[641px]:pb-0">${nav}</nav>
-        <div class="order-2 ml-auto flex shrink-0 items-center gap-1.5 max-[400px]:gap-1 min-[641px]:order-none min-[641px]:ml-0 min-[901px]:gap-2">
+        <div class="order-2 ml-auto flex shrink-0 items-center gap-1.5 max-[400px]:gap-1 min-[641px]:order-none min-[641px]:ml-0 min-[1025px]:gap-2">
           <a
             id="lang-switch"
-            class="${ghostButtonClass} max-[900px]:size-11 max-[900px]:px-0"
+            class="${ghostButtonClass} max-[1024px]:size-11 max-[1024px]:px-0 touch:min-h-11"
             href="${switchHref}"
             title="${t.language.label}"
             aria-label="${t.language.label}"
           >
-            <span class="max-[900px]:hidden">${localeLabel(other)}</span>
-            <span class="hidden text-xs font-semibold max-[900px]:inline">${compactLocale}</span>
+            <span class="max-[1024px]:hidden">${localeLabel(other)}</span>
+            <span class="hidden text-xs font-semibold max-[1024px]:inline">${compactLocale}</span>
           </a>
           <button
             id="theme-toggle"
-            class="${ghostButtonClass} max-[900px]:size-11 max-[900px]:px-0"
+            class="${ghostButtonClass} max-[1024px]:size-11 max-[1024px]:px-0 touch:min-h-11"
             type="button"
             title="${themeLabel}"
             aria-label="${themeLabel}"
           >
-            <span data-theme-text class="max-[900px]:hidden">${themeLabel}</span>
-            <span data-theme-icon class="hidden max-[900px]:block">${themeIcons[pref]}</span>
+            <span data-theme-text class="max-[1024px]:hidden">${themeLabel}</span>
+            <span data-theme-icon class="hidden max-[1024px]:block">${themeIcons[pref]}</span>
           </button>
           <div class="relative">
             <button
               id="settings-toggle"
-              class="${ghostButtonClass} max-[900px]:size-11 max-[900px]:px-0"
+              class="${ghostButtonClass} max-[1024px]:size-11 max-[1024px]:px-0 touch:min-h-11"
               type="button"
               aria-expanded="false"
               aria-controls="settings-panel"
               aria-label="${t.settings.label}"
             >
-              <span class="max-[900px]:hidden">${t.settings.label}</span>
-              <span class="hidden max-[900px]:block">${slidersIcon}</span>
+              <span class="max-[1024px]:hidden">${t.settings.label}</span>
+              <span class="hidden max-[1024px]:block">${slidersIcon}</span>
             </button>
             <div
               id="settings-panel"
-              class="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(320px,calc(100vw-32px))] rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow)] max-[900px]:max-h-[calc(100dvh-160px)] max-[900px]:overflow-y-auto max-[900px]:overscroll-contain"
+              class="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(320px,calc(100vw-32px))] rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow)] max-[1024px]:max-h-[calc(100dvh-160px)] max-[1024px]:overflow-y-auto max-[1024px]:overscroll-contain"
               hidden
             >
               <h2 class="mt-0 mb-3 text-xs font-[650] uppercase tracking-[0.07em] text-muted">${t.settings.title}</h2>
@@ -138,7 +138,6 @@ export const renderLayout = (
                   <option value="auto">${t.playground.sourceAuto}</option>
                   <option value="cdn">${t.playground.sourceCdn}</option>
                   <option value="mirror">${t.playground.sourceMirror}</option>
-                  <option value="github">${t.playground.sourceGithub}</option>
                 </select>
                 <small class="mt-2 block text-xs leading-normal text-muted">${t.settings.assetSourceHint}</small>
               </label>
@@ -171,8 +170,8 @@ export const renderLayout = (
     >
       <span>${t.footer.note}</span>
       <span class="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-        <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center rounded-md px-2 text-muted no-underline hover:text-fg hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.footer.repo}</a>
-        <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center rounded-md px-2 text-muted no-underline hover:text-fg hover:underline" href="/${locale}/privacy">${t.footer.privacy}</a>
+        <a class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 items-center rounded-md px-2 text-muted no-underline hover:text-fg hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.footer.repo}</a>
+        <a class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 items-center rounded-md px-2 text-muted no-underline hover:text-fg hover:underline" href="/${locale}/privacy">${t.footer.privacy}</a>
         <span class="px-1">${t.footer.license}</span>
       </span>
     </footer>
@@ -215,7 +214,9 @@ export const bindLayout = (root: HTMLElement, locale: Locale) => {
   const sourceSelect = root.querySelector<HTMLSelectElement>('#asset-source');
   const syncSourceSelect = async () => {
     if (!sourceSelect) return;
-    sourceSelect.value = (await readSourcePreference()) ?? 'auto';
+    const saved = await readSourcePreference();
+    // 浏览器端已不再提供 github 下载源；历史残留值平滑回落到 auto，避免下拉框空选。
+    sourceSelect.value = saved === 'cdn' || saved === 'mirror' ? saved : 'auto';
   };
   void syncSourceSelect();
 

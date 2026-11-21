@@ -253,6 +253,12 @@ export type Messages = {
     /** 第一次点击重置后按钮变成的确认态。 */
     resetConfirmAction: string;
     exportCode: string;
+    /** 与导出成对的 .lean 导入入口。 */
+    importCode: string;
+    /** 导入成功后写入日志面板的文案。 */
+    logCodeImported: (name: string) => string;
+    /** 导入失败（如文件过大或读取失败）时写入日志面板的文案。 */
+    logImportFailed: (reason: string) => string;
     lessonPassed: string;
     /** 扩展库菜单：Init 内置，Std / Batteries 按需下载并占用额外内存。 */
     librariesTitle: string;

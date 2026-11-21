@@ -38,6 +38,19 @@ describe('renderLeanMarkup', () => {
     expect(compact).not.toContain('data-role="mobile-actions"');
   });
 
+  it('全屏工具栏提供与导出成对的导入按钮和隐藏文件输入', () => {
+    const t = messagesFor('zh').playground;
+    const html = renderLeanMarkup('zh', 'full', t);
+    expect(html).toContain('data-role="export"');
+    expect(html).toContain('data-role="import"');
+    expect(html).toContain('data-role="import-input"');
+    expect(html).toContain('accept=".lean,.txt,text/plain"');
+    expect(html).toContain(t.importCode);
+
+    const compact = renderLeanMarkup('zh', 'compact', t);
+    expect(compact).not.toContain('data-role="import"');
+  });
+
   it('带 lessonSlug 时在全屏工具栏渲染回到本课链接并编码 slug', () => {
     const html = renderLeanMarkup('en', 'full', messagesFor('en').playground, 'first proof');
     expect(html).toContain('href="/en/learn/first%20proof"');

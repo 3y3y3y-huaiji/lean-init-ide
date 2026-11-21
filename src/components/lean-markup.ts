@@ -385,6 +385,8 @@ export const renderLeanMarkup = (
           }
           <button class="${ghostButtonClass} data-[armed=true]:border-err/60 data-[armed=true]:bg-err/10 data-[armed=true]:text-err" type="button" data-role="reset">${t.resetCode}</button>
           <button class="${ghostButtonClass}" type="button" data-role="export">${t.exportCode}</button>
+          <button class="${ghostButtonClass}" type="button" data-role="import">${t.importCode}</button>
+          <input type="file" accept=".lean,.txt,text/plain" data-role="import-input" hidden />
           <span data-role="passed" hidden class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-ok/45 bg-ok/10 px-3 py-1 text-xs font-[650] text-ok">✓ ${t.lessonPassed}</span>
         </div>
         ${renderWorkspace(t, false)}

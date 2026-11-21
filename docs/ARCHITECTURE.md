@@ -1,3 +1,7 @@
+**何时读我**：理解应用层 / 语言层 / 资产层三层解耦、Service Worker 与 R2 网关流向及 CacheStorage 归属时阅读。
+**单一事实来源**：资产源与清单见 [asset-sources.mjs](../src/asset-sources.mjs) 与 [lean4-runtime.json](../config/lean4-runtime.json)。
+**维护边界**：不写本地命令清单（见 [DEVELOPMENT](DEVELOPMENT.md)）或 CI 工作流（见 [CI](CI.md)）；设计权衡与禁用方案见 [DECISIONS](DECISIONS.md)。
+
 # 架构与运行时分发
 
 这份文档讲「它是怎么跑起来的」：三层边界、主要数据流，以及约 102MB 运行时如何到达浏览器。

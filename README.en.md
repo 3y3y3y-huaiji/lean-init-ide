@@ -58,8 +58,8 @@ possible input at once.
 | Lesson | Topic | Key moves |
 | --- | --- | --- |
 | `what-is-lean` | A compiler that does math homework | `#eval`, `#check`, `rfl` |
-| `first-proof` | Your first leak-proof proof | `#check`, `#eval`, `rfl` simplification |
-| `implication` | Write an if…then… proof function | `intro`, `exact` |
+| `first-proof` | Your first leak-proof proof | Reading context above `⊢`, `rfl`, `exact` |
+| `implication` | Write an if…then… proof function | `intro`, `apply`, `exact` |
 | `connectives` | Pack and unpack: ∧ and ∨ | `⟨hp, hq⟩`, `h.1` / `h.2`, `cases` |
 | `induction` | Dominoes: induction is recursion | `induction ... with`, `simp only` |
 | `rewrite` | Ctrl+H, but for proofs | `rw [Nat.add_comm]`, `rw [h]` |
@@ -80,7 +80,7 @@ possible input at once.
 | `math-functions` | Injective, surjective, bijective | Function properties, composition |
 | `math-relations` | Equivalence relations: three rules for sorting data | `IsEquivalence`, same-length relation |
 | `math-strong-induction` | Strong induction: borrow every earlier step | `Nat.strongRecOn`, exponential bound |
-| `code-sorting` | Prove insertion sort never sorts wrong | `Sorted`, membership preservation, sortedness exercise |
+| `code-sorting` | Prove insertion sort never sorts wrong | `Sorted`, `sorted_insert`, `mem_sort` |
 | `code-sum` | Why concatenating two lists preserves sums | `sum`, `sum_append`, structural induction |
 | `math-axioms` | The cheat detector: `sorry` and `#print axioms` | `#print axioms`, `sorryAx` |
 | `math-mathlib` | From the browser sandbox to Mathlib | Built-in library boundary, local full toolchain |
@@ -110,7 +110,8 @@ If you would rather start from a classic puzzle than lesson one:
 
 ## Limitations
 
-- **Init by default**; Std and Batteries are optional extension packs. No Lean / Lake / Mathlib.
+- **Init by default** (wasm32); Std and Batteries are optional extension packs.
+- The experimental wasm64 runtime can load **Std / Lean core** and a curated **Mathlib subset** on demand (183 modules including `Mathlib.Order.Basic` and `Mathlib.Tactic.Spread`), not full Mathlib; wasm32 stays the default.
 - Requires cross-origin isolation (COOP/COEP) and SharedArrayBuffer; Chromium-based browsers work best.
 
 ## Privacy
@@ -174,6 +175,7 @@ not be discussed in public.
 ## Docs
 
 - [Docs index](docs/README.md)
+- [Architecture decisions (ADR)](docs/DECISIONS.md)
 - [CI / CD workflow map](docs/CI.md)
 - [Architecture and runtime distribution](docs/ARCHITECTURE.md)
 - [Local development and quality gates](docs/DEVELOPMENT.md)

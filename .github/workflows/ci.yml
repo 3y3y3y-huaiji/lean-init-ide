@@ -5,6 +5,11 @@ run-name: CI · ${{ github.ref_name }} · ${{ github.event_name }}
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      base:
+        description: '可选 diff 基线 ref / SHA（由 ci-refresh-open-prs 自动触发时传入 origin/main）'
+        required: false
+        default: ''
   # 允许 deploy.yml 在 direct push 时复用同一套检查。
   workflow_call:
 
@@ -44,12 +49,51 @@ jobs:
         with:
           # 需要与基线做 diff，必须拿全历史。
           fetch-depth: 0
+      - name: 门禁新鲜度硬校验
+        if: github.ref != 'refs/heads/main'
+        env:
+          TARGET_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git rev-parse --verify origin/main >/dev/null 2>&1 || git fetch --no-tags origin main:refs/remotes/origin/main
+          latest_ci_sha=$(git log -n 1 --format=%H origin/main -- \
+            .github/workflows/ \
+            .github/actions/ \
+            scripts/detect-changes.mjs \
+            scripts/e2e-lean.mjs \
+            scripts/e2e-lessons.mjs \
+            scripts/e2e-ui.mjs \
+            scripts/verify-build.mjs \
+            scripts/verify-manifest.mjs \
+            scripts/verify-docs.mjs \
+            eslint.config.js \
+            vitest.config.ts \
+            src/curriculum-invariants.test.ts \
+            src/architecture-invariants.test.ts)
+          if [ -n "$latest_ci_sha" ] && ! git merge-base --is-ancestor "$latest_ci_sha" "$TARGET_HEAD"; then
+            echo "::error::main 上的 CI/CD 门禁已升级（$latest_ci_sha），当前分支尚未包含最新门禁，请先合并或 rebase origin/main。"
+            exit 1
+          fi
       - name: 分类改动
         id: detect
         env:
-          # PR 用基线分支 tip；push 用上一次提交；手动触发交给脚本退回 HEAD^。
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # PR 用基线分支 tip；push 用上一次提交；手动刷新可显式传入 base；否则退回 HEAD^。
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.event.inputs.base }}
         run: node scripts/detect-changes.mjs --base "$BASE"
+
+  docs-check:
+    name: 文档不变量检查
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'true' || needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: 文档不变量校验
+        run: node scripts/verify-docs.mjs
 
   static:
     name: 静态检查
@@ -77,6 +121,8 @@ jobs:
         run: pnpm run typecheck
       - name: 资产清单结构
         run: pnpm run verify:manifest
+      - name: 文档不变量校验
+        run: pnpm run verify:docs
       - name: Spike 脚本静态检查
         if: needs.changes.outputs.spike_scripts == 'true'
         run: |

@@ -35,7 +35,13 @@ const flags = (paths) => {
 
 describe('CI 变更分类', () => {
   it('纯文档改动不进 install / build / e2e，也不触发部署', () => {
-    const result = flags(['docs/ARCHITECTURE.md', 'README.en.md', 'AGENTS.md']);
+    const result = flags([
+      'docs/ARCHITECTURE.md',
+      'README.en.md',
+      'AGENTS.md',
+      'src/i18n/AGENTS.md',
+      'scripts/AGENTS.md',
+    ]);
     expect(result.docsOnly).toBe(true);
     expect(result.static).toBe(false);
     expect(result.test).toBe(false);
@@ -45,6 +51,15 @@ describe('CI 变更分类', () => {
     expect(result.ui).toBe(false);
     expect(result.smoke).toBe(false);
     expect(result.fullLessons).toBe(false);
+    expect(result.deployable).toBe(false);
+  });
+
+  it('改动 docs 校验或分类脚本会触发静态检查与单测，但不触发构建和部署', () => {
+    const result = flags(['scripts/verify-docs.mjs']);
+    expect(result.docsOnly).toBe(false);
+    expect(result.static).toBe(true);
+    expect(result.test).toBe(true);
+    expect(result.build).toBe(false);
     expect(result.deployable).toBe(false);
   });
 

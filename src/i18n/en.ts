@@ -269,6 +269,9 @@ end
     resetCode: 'Reset exercise',
     resetConfirmAction: 'Confirm reset?',
     exportCode: 'Export .lean',
+    importCode: 'Import .lean',
+    logCodeImported: (name) => `Imported ${name}.`,
+    logImportFailed: (reason) => `Import failed: ${reason}`,
     lessonPassed: 'Exercise passed',
     librariesTitle: 'Libraries',
     librariesHint:

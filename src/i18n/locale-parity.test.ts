@@ -52,6 +52,15 @@ describe('i18n 字典结构对齐', () => {
     expect(emptyPaths(lessonsEn, 'lessonsEn')).toEqual([]);
   });
 
+  it('playground 提供成对的导入/导出文案，且函数签名与插值保持一致', () => {
+    expect(zh.playground.importCode).toBe('导入 .lean');
+    expect(en.playground.importCode).toBe('Import .lean');
+    expect(zh.playground.logCodeImported('a.lean')).toBe('已导入 a.lean。');
+    expect(en.playground.logCodeImported('a.lean')).toBe('Imported a.lean.');
+    expect(zh.playground.logImportFailed('x')).toBe('导入失败：x');
+    expect(en.playground.logImportFailed('x')).toBe('Import failed: x');
+  });
+
   it('每节课都有 slug、标题和内容块', () => {
     for (const [name, lessons] of [
       ['zh', lessonsZh],

@@ -26,13 +26,25 @@ type Context = {
   waitUntil?: (promise: Promise<unknown>) => void;
 };
 
-const extensions = (manifest as unknown as { extensions?: Array<{ assets: RuntimeAsset[] }> })
-  .extensions;
-const runtimeAssets = [...(manifest.assets as unknown as RuntimeAsset[])];
-for (const extension of extensions ?? []) runtimeAssets.push(...extension.assets);
+type RuntimeManifestShape = {
+  assets?: RuntimeAsset[];
+  extensions?: Array<{ assets?: RuntimeAsset[] }>;
+};
+
+export const collectManifestAssets = (input: RuntimeManifestShape): RuntimeAsset[] => {
+  const collected = [...(input.assets ?? [])];
+  for (const extension of input.extensions ?? []) {
+    collected.push(...(extension.assets ?? []));
+  }
+  return collected;
+};
+
 // 实验性 wasm64 资产与 wasm32 共用同一个 /cdn/ 网关与 R2 binding，不需要单独的 Worker；
-// 白名单照样只认清单里登记的 key 与精确字节数。
-runtimeAssets.push(...(wasm64Manifest.assets as unknown as RuntimeAsset[]));
+// 白名单照样只认清单里登记的 key 与精确字节数（同时囊括 wasm32 与 wasm64 的基础与扩展资产）。
+const runtimeAssets = [
+  ...collectManifestAssets(manifest as unknown as RuntimeManifestShape),
+  ...collectManifestAssets(wasm64Manifest as unknown as RuntimeManifestShape),
+];
 const assets = new Map<string, RuntimeAsset>(runtimeAssets.map((asset) => [asset.key, asset]));
 
 const CACHE_CONTROL = 'public,max-age=31536000,immutable';

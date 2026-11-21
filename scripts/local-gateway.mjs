@@ -17,13 +17,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
 const assets = path.join(root, 'public', 'wasm-lean4');
 const manifest = JSON.parse(readFileSync(path.join(root, 'config', 'lean4-runtime.json'), 'utf8'));
+const wasm64Manifest = JSON.parse(
+  readFileSync(path.join(root, 'config', 'lean4-wasm64-runtime.json'), 'utf8'),
+);
 const port = Number(process.env.LEAN_GATEWAY_PORT ?? 4174);
 const verbose = process.env.LEAN_GATEWAY_VERBOSE === '1';
 
+const collectAssets = (input) => [
+  ...(input.assets ?? []),
+  ...(input.extensions ?? []).flatMap((extension) => extension.assets ?? []),
+];
+
 const assetsByKey = new Map(
-  [...manifest.assets, ...(manifest.extensions ?? []).flatMap((extension) => extension.assets)].map(
-    (asset) => [asset.key, asset],
-  ),
+  [...collectAssets(manifest), ...collectAssets(wasm64Manifest)].map((asset) => [asset.key, asset]),
 );
 const etagCache = new Map();
 

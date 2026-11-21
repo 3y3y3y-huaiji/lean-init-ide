@@ -2,10 +2,16 @@
  * 练习通关判定：只声明「无 sorry + 无 Error」不够，清空编辑器也会被误判成通关。
  * 这里额外要求 starter 里声明的定理/定义名称仍然存在。
  */
-export type DiagnosticLike = { severity?: number };
+export type DiagnosticLike = { severity?: number; message?: string };
 
 const NAMED_DECLARATION =
   /\b(?:theorem|lemma|def|structure|inductive|class|abbrev|opaque|instance)\s+([A-Za-z_][A-Za-z0-9_']*)/g;
+
+const THEOREM_HEADER =
+  /\b(?:theorem|lemma)\s+[A-Za-z_][A-Za-z0-9_']*(?:(?!\b(?:theorem|lemma)\b)[\s\S])*?:=/g;
+
+const CHEAT_TACTIC_OR_AXIOM = /\b(?:sorry|admit|axiom)\b/;
+const SORRY_DIAGNOSTIC = /uses\s+'sorry'|sorryAx/i;
 
 /** 提取 starter 里所有具名声明的名字；`example` 没有名字，不参与通关判定。 */
 export const declarationNames = (code: string): string[] => {
@@ -14,6 +20,18 @@ export const declarationNames = (code: string): string[] => {
     if (match[1]) names.add(match[1]);
   }
   return [...names];
+};
+
+const normalizeWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+/** 提取代码中每条 theorem / lemma 到 `:=` 为止的归一化签名（用于防止篡改结论绕过判题）。 */
+export const theoremHeaders = (code: string): string[] => {
+  const clean = stripComments(code);
+  const headers: string[] = [];
+  for (const match of clean.matchAll(THEOREM_HEADER)) {
+    headers.push(normalizeWhitespace(match[0]));
+  }
+  return headers;
 };
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -38,7 +56,16 @@ export const isExerciseSolved = (
   const names = declarationNames(starter);
   if (names.length === 0) return false;
   const active = stripComments(current);
-  if (/\bsorry\b/.test(active)) return false;
+  if (CHEAT_TACTIC_OR_AXIOM.test(active)) return false;
   if (!names.every((name) => hasIdentifier(active, name))) return false;
-  return !diagnostics.some((item) => (item.severity ?? 1) === 1);
+
+  const headers = theoremHeaders(starter);
+  if (headers.length > 0) {
+    const normalizedCurrent = normalizeWhitespace(active);
+    if (!headers.every((header) => normalizedCurrent.includes(header))) return false;
+  }
+
+  return !diagnostics.some(
+    (item) => (item.severity ?? 1) === 1 || SORRY_DIAGNOSTIC.test(item.message ?? ''),
+  );
 };

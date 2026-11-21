@@ -562,6 +562,45 @@ describe('LeanSession', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(h.sent('textDocument/didOpen')).toHaveLength(1);
   });
+
+  it('$/lean/fileProgress 丢弃旧文档版本或其它 URI 的迟到通知', async () => {
+    const onFileProgress = vi.fn();
+    const h = makeHarness({ onFileProgress });
+    await h.session.start('def a := 1');
+    const runPromise = h.session.run('def b := 2', vi.fn());
+    await vi.advanceTimersByTimeAsync(0);
+
+    h.emitFileProgress({
+      textDocument: { uri: 'file:///workspace/Main.lean', version: 1 },
+      processing: [],
+    });
+    h.emitFileProgress({
+      textDocument: { uri: 'file:///workspace/Other.lean', version: 2 },
+      processing: [],
+    });
+    expect(onFileProgress).not.toHaveBeenCalled();
+
+    h.emitFileProgress({
+      textDocument: { uri: 'file:///workspace/Main.lean', version: 2 },
+      processing: [{}],
+    });
+    h.emitFileProgress({
+      textDocument: { uri: 'file:///workspace/Main.lean' },
+      processing: [],
+    });
+    expect(onFileProgress).toHaveBeenCalledTimes(2);
+    expect(onFileProgress).toHaveBeenNthCalledWith(1, {
+      uri: 'file:///workspace/Main.lean',
+      processingCount: 1,
+    });
+    expect(onFileProgress).toHaveBeenNthCalledWith(2, {
+      uri: 'file:///workspace/Main.lean',
+      processingCount: 0,
+    });
+
+    h.completeRun();
+    await runPromise;
+  });
 });
 
 describe('anchorImportDiagnostic', () => {

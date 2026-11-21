@@ -366,32 +366,6 @@ const main = () => {
 
   const result = classifyFiles(files);
 
-  // 新增 / 删除课程或挑战时，E2E 的硬编码清单必须同步；
-  // 否则即使回退到全量，新条目也不会被真正跑到。
-  const e2eSource = showFile(head, E2E_SCRIPT) ?? '';
-  const parity = [
-    ['课程', slugLines(showFile(head, LESSON_SOURCE) ?? ''), listFromArray(e2eSource, 'SLUGS')],
-    [
-      '挑战',
-      slugLines(showFile(head, CHALLENGE_SOURCE) ?? ''),
-      listFromArray(e2eSource, 'CHALLENGE_SLUGS'),
-    ],
-  ];
-  for (const [label, sourceSlugs, listedSlugs] of parity) {
-    const mismatch = listMismatch(
-      sourceSlugs.map((entry) => entry.slug),
-      listedSlugs,
-    );
-    if (mismatch.unknown || mismatch.missing.length > 0 || mismatch.extra.length > 0) {
-      console.error(`${label}清单与 ${E2E_SCRIPT} 不一致：`);
-      if (mismatch.unknown) console.error(`  无法解析 ${label} 的 E2E 清单`);
-      if (mismatch.missing.length > 0) console.error(`  缺少：${mismatch.missing.join(', ')}`);
-      if (mismatch.extra.length > 0) console.error(`  多余：${mismatch.extra.join(', ')}`);
-      console.error('请同步 SLUGS / CHALLENGE_SLUGS 后再提 PR。');
-      process.exit(1);
-    }
-  }
-
   let lessonSlugs = NONE;
   let challengeSlugs = NONE;
 

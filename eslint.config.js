@@ -17,6 +17,31 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: false }],
+    },
+  },
+  {
+    files: ['src/**/*.ts', 'functions/**/*.ts'],
+    ignores: ['**/*.test.ts', 'src/i18n/**', 'src/challenges.ts'],
+    rules: {
+      'max-lines': ['error', { max: 520, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    files: ['src/views/lesson.ts'],
+    rules: {
+      'max-lines': ['error', { max: 750, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    // PR B2 将把 lean-panel.ts 拆成职责单一的子模块并移除本豁免。
+    files: ['src/components/lean-panel.ts'],
+    rules: {
+      'max-lines': 'off',
+    },
+  },
+  {
     files: ['src/**/*.ts'],
     languageOptions: { globals: globals.browser },
   },

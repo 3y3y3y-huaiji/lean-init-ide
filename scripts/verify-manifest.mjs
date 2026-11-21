@@ -154,62 +154,92 @@ if (!Array.isArray(assets) || assets.length === 0) {
   }
 }
 
-const extensions = manifest.extensions;
-if (extensions !== undefined) {
+const validateExtensionList = (
+  extensions,
+  existingKeys,
+  recordError,
+  { requirePrefix = true, prefixMustStartWithWasm = false } = {},
+) => {
+  if (extensions === undefined) return;
   if (!Array.isArray(extensions)) {
-    fail('extensions 必须是数组');
-  } else {
-    const ids = new Set();
-    const keys = new Set(assets.map((asset) => asset?.key));
-    for (const [index, extension] of extensions.entries()) {
-      const label = `extensions[${index}]`;
-      if (!isNonEmptyString(extension?.id)) fail(`${label}.id 必须是非空字符串`);
-      else if (ids.has(extension.id)) fail(`${label}.id 重复`);
-      else ids.add(extension.id);
-      if (!isNonEmptyString(extension?.label)) fail(`${label}.label 必须是非空字符串`);
-      if (!isNonEmptyString(extension?.prefix)) fail(`${label}.prefix 必须是非空字符串`);
-      if (!Array.isArray(extension?.requires)) fail(`${label}.requires 必须是数组`);
-      if (!Array.isArray(extension?.assets) || extension.assets.length === 0) {
-        fail(`${label}.assets 必须是非空数组`);
-        continue;
-      }
-      if (!extension.assets.some((asset) => String(asset?.name ?? '').endsWith('.index.json'))) {
-        fail(`${label}.assets 缺少 .index.json`);
-      }
-      for (const [assetIndex, asset] of extension.assets.entries()) {
-        const assetLabel = `${label}.assets[${assetIndex}]`;
-        for (const field of ['name', 'key', 'contentType']) {
-          if (!isNonEmptyString(asset?.[field])) fail(`${assetLabel}.${field} 必须是非空字符串`);
-        }
-        if (!Number.isSafeInteger(asset?.bytes) || asset.bytes <= 0) {
-          fail(`${assetLabel}.bytes 必须是正整数`);
-        }
-        if (!/^[0-9a-f]{64}$/.test(asset?.sha256 ?? '')) {
-          fail(`${assetLabel}.sha256 必须是 64 位小写十六进制`);
-        }
-        if (!(asset?.contentType ?? '').includes('/')) {
-          fail(`${assetLabel}.contentType 缺少 MIME 主/子类型`);
-        }
-        if (asset?.encoding !== undefined && !['gzip', 'zstd'].includes(asset.encoding)) {
-          fail(`${assetLabel}.encoding 只能是 gzip 或 zstd`);
-        }
-        const key = asset?.key;
-        if (typeof key === 'string') {
-          if (key.startsWith('/')) fail(`${assetLabel}.key 不能以 / 开头`);
-          if (key.includes('..')) fail(`${assetLabel}.key 不能包含 ..`);
-          if (key.includes('\\')) fail(`${assetLabel}.key 不能包含反斜杠`);
-          if (keys.has(key)) fail(`${assetLabel}.key 重复`);
-          keys.add(key);
-        }
-      }
+    recordError('extensions 必须是数组');
+    return;
+  }
+  const ids = new Set();
+  const keys = new Set(existingKeys);
+  for (const [index, extension] of extensions.entries()) {
+    const label = `extensions[${index}]`;
+    if (!isNonEmptyString(extension?.id)) recordError(`${label}.id 必须是非空字符串`);
+    else if (ids.has(extension.id)) recordError(`${label}.id 重复`);
+    else ids.add(extension.id);
+    if (!isNonEmptyString(extension?.label)) recordError(`${label}.label 必须是非空字符串`);
+    if (requirePrefix && !isNonEmptyString(extension?.prefix)) {
+      recordError(`${label}.prefix 必须是非空字符串`);
     }
-    for (const extension of extensions) {
-      for (const dependency of extension?.requires ?? []) {
-        if (!ids.has(dependency)) fail(`${extension?.id}.requires 引用了未知扩展 ${dependency}`);
+    if (extension?.requires !== undefined && !Array.isArray(extension.requires)) {
+      recordError(`${label}.requires 必须是数组`);
+    } else if (requirePrefix && !Array.isArray(extension?.requires)) {
+      recordError(`${label}.requires 必须是数组`);
+    }
+    if (!Array.isArray(extension?.assets) || extension.assets.length === 0) {
+      recordError(`${label}.assets 必须是非空数组`);
+      continue;
+    }
+    if (!extension.assets.some((asset) => String(asset?.name ?? '').endsWith('.index.json'))) {
+      recordError(`${label}.assets 缺少 .index.json`);
+    }
+    for (const [assetIndex, asset] of extension.assets.entries()) {
+      const assetLabel = `${label}.assets[${assetIndex}]`;
+      for (const field of ['name', 'key', 'contentType']) {
+        if (!isNonEmptyString(asset?.[field]))
+          recordError(`${assetLabel}.${field} 必须是非空字符串`);
+      }
+      if (!Number.isSafeInteger(asset?.bytes) || asset.bytes <= 0) {
+        recordError(`${assetLabel}.bytes 必须是正整数`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(asset?.sha256 ?? '')) {
+        recordError(`${assetLabel}.sha256 必须是 64 位小写十六进制`);
+      }
+      if (!(asset?.contentType ?? '').includes('/')) {
+        recordError(`${assetLabel}.contentType 缺少 MIME 主/子类型`);
+      }
+      if (asset?.encoding !== undefined && !['gzip', 'zstd'].includes(asset.encoding)) {
+        recordError(`${assetLabel}.encoding 只能是 gzip 或 zstd`);
+      }
+      if (asset?.encoding === 'zstd') {
+        if (!Number.isSafeInteger(asset?.uncompressedBytes) || asset.uncompressedBytes <= 0) {
+          recordError(`${assetLabel}.uncompressedBytes 必须是正整数`);
+        }
+        if (!/^[0-9a-f]{64}$/.test(asset?.uncompressedSha256 ?? '')) {
+          recordError(`${assetLabel}.uncompressedSha256 必须是 64 位小写十六进制`);
+        }
+      }
+      const key = asset?.key;
+      if (typeof key === 'string') {
+        if (key.startsWith('/')) recordError(`${assetLabel}.key 不能以 / 开头`);
+        if (key.includes('..')) recordError(`${assetLabel}.key 不能包含 ..`);
+        if (key.includes('\\')) recordError(`${assetLabel}.key 不能包含反斜杠`);
+        if (prefixMustStartWithWasm && !key.startsWith('wasm-lean4/')) {
+          recordError(`${assetLabel}.key 必须位于 wasm-lean4/ 前缀下: ${key}`);
+        }
+        if (keys.has(key)) recordError(`${assetLabel}.key 重复`);
+        keys.add(key);
       }
     }
   }
-}
+  for (const extension of extensions) {
+    for (const dependency of extension?.requires ?? []) {
+      if (!ids.has(dependency))
+        recordError(`${extension?.id}.requires 引用了未知扩展 ${dependency}`);
+    }
+  }
+};
+
+validateExtensionList(
+  manifest.extensions,
+  assets.map((asset) => asset?.key),
+  fail,
+);
 
 if (errors.length > 0) {
   console.error(`资产清单校验失败（${errors.length} 项）：`);
@@ -356,6 +386,13 @@ try {
       });
     }
   }
+
+  validateExtensionList(
+    w64?.extensions,
+    (w64?.assets ?? []).map((asset) => asset?.key),
+    w64Fail,
+    { requirePrefix: false, prefixMustStartWithWasm: true },
+  );
 
   if (w64Errors.length > 0) {
     console.error(`wasm64 资产清单校验失败（${w64Errors.length} 项）：`);

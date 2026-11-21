@@ -301,27 +301,36 @@ await check('/api/telemetry 路由已接管', async () => {
 
 // 魔搭是第三方镜像，波动不应阻断发布：记录结果但不计入失败。
 if (manifest.mirror) {
-  const started = Date.now();
-  try {
-    const response = await request(`${manifest.mirror.baseUrl}${manifest.cacheKey}/${probe.name}`, {
-      headers: { Range: 'bytes=0-15' },
-    });
-    const ok = response.status === 206 || response.status === 200;
-    results.push({
-      name: '魔搭镜像可读（可选）',
-      ok,
-      optional: true,
-      detail: ok ? `${response.status}，${response.body.length} 字节` : `HTTP ${response.status}`,
-      ms: Date.now() - started,
-    });
-  } catch (error) {
-    results.push({
-      name: '魔搭镜像可读（可选）',
-      ok: false,
-      optional: true,
-      detail: error.message,
-      ms: Date.now() - started,
-    });
+  const mirrorPrefix = manifest.mirror.prefix ?? manifest.cacheKey;
+  const probeMirrorAsset = async (assetName, checkLabel) => {
+    const started = Date.now();
+    try {
+      const response = await request(`${manifest.mirror.baseUrl}${mirrorPrefix}/${assetName}`, {
+        headers: { Range: 'bytes=0-15' },
+      });
+      const ok = response.status === 206 || response.status === 200;
+      results.push({
+        name: checkLabel,
+        ok,
+        optional: true,
+        detail: ok ? `${response.status}，${response.body.length} 字节` : `HTTP ${response.status}`,
+        ms: Date.now() - started,
+      });
+    } catch (error) {
+      results.push({
+        name: checkLabel,
+        ok: false,
+        optional: true,
+        detail: error.message,
+        ms: Date.now() - started,
+      });
+    }
+  };
+
+  await probeMirrorAsset(probe.name, '魔搭镜像可读（可选）');
+  const extProbe = manifest.extensions?.[0]?.assets?.[0];
+  if (extProbe) {
+    await probeMirrorAsset(extProbe.name, '魔搭扩展镜像可读（可选）');
   }
 }
 

@@ -165,8 +165,20 @@ for (const asset of assetsToPrepare) {
     data = readFileSync(path.join(root, asset.local));
     verify(asset, data);
   } else if (asset.encoding === 'zstd') {
-    data = toZstd(asset, await fetchUpstream(asset));
-    label = 'upstream gzip -> zstd';
+    // 优先直接拉取已发布在 CDN / 魔搭的预压缩 .gz.bin，避免每次无意义下载 130MB .gz 再重压缩；
+    // 只有当直接拉取失败（如首次构建新版本）时，才回退到上游 gzip 现场转压。
+    try {
+      ({ data, label } = await fetchFromSources(asset));
+    } catch (directError) {
+      if (!asset.upstream || !asset.upstreamBytes || !asset.upstreamSha256) {
+        throw directError;
+      }
+      console.warn(
+        `warn   ${asset.name} 预压缩直连未命中（${directError.message ?? directError}），回退上游 gzip 转压`,
+      );
+      data = toZstd(asset, await fetchUpstream(asset));
+      label = 'upstream gzip -> zstd';
+    }
   } else {
     ({ data, label } = await fetchFromSources(asset));
   }

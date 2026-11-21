@@ -33,8 +33,6 @@ on:
       - 'scripts/package-wasm64-extensions.ts'
       - 'scripts/wasm64-*.ts'
       - 'scripts/check-cpp.sh'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
       - 'tsconfig.spike.json'
       - 'vitest.spike.config.ts'
       - '.github/workflows/spike-wasm64.yml'
@@ -55,8 +53,7 @@ on:
       - 'scripts/package-wasm64-runtime.ts'
       - 'scripts/package-wasm64-extensions.ts'
       - 'scripts/wasm64-*.ts'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+      - 'scripts/check-cpp.sh'
       - 'tsconfig.spike.json'
       - 'vitest.spike.config.ts'
       - '.github/workflows/spike-wasm64.yml'
@@ -77,6 +74,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 # 同一触发源的新一轮直接取消上一轮：push 不再排在旧构建后面干等。
 # 用 event_name 分组，nightly/manual 的长任务不会被随手一推杀掉。
@@ -90,8 +88,29 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      run_build: ${{ steps.dedup.outputs.run_build }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: PR 合并去重（避免与刚通过的 PR smoke 重复运行）
+        id: dedup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ "$EVENT_NAME" != "push" ] || [[ "$COMMIT_MSG" == *"[wasm64-deep]"* ]]; then
+            echo "run_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.merged_at != null)] | length' || echo 0)
+          if [ "$merged" -gt 0 ]; then
+            echo "run_build=false" >> "$GITHUB_OUTPUT"
+            echo "PR merge commit already verified by PR wasm64 smoke; skipping duplicate push build"
+          else
+            echo "run_build=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v7
         with:
@@ -122,7 +141,7 @@ jobs:
 
   prepare:
     needs: lint
-    if: github.event.inputs.mode != 'publish'
+    if: github.event.inputs.mode != 'publish' && needs.lint.outputs.run_build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -1180,6 +1199,12 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
       - uses: actions/download-artifact@v8
         if: github.event.inputs.mode != 'publish'
         with:
@@ -1378,7 +1403,6 @@ jobs:
           '
 
       - name: 发布 GitHub Release（runtime-v<lean>-wasm64，归档与构建期使用）
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
@@ -1395,7 +1419,17 @@ jobs:
             gh release create "$TAG" \
               -R "$REPO" \
               --target "$TARGET_SHA" \
+              --prerelease \
+              --latest=false \
               --title "Lean ${VERSION} wasm64 experimental runtime" \
               --notes "Experimental wasm64 (Memory64) runtime + 64-bit Init oleans. Opt-in trial only; do not use in production."
+          else
+            gh release edit "$TAG" -R "$REPO" --prerelease --latest=false
           fi
-          gh release upload "$TAG" -R "$REPO" runtime/* --clobber
+          shopt -s nullglob
+          FILES=()
+          for f in runtime/* runtime/extensions/*/*; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+          [ "${#FILES[@]}" -gt 0 ] || { echo "未找到可上传的 Release 文件"; exit 1; }
+          gh release upload "$TAG" -R "$REPO" "${FILES[@]}" --clobber

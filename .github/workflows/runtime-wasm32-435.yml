@@ -637,7 +637,6 @@ jobs:
             config/lean4-runtime.json
 
       - name: 发布 GitHub Release（回退源）
-        if: env.PUBLISH_SCOPE == 'all'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -645,19 +644,25 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
+              --latest=false \
               --title "Lean ${LEAN_VERSION} wasm32 runtime" \
               --notes "wasm32 runtime + Init oleans, packaged by GitHub Actions."
           fi
-          gh release upload "$TAG" \
-            work/artifact/lean.mjs \
-            work/artifact/producer-receipt.json \
-            work/artifact/lean-init.index.json \
-            work/artifact/*.gz \
-            work/artifact/*.gz.bin \
-            work/artifact/runtime-manifest.json \
-            work/artifact/SHA256SUMS \
-            --clobber
-          gh release upload "$TAG" scripts/assets/runner-worker.js --clobber
+          if [ "$PUBLISH_SCOPE" = "all" ]; then
+            gh release upload "$TAG" \
+              work/artifact/lean.mjs \
+              work/artifact/producer-receipt.json \
+              work/artifact/lean-init.index.json \
+              work/artifact/*.gz \
+              work/artifact/*.gz.bin \
+              work/artifact/runtime-manifest.json \
+              work/artifact/SHA256SUMS \
+              scripts/assets/runner-worker.js \
+              --clobber
+          fi
+          if [ -d work/extensions/upload ] && ls work/extensions/upload/lean-* >/dev/null 2>&1; then
+            gh release upload "$TAG" work/extensions/upload/lean-* --clobber
+          fi
 
       - name: 上传 R2
         if: env.PUBLISH_TARGET == 'r2' || env.PUBLISH_TARGET == 'both'

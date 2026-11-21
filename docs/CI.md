@@ -5,23 +5,24 @@ Actions 里只保留三类工作流：应用 CI、运行时构建、线上巡检
 
 | 工作流 | 触发 | 用途 | 产物 / 影响 |
 | --- | --- | --- | --- |
-| [ci.yml](../.github/workflows/ci.yml) `CI · 应用` | PR、手动、被 Deploy 复用 | 先由 `changes` 分类：文档/工作流直接过、课程内容增量 e2e、运行时改动全量 e2e；另有 static / test / build / audit / actionlint | PR 检查结果，不部署 |
-| [deploy.yml](../.github/workflows/deploy.yml) `Deploy · 应用` | push `main`、手动 | PR 合并：直接构建、部署、smoke；direct push：先复用 `CI · 应用`，通过后再部署 | 生产站点 |
-| [runtime-wasm32-435.yml](../.github/workflows/runtime-wasm32-435.yml) `Runtime · Lean 4.35 wasm32` | `runtime-v*` tag、手动 | 构建 4.35 wasm32 运行时、Init oleans 与 zstd 资产；手动可选发布 R2 / 魔搭 / GitHub Release | artifact；发布时写 R2、魔搭、Release |
-| [spike-wasm64.yml](../.github/workflows/spike-wasm64.yml) `Runtime · Lean wasm64 gate` | PR / push `main`（仅构建链路径）、nightly、手动 | 用 `scripts/pin-lean.ts` 的 Lean 版本（默认 4.36.0-rc2）构建 wasm64（GMP + 三处栈补丁），smoke 跑 Init 编译、LSP 与 `wasm64-patch-equivalence` 差分门禁；`deep` 追加 Mathlib 裁切与 release/npm | 不自动部署；`deep` 产物可手动发布 R2 / 魔搭 / Release |
+| [ci.yml](../.github/workflows/ci.yml) `CI · 应用` | PR、手动、被 Deploy 复用 | 先由 `changes` 分类：文档/工作流直接过、纯 UI 改动跑轻量多视口 `e2e-ui`、课程/视图改动增量或金丝雀 e2e、运行时改动全量 e2e；另有 static（含 spike TS） / test / build / audit（仅依赖变更） / actionlint | PR 检查结果，不部署 |
+| [deploy.yml](../.github/workflows/deploy.yml) `Deploy · 应用` | push `main`、手动 | 先判定来源与 `deployable`：非可部署改动直接跳过；PR 合并直接构建部署并 smoke；direct push 先复用 `CI · 应用`，通过后再部署 | 生产站点 |
+| [pr-cleanup.yml](../.github/workflows/pr-cleanup.yml) `Cleanup · 自动删除已合并 PR 分支` | `pull_request` (`closed`) | 同仓 PR 合并后自动兜底清理临时源分支（跳过 `main`、`release/*`、`spike/*`），与仓库 `delete_branch_on_merge` 双保险 | 仓库分支整洁 |
+| [runtime-wasm32-435.yml](../.github/workflows/runtime-wasm32-435.yml) `Runtime · Lean 4.35 wasm32` | `runtime-v*` tag、手动 | 构建 4.35 wasm32 运行时、Init oleans 与 zstd 资产（及可选 Std/Batteries）；发布时打 `--latest=false` 并同步扩展资产到 Release | artifact；发布时写 R2、魔搭、Release |
+| [spike-wasm64.yml](../.github/workflows/spike-wasm64.yml) `Runtime · Lean wasm64 gate` | PR / push `main`（仅构建链路径，PR 合并自动去重）、nightly、手动 | 用 `scripts/pin-lean.ts` 的 Lean 版本（默认 4.36.0-rc2）构建 wasm64（GMP + 三处栈补丁），smoke 跑 Init 编译、LSP 与 `wasm64-patch-equivalence` 差分门禁；`deep` 追加 Mathlib 裁切与 release/npm | 不自动部署；`deep` 产物可手动发布 R2 / 魔搭 / Release（`--prerelease --latest=false`） |
 | [cpp-gate.yml](../.github/workflows/cpp-gate.yml) `CPP Gate` | PR / push `main`（`scripts/**/*.c*`） | 手写 C/C++ 的 clang-format / clang-tidy / `-Werror` | 只读检查 |
 | [depth-probe.yml](../.github/workflows/depth-probe.yml) `Depth probe` | push `main`（探针路径）、手动 | 浏览器 Worker 递归上界、JSPI/ASYNCIFY/tail-call 对照、WHNF 尾调用审计 | artifact，只读 |
 | [modelscope.yml](../.github/workflows/modelscope.yml) `Runtime · 魔搭镜像` | 手动 | 单独重传或校验魔搭镜像 | ModelScope |
 | [smoke.yml](../.github/workflows/smoke.yml) `Smoke · 线上巡检` | 每天 01:00 UTC、手动 | 首页、COOP/COEP、`sw.js`、`/cdn/` Range、白名单 404 巡检 | 只读 |
 
-> `CI · 应用` 对外的 required check 固定为：`changes` / `static` / `test` / `build` / `浏览器端到端` / `audit` / `actionlint`。其中 `浏览器端到端` 是聚合门禁（`e2e-gate`），内部再拆成 `e2e-smoke` / `e2e-lessons-full` / `e2e-lessons-changed`；内部 job 改名不影响分支保护。变更分类跳过的 job 在 PR 上显示为 Skipped，GitHub 按通过处理。
+> `CI · 应用` 对外的 required check 固定为：`static` / `test` / `build` / `浏览器端到端` / `audit`（另有 `changes` / `actionlint`）。其中 `浏览器端到端` 是聚合门禁（`e2e-gate`），内部拆成 `e2e-ui`（20 秒级手机/平板/桌面多视口无 WASM 契约）、`e2e-smoke` / `e2e-lessons-full` / `e2e-lessons-changed`（含视图改动触发的金丝雀）；内部 job 改名不影响分支保护。变更分类跳过的 job 在 PR 上显示为 Skipped，GitHub 按通过处理。
 
 ## 命名与触发约定
 
 - 应用 CI 只叫 `CI · 应用`，在 PR / 手动触发，并被 `Deploy · 应用` 在 direct push 时复用；运行时构建不要混进来。
-- 应用部署只叫 `Deploy · 应用`，只在 push `main` / 手动触发。PR 合并直接部署；direct push 先跑 CI，CI 不过不部署，不重复跑两份 PR 检查。
-- 运行时工作流统一 `Runtime · Lean <version> wasm32|wasm64`。wasm64 门禁只在构建链路径变更时触发，避免文档改动占用 6 小时 runner。
-- 日常主分支不自动发布运行时；只有手动 dispatch 或 `runtime-v*` tag 才发布资产。wasm64 的 `deep` 同样不会被普通 push `main` 触发。
+- 应用部署只叫 `Deploy · 应用`，只在 push `main` / 手动触发。纯文档、工作流、或只改 `scripts/*.ts` 的 PR 合并后跳过部署；涉及可部署产物时，PR 合并直接部署，direct push 先跑 CI 再部署。
+- 运行时工作流统一 `Runtime · Lean <version> wasm32|wasm64`。wasm64 门禁只在构建链路径变更时触发（不再因前端 `package.json` 误触发），且 `main` 上的 PR 合并提交若非 `[wasm64-deep]` 自动复用 PR 阶段门禁结果、不重复跑构建；只有手动 dispatch 或 `runtime-v*` tag 才发布资产，且 `runtime-v*` 均标记 `--latest=false`（wasm64 额外标记 `--prerelease`），避免抢占仓库首页的正式应用 `Latest` 标签。
+- `delete_branch_on_merge` 与 `pr-cleanup.yml` 共同保障 PR 合并后临时分支及时清理；`main` 分支保护开启 `strict: false`，并行 PR 无需为了同步无关提交连环重跑。
 - `run-name` 写动作（build / deploy / publish / verify），不要依赖 commit message。
 - Std / Batteries 扩展包的 `build_extensions` 开关在 `spike/std-batteries` 分支验证，尚未合并到主工作流；生产默认只加载 Init。
 

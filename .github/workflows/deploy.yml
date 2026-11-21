@@ -18,16 +18,27 @@ permissions:
 
 jobs:
   gate:
-    name: 判断来源
+    name: 判断来源与产物范围
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       direct: ${{ steps.detect.outputs.direct }}
+      deployable: ${{ steps.classify.outputs.deployable }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: 是否为 PR 合并提交
         id: detect
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "direct=false" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch: deploy current main directly"
+            exit 0
+          fi
           merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.merged_at != null)] | length')
           if [ "$merged" -gt 0 ]; then
             echo "direct=false" >> "$GITHUB_OUTPUT"
@@ -36,11 +47,25 @@ jobs:
             echo "direct=true" >> "$GITHUB_OUTPUT"
             echo "direct push: run CI before deploy"
           fi
+      - name: 判定是否涉及可部署产物
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "deployable=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node scripts/detect-changes.mjs --base "$BASE"
 
   ci:
     name: 直接 push 的 CI
     needs: gate
-    if: github.ref == 'refs/heads/main' && needs.gate.outputs.direct == 'true'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      needs.gate.outputs.direct == 'true' &&
+      needs.gate.outputs.deployable == 'true'
     uses: ./.github/workflows/ci.yml
 
   deploy:
@@ -48,13 +73,16 @@ jobs:
     needs: [gate, ci]
     # PR 合并：PR CI 已经跑过，直接部署。
     # 直接 push：先在 ci job 里复用完整 CI，通过后才部署。
+    # 纯文档 / 纯工作流 / 纯 spike 脚本改动：跳过 102MB 构建与部署，避免无效耗时。
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&
       vars.CD_ENABLED == 'true' &&
       needs.gate.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || needs.gate.outputs.deployable == 'true') &&
       (needs.gate.outputs.direct == 'false' || needs.ci.result == 'success')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: 主机参数

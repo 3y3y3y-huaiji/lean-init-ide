@@ -3,9 +3,12 @@
  * CI 变更分类：按改动类型决定门禁重量。
  *
  * - 纯文档 / 纯工作流改动：只跑轻量检查，不进 install / build / e2e。
+ * - 纯 wasm64 / spike 脚本改动（scripts/*.ts）：跑静态检查 + spike 单测，不触发前端 build / E2E / 部署。
  * - 纯课程或挑战内容改动：只跑改动到的那几节课程（增量），不跑全量。
- * - 运行时、资产、LSP、网关等关键路径改动：才跑全量课程 E2E。
- * - 其它应用代码改动：跑启动冒烟，不跑课程。
+ * - 课程 / 挑战视图改动：跑轻量多视口 UI E2E + 对应金丝雀课/挑战 E2E，不跑全量。
+ * - 纯 UI / 样式 / 英文课程 / SEO 改动：跑轻量多视口 UI E2E，不启动 102MB WASM。
+ * - 运行时、资产、LSP、网关等关键路径改动：才跑全量课程 E2E + 启动冒烟。
+ * - 依赖（package.json / pnpm-lock.yaml 等）改动：触发依赖审计与冒烟。
  *
  * 输出同时写到 $GITHUB_OUTPUT，并打印一份可读摘要。
  */
@@ -20,13 +23,28 @@ export const CHALLENGE_SOURCE = 'src/challenges.ts';
 /** 课程 E2E 的硬编码清单；新增/删除课程时必须同步，否则全量跑也测不到新条目。 */
 export const E2E_SCRIPT = 'scripts/e2e-lessons.mjs';
 
+/** 课程页 / 挑战页结构变化时，用单条稳定金丝雀条目做真实 LSP 回归，不至于漏测交互又不拖慢全量。 */
+export const CANARY_LESSON = 'first-proof';
+export const CANARY_CHALLENGE = 'add-comm';
+
 const TEST_FILE = /\.test\.(?:ts|mjs)$/;
+
+const DEPS_FILES = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);
+
+const SPIKE_CONFIG_FILES = new Set([
+  'tsconfig.spike.json',
+  'eslint.spike.config.mjs',
+  'vitest.spike.config.ts',
+]);
 
 const isDocFile = (file) =>
   file.startsWith('docs/') ||
   /^[^/]+\.md$/i.test(file) ||
   file.startsWith('LICENSE') ||
   file === 'AGENTS.md';
+
+const isSpikeScriptFile = (file) =>
+  (file.startsWith('scripts/') && file.endsWith('.ts')) || SPIKE_CONFIG_FILES.has(file);
 
 /** 只有这些路径的改动才需要全量课程 E2E：它们决定 Lean 运行时、资产分发或 LSP 行为。 */
 const RUNTIME_EXACT = new Set([
@@ -63,14 +81,40 @@ const isRuntimeFile = (file) =>
   RUNTIME_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
   /^src\/lsp-/.test(file);
 
+/** 需要启动真实 102MB Lean WASM 冒烟的非 runtime 应用文件（排除纯视图/样式/i18n）。 */
+const SMOKE_EXACT = new Set([
+  'src/main.ts',
+  'src/monaco-contrib.ts',
+  'src/telemetry.ts',
+  'src/components/lean-panel.ts',
+  'src/components/lean-markup.ts',
+  'src/views/playground.ts',
+  'src/exercise.ts',
+  'src/draft.ts',
+  'src/progress.ts',
+  'src/settings.ts',
+  'src/runtime-cache.ts',
+]);
+
+const isSmokeFile = (file) =>
+  SMOKE_EXACT.has(file) ||
+  DEPS_FILES.has(file) ||
+  file.startsWith('src/lean-') ||
+  file.startsWith('src/wasm64-');
+
 /** 课程 / 挑战的加载或目录结构变化时，无法可靠缩小范围，按全量处理。 */
 const LESSON_INFRA = new Set(['src/i18n/lesson-catalog.ts', 'src/i18n/index.ts']);
 
-/** 会进入构建产物的其余路径：需要 build + 启动冒烟。 */
+const LESSON_VIEW_FILES = new Set(['src/views/lesson.ts', 'src/components/lean-panel.ts']);
+const CHALLENGE_VIEW_FILES = new Set([
+  'src/views/challenge.ts',
+  'src/challenge-goal.ts',
+  'src/components/lean-panel.ts',
+]);
+
+/** 会进入构建产物的非 src/ 关键路径（需要 build + 产物校验）。 */
 const SHIPPED_EXACT = new Set([
-  'package.json',
-  'pnpm-lock.yaml',
-  'pnpm-workspace.yaml',
+  ...DEPS_FILES,
   'vite.config.ts',
   'index.html',
   'wrangler.toml',
@@ -78,7 +122,26 @@ const SHIPPED_EXACT = new Set([
   'scripts/prerender.mjs',
   'scripts/verify-build.mjs',
 ]);
-const isShippedFile = (file) => file.startsWith('src/') || SHIPPED_EXACT.has(file);
+
+const UI_ONLY_SCRIPTS = new Set(['scripts/e2e-ui.mjs']);
+
+const isShippedFile = (file) =>
+  file.startsWith('src/') || SHIPPED_EXACT.has(file) || UI_ONLY_SCRIPTS.has(file);
+
+const isDeployableFile = (file) => {
+  if (isDocFile(file) || file.startsWith('.github/') || TEST_FILE.test(file)) return false;
+  if (isSpikeScriptFile(file) || UI_ONLY_SCRIPTS.has(file)) return false;
+  return (
+    file.startsWith('src/') ||
+    file.startsWith('functions/') ||
+    file.startsWith('public/') ||
+    file.startsWith('config/') ||
+    file.startsWith('patches/') ||
+    SHIPPED_EXACT.has(file) ||
+    file.startsWith('scripts/assets/') ||
+    file === 'scripts/fetch-assets.mjs'
+  );
+};
 
 /**
  * 纯函数：把文件列表归类成 CI 需要执行的档位。
@@ -96,6 +159,12 @@ export const classifyFiles = (paths) => {
     lessonsAll: false,
     challenges: false,
     app: false,
+    smoke: false,
+    deps: false,
+    spikeScripts: false,
+    deployable: false,
+    canaryLesson: false,
+    canaryChallenge: false,
   };
 
   for (const file of files) {
@@ -105,32 +174,55 @@ export const classifyFiles = (paths) => {
       continue;
     }
     if (file.startsWith('.github/')) continue;
+    if (DEPS_FILES.has(file)) flags.deps = true;
+    if (isSpikeScriptFile(file)) {
+      flags.spikeScripts = true;
+      continue;
+    }
+    if (isDeployableFile(file)) flags.deployable = true;
     if (TEST_FILE.test(file)) continue;
-    if (isRuntimeFile(file)) flags.runtime = true;
-    else if (file === LESSON_SOURCE) flags.lessons = true;
-    else if (LESSON_INFRA.has(file)) {
+
+    if (isRuntimeFile(file)) {
+      flags.runtime = true;
+      flags.smoke = true;
+    } else if (file === LESSON_SOURCE) {
+      flags.lessons = true;
+    } else if (LESSON_INFRA.has(file)) {
       flags.lessons = true;
       flags.lessonsAll = true;
-    } else if (file === CHALLENGE_SOURCE) flags.challenges = true;
-    else if (isShippedFile(file)) flags.app = true;
+    } else if (file === CHALLENGE_SOURCE) {
+      flags.challenges = true;
+    } else if (isShippedFile(file)) {
+      flags.app = true;
+      if (isSmokeFile(file)) flags.smoke = true;
+      if (LESSON_VIEW_FILES.has(file)) flags.canaryLesson = true;
+      if (CHALLENGE_VIEW_FILES.has(file)) flags.canaryChallenge = true;
+    }
   }
 
   // 没有可识别的改动（例如手动重跑同一个提交）时按全量处理，宁可多跑不漏跑。
   if (!hasFiles) {
     flags.runtime = true;
     flags.lessonsAll = true;
+    flags.smoke = true;
+    flags.deps = true;
+    flags.spikeScripts = true;
+    flags.deployable = true;
   }
 
-  const content = flags.lessons || flags.challenges;
+  const content = flags.lessons || flags.challenges || flags.canaryLesson || flags.canaryChallenge;
+  const fullLessons = flags.runtime || flags.lessonsAll;
+  const build = flags.runtime || content || flags.app;
   return {
     docsOnly,
     workflows,
     workflowsOnly,
     static: !docsOnly && !workflowsOnly,
     test: !docsOnly && !workflowsOnly,
-    build: flags.runtime || content || flags.app,
-    smoke: flags.runtime || flags.app,
-    fullLessons: flags.runtime || flags.lessonsAll,
+    build,
+    ui: build,
+    smoke: flags.runtime || flags.smoke,
+    fullLessons,
     content,
     ...flags,
   };
@@ -308,10 +400,17 @@ const main = () => {
     if (changed.all || changed.slugs.length === 0) result.lessonsAll = true;
     else lessonSlugs = changed.slugs.join(',');
   }
+  if (!result.lessonsAll && lessonSlugs === NONE && result.canaryLesson) {
+    lessonSlugs = CANARY_LESSON;
+  }
+
   if (result.challenges) {
     const changed = changedSlugs({ file: CHALLENGE_SOURCE, base, head });
     // 挑战只有 6 道，无法细分时直接全跑（空字符串在脚本里表示不过滤）。
     challengeSlugs = changed.all ? '' : changed.slugs.join(',') || NONE;
+  }
+  if (challengeSlugs === NONE && result.canaryChallenge) {
+    challengeSlugs = CANARY_CHALLENGE;
   }
 
   const fullLessons = result.runtime || result.lessonsAll;
@@ -320,12 +419,16 @@ const main = () => {
     workflows: String(result.workflows),
     static: String(result.static),
     test: String(result.test),
+    deps: String(result.deps),
+    spike_scripts: String(result.spikeScripts),
     build: String(result.build),
+    ui: String(result.ui),
     smoke: String(result.smoke),
     full_lessons: String(fullLessons),
     content: String(result.content),
     lessons: String(result.lessons),
     challenges: String(result.challenges),
+    deployable: String(result.deployable),
     lesson_slugs: fullLessons ? '' : lessonSlugs,
     challenge_slugs: challengeSlugs,
   };

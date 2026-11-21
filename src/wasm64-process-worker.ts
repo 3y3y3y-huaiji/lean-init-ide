@@ -34,7 +34,7 @@ type StartMessage = {
   readonly args: readonly string[];
 };
 
-type PollMessage = { readonly type: 'pollMemory' };
+type PollMessage = { readonly type: 'pollMemory'; readonly id?: number };
 
 type PostScope = { postMessage: (message: unknown, transfer?: Transferable[]) => void };
 const scope = self as unknown as PostScope;
@@ -168,11 +168,17 @@ const start = async (data: StartMessage): Promise<void> => {
   }
 
   const stderrDecoder = new TextDecoder();
+  let lastMemoryBytes = lean.wasmMemory?.buffer.byteLength ?? 0;
   for (const fd of [1, 2] as const) {
     const stream = lean.FS.getStream(fd);
     stream.stream_ops = {
       ...stream.stream_ops,
       write(_stream: unknown, buffer: Uint8Array, offset: number, length: number): number {
+        const memoryBytes = lean.wasmMemory?.buffer.byteLength;
+        if (typeof memoryBytes === 'number' && memoryBytes !== lastMemoryBytes) {
+          lastMemoryBytes = memoryBytes;
+          scope.postMessage({ memoryBytes });
+        }
         const chunk = Uint8Array.from(buffer.subarray(offset, offset + length));
         if (fd === 1) scope.postMessage({ stdout: chunk }, [chunk.buffer]);
         else if (length > 0) scope.postMessage({ stderr: stderrDecoder.decode(chunk) });
@@ -183,6 +189,7 @@ const start = async (data: StartMessage): Promise<void> => {
 
   lean.FS.chdir('/workspace');
   const initialMemoryBytes = lean.wasmMemory?.buffer.byteLength;
+  if (typeof initialMemoryBytes === 'number') lastMemoryBytes = initialMemoryBytes;
   scope.postMessage({
     ready: true,
     ...(typeof initialMemoryBytes === 'number' ? { memoryBytes: initialMemoryBytes } : {}),
@@ -203,8 +210,12 @@ const start = async (data: StartMessage): Promise<void> => {
 self.onmessage = (event: MessageEvent<StartMessage | PollMessage>) => {
   const data = event.data;
   if (data.type === 'pollMemory') {
-    const memoryBytes = activeLean?.wasmMemory?.buffer.byteLength;
-    if (typeof memoryBytes === 'number') scope.postMessage({ memoryBytes });
+    const memoryBytes = activeLean?.wasmMemory?.buffer.byteLength ?? null;
+    if (typeof data.id === 'number') {
+      scope.postMessage({ type: 'memorySample', id: data.id, memoryBytes });
+    } else if (typeof memoryBytes === 'number') {
+      scope.postMessage({ memoryBytes });
+    }
     return;
   }
   start(data).catch((error: unknown) => scope.postMessage({ failure: errorStack(error) }));

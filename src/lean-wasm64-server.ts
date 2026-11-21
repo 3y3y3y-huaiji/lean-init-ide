@@ -3,10 +3,13 @@
  * 相同形状的 LeanSessionServer。不稳定，仅在用户手动选择 wasm64 且浏览器支持
  * Memory64 时使用；默认生产路径仍是 @wasm-idle/lsp 的 wasm32。
  */
-import type { LeanSessionServer } from './lean-session';
 import { wasm64Available } from './lean-wasm64-available';
 import { loadWasm64Runtime, type Wasm64Manifest } from './lean-wasm64-runtime';
-import { createWasm64Supervisor, type LeanProcessFactory } from './lean-wasm64-supervisor';
+import {
+  createWasm64Supervisor,
+  type LeanProcessFactory,
+  type Wasm64SessionServer,
+} from './lean-wasm64-supervisor';
 
 export { wasm64Available };
 
@@ -29,7 +32,7 @@ export type Wasm64ServerOptions = {
 
 export const createWasm64LanguageServer = async (
   options: Wasm64ServerOptions = {},
-): Promise<LeanSessionServer> => {
+): Promise<Wasm64SessionServer> => {
   const runtime = await loadWasm64Runtime({
     ...(options.manifest ? { manifest: options.manifest } : {}),
     ...(options.extensions ? { extensions: options.extensions } : {}),

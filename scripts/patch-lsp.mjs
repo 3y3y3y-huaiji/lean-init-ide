@@ -216,7 +216,8 @@ applyPatch(
 
 /**
  * 5c. 扩展包从页面侧下载完成后随 initOptions 传进 worker（SharedArrayBuffer），
- *     挂到 library；页面重开会话时即可生效。
+ *     挂到 library；已是 SharedArrayBuffer 时零拷贝复用，不再二次分配拷贝；
+ *     页面重开会话时即可生效。
  */
 applyPatch(
   leanWorker,
@@ -226,13 +227,17 @@ applyPatch(
   `        delete payload[name];
     }
     for (const [name, buffer] of Object.entries(data.options.extensionPacks ?? {})) {
-        const bytes = new Uint8Array(buffer);
-        const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));
-        shared.set(bytes);
-        library[name] = shared;
+        if (typeof SharedArrayBuffer === 'function' && buffer instanceof SharedArrayBuffer) {
+            library[name] = new Uint8Array(buffer);
+        } else {
+            const bytes = new Uint8Array(buffer);
+            const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));
+            shared.set(bytes);
+            library[name] = shared;
+        }
     }
     bootstrap = startProcess(['-j2', '--server'], 8, (message) => {`,
-  'mount extension packs from init options',
+  'mount extension packs from init options (zero-copy SAB)',
 );
 
 applyPatch(
@@ -259,9 +264,154 @@ applyPatch(
         /** Per-document shared Wasm memory ceiling; defaults to 1 GiB. */
         maxMemoryBytes?: number;
         /** Extra verified library packs (logicalName -> compressed bytes) mounted with Init. */
-        extensionPacks?: Record<string, ArrayBuffer>;
+        extensionPacks?: Record<string, ArrayBufferLike>;
     };`,
   'extensionPacks option type',
+);
+
+/**
+ * 5d. 打通 wasm32 真实线性内存遥测：
+ *     - runtime-worker 在创建 Wasm 内存后回传 wasmMemory 引用与初始字节数，并在 stdio write 时增量推送；
+ *     - worker 在 dispose() 时立即置空 processWasmMemory 避免持有 1 GiB SAB 泄漏；
+ *     - worker 在进入 queued 串口链之前直接响应 pollMemory，保证主动采样不被长阻塞队列卡住。
+ */
+applyPatch(
+  path.join('lean4', 'runtime-worker.js'),
+  `\t\tconst { default: createLean } = await import(/* @vite-ignore */ data.glueUrl);
+\t\tconst lean = await createLean({
+\t\t\tnoInitialRun: true,
+\t\t\tonExit,
+\t\t\tlspProcessExit: onExit,
+\t\t\tlspStdin: data.stdin,
+\t\t\twasmMemory: new WebAssembly.Memory({
+\t\t\t\tinitial: 4096,
+\t\t\t\tmaximum: data.maxMemoryBytes / 65536,
+\t\t\t\tshared: true
+\t\t\t}),`,
+  `\t\tconst wasmMemory = new WebAssembly.Memory({
+\t\t\tinitial: 4096,
+\t\t\tmaximum: data.maxMemoryBytes / 65536,
+\t\t\tshared: true
+\t\t});
+\t\tlet lastMemoryBytes = wasmMemory.buffer.byteLength;
+\t\tconst reportMemory = () => {
+\t\t\tconst bytes = wasmMemory.buffer.byteLength;
+\t\t\tif (bytes !== lastMemoryBytes) {
+\t\t\t\tlastMemoryBytes = bytes;
+\t\t\t\tself.postMessage({ memoryBytes: bytes });
+\t\t\t}
+\t\t};
+\t\tconst { default: createLean } = await import(/* @vite-ignore */ data.glueUrl);
+\t\tconst lean = await createLean({
+\t\t\tnoInitialRun: true,
+\t\t\tonExit,
+\t\t\tlspProcessExit: onExit,
+\t\t\tlspStdin: data.stdin,
+\t\t\twasmMemory,`,
+  'runtime-worker wasmMemory tracker',
+);
+
+applyPatch(
+  path.join('lean4', 'runtime-worker.js'),
+  `\t\t\t\twrite(_stream, buffer, offset, length) {
+\t\t\t\t\tif (length)`,
+  `\t\t\t\twrite(_stream, buffer, offset, length) {
+\t\t\t\t\treportMemory();
+\t\t\t\t\tif (length)`,
+  'runtime-worker reportMemory on stdio write',
+);
+
+applyPatch(
+  path.join('lean4', 'runtime-worker.js'),
+  `\t\tlean.FS.chdir('/workspace');
+\t\tself.postMessage({ ready: true });`,
+  `\t\tlean.FS.chdir('/workspace');
+\t\tlastMemoryBytes = wasmMemory.buffer.byteLength;
+\t\tself.postMessage({ ready: true, memoryBytes: lastMemoryBytes, wasmMemory });`,
+  'runtime-worker expose wasmMemory on ready',
+);
+
+applyPatch(
+  leanWorker,
+  `    let disposed = false;
+    const pthreads = new Map();
+    let startupTimer;`,
+  `    let disposed = false;
+    const pthreads = new Map();
+    let startupTimer;
+    let processWasmMemory;`,
+  'worker processWasmMemory slot',
+);
+
+applyPatch(
+  leanWorker,
+  `            else if (data.ready) {
+                clearTimeout(startupTimer);
+                resolve();
+            }
+            else if (data.stdout)`,
+  `            else if (data.ready) {
+                clearTimeout(startupTimer);
+                if (data.wasmMemory)
+                    processWasmMemory = data.wasmMemory;
+                if (typeof data.memoryBytes === 'number')
+                    scope.postMessage({ memoryBytes: data.memoryBytes });
+                resolve();
+            }
+            else if (typeof data.memoryBytes === 'number')
+                scope.postMessage({ memoryBytes: data.memoryBytes });
+            else if (data.stdout)`,
+  'worker relay wasmMemory and memoryBytes',
+);
+
+applyPatch(
+  leanWorker,
+  `    const process = {
+        ready,
+        send: (message) => {`,
+  `    const process = {
+        ready,
+        sampleMemoryBytes: () => processWasmMemory?.buffer.byteLength ?? null,
+        send: (message) => {`,
+  'worker sampleMemoryBytes on process',
+);
+
+applyPatch(
+  leanWorker,
+  `            stdin.close();
+            for (const pthread of pthreads.values())`,
+  `            stdin.close();
+            processWasmMemory = undefined;
+            for (const pthread of pthreads.values())`,
+  'worker clear processWasmMemory on dispose',
+);
+
+applyPatch(
+  leanWorker,
+  `    if (data?.type === 'lean-worker-event') {
+        const worker = ownedWorkers.get(data.id);
+        if (data.error)
+            worker?.onerror?.({ message: data.error, preventDefault() { } });
+        else
+            worker?.onmessage?.({ data: data.data });
+        return;
+    }
+    queued = queued`,
+  `    if (data?.type === 'lean-worker-event') {
+        const worker = ownedWorkers.get(data.id);
+        if (data.error)
+            worker?.onerror?.({ message: data.error, preventDefault() { } });
+        else
+            worker?.onmessage?.({ data: data.data });
+        return;
+    }
+    if (data?.type === 'pollMemory') {
+        const memoryBytes = fileProcess?.sampleMemoryBytes?.() ?? null;
+        scope.postMessage({ type: 'memorySample', id: data.id, memoryBytes });
+        return;
+    }
+    queued = queued`,
+  'worker non-blocking pollMemory handler',
 );
 
 /**

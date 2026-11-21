@@ -231,7 +231,7 @@ index 8c0413a..dc3deff 100644
                  assetTimeoutMs: host?.assetTimeoutMs,
                  maxAssetBytes: host?.maxAssetBytes
 diff --git a/dist/lean4/runtime-worker.js b/dist/lean4/runtime-worker.js
-index cd8db8b..27c5a14 100644
+index cd8db8b..172ce83 100644
 --- a/dist/lean4/runtime-worker.js
 +++ b/dist/lean4/runtime-worker.js
 @@ -20,38 +20,45 @@ globalThis.Worker = class {
@@ -309,7 +309,47 @@ index cd8db8b..27c5a14 100644
  	}
  	return files;
  }
-@@ -139,7 +146,7 @@ self.onmessage = async ({ data }) => {
+@@ -72,17 +79,26 @@ self.onmessage = async ({ data }) => {
+ 				self.postMessage({ exit: code });
+ 			}
+ 		};
++		const wasmMemory = new WebAssembly.Memory({
++			initial: 4096,
++			maximum: data.maxMemoryBytes / 65536,
++			shared: true
++		});
++		let lastMemoryBytes = wasmMemory.buffer.byteLength;
++		const reportMemory = () => {
++			const bytes = wasmMemory.buffer.byteLength;
++			if (bytes !== lastMemoryBytes) {
++				lastMemoryBytes = bytes;
++				self.postMessage({ memoryBytes: bytes });
++			}
++		};
+ 		const { default: createLean } = await import(/* @vite-ignore */ data.glueUrl);
+ 		const lean = await createLean({
+ 			noInitialRun: true,
+ 			onExit,
+ 			lspProcessExit: onExit,
+ 			lspStdin: data.stdin,
+-			wasmMemory: new WebAssembly.Memory({
+-				initial: 4096,
+-				maximum: data.maxMemoryBytes / 65536,
+-				shared: true
+-			}),
++			wasmMemory,
+ 			mainScriptUrlOrBlob: data.glueUrl,
+ 			instantiateWasm(imports, receive) {
+ 				WebAssembly.instantiate(data.wasmModule, imports).then((instance) =>
+@@ -101,6 +117,7 @@ self.onmessage = async ({ data }) => {
+ 			stream.stream_ops = {
+ 				...stream.stream_ops,
+ 				write(_stream, buffer, offset, length) {
++					reportMemory();
+ 					if (length)
+ 						self.postMessage(
+ 							fd === 1
+@@ -139,10 +156,11 @@ self.onmessage = async ({ data }) => {
  			const path = LIBRARY_ROOT + '/' + file.path;
  			lean.FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
  			// Copy into this process: a document's #eval must never modify the shared source pack.
@@ -317,9 +357,14 @@ index cd8db8b..27c5a14 100644
 +			lean.FS.writeFile(path, file.bytes, { canOwn: true });
  		}
  		lean.FS.chdir('/workspace');
- 		self.postMessage({ ready: true });
+-		self.postMessage({ ready: true });
++		lastMemoryBytes = wasmMemory.buffer.byteLength;
++		self.postMessage({ ready: true, memoryBytes: lastMemoryBytes, wasmMemory });
+ 		const code = lean.callMain(data.args);
+ 		onExit(code);
+ 	} catch (error) {
 diff --git a/dist/lean4/worker.js b/dist/lean4/worker.js
-index ecf242e..9a77393 100644
+index ecf242e..5f3f55e 100644
 --- a/dist/lean4/worker.js
 +++ b/dist/lean4/worker.js
 @@ -34,6 +34,7 @@ const unsupported = new Set([
@@ -330,7 +375,46 @@ index ecf242e..9a77393 100644
  let library;
  let wasmModule;
  let glueText = '';
-@@ -190,7 +191,7 @@ async function openDocument(document) {
+@@ -73,6 +74,7 @@ function startProcess(args, pool, output, exit) {
+     let disposed = false;
+     const pthreads = new Map();
+     let startupTimer;
++    let processWasmMemory;
+     let resolve;
+     let reject;
+     const ready = new Promise((res, rej) => {
+@@ -111,8 +113,14 @@ function startProcess(args, pool, output, exit) {
+             }
+             else if (data.ready) {
+                 clearTimeout(startupTimer);
++                if (data.wasmMemory)
++                    processWasmMemory = data.wasmMemory;
++                if (typeof data.memoryBytes === 'number')
++                    scope.postMessage({ memoryBytes: data.memoryBytes });
+                 resolve();
+             }
++            else if (typeof data.memoryBytes === 'number')
++                scope.postMessage({ memoryBytes: data.memoryBytes });
+             else if (data.stdout)
+                 for (const message of frames.push(data.stdout))
+                     output(message);
+@@ -133,6 +141,7 @@ function startProcess(args, pool, output, exit) {
+     };
+     const process = {
+         ready,
++        sampleMemoryBytes: () => processWasmMemory?.buffer.byteLength ?? null,
+         send: (message) => {
+             if (!disposed)
+                 stdin.write(message);
+@@ -144,6 +153,7 @@ function startProcess(args, pool, output, exit) {
+             clearTimeout(startupTimer);
+             reject(new DOMException('Lean process was disposed.', 'AbortError'));
+             stdin.close();
++            processWasmMemory = undefined;
+             for (const pthread of pthreads.values())
+                 pthread.terminate();
+             pthreads.clear();
+@@ -190,7 +200,7 @@ async function openDocument(document) {
      serverRequests.clear();
      active = { ...document };
      const token = ++generation;
@@ -339,7 +423,7 @@ index ecf242e..9a77393 100644
          if (token === generation)
              fileOutput(message);
      }, (code) => {
-@@ -376,16 +377,29 @@ async function init(data) {
+@@ -376,16 +386,29 @@ async function init(data) {
          assetTimeoutMs: data.options.assetTimeoutMs ?? 120000,
          maxAssetBytes: data.options.maxAssetBytes ?? 128 * 1024 ** 2
      });
@@ -372,22 +456,38 @@ index ecf242e..9a77393 100644
              const stream = new Blob([new Uint8Array(delivered)])
                  .stream()
                  .pipeThrough(new DecompressionStream('gzip'));
-@@ -418,6 +432,13 @@ async function init(data) {
+@@ -418,6 +441,17 @@ async function init(data) {
              shared.set(bytes);
              library[logicalName] = shared;
          }
 +        delete payload[name];
 +    }
 +    for (const [name, buffer] of Object.entries(data.options.extensionPacks ?? {})) {
-+        const bytes = new Uint8Array(buffer);
-+        const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));
-+        shared.set(bytes);
-+        library[name] = shared;
++        if (typeof SharedArrayBuffer === 'function' && buffer instanceof SharedArrayBuffer) {
++            library[name] = new Uint8Array(buffer);
++        } else {
++            const bytes = new Uint8Array(buffer);
++            const shared = new Uint8Array(new SharedArrayBuffer(bytes.length));
++            shared.set(bytes);
++            library[name] = shared;
++        }
      }
      bootstrap = startProcess(['-j2', '--server'], 8, (message) => {
          if (!message.method && message.id === initializeId && message.result) {
+@@ -453,6 +487,11 @@ scope.onmessage = ({ data }) => {
+             worker?.onmessage?.({ data: data.data });
+         return;
+     }
++    if (data?.type === 'pollMemory') {
++        const memoryBytes = fileProcess?.sampleMemoryBytes?.() ?? null;
++        scope.postMessage({ type: 'memorySample', id: data.id, memoryBytes });
++        return;
++    }
+     queued = queued
+         .then(async () => {
+         await restarting;
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index 209ea07..df961ad 100644
+index 209ea07..b07f242 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
 @@ -63,6 +63,8 @@ export interface EditorLanguageServerRuntimeOptions {
@@ -395,7 +495,7 @@ index 209ea07..df961ad 100644
          /** Per-document shared Wasm memory ceiling; defaults to 1 GiB. */
          maxMemoryBytes?: number;
 +        /** Extra verified library packs (logicalName -> compressed bytes) mounted with Init. */
-+        extensionPacks?: Record<string, ArrayBuffer>;
++        extensionPacks?: Record<string, ArrayBufferLike>;
      };
      nim?: {
          /** External, pinned nimlsp/nimsuggest browser assets. */

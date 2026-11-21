@@ -368,6 +368,8 @@ end
     logLowMemory:
       'Low-memory device: auto-start disabled and the persistent cache capped at 128 MB',
     statusMemoryLimit: 'Near memory limit · stopped safely',
+    logMemoryWarning: (mb, limitMb) =>
+      `Memory entered warning tier (${mb} / ${limitMb} MB); engine will recycle automatically when idle`,
     logMemorySoftRecycle: (mb) =>
       `Memory reached ${mb} MB (soft threshold); recycled idle engine to release heap`,
     logMemoryImportRecycle: (mb) =>

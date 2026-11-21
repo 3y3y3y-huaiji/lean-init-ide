@@ -56,7 +56,13 @@ export interface LeanProcess {
   readonly ready: Promise<void>;
   send(message: LspMessage): void;
   dispose(): void;
+  /** 主动采样当前进程的线性内存字节数（支持运行时扩展后的瞬时探测）。 */
+  readonly sampleMemoryBytes?: () => Promise<number | null>;
 }
+
+export type Wasm64SessionServer = LeanSessionServer & {
+  readonly sampleMemoryBytes?: () => Promise<number | null>;
+};
 
 export type LeanProcessFactory = (
   args: readonly string[],
@@ -124,7 +130,7 @@ const offsetOf = (text: string, position: { line: number; character: number }): 
 export const createWasm64Supervisor = async (
   factory: LeanProcessFactory,
   options: Wasm64SupervisorOptions = {},
-): Promise<LeanSessionServer> => {
+): Promise<Wasm64SessionServer> => {
   const closed = createEmitter<void>();
   const readerError = createEmitter<Error>();
   const readerPartial = createEmitter<never>();
@@ -523,6 +529,7 @@ export const createWasm64Supervisor = async (
         dispose,
       },
     },
+    sampleMemoryBytes: () => fileProcess?.sampleMemoryBytes?.() ?? Promise.resolve(null),
     dispose,
   };
 };

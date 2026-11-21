@@ -3,6 +3,7 @@
  */
 import Wasm64ProcessWorker from './wasm64-process-worker.ts?worker';
 import { formatWorkerError } from './wasm64-error';
+import { createWorkerMemorySampler } from './lean-memory-guard';
 import { FrameDecoder, RING_CONTROL_BYTES, RingWriter, encodeFrame } from './lean-wasm64-frames';
 import type { LoadedWasm64Runtime } from './lean-wasm64-runtime';
 import type { LeanProcessFactory, LspMessage } from './lean-wasm64-supervisor';
@@ -11,12 +12,14 @@ import type { LeanProcessFactory, LspMessage } from './lean-wasm64-supervisor';
 const RING_BYTES = 8 * 1024 * 1024 + 8192;
 
 type ProcessEvent = {
+  type?: string;
+  id?: number;
   ready?: true;
   stdout?: Uint8Array;
   stderr?: string;
   exit?: number;
   failure?: string;
-  memoryBytes?: number;
+  memoryBytes?: number | null;
 };
 
 export type Wasm64ProcessHooks = {
@@ -52,10 +55,13 @@ export const createWasm64ProcessFactory =
       callbacks.onFailure(message);
     };
 
+    const memorySampler = createWorkerMemorySampler((message) => worker.postMessage(message));
+
     const dispose = (): void => {
       if (disposed) return;
       disposed = true;
       clearTimeout(startupTimer);
+      memorySampler.dispose();
       rejectReady(new DOMException('Lean process was disposed.', 'AbortError'));
       ring.close();
       worker.terminate();
@@ -65,6 +71,7 @@ export const createWasm64ProcessFactory =
       if (disposed) return;
       const data = event.data;
       try {
+        if (memorySampler.handleMessage(data)) return;
         if (data.ready) {
           clearTimeout(startupTimer);
           resolveReady();
@@ -105,6 +112,7 @@ export const createWasm64ProcessFactory =
 
     return {
       ready,
+      sampleMemoryBytes: memorySampler.sample,
       send(message) {
         if (disposed) return;
         try {

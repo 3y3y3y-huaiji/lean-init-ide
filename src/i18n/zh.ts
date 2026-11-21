@@ -355,6 +355,8 @@ end
     logStopped: '已关闭 Lean 引擎，worker 与内存已释放',
     logLowMemory: '低内存设备：已关闭自动启动，持久缓存上限下调到 128MB',
     statusMemoryLimit: '内存接近上限 · 已保护性停止',
+    logMemoryWarning: (mb, limitMb) =>
+      `内存进入预警水位（${mb} / ${limitMb} MB），后续将在空闲时自动回收`,
     logMemorySoftRecycle: (mb) => `内存达到 ${mb} MB（软阈值），已在空闲时重建引擎释放堆`,
     logMemoryImportRecycle: (mb) =>
       `检测到 import 变更且当前堆水位达 ${mb} MB，已顺手重建引擎释放内存`,

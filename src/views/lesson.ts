@@ -7,6 +7,11 @@ import { lessonsFor, messagesFor, type Locale } from '../i18n';
 import type { LessonLibrary, LessonPage, LessonTrack } from '../i18n/types';
 import { markLessonVisited, readCompleted } from '../progress';
 import { escapeHtml, renderInlineCode } from './html';
+import {
+  extractStructuredGoalSteps,
+  formatGoalStepText,
+  type LessonGoalStep,
+} from './lesson-goal-steps';
 
 const codeBlockOpen = 'overflow-hidden rounded-xl border border-line bg-panel-soft';
 
@@ -41,30 +46,17 @@ const needsExtensionPacks = (page: LessonPage): boolean =>
   ) ||
   /import\s+(?:Std|Batteries)\./.test(page.exercise?.starter ?? '');
 
-/** 从本课 Goal 旁白块提取可逐步切换的 Goal 演练步骤。 */
-export const extractLessonGoalSteps = (page: LessonPage): string[] => {
-  const steps: string[] = [];
-  for (const block of page.blocks) {
-    if (block.kind !== 'goal') continue;
-    const rawLines = block.text.split('\n');
-    for (let i = 0; i < rawLines.length; i += 1) {
-      const raw = rawLines[i]!;
-      const trimmed = raw.trim();
-      if (!trimmed) continue;
-      if (steps.length > 0 && (/^\s+/.test(raw) || /^(?:目标：|goal:)/i.test(trimmed))) {
-        steps[steps.length - 1] = `${steps[steps.length - 1]}\n${trimmed}`;
-        continue;
-      }
-      if (/[:：]$/.test(trimmed) && i + 1 < rawLines.length && rawLines[i + 1]!.trim()) {
-        steps.push(`${trimmed}\n${rawLines[i + 1]!.trim()}`);
-        i += 1;
-        continue;
-      }
-      steps.push(trimmed);
-    }
-  }
-  return steps;
+type LiveGoalPanelTone = 'live' | 'ok' | 'error' | 'info';
+
+export type LiveGoalPanelState = {
+  badge: string;
+  text: string;
+  tone: LiveGoalPanelTone;
 };
+
+/** 从本课 Goal 旁白块提取可逐步切换的 Goal 演练步骤（向后兼容旧版字符串格式）。 */
+export const extractLessonGoalSteps = (page: LessonPage): string[] =>
+  extractStructuredGoalSteps(page).map(formatGoalStepText);
 
 /** 从课程代码块的运行诊断中提取实时 Goal 状态（未解决目标或证明完成）。 */
 export const extractLiveLessonGoal = (
@@ -82,11 +74,97 @@ export const extractLiveLessonGoal = (
   return null;
 };
 
+const formatGoalPanelDiagnostics = (diagnostics: readonly LspDiagnostic[]): string =>
+  diagnostics
+    .map((item) => {
+      const at = `${item.range.start.line + 1}:${item.range.start.character + 1}`;
+      return `${at} ${item.message.trim()}`;
+    })
+    .join('\n\n');
+
+/** 将单次代码块运行的诊断整理为右侧 Goal 面板展示状态。 */
+export const resolveLiveLessonGoalPanelState = (
+  diagnostics: readonly LspDiagnostic[],
+  code: string,
+  labels: Pick<
+    ReturnType<typeof messagesFor>['lesson'],
+    'goalLive' | 'goalNoRemaining' | 'goalError' | 'goalOutput' | 'noOutput'
+  >,
+): LiveGoalPanelState => {
+  const liveGoal = extractLiveLessonGoal(diagnostics, code, labels.goalNoRemaining);
+  if (liveGoal) {
+    return {
+      badge: labels.goalLive,
+      text: liveGoal,
+      tone: liveGoal === labels.goalNoRemaining ? 'ok' : 'live',
+    };
+  }
+  const errors = diagnostics.filter((item) => item.severity === 1);
+  if (errors.length > 0) {
+    return {
+      badge: labels.goalError,
+      text: formatGoalPanelDiagnostics(errors),
+      tone: 'error',
+    };
+  }
+  if (diagnostics.length > 0) {
+    return {
+      badge: labels.goalOutput,
+      text: formatGoalPanelDiagnostics(diagnostics),
+      tone: 'info',
+    };
+  }
+  return {
+    badge: labels.goalOutput,
+    text: labels.noOutput,
+    tone: 'info',
+  };
+};
+
+const codeLineClass = (linked: boolean, active: boolean): string => {
+  const base = 'block min-h-[1.65em] border-l-2 px-4 transition-colors';
+  if (active) {
+    return `${base} border-accent bg-accent-soft text-fg${linked ? ' cursor-pointer' : ''}`;
+  }
+  if (linked) {
+    return `${base} cursor-pointer border-accent/30 hover:bg-accent-soft/50`;
+  }
+  return `${base} border-transparent`;
+};
+
+const goalTextBoxClass = (tone?: LiveGoalPanelTone): string => {
+  const base =
+    'm-0 max-h-[260px] overflow-auto whitespace-pre-wrap break-words rounded-lg border px-3 py-2.5 font-mono text-[12.5px] leading-[1.65]';
+  if (tone === 'ok') return `${base} border-ok/45 bg-ok/10 text-fg`;
+  if (tone === 'error') return `${base} border-err/45 bg-err/10 text-err`;
+  if (tone === 'live') return `${base} border-accent/40 bg-panel-soft text-fg`;
+  return `${base} border-line bg-panel-soft text-fg`;
+};
+
+const goalBadgeClass = (tone?: LiveGoalPanelTone): string => {
+  const base = 'font-mono text-xs tabular-nums';
+  if (tone === 'ok') return `${base} text-ok`;
+  if (tone === 'error') return `${base} text-err`;
+  if (tone === 'info') return `${base} text-muted`;
+  return `${base} text-accent`;
+};
+
 const renderBlocks = (
   page: LessonPage,
   runLabel: string,
   goalLabel: string,
+  goalSteps: readonly LessonGoalStep[],
 ): { html: string; codeCount: number } => {
+  const stepIndicesByCodeLine = new Map<string, number[]>();
+  goalSteps.forEach((step, stepIndex) => {
+    if (step.codeIndex === null || step.lineIndex === null) return;
+    const key = `${step.codeIndex}:${step.lineIndex}`;
+    const bucket = stepIndicesByCodeLine.get(key) ?? [];
+    bucket.push(stepIndex);
+    stepIndicesByCodeLine.set(key, bucket);
+  });
+  const firstStep = goalSteps[0];
+
   let codeIndex = 0;
 
   const html = page.blocks
@@ -117,13 +195,31 @@ const renderBlocks = (
 
       const index = codeIndex;
       codeIndex += 1;
+      const linesHtml = block.code
+        .split('\n')
+        .map((line, lineIdx) => {
+          const boundSteps = stepIndicesByCodeLine.get(`${index}:${lineIdx}`);
+          const isInitialActive =
+            firstStep !== undefined &&
+            firstStep.codeIndex === index &&
+            firstStep.lineIndex === lineIdx;
+          const stepAttr = boundSteps
+            ? ` data-step-index="${boundSteps[0]}" data-step-indices="${boundSteps.join(',')}"`
+            : '';
+          const activeAttr = isInitialActive ? ' data-active-line="true"' : '';
+          return `<span data-code-line="${lineIdx}"${stepAttr}${activeAttr} class="${codeLineClass(
+            Boolean(boundSteps),
+            isInitialActive,
+          )}">${line.length > 0 ? escapeHtml(line) : ' '}</span>`;
+        })
+        .join('');
       return `
-        <div data-role="code-block" class="my-5 ${codeBlockOpen}">
+        <div data-role="code-block" data-code-index="${index}" class="my-5 ${codeBlockOpen}">
           <div class="${codeBlockHead}">
             <span>Lean 4</span>
             <button class="${ghostButtonClass}" type="button" data-run-index="${index}">${escapeHtml(runLabel)}</button>
           </div>
-          <pre class="m-0 overflow-auto px-4 py-3.5 font-mono text-[13.5px] leading-[1.65]"><code>${escapeHtml(block.code)}</code></pre>
+          <pre class="m-0 overflow-auto py-3.5 font-mono text-[13.5px] leading-[1.65]"><code class="block">${linesHtml}</code></pre>
           <div
             data-output="${index}"
             hidden
@@ -142,7 +238,8 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
   const { page, index } = pickLesson(lessons, slug);
   const prev = lessons[index - 1];
   const next = lessons[index + 1];
-  const body = renderBlocks(page, t.runInEditor, t.goalLabel);
+  const goalSteps = extractStructuredGoalSteps(page);
+  const body = renderBlocks(page, t.runInEditor, t.goalLabel, goalSteps);
 
   const trackOf = (lesson: LessonPage): LessonTrack => lesson.track ?? 'intro';
   const toc = (['intro', 'math', 'eng'] as const)
@@ -243,7 +340,12 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       )}">${escapeHtml(t.feedbackBug)}</a>
     </div>`;
 
-  const goalSteps = extractLessonGoalSteps(page);
+  const firstStep = goalSteps[0];
+  const initialLocation =
+    firstStep && firstStep.codeIndex !== null && firstStep.lineIndex !== null
+      ? t.goalLocation(firstStep.codeIndex + 1, firstStep.lineIndex + 1)
+      : '';
+  const hasLinkedLines = goalSteps.some((step) => step.lineIndex !== null);
   const goalPanel = `
       <aside
         data-role="lesson-goal-panel"
@@ -254,15 +356,25 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
       >
         <div class="flex items-center justify-between gap-2 border-b border-line px-3.5 py-[11px]">
           <h2 class="m-0 text-xs font-[650] uppercase tracking-[0.07em] text-muted">${escapeHtml(t.goalPanelTitle)}</h2>
-          <span data-role="lesson-goal-badge" class="font-mono text-xs tabular-nums text-accent">${
+          <span data-role="lesson-goal-badge" class="${goalBadgeClass()}">${
             goalSteps.length > 0 ? escapeHtml(t.goalStepLabel(1, goalSteps.length)) : ''
           }</span>
         </div>
         <div class="p-3.5">
+          <p
+            data-role="lesson-goal-step-label"
+            ${initialLocation ? '' : 'hidden'}
+            class="mt-0 mb-2 font-mono text-[11px] text-muted"
+          >${escapeHtml(initialLocation)}</p>
           <pre
             data-role="lesson-goal-text"
-            class="m-0 max-h-[260px] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-panel-soft px-3 py-2.5 font-mono text-[12.5px] leading-[1.65] text-fg"
-          >${escapeHtml(goalSteps[0] ?? t.goalNoRemaining)}</pre>
+            class="${goalTextBoxClass()}"
+          >${escapeHtml(firstStep?.goal ?? t.goalNoRemaining)}</pre>
+          <p
+            data-role="lesson-goal-note"
+            ${firstStep?.note ? '' : 'hidden'}
+            class="mt-2.5 mb-0 rounded-lg border border-line bg-panel-soft px-3 py-2 text-xs leading-relaxed text-muted"
+          >${escapeHtml(firstStep?.note ?? '')}</p>
           <div class="mt-3 flex flex-wrap items-center gap-2">
             ${
               goalSteps.length > 1
@@ -272,6 +384,11 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
             }
             <button type="button" data-role="lesson-goal-reset" hidden class="${ghostButtonClass} px-2.5 py-1 text-xs">${escapeHtml(t.goalBackToSteps)}</button>
           </div>
+          ${
+            hasLinkedLines
+              ? `<p data-role="lesson-goal-hint" class="mt-2.5 mb-0 text-[11.5px] leading-relaxed text-muted">${escapeHtml(t.goalClickHint)}</p>`
+              : ''
+          }
           ${
             page.exercise
               ? `<a class="mt-3 inline-flex min-h-10 max-[1024px]:min-h-11 touch:min-h-11 w-full items-center justify-center rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-[650] text-accent no-underline transition hover:bg-accent hover:text-accent-contrast" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(t.goalOpenPlayground)} →</a>`
@@ -471,42 +588,124 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
   }
 
   const goalPanel = root.querySelector<HTMLElement>('[data-role="lesson-goal-panel"]');
-  const goalSteps = extractLessonGoalSteps(page);
+  const goalSteps = extractStructuredGoalSteps(page);
+  const goalStepLabelEl = goalPanel?.querySelector<HTMLElement>(
+    '[data-role="lesson-goal-step-label"]',
+  );
   const goalTextEl = goalPanel?.querySelector<HTMLElement>('[data-role="lesson-goal-text"]');
+  const goalNoteEl = goalPanel?.querySelector<HTMLElement>('[data-role="lesson-goal-note"]');
   const goalBadgeEl = goalPanel?.querySelector<HTMLElement>('[data-role="lesson-goal-badge"]');
   const goalPrevEl = goalPanel?.querySelector<HTMLButtonElement>('[data-role="lesson-goal-prev"]');
   const goalNextEl = goalPanel?.querySelector<HTMLButtonElement>('[data-role="lesson-goal-next"]');
   const goalResetEl = goalPanel?.querySelector<HTMLButtonElement>(
     '[data-role="lesson-goal-reset"]',
   );
+  const codeLines = Array.from(
+    root.querySelectorAll<HTMLElement>('[data-role="code-block"] [data-code-line]'),
+  );
   let goalStep = 0;
+  let inLiveMode = false;
 
-  const paintGoalSteps = () => {
+  const highlightStepLine = (step: LessonGoalStep | undefined, scrollIntoView: boolean) => {
+    for (const lineEl of codeLines) {
+      delete lineEl.dataset.activeLine;
+      lineEl.className = codeLineClass(Boolean(lineEl.dataset.stepIndex), false);
+    }
+    if (!step || step.codeIndex === null || step.lineIndex === null) return;
+    const targetLine = root.querySelector<HTMLElement>(
+      `[data-role="code-block"][data-code-index="${step.codeIndex}"] [data-code-line="${step.lineIndex}"]`,
+    );
+    if (!targetLine) return;
+    targetLine.dataset.activeLine = 'true';
+    targetLine.className = codeLineClass(Boolean(targetLine.dataset.stepIndex), true);
+    if (scrollIntoView && typeof targetLine.scrollIntoView === 'function') {
+      targetLine.scrollIntoView({ block: 'nearest' });
+    }
+  };
+
+  const paintGoalSteps = (scrollIntoView = false) => {
     if (!goalPanel || goalSteps.length === 0) return;
+    inLiveMode = false;
+    const step = goalSteps[goalStep];
     goalPanel.dataset.goalStep = String(goalStep);
-    if (goalTextEl) goalTextEl.textContent = goalSteps[goalStep] ?? '';
-    if (goalBadgeEl) goalBadgeEl.textContent = t.goalStepLabel(goalStep + 1, goalSteps.length);
+    if (goalStepLabelEl) {
+      const locationText =
+        step && step.codeIndex !== null && step.lineIndex !== null
+          ? t.goalLocation(step.codeIndex + 1, step.lineIndex + 1)
+          : '';
+      goalStepLabelEl.hidden = !locationText;
+      goalStepLabelEl.textContent = locationText;
+    }
+    if (goalTextEl) {
+      goalTextEl.textContent = step?.goal ?? '';
+      goalTextEl.className = goalTextBoxClass();
+    }
+    if (goalNoteEl) {
+      goalNoteEl.hidden = !step?.note;
+      goalNoteEl.textContent = step?.note ?? '';
+    }
+    if (goalBadgeEl) {
+      goalBadgeEl.textContent = t.goalStepLabel(goalStep + 1, goalSteps.length);
+      goalBadgeEl.className = goalBadgeClass();
+    }
     if (goalPrevEl) goalPrevEl.disabled = goalStep <= 0;
     if (goalNextEl) goalNextEl.disabled = goalStep >= goalSteps.length - 1;
     if (goalResetEl) goalResetEl.hidden = true;
+    highlightStepLine(step, scrollIntoView);
   };
 
-  const showLiveGoal = (liveText: string) => {
+  const showLiveState = (state: LiveGoalPanelState) => {
     if (!goalPanel) return;
-    if (goalTextEl) goalTextEl.textContent = liveText;
-    if (goalBadgeEl) goalBadgeEl.textContent = t.goalLive;
+    inLiveMode = true;
+    if (goalStepLabelEl) {
+      goalStepLabelEl.hidden = true;
+      goalStepLabelEl.textContent = '';
+    }
+    if (goalTextEl) {
+      goalTextEl.textContent = state.text;
+      goalTextEl.className = goalTextBoxClass(state.tone);
+    }
+    if (goalNoteEl) {
+      goalNoteEl.hidden = true;
+      goalNoteEl.textContent = '';
+    }
+    if (goalBadgeEl) {
+      goalBadgeEl.textContent = state.badge;
+      goalBadgeEl.className = goalBadgeClass(state.tone);
+    }
     if (goalResetEl) goalResetEl.hidden = goalSteps.length === 0;
+    highlightStepLine(undefined, false);
   };
 
   goalPrevEl?.addEventListener('click', () => {
     goalStep = Math.max(0, goalStep - 1);
-    paintGoalSteps();
+    paintGoalSteps(true);
   });
   goalNextEl?.addEventListener('click', () => {
     goalStep = Math.min(goalSteps.length - 1, goalStep + 1);
-    paintGoalSteps();
+    paintGoalSteps(true);
   });
-  goalResetEl?.addEventListener('click', paintGoalSteps);
+  goalResetEl?.addEventListener('click', () => paintGoalSteps(true));
+
+  for (const lineEl of codeLines) {
+    const rawIndices = lineEl.dataset.stepIndices;
+    if (!rawIndices) continue;
+    const indices = rawIndices
+      .split(',')
+      .map(Number)
+      .filter((value) => Number.isInteger(value) && value >= 0 && value < goalSteps.length);
+    if (indices.length === 0) continue;
+
+    lineEl.addEventListener('click', () => {
+      const currentPos = indices.indexOf(goalStep);
+      const nextStep =
+        !inLiveMode && currentPos >= 0 && indices.length > 1
+          ? indices[(currentPos + 1) % indices.length]!
+          : indices[0]!;
+      goalStep = nextStep;
+      paintGoalSteps(false);
+    });
+  }
 
   const codes = page.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));
   const runnerHost = root.querySelector<HTMLElement>('[data-role="runner"]');
@@ -566,6 +765,7 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
     output.hidden = false;
     output.innerHTML = renderRunProgress(initial.label, initial.ratio);
     for (const other of buttons) other.disabled = true;
+    showLiveState({ badge: t.goalLive, text: t.goalChecking, tone: 'live' });
 
     const labelEl = output.querySelector<HTMLElement>('[data-role="run-label"]')!;
     const timeEl = output.querySelector<HTMLElement>('[data-role="run-time"]')!;
@@ -590,12 +790,12 @@ export const bindLesson = (root: HTMLElement, locale: Locale, slug?: string) => 
       .then(({ list }) => {
         const filtered = anchorImportDiagnostics(dropSpuriousRedeclarations(list, code), code);
         renderOutput(output, filtered, looksLikeProof(code) ? t.proofAccepted : t.noOutput);
-        const liveGoal = extractLiveLessonGoal(filtered, code, t.goalNoRemaining);
-        if (liveGoal) showLiveGoal(liveGoal);
+        showLiveState(resolveLiveLessonGoalPanelState(filtered, code, t));
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
         renderRunFailure(output, message, loadedPanel, t, () => runCode(code, output));
+        showLiveState({ badge: t.goalError, text: message, tone: 'error' });
       })
       .finally(() => {
         window.clearInterval(timer);

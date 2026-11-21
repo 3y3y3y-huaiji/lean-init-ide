@@ -202,6 +202,10 @@ export const en: Messages = {
     goalOpenPlayground: 'Inspect live Goal in playground',
     goalChecking: 'Running code and checking Goal…',
     goalNoRemaining: '✓ No remaining goals (proof accepted)',
+    goalClickHint: 'Click any linked line in a code block to jump here, or Run for live Goal.',
+    goalError: 'Compile error',
+    goalOutput: 'Output',
+    goalLocation: (block, line) => `Block ${block} · Line ${line}`,
   },
   playground: {
     title: 'Lean playground',

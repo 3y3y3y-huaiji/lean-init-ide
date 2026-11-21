@@ -196,6 +196,10 @@ export type Messages = {
     goalOpenPlayground: string;
     goalChecking: string;
     goalNoRemaining: string;
+    goalClickHint: string;
+    goalError: string;
+    goalOutput: string;
+    goalLocation: (block: number, line: number) => string;
   };
   playground: {
     title: string;

@@ -197,6 +197,10 @@ export const zh: Messages = {
     goalOpenPlayground: '在编辑器中实时看 Goal',
     goalChecking: '正在运行代码并检查 Goal…',
     goalNoRemaining: '✓ 没有剩余目标（当前证明已关闭）',
+    goalClickHint: '点击左侧代码块的高亮行可直接跳到对应步骤；点击「运行」显示实时 Goal。',
+    goalError: '编译报错',
+    goalOutput: '运行输出',
+    goalLocation: (block, line) => `代码块 ${block} · 第 ${line} 行`,
   },
   playground: {
     title: 'Lean 编辑器',

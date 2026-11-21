@@ -11,7 +11,7 @@ export type LeanPanelVariant = 'full' | 'compact';
 
 export const panelClass = (compact: boolean) =>
   `flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-panel ${
-    compact ? 'max-h-[150px]' : 'max-[900px]:max-h-[320px]'
+    compact ? 'max-h-[150px]' : 'max-[1024px]:max-h-[320px]'
   }`;
 
 export const panelHeadingClass =
@@ -87,7 +87,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
     class="${
       compact
         ? 'flex min-h-0 flex-1 flex-col gap-2 p-2.5'
-        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_6px_clamp(320px,32vw,380px)] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[900px]:grid-cols-1'
+        : 'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_6px_clamp(320px,32vw,380px)] gap-4 px-[clamp(16px,4vw,40px)] py-4 max-[1024px]:grid-cols-1'
     }"
   >
     <section
@@ -95,13 +95,13 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       class="${
         compact
           ? 'relative flex min-h-[130px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg'
-          : 'relative flex h-[calc(100svh-292px)] min-h-[420px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg max-[900px]:h-[52svh] max-[900px]:min-h-[360px]'
+          : 'relative flex h-[calc(100svh-292px)] min-h-[420px] flex-col overflow-hidden rounded-xl border border-line bg-editor-bg max-[1024px]:h-[52svh] max-[1024px]:min-h-[360px]'
       }"
     >
       ${
         compact
           ? ''
-          : `<div data-role="mobile-actions" class="flex shrink-0 items-center gap-1.5 border-b border-line bg-panel-soft px-2 py-1.5 min-[901px]:hidden">
+          : `<div data-role="mobile-actions" class="hidden max-[1024px]:flex touch:flex shrink-0 items-center gap-1.5 border-b border-line bg-panel-soft px-2 py-1.5">
                <button type="button" class="${toolbarButtonClass}" data-role="select-all">${t.selectAll}</button>
                <button type="button" class="${toolbarButtonClass}" data-role="copy-selection" disabled>${t.copySelection}</button>
                <button type="button" class="${toolbarButtonClass}" data-role="paste">${t.paste}</button>
@@ -148,7 +148,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
              role="separator"
              aria-orientation="vertical"
              title="${t.splitHint}"
-             class="flex cursor-col-resize touch-none items-center justify-center max-[900px]:hidden"
+             class="flex cursor-col-resize touch-none items-center justify-center max-[1024px]:hidden"
            ><span class="h-12 w-[3px] rounded-full bg-line transition-colors hover:bg-accent"></span></div>`
     }
     <aside
@@ -156,7 +156,7 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
       class="${
         compact
           ? 'contents'
-          : 'flex h-[calc(100svh-292px)] flex-col gap-4 max-[900px]:h-auto min-[901px]:min-h-[420px]'
+          : 'flex h-[calc(100svh-292px)] flex-col gap-4 max-[1024px]:h-auto min-[1025px]:min-h-[420px]'
       }"
     >
       <section data-panel="goal" class="${panelClass(compact)} shrink-0">
@@ -185,11 +185,10 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
           <p data-role="load-failure-detail" class="mt-1 mb-2 text-xs leading-normal text-muted"></p>
           <p data-role="load-failure-error" class="m-0 mb-2 break-words font-mono text-xs leading-normal text-muted"></p>
           <div data-role="load-failure-actions" class="flex flex-wrap gap-2">
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="github">${t.sourceGithub}</button>
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-muted hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="auto">${t.sourceAuto}</button>
+            <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="retry-load">${t.retryLoad}</button>
+            <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="cdn">${t.sourceCdn}</button>
+            <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-fg hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="mirror">${t.sourceMirror}</button>
+            <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-2.5 py-1 text-xs text-muted hover:border-line-strong disabled:cursor-progress disabled:opacity-55" type="button" data-source="auto">${t.sourceAuto}</button>
           </div>
         </div>
         <div
@@ -201,8 +200,8 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
           <p data-role="crash-title" class="m-0 font-[650] text-err"></p>
           <p data-role="crash-detail" class="mt-1 mb-2 text-xs leading-normal text-muted"></p>
           <div class="flex flex-wrap gap-2">
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="crash-restart">${t.restartLean}</button>
-            <button class="inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:text-fg" type="button" data-role="crash-copy">${t.copyError}</button>
+            <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-[650] text-accent-contrast disabled:cursor-progress disabled:opacity-55" type="button" data-role="crash-restart">${t.restartLean}</button>
+            <button class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:text-fg" type="button" data-role="crash-copy">${t.copyError}</button>
           </div>
         </div>
         <div
@@ -218,19 +217,19 @@ const renderWorkspace = (t: Messages['playground'], compact: boolean) => `
             <span data-role="run-ok-detail" class="block text-xs text-muted"></span>
           </span>
         </div>
-        <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2 max-[900px]:max-h-[280px]">
+        <ul data-role="diagnostics" class="m-0 flex-1 list-none overflow-auto p-2 max-[1024px]:max-h-[280px]">
           <li class="${mutedItemClass}">${t.diagnosticsPlaceholder}</li>
         </ul>
       </section>
       ${
         compact
           ? `<details data-panel="log" class="${panelClass(true)} shrink-0">
-               <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-xs font-normal normal-case tracking-normal">${t.expand}</span></summary>
+               <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer list-none items-center justify-between gap-2 border-b border-line px-3.5 py-[9px] text-xs font-[650] uppercase tracking-[0.07em] text-muted select-none">${t.logTitle}<span class="text-xs font-normal normal-case tracking-normal">${t.expand}</span></summary>
                <pre data-role="log" class="m-0 max-h-[140px] overflow-auto whitespace-pre-wrap break-words px-3.5 py-2.5 font-mono text-xs leading-[1.65] text-muted"></pre>
              </details>`
           : `<section data-panel="log" class="${panelClass(false)} flex-1">
                <h2 class="${panelHeadingClass}">${t.logTitle}</h2>
-               <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted max-[900px]:max-h-[220px]"></pre>
+               <pre data-role="log" class="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-xs leading-[1.65] text-muted max-[1024px]:max-h-[220px]"></pre>
              </section>`
       }
     </aside>
@@ -257,7 +256,7 @@ export const renderLeanMarkup = (
   const start = `<button class="${buttonClass} max-[400px]:px-3" type="button" data-role="start">${t.start}</button>`;
 
   const panelToggle = (key: string, label: string) => `
-    <label class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
+    <label class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft">
       <input type="checkbox" data-panel-toggle="${key}" checked class="size-4 accent-[var(--accent)]" />
       <span>${label}</span>
     </label>`;
@@ -267,7 +266,7 @@ export const renderLeanMarkup = (
       <summary
         class="${
           iconOnly
-            ? 'flex size-9 max-[900px]:size-11 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg'
+            ? 'flex size-9 max-[1024px]:size-11 touch:size-11 cursor-pointer list-none items-center justify-center rounded-lg border border-line text-muted hover:text-fg'
             : `${ghostButtonClass} cursor-pointer list-none`
         }"
         title="${t.panelsTitle}"
@@ -279,7 +278,7 @@ export const renderLeanMarkup = (
                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>`
         }
       </summary>
-      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-line bg-panel p-2">
+      <div data-role="menu-popover" class="absolute right-0 top-[calc(100%+6px)] z-20 w-[min(176px,calc(100vw-24px))] max-h-[calc(100svh-160px)] overflow-y-auto overscroll-contain rounded-xl border border-line bg-panel p-2 shadow-[var(--shadow)]">
         <p class="m-0 mb-1 px-1.5 text-xs uppercase tracking-[0.08em] text-muted">${t.showPanels}</p>
         ${panelToggle('goal', t.goalTitle)}
         ${panelToggle('diagnostics', t.diagnosticsTitle)}
@@ -293,7 +292,7 @@ export const renderLeanMarkup = (
         ${t.librariesTitle}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>
       </summary>
-      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-64 rounded-xl border border-line bg-panel p-2">
+      <div data-role="menu-popover" class="absolute left-0 min-[1025px]:left-auto min-[1025px]:right-0 top-[calc(100%+6px)] z-20 w-[min(256px,calc(100vw-24px))] max-h-[calc(100svh-160px)] overflow-y-auto overscroll-contain rounded-xl border border-line bg-panel p-2 shadow-[var(--shadow)]">
         <div class="flex items-center justify-between gap-2 px-1.5 py-1 text-[13px]">
           <span class="min-w-0 truncate">Init</span>
           <span class="shrink-0 rounded border border-line px-1.5 py-0.5 text-xs text-muted">${t.libraryBuiltin}</span>
@@ -302,7 +301,7 @@ export const renderLeanMarkup = (
           .map(
             (extension) => `
           <div class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-panel-soft" data-extension-row="${extension.id}" data-extension-arch="${extension.arch}">
-            <label class="flex min-h-9 max-[900px]:min-h-11 min-w-0 cursor-pointer items-center gap-2">
+            <label class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 min-w-0 cursor-pointer items-center gap-2">
               <input type="checkbox" class="size-4 shrink-0 accent-[var(--accent)]" data-library-default="${extension.id}" data-extension-arch="${extension.arch}" aria-label="${t.libraryDefault}" />
               <span class="min-w-0 truncate">${extension.label}</span>
             </label>
@@ -326,7 +325,7 @@ export const renderLeanMarkup = (
         ${t.advancedTitle}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>
       </summary>
-      <div class="absolute right-0 top-[calc(100%+6px)] z-20 w-72 rounded-xl border border-line bg-panel p-2.5">
+      <div data-role="menu-popover" class="absolute left-0 min-[1025px]:left-auto min-[1025px]:right-0 top-[calc(100%+6px)] z-20 w-[min(288px,calc(100vw-24px))] max-h-[calc(100svh-160px)] overflow-y-auto overscroll-contain rounded-xl border border-line bg-panel p-2.5 shadow-[var(--shadow)]">
         <!-- 实验性运行时默认折叠在高级设置里，普通访客只看到稳定的 wasm32 -->
         <p data-role="runtime-arch-label" class="m-0 mb-1.5 px-1 text-xs font-[650] uppercase tracking-[0.06em] text-muted">${t.runtimeTitle}: wasm32</p>
         <!-- 实验性提醒：默认走稳定的 wasm32，wasm64 仅作实验试用，不可作生产依赖 -->
@@ -340,7 +339,7 @@ export const renderLeanMarkup = (
             aria-checked="true"
             data-runtime-arch="wasm32"
             data-active="true"
-            class="flex min-h-9 max-[900px]:min-h-11 w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft data-[active=true]:border-accent data-[active=true]:bg-accent/10 data-[active=true]:font-[650]"
+            class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft data-[active=true]:border-accent data-[active=true]:bg-accent/10 data-[active=true]:font-[650]"
           >${t.runtimeWasm32}</button>
           <button
             type="button"
@@ -348,7 +347,7 @@ export const renderLeanMarkup = (
             aria-checked="false"
             data-runtime-arch="wasm64"
             data-active="false"
-            class="flex min-h-9 max-[900px]:min-h-11 w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-50 data-[active=true]:border-warn data-[active=true]:bg-warn/10 data-[active=true]:font-[650]"
+            class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 w-full cursor-pointer items-center justify-between rounded-md border border-line px-2 py-1.5 text-left text-xs text-fg hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-50 data-[active=true]:border-warn data-[active=true]:bg-warn/10 data-[active=true]:font-[650]"
           >${t.runtimeWasm64}</button>
         </div>
         <p data-role="runtime-arch-note" class="m-0 mt-2 px-1 text-xs leading-normal text-muted"></p>
@@ -358,11 +357,11 @@ export const renderLeanMarkup = (
   if (!compact) {
     const heading = options.heading !== false;
     return `
-      <section data-ssr-markup="full" class="flex min-h-[calc(100svh-61px)] flex-col max-[900px]:min-h-0">
+      <section data-ssr-markup="full" class="flex min-h-[calc(100svh-61px)] flex-col max-[1024px]:min-h-0">
         ${
           heading
             ? `<div
-          class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[900px]:flex-col max-[900px]:items-start max-[900px]:gap-3"
+          class="flex items-end justify-between gap-4 border-b border-line gutter-x pb-3 pt-5 max-[1024px]:flex-col max-[1024px]:items-start max-[1024px]:gap-3"
         >
           <div class="min-w-0 flex-1 max-w-[540px]">
             <p class="mt-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${runtimeLabel}</p>
@@ -373,7 +372,7 @@ export const renderLeanMarkup = (
               <a class="inline-flex min-h-7 items-center text-accent no-underline hover:underline" href="${REPO_URL}" target="_blank" rel="noreferrer">${t.factsRepo}</a>
             </p>
           </div>
-          <div class="flex shrink-0 max-w-full flex-wrap items-center gap-2 min-[901px]:justify-end max-[900px]:w-full max-[900px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
+          <div class="flex shrink-0 max-w-full flex-wrap items-center gap-2 min-[1025px]:justify-end max-[1024px]:w-full max-[1024px]:justify-between">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>
         </div>`
             : `<div class="flex flex-wrap items-center justify-end gap-2 border-b border-line gutter-x py-2">${runtimeMenu()}${librariesMenu()}${panelsMenu(false)}${status}${start}</div>`
         }
@@ -405,7 +404,7 @@ export const renderLeanMarkup = (
       <div class="h-[3px] shrink-0 bg-transparent" aria-hidden="true"><div data-role="bar" class="h-full w-0 bg-[linear-gradient(90deg,var(--accent),var(--ok))] transition-[width] duration-[250ms] ease-out"></div></div>
       ${renderWorkspace(t, true)}
       <div class="shrink-0 px-3.5 pb-3 pt-1.5 text-right text-xs">
-        <a class="inline-flex min-h-9 max-[900px]:min-h-11 items-center text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
+        <a class="inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 items-center text-muted no-underline hover:text-accent" href="/${locale}/playground">${t.openFull}</a>
       </div>
     </section>
   `;

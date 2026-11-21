@@ -15,8 +15,8 @@ const codeBlockHead =
 
 const tocLink = (active: boolean) =>
   active
-    ? 'flex min-h-10 max-[900px]:min-h-11 items-center rounded-lg bg-accent-soft px-2.5 py-2 text-[13px] leading-snug text-fg no-underline'
-    : 'flex min-h-10 max-[900px]:min-h-11 items-center rounded-lg px-2.5 py-2 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
+    ? 'flex min-h-10 max-[1024px]:min-h-11 touch:min-h-11 items-center rounded-lg bg-accent-soft px-2.5 py-2 text-[13px] leading-snug text-fg no-underline'
+    : 'flex min-h-10 max-[1024px]:min-h-11 touch:min-h-11 items-center rounded-lg px-2.5 py-2 text-[13px] leading-snug text-muted no-underline hover:bg-panel-soft hover:text-fg';
 
 const noteClass = (tone: 'info' | 'warn' | undefined) =>
   tone === 'warn'
@@ -106,7 +106,7 @@ const renderBlocks = (
       if (block.kind === 'details') {
         return `
           <details class="my-4 rounded-lg border border-line bg-panel-soft px-4 py-3">
-            <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-semibold text-fg">${renderInlineCode(block.summary)}</summary>
+            <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-[13px] font-semibold text-fg">${renderInlineCode(block.summary)}</summary>
             <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${renderInlineCode(block.text)}</p>
           </details>`;
       }
@@ -221,7 +221,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
         ${
           page.exercise.hint
             ? `<details class="mb-4 rounded-lg border border-line bg-panel px-4 py-3">
-                 <summary class="flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
+                 <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-[13px] font-semibold text-fg">${escapeHtml(t.hintLabel)}</summary>
                  <p class="mb-0 mt-2 text-[13.5px] leading-relaxed text-muted">${renderInlineCode(page.exercise.hint)}</p>
                </details>`
             : ''
@@ -274,7 +274,7 @@ export const renderLesson = (locale: Locale, slug?: string): string => {
           </div>
           ${
             page.exercise
-              ? `<a class="mt-3 inline-flex min-h-10 max-[900px]:min-h-11 w-full items-center justify-center rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-[650] text-accent no-underline transition hover:bg-accent hover:text-accent-contrast" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(t.goalOpenPlayground)} →</a>`
+              ? `<a class="mt-3 inline-flex min-h-10 max-[1024px]:min-h-11 touch:min-h-11 w-full items-center justify-center rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs font-[650] text-accent no-underline transition hover:bg-accent hover:text-accent-contrast" href="/${locale}/playground?lesson=${page.slug}">${escapeHtml(t.goalOpenPlayground)} →</a>`
               : ''
           }
         </div>
@@ -407,7 +407,7 @@ const renderRunFailure = (
   button.type = 'button';
   button.dataset.role = 'restart-lean';
   button.className =
-    'inline-flex min-h-9 max-[900px]:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg transition hover:border-line-strong disabled:cursor-progress disabled:opacity-55';
+    'inline-flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg transition hover:border-line-strong disabled:cursor-progress disabled:opacity-55';
   button.textContent = t.restartLean;
   const markRestartFailed = () => {
     button.disabled = false;

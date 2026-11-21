@@ -77,6 +77,7 @@ import {
   renderLeanMarkup,
   type LeanPanelVariant,
 } from './lean-markup';
+import { computePopoverShift } from './popover-position';
 
 (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
   getWorker: () => new editorWorker(),
@@ -293,10 +294,10 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     });
   }
 
-  // 完整编辑器允许拖动左右分栏；窄屏恢复单列，避免内联样式压过响应式布局。
+  // 完整编辑器允许拖动左右分栏；平板与窄屏（<=1024px）恢复单列，避免内联样式压过响应式布局。
   const workspaceEl = host.querySelector<HTMLElement>('[data-role="workspace"]');
   const splitHandle = host.querySelector<HTMLElement>('[data-role="split"]');
-  const wideQuery = window.matchMedia('(min-width: 901px)');
+  const wideQuery = window.matchMedia('(min-width: 1025px)');
 
   const splitColumns = (width: number) => `minmax(0, 1fr) 6px ${width}px`;
 
@@ -434,9 +435,30 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
       if (menu !== except && menu.open) menu.open = false;
     }
   };
+  const clampMenuPopover = (menu: HTMLDetailsElement) => {
+    const popover = menu.querySelector<HTMLElement>('[data-role="menu-popover"]');
+    if (!popover) return;
+    popover.style.transform = '';
+    if (!menu.open) return;
+    const dx = computePopoverShift(popover.getBoundingClientRect(), window.innerWidth);
+    if (Math.abs(dx) >= 0.5) {
+      popover.style.transform = `translateX(${Math.round(dx)}px)`;
+    }
+  };
+  const onWindowResize = () => {
+    for (const menu of menuEls) {
+      if (menu.open) clampMenuPopover(menu);
+    }
+  };
+  window.addEventListener('resize', onWindowResize);
   for (const menu of menuEls) {
     menu.addEventListener('toggle', () => {
-      if (menu.open) closeMenus(menu);
+      if (menu.open) {
+        closeMenus(menu);
+        clampMenuPopover(menu);
+      } else {
+        clampMenuPopover(menu);
+      }
     });
   }
   const onDocumentPointerDown = (event: PointerEvent) => {
@@ -2224,6 +2246,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     document.removeEventListener('pointerdown', onDocumentPointerDown, true);
     document.removeEventListener('keydown', onDocumentKeyDown);
     document.removeEventListener('click', onResetOutsideClick);
+    window.removeEventListener('resize', onWindowResize);
     saveDraftNow();
     // 正常导航离开时保留“运行中”，下一个编辑器页据此自动恢复；
     // 刷新页面由 isReloadNavigation 判定，不会触发自动启动。

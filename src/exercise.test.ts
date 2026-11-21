@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES } from './challenges';
-import { declarationNames, isExerciseSolved, isExerciseStarter, theoremHeaders } from './exercise';
+import {
+  analyzeProofStyle,
+  declarationNames,
+  isChallengeSolved,
+  isExerciseSolved,
+  isExerciseStarter,
+  solvedChallengeTiers,
+  theoremHeaders,
+  type ChallengeSpec,
+} from './exercise';
 
 const STARTER = `theorem add_zero (a : Nat) : a + 0 = a := by
   sorry
@@ -69,8 +78,10 @@ describe('isExerciseSolved', () => {
     expect(isExerciseSolved('example : True := rfl', 'example : True := rfl', [])).toBe(false);
   });
 
-  it('拦截 admit / axiom / sorry 警告诊断，以及篡改定理签名的作弊写法', () => {
+  it('拦截 admit / axiom / opaque / unsafe / sorry 警告诊断，以及篡改定理签名的作弊写法', () => {
     expect(isExerciseSolved(STARTER, SOLVED.replace('induction a with', 'admit'), [])).toBe(false);
+    expect(isExerciseSolved(STARTER, SOLVED.replace('induction a with', 'opaque'), [])).toBe(false);
+    expect(isExerciseSolved(STARTER, SOLVED.replace('induction a with', 'unsafe'), [])).toBe(false);
     expect(
       isExerciseSolved(
         STARTER,
@@ -101,16 +112,124 @@ describe('isExerciseSolved', () => {
     ).toBe(true);
   });
 
-  it('全部趣味挑战的官方参考解法都能通过签名与反作弊判定', () => {
+  it('全部趣味挑战的官方参考解法都能通过各自模式的判题', () => {
+    const specFor = (
+      challenge: (typeof CHALLENGES)[number],
+      locale: 'zh' | 'en',
+    ): ChallengeSpec => ({
+      mode: challenge.mode,
+      starter: challenge.starter[locale],
+      verdict: challenge.verdict,
+      requiredConclusion: challenge.requiredConclusion,
+      bounty: challenge.bounty,
+    });
     for (const challenge of CHALLENGES) {
-      expect(
-        isExerciseSolved(challenge.starter.zh, challenge.solution.zh, []),
-        challenge.slug,
-      ).toBe(true);
-      expect(
-        isExerciseSolved(challenge.starter.en, challenge.solution.en, []),
-        challenge.slug,
-      ).toBe(true);
+      for (const locale of ['zh', 'en'] as const) {
+        const spec = specFor(challenge, locale);
+        expect(
+          isChallengeSolved(spec, challenge.solution[locale], []),
+          `${challenge.slug}.${locale}`,
+        ).toBe(true);
+        expect(
+          isChallengeSolved(spec, challenge.starter[locale], [
+            { severity: 2, message: "declaration uses 'sorry'" },
+          ]),
+          `${challenge.slug}.${locale} 骨架不应通关`,
+        ).toBe(false);
+      }
     }
+  });
+});
+
+describe('analyzeProofStyle', () => {
+  it('把自动化战术识别为 ⚡ 降维打击', () => {
+    expect(analyzeProofStyle('theorem t : 1 = 1 := by decide').badges).toEqual(['automation']);
+    expect(analyzeProofStyle('theorem t (n : Nat) : n + 0 = n := by omega').badges).toEqual([
+      'automation',
+    ]);
+  });
+
+  it('纯手工战术识别为 🛠️ 古典手艺人', () => {
+    expect(analyzeProofStyle('theorem t : 1 = 1 := by\n  rfl').badges).toEqual(['handcrafted']);
+  });
+
+  it('直接给出证明项识别为 λ 类型论极客', () => {
+    expect(analyzeProofStyle('theorem t : 1 = 1 := rfl').badges).toEqual(['term-mode']);
+    expect(analyzeProofStyle('theorem t : True := ⟨⟩').badges).toEqual(['term-mode']);
+  });
+
+  it('注释里的战术词不参与流派判断', () => {
+    expect(analyzeProofStyle('-- by omega decide simp\ntheorem t : 1 = 1 := rfl').badges).toEqual([
+      'term-mode',
+    ]);
+  });
+
+  it('剥除注释与空白后统计有效字符数', () => {
+    const code = `-- 这段注释不计入
+theorem t : 1 = 1 := by
+  rfl
+/- 块注释也不计入 -/
+`;
+    expect(analyzeProofStyle(code).codeChars).toBe('theoremt:1=1:=byrfl'.length);
+  });
+});
+
+describe('isChallengeSolved 的其它判题模式', () => {
+  const verdictSpec = CHALLENGES.find((challenge) => challenge.slug === 'nat-sub-trap');
+  const bugfixSpec = CHALLENGES.find((challenge) => challenge.slug === 'clamp-contract');
+  const bountySpec = CHALLENGES.find((challenge) => challenge.slug === 'collatz-bounty');
+
+  it('真假审判庭要求保留正确候选且不残留 sorry', () => {
+    expect(verdictSpec).toBeDefined();
+    if (!verdictSpec) return;
+    const spec: ChallengeSpec = {
+      mode: verdictSpec.mode,
+      starter: verdictSpec.starter.zh,
+      verdict: verdictSpec.verdict,
+      requiredConclusion: verdictSpec.requiredConclusion,
+    };
+    expect(isChallengeSolved(spec, verdictSpec.solution.zh, [])).toBe(true);
+    expect(isChallengeSolved(spec, verdictSpec.solution.zh, [{ severity: 1 }])).toBe(false);
+    expect(
+      isChallengeSolved(spec, verdictSpec.solution.zh.replace('verdict_false', 'verdict_true'), []),
+    ).toBe(false);
+    expect(isChallengeSolved(spec, `theorem verdict_false : True := trivial`, [])).toBe(false);
+  });
+
+  it('契约漏洞猎人要求保留核心结论片段', () => {
+    expect(bugfixSpec).toBeDefined();
+    if (!bugfixSpec) return;
+    const spec: ChallengeSpec = {
+      mode: bugfixSpec.mode,
+      starter: bugfixSpec.starter.zh,
+      requiredConclusion: bugfixSpec.requiredConclusion,
+    };
+    expect(isChallengeSolved(spec, bugfixSpec.solution.zh, [])).toBe(true);
+    expect(isChallengeSolved(spec, 'theorem clamp_in_range : True := trivial', [])).toBe(false);
+    expect(
+      isChallengeSolved(
+        spec,
+        bugfixSpec.solution.zh.replace('lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi', 'True'),
+        [],
+      ),
+    ).toBe(false);
+  });
+
+  it('悬赏厅逐层判断，完成铜牌或银牌即可通关', () => {
+    expect(bountySpec).toBeDefined();
+    if (!bountySpec) return;
+    const spec: ChallengeSpec = {
+      mode: bountySpec.mode,
+      starter: bountySpec.starter.zh,
+      bounty: bountySpec.bounty,
+    };
+    expect(solvedChallengeTiers(spec, bountySpec.solution.zh, [])).toEqual(['bronze', 'silver']);
+    expect(isChallengeSolved(spec, bountySpec.solution.zh, [])).toBe(true);
+    const bronzeOnly = bountySpec.solution.zh.replace(/theorem tier_silver[\s\S]*$/, '');
+    expect(solvedChallengeTiers(spec, bronzeOnly, [])).toEqual(['bronze']);
+    expect(isChallengeSolved(spec, bronzeOnly, [])).toBe(true);
+    const noSlots = bountySpec.solution.zh.replace(/theorem tier_bronze[\s\S]*$/, '');
+    expect(solvedChallengeTiers(spec, noSlots, [])).toEqual([]);
+    expect(isChallengeSolved(spec, noSlots, [])).toBe(false);
   });
 });

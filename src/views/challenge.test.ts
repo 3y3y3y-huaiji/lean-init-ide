@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHALLENGES } from '../challenges';
+import { analyzeProofStyle } from '../exercise';
 import { messagesFor } from '../i18n';
 import { escapeHtml } from './html';
 
@@ -7,7 +8,7 @@ const { createLeanPanel } = vi.hoisted(() => ({ createLeanPanel: vi.fn() }));
 
 vi.mock('../components/lean-panel', () => ({ createLeanPanel }));
 
-const { challengeDraftKey, mountChallenge, renderChallenge, renderChallenges } =
+const { challengeDraftKey, mountChallenge, mountChallenges, renderChallenge, renderChallenges } =
   await import('./challenge');
 
 const challenge = CHALLENGES.find((item) => item.slug === 'double-induction')!;
@@ -35,6 +36,53 @@ describe('挑战列表渲染', () => {
         expect(html, item.slug).toContain(item.title[locale]);
       }
     }
+  });
+  it('列表页顶部显示通关与勋章统计，卡片显示模式标签与勋章占位', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      const html = renderChallenges(locale);
+      const t = messagesFor(locale).challenges;
+      expect(html).toContain('data-role="challenge-summary"');
+      expect(html).toContain(escapeHtml(t.summary.solved(0, CHALLENGES.length)));
+      expect(html).toContain(escapeHtml(t.summary.badges(0, 0, 0)));
+      for (const item of CHALLENGES) {
+        expect(html, item.slug).toContain(`data-challenge-slug="${item.slug}"`);
+        expect(html, item.slug).toContain(escapeHtml(t.modes[item.mode]));
+        expect(html, item.slug).toContain('data-role="card-badges"');
+      }
+    }
+  });
+
+  it('挂载列表页时从 localStorage 读取通关数与卡片勋章', () => {
+    localStorage.setItem(
+      'lean-init-ide:challenge-progress:v1',
+      JSON.stringify({
+        version: 1,
+        challenges: {
+          'double-induction': {
+            solved: true,
+            badges: ['automation', 'term-mode'],
+            tiers: [],
+            bestChars: 42,
+          },
+        },
+      }),
+    );
+    document.body.innerHTML = renderChallenges('zh');
+    mountChallenges(document.body, 'zh');
+
+    const t = messagesFor('zh').challenges;
+    expect(document.body.querySelector('[data-role="summary-solved"]')?.textContent).toBe(
+      t.summary.solved(1, CHALLENGES.length),
+    );
+    expect(document.body.querySelector('[data-role="summary-badges"]')?.textContent).toBe(
+      t.summary.badges(1, 0, 1),
+    );
+    const card = document.body.querySelector('[data-challenge-slug="double-induction"]');
+    expect(card?.querySelector('[data-role="card-badges"]')?.textContent).toBe(
+      `${t.badgeLabels.automation} · ${t.badgeLabels.termMode}`,
+    );
+    const untouched = document.body.querySelector('[data-challenge-slug="add-comm"]');
+    expect(untouched?.querySelector('[data-role="card-badges"]')?.textContent).toBe('');
   });
 });
 
@@ -164,6 +212,70 @@ describe('挑战页挂载', () => {
     document.body.querySelector<HTMLButtonElement>('[data-role="copy-link"]')!.click();
     await vi.waitFor(() =>
       expect(status.textContent).toBe(messagesFor('zh').challenges.detail.copyLinkFailed),
+    );
+  });
+
+  it('零 Error 且判题通过时显示通关横幅、流派勋章、最短字符数与可复制战绩卡片', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    document.body.innerHTML = renderChallenge('zh', challenge.slug);
+    await mountChallenge(document.body, 'zh', challenge.slug);
+
+    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
+    panel.getCode.mockReturnValue(challenge.solution.zh);
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { onDiagnostics: (diagnostics: Array<{ severity?: number }>) => void },
+    ];
+
+    options.onDiagnostics([]);
+
+    const t = messagesFor('zh').challenges;
+    const result = document.body.querySelector<HTMLElement>('[data-role="challenge-result"]')!;
+    const chars = analyzeProofStyle(challenge.solution.zh).codeChars;
+    expect(result.hidden).toBe(false);
+    expect(result.querySelector('[data-role="result-title"]')?.textContent).toBe(
+      t.detail.solvedTitle,
+    );
+    expect(result.querySelector('[data-role="result-badges"]')?.textContent).toBe(
+      t.detail.solvedBadges(t.badgeLabels.automation),
+    );
+    expect(result.querySelector('[data-role="result-chars"]')?.textContent).toBe(
+      t.detail.bestChars(chars),
+    );
+
+    const share = t.detail.shareText(challenge.title.zh, t.badgeLabels.automation, chars);
+    document.body.querySelector<HTMLButtonElement>('[data-role="copy-card"]')!.click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining(`${share}\n${location.origin}/zh/challenges/${challenge.slug}`),
+    );
+
+    options.onDiagnostics([{ severity: 1 }]);
+    expect(result.hidden).toBe(true);
+  });
+
+  it('悬赏关卡在横幅里显示已点亮的铜牌与银牌层数', async () => {
+    const bounty = CHALLENGES.find((item) => item.slug === 'collatz-bounty')!;
+    document.body.innerHTML = renderChallenge('en', bounty.slug);
+    await mountChallenge(document.body, 'en', bounty.slug);
+
+    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
+    panel.getCode.mockReturnValue(bounty.solution.en);
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { onDiagnostics: (diagnostics: Array<{ severity?: number }>) => void },
+    ];
+    options.onDiagnostics([]);
+
+    const t = messagesFor('en').challenges;
+    const tiers = document.body.querySelector<HTMLElement>('[data-role="result-tiers"]')!;
+    expect(tiers.hidden).toBe(false);
+    expect(tiers.textContent).toBe(
+      t.detail.solvedTiers(`${t.detail.tierLabels.bronze} · ${t.detail.tierLabels.silver}`),
     );
   });
 

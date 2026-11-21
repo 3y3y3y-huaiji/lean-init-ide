@@ -113,6 +113,8 @@ export type LeanPanelOptions = {
   onProgress?: (progress: LeanPanelProgress) => void;
   /** Goal 面板文本变化时回调；挑战页用它把 `⊢` 数量翻译成通俗进度。 */
   onGoal?: (goalText: string) => void;
+  /** 每批 LSP 诊断到达时回调；挑战页用它判断是否真正通关。 */
+  onDiagnostics?: (diagnostics: LspDiagnostic[]) => void;
   /** 课程代码依赖的扩展包；启动前自动挂载，用户无需手动开库。 */
   requiredExtensions?: RuntimeExtensionId[];
 };
@@ -1105,6 +1107,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
 
     updatePassedBadge(diagnostics);
     lastDiagnostics = diagnostics;
+    options.onDiagnostics?.(diagnostics);
 
     // 每批新诊断先收起旧的“运行通过”，等文件处理完再决定是否重新显示。
     resetRunOk();

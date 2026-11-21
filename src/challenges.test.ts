@@ -16,9 +16,12 @@ describe('挑战数据源', () => {
     for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
-  it('首批提供 5–6 道题，且每道的双语文案都齐全', () => {
-    expect(CHALLENGES.length).toBeGreaterThanOrEqual(5);
-    expect(CHALLENGES.length).toBeLessThanOrEqual(6);
+  it('四大主题区合计至少 8 道题，且每道的双语文案都齐全', () => {
+    expect(CHALLENGES.length).toBeGreaterThanOrEqual(8);
+    expect(CHALLENGES.length).toBeLessThanOrEqual(9);
+    const counts = { classic: 0, verdict: 0, bugfix: 0, bounty: 0 };
+    for (const challenge of CHALLENGES) counts[challenge.mode] += 1;
+    expect(counts).toEqual({ classic: 4, verdict: 2, bugfix: 1, bounty: 2 });
     for (const challenge of CHALLENGES) {
       for (const locale of ['zh', 'en'] as const) {
         expect(
@@ -108,6 +111,57 @@ describe('挑战数据源', () => {
             `${challenge.slug}.${tactic.label}.${locale}`,
           ).toBeGreaterThan(0);
         }
+      }
+    }
+  });
+
+  it('每种判题模式都带上对应的通关契约', () => {
+    for (const challenge of CHALLENGES) {
+      if (challenge.mode === 'classic') continue;
+      expect(challenge.starter.zh, challenge.slug).toContain('sorry');
+    }
+
+    const verdicts = CHALLENGES.filter((challenge) => challenge.mode === 'verdict');
+    expect(verdicts.map((challenge) => challenge.slug)).toEqual(['nat-sub-trap', 'even-sum-split']);
+    for (const challenge of verdicts) {
+      expect(challenge.verdict?.correct, challenge.slug).toBe('verdict_false');
+      expect(challenge.verdict?.wrong, challenge.slug).toBe('verdict_true');
+      expect(challenge.requiredConclusion, challenge.slug).toBeTruthy();
+      for (const locale of ['zh', 'en'] as const) {
+        expect(challenge.solution[locale], challenge.slug).toContain('verdict_false');
+        expect(challenge.solution[locale], challenge.slug).toContain(
+          challenge.requiredConclusion ?? '',
+        );
+      }
+    }
+
+    const bugfix = CHALLENGES.filter((challenge) => challenge.mode === 'bugfix');
+    expect(bugfix.map((challenge) => challenge.slug)).toEqual(['clamp-contract']);
+    for (const challenge of bugfix) {
+      expect(challenge.requiredConclusion, challenge.slug).toBeTruthy();
+      for (const locale of ['zh', 'en'] as const) {
+        expect(challenge.solution[locale], challenge.slug).toContain(
+          challenge.requiredConclusion ?? '',
+        );
+      }
+    }
+
+    const bounties = CHALLENGES.filter((challenge) => challenge.mode === 'bounty');
+    expect(bounties.map((challenge) => challenge.slug)).toEqual([
+      'collatz-bounty',
+      'goldbach-bounty',
+    ]);
+    for (const challenge of bounties) {
+      expect(challenge.bounty, challenge.slug).toEqual({
+        bronze: 'tier_bronze',
+        silver: 'tier_silver',
+        legend: 'tier_legend',
+      });
+      for (const locale of ['zh', 'en'] as const) {
+        expect(challenge.starter[locale], challenge.slug).toContain('theorem tier_legend');
+        expect(challenge.solution[locale], challenge.slug).toContain('theorem tier_bronze');
+        expect(challenge.solution[locale], challenge.slug).toContain('theorem tier_silver');
+        expect(challenge.solution[locale], challenge.slug).not.toContain('theorem tier_legend');
       }
     }
   });

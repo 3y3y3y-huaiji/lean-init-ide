@@ -1,3 +1,7 @@
+**何时读我**：执行 Cloudflare Pages 部署、上传或巡检 R2 / 魔搭资产、调整 CSP/限流/遥测字段或排查线上故障时阅读。
+**单一事实来源**：清单与源定义见 [lean4-runtime.json](../config/lean4-runtime.json) 与 [asset-sources.mjs](../src/asset-sources.mjs)，响应头见 [\_headers](../public/_headers)。
+**维护边界**：浏览器禁用 GitHub 源及镜像扁平结构等硬决策见 [DECISIONS.md](DECISIONS.md)；日常本地命令见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+
 # 部署与运维
 
 分发链路的设计见 [ARCHITECTURE](ARCHITECTURE.md)；本地命令与门禁见 [DEVELOPMENT](DEVELOPMENT.md)；
@@ -203,12 +207,8 @@ pnpm run upload:modelscope -- --extensions work/extensions --metadata
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
 `functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
 
-清单里 `encoding: "zstd"` 的资产保留上游 `.gz.bin` 键名，但交付字节是 zstd；`fetch:assets` 会从
-GitHub Release 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩，
-再按 `bytes`/`sha256` 校验交付字节。构建机需要 **Node 24+**（内置 `zlib.zstdCompressSync`）。
-R2 与魔搭镜像上传的是 zstd 字节；Release 上的上游仍是 gzip，因此这类资产不参与浏览器回退，
-最后一级回退是同源静态副本。Release 下载没有 CORS 响应头，浏览器无法跨源读取，
-所以清单里的 `fallback` 只用于构建期与 Node 侧。
+清单里 `encoding: "zstd"` 的资产保留上游 `.gz.bin` 键名，但交付字节是 zstd；`fetch:assets` 会优先从 R2 `/cdn/` 或魔搭镜像直接拉取匹配 `bytes`/`sha256` 的 zstd 字节，缺失或不一致时再从 GitHub Release 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩（构建机需要 **Node 24+** 内置 `zlib.zstdCompressSync`）。
+R2 与魔搭镜像托管 zstd 字节；Release 没有 CORS 响应头且在 COOP/COEP 下无法跨源读取，浏览器端已禁用 GitHub Release（仅服务构建期与版本归档，见 [ADR-01](DECISIONS.md#adr-01)），最终回退为同源静态副本。
 
 修改清单里的资产字节数/SHA-256 或 `cacheKey` 后，必须重新生成 LSP 补丁，把交付哈希同步进包内 profile：
 
@@ -267,16 +267,14 @@ pnpm run probe:sources        # 对魔搭 / 同源网关各取 64KiB，输出 TT
 LEAN_ASSET_ORIGIN=https://lean-init-ide.pages.dev pnpm run probe:sources
 ```
 
-浏览器里可用 `?source=mirror|cdn|github` 强制首选源（写在 CacheStorage 里，Service Worker 读取后生效），
-面板日志会显示实际命中的源标签：
+浏览器里可用 `?source=mirror|cdn|auto` 覆盖首选源（或直接在界面选择，写在 CacheStorage / localStorage 中生效），
+面板日志会显示实际命中的源标签（浏览器端不提供 `github` 源，见 [ADR-01](DECISIONS.md#adr-01)）：
 
-- `?source=mirror`：魔搭优先，适合验证国内镜像
+- `?source=mirror`：魔搭镜像优先
 - `?source=cdn`：同源 `/cdn/` 网关优先
-- `?source=github`：把清单里的 GitHub 回退源排最前；当前 ranged 资产都是 zstd，会跳过回退，
-  实际顺序与默认相同
+- `?source=auto`：恢复默认按地区/网络自动择优
 
-参数非法或没有参数时恢复默认策略（按 `Accept-Language` 在魔搭与同源网关之间选首选源）。
-选择会写进 CacheStorage 并在后续访问继续生效；用另一个值覆盖，或访问 `?source=reset` 之类的非法值即可清除。
+参数非法或使用 `?source=reset` 时会清除覆盖并恢复默认策略。
 
 ## 排查
 

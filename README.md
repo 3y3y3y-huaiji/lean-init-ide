@@ -46,8 +46,8 @@
 | 课时 | 主题 | 关键动作 |
 | --- | --- | --- |
 | `what-is-lean` | 会做数学题的编译器 | `#eval`、`#check`、`rfl` |
-| `first-proof` | 你的第一个零漏洞证明 | `#check`、`#eval`、`rfl` 化简过关 |
-| `implication` | 写一个 if…then… 风格的证明函数 | `intro`、`exact` |
+| `first-proof` | 你的第一个零漏洞证明 | 读 `⊢` 上下文与目标、`rfl`、`exact` |
+| `implication` | 写一个 if…then… 风格的证明函数 | `intro`、`apply`、`exact` |
 | `connectives` | 打包与拆包：∧ 与 ∨ | `⟨hp, hq⟩`、`h.1` / `h.2`、`cases` |
 | `induction` | 多米诺骨牌：归纳就是递归 | `induction ... with`、`simp only` |
 | `rewrite` | Ctrl+H 精准替换 | `rw [Nat.add_comm]`、`rw [h]` |
@@ -68,7 +68,7 @@
 | `math-functions` | 单射、满射、双射 | 函数性质、复合保持单射 / 满射 |
 | `math-relations` | 等价关系：分类的三大铁律 | `IsEquivalence`、长度相同的等价关系 |
 | `math-strong-induction` | 强归纳与斐波那契 | `Nat.strongRecOn`、指数上界 |
-| `code-sorting` | 证明插入排序永远不会排错 | `Sorted`、成员保持、有序性练习 |
+| `code-sorting` | 证明插入排序永远不会排错 | `Sorted`、`sorted_insert`、`mem_sort` |
 | `code-sum` | 两段数组拼起来求和为什么相等 | `sum`、`sum_append`、结构归纳 |
 | `math-axioms` | 作弊检测器：`sorry` 与 `#print axioms` | `#print axioms`、`sorryAx` |
 | `math-mathlib` | 从浏览器沙盒走进 Mathlib | 内置库边界、本地完整工具链 |
@@ -147,6 +147,7 @@ pnpm run smoke       # 线上冒烟，发版后跑
 ## 文档
 
 - [文档索引](docs/README.md)
+- [架构决策记录（ADR）](docs/DECISIONS.md)
 - [CI / CD 工作流地图](docs/CI.md)
 - [架构与运行时分发](docs/ARCHITECTURE.md)
 - [本地开发与质量门禁](docs/DEVELOPMENT.md)

@@ -1,3 +1,7 @@
+**何时读我**：搭建本地环境、升级 `@wasm-idle/lsp` 补丁、查看本地质量门禁命令或排查发版规则时阅读。
+**单一事实来源**：脚本命令定义见 [package.json](../package.json)，CI 分档矩阵见 [CI.md](CI.md)。
+**维护边界**：不重复抄写 CI 分档表；课程编写细节转读 [src/i18n/AGENTS.md](../src/i18n/AGENTS.md)，脚本规范转读 [scripts/AGENTS.md](../scripts/AGENTS.md)。
+
 # 本地开发
 
 项目定位见 [README](../README.md)；分发链路见 [ARCHITECTURE](ARCHITECTURE.md)；
@@ -73,34 +77,22 @@ CI 跑下列命令，任一失败即阻断合并（本地仅作按需参考）�
 | `pnpm run typecheck` | 三份 tsconfig：应用、Service Worker、Pages Functions |
 | `pnpm test` | Vitest + 覆盖率阈值 |
 | `pnpm run verify:manifest` | 资产清单结构：key 唯一、sha256 格式、同源 baseUrl、bytes 为正 |
+| `pnpm run verify:docs` | Docs-as-Code 不变量：断链、幽灵命令/路径、工作流/版本/课时数同步 |
 | `pnpm run build:web` | 生产构建（跳过运行时资产下载） |
 | `pnpm run verify:build` | 产物契约：`#app` 挂载点、`sw.js`、`_routes.json` 白名单（`/cdn/*` + `/api/telemetry`）、COOP/COEP、JS 体积预算 |
+| `pnpm run e2e:ui` | 多视口无 WASM UI 契约（手机 / 竖横屏平板 / 桌面），需先起 `pnpm run gateway` |
 | `pnpm run e2e:lessons` | 逐课运行全部代码块，出现 error 级诊断即失败（CI 的分片 job 内执行） |
 
 覆盖率阈值写在 `vitest.config.ts`：全局 78% 语句 / 80% 行，`functions/**` 单独要求 95%。
 后者是资产分发网关，任何降级都会让 wasm 加载链路断掉，所以按关键路径对待。
 
-`.github/workflows/ci.yml` 先用 `changes` job 调 `scripts/detect-changes.mjs` 给改动分档，再按档位启动门禁：
-
-| 改动类型 | 实际执行 |
-| --- | --- |
-| 纯文档 | 只跑 `changes`，其余 job 跳过（跳过视为通过） |
-| 纯工作流 / `.github/**` | `changes` + `actionlint` |
-| 测试文件 | `static` + `test` |
-| 课程 `lessons-zh.ts` / 挑战 `challenges.ts` | `static` + `test` + `build` + `e2e-lessons-changed`（只跑改到的 slug） |
-| 其它应用代码 | `static` + `test` + `build` + `e2e-smoke` |
-| 运行时 / 资产 / LSP / 网关 / `config/` / `functions/` / `public/` | 以上全部 + `e2e-smoke` + `e2e-lessons-full`（2 片并行） |
-
-课程增量筛选由 `LEAN_E2E_LESSONS` / `LEAN_E2E_CHALLENGES` 控制；全量课程在单 runner 内仍保持 `LEAN_E2E_WORKERS=1`，避免三套 Init + Std + Batteries 同时驻留导致内存不足，并行度由独立 runner 分片提供。无法可靠缩小范围时（课程目录、加载器、新增/删除课程）会自动回退到全量。
-对外始终由 `e2e-gate`（check 名 `浏览器端到端`）聚合内部 E2E 结果；调整内部分档时不要改这个对外名字。
-新增或删除课程 / 挑战时必须同步 `scripts/e2e-lessons.mjs` 的 `SLUGS` / `CHALLENGE_SLUGS`：`changes` 会核对内容源与清单，不一致直接失败，避免全量跑也漏掉新条目。
-建议在 GitHub 分支保护里要求上述 check 全绿才允许合入 `main`。
+CI 按改动类型自动分档（纯文档、纯工作流、仅单测、增量课程、纯 UI、全量运行时等）与 required checks 说明，统一维护于 [CI](CI.md)。
 
 ## 贡献约定
 
 - 改代码前先读 [AGENTS.md](../AGENTS.md) 的硬约束与模块边界；资产清单、源解析、Range 语义各有唯一入口。
-- 改完后直接推送分支并提 PR，交由 GitHub Actions（`CI · 应用`）算力跑完整门禁，不在本地重复跑重型测试或 E2E；一个提交只做一件事，提交信息写清楚「为什么」。
-- 课程内容只能落在 Init 范围内；用户可见文案必须中英文同时补齐。
+- 改完后直接推送分支并提 PR，交由 GitHub Actions（`CI · 应用`）算力跑完整门禁，不在本地重复跑重型 E2E；一个提交只做一件事，提交信息写清楚「为什么」。
+- 课程入门与数学篇仅使用内置 Init（工程篇按需通过 `requires` 自动挂载 Std / Batteries）；用户可见文案与课程必须中英文严格 1:1 对齐。
 
 ## 版本与发布
 

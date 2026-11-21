@@ -41,7 +41,7 @@ const isDocFile = (file) =>
   file.startsWith('docs/') ||
   /^[^/]+\.md$/i.test(file) ||
   file.startsWith('LICENSE') ||
-  file === 'AGENTS.md';
+  /(?:^|\/)AGENTS\.md$/i.test(file);
 
 const isSpikeScriptFile = (file) =>
   (file.startsWith('scripts/') && file.endsWith('.ts')) || SPIKE_CONFIG_FILES.has(file);

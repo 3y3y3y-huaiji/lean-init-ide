@@ -1,0 +1,96 @@
+name: CI · 门禁升级自动刷新在途 PR
+run-name: CI Refresh Open PRs · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'scripts/detect-changes.mjs'
+      - 'scripts/e2e-*.mjs'
+      - 'scripts/verify-*.mjs'
+      - 'eslint.config.js'
+      - 'vitest.config.ts'
+      - 'src/curriculum-invariants.test.ts'
+      - 'src/architecture-invariants.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: ci-refresh-open-prs
+  cancel-in-progress: false
+
+jobs:
+  refresh-open-prs:
+    name: 同步并重跑在途 PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: 刷新尚未包含新版门禁的在途 PR
+        env:
+          GH_TOKEN: ${{ secrets.CI_BOT_TOKEN || github.token }}
+          USING_BOT_TOKEN: ${{ secrets.CI_BOT_TOKEN != '' }}
+          REPO: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          prs_json=$(gh pr list \
+            --repo "$REPO" \
+            --state open \
+            --base main \
+            --limit 100 \
+            --json number,headRefName,headRefOid,isCrossRepository)
+
+          mapfile -t stale_prs < <(printf '%s' "$prs_json" | node -e "
+            const fs = require('node:fs');
+            const prs = JSON.parse(fs.readFileSync(0, 'utf8'));
+            for (const pr of prs) {
+              if (pr.isCrossRepository) continue;
+              console.log([pr.number, pr.headRefName, pr.headRefOid].join('\t'));
+            }
+          ")
+
+          if [ "${#stale_prs[@]}" -eq 0 ]; then
+            echo "没有同仓在途 PR 需要刷新。"
+            exit 0
+          fi
+
+          for row in "${stale_prs[@]}"; do
+            IFS=$'\t' read -r pr_num head_ref head_oid <<< "$row"
+            git fetch --no-tags origin "+refs/heads/${head_ref}:refs/remotes/origin/${head_ref}" >/dev/null 2>&1 || true
+            if git merge-base --is-ancestor "$TARGET_SHA" "$head_oid" 2>/dev/null; then
+              echo "PR #$pr_num ($head_ref) 已包含 $TARGET_SHA，跳过。"
+              continue
+            fi
+
+            echo "正在将最新 main 合入 PR #$pr_num ($head_ref)..."
+            if out=$(gh api -X PUT "repos/$REPO/pulls/$pr_num/update-branch" \
+              -f expected_head_sha="$head_oid" 2>&1); then
+              echo "PR #$pr_num 分支已更新。"
+              if [ "$USING_BOT_TOKEN" != "true" ]; then
+                # 默认 GITHUB_TOKEN 更新分支不会触发 pull_request 事件，主动在新 HEAD 上补跑新版 CI。
+                gh workflow run ci.yml \
+                  --repo "$REPO" \
+                  --ref "$head_ref" \
+                  -f base=origin/main
+                echo "已用 GITHUB_TOKEN 补触发 PR #$pr_num 的新版 CI · 应用。"
+              fi
+            else
+              echo "::warning::PR #$pr_num 自动合入 main 失败：$out"
+              existing_comments=$(gh pr view "$pr_num" --repo "$REPO" --json comments --jq '.comments[].body' 2>/dev/null || true)
+              marker="gate-refresh:${TARGET_SHA:0:7}"
+              if ! printf '%s' "$existing_comments" | grep -Fq "$marker"; then
+                gh pr comment "$pr_num" \
+                  --repo "$REPO" \
+                  --body "<!-- $marker -->⚠️ \`main\` 上的 CI/CD 门禁已升级（\`${TARGET_SHA:0:7}\`），自动将最新 \`main\` 合入本分支失败（可能存在合并冲突）。请手动执行 \`git fetch origin && git merge origin/main\` 并推送，以重跑新版 CI。"
+              fi
+            fi
+          done

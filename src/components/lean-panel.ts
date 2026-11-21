@@ -205,6 +205,8 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
   const statementEl = host.querySelector<HTMLElement>('[data-role="goal-statement"]')!;
   const resetEl = host.querySelector<HTMLButtonElement>('[data-role="reset"]');
   const exportEl = host.querySelector<HTMLButtonElement>('[data-role="export"]');
+  const importEl = host.querySelector<HTMLButtonElement>('[data-role="import"]');
+  const importInputEl = host.querySelector<HTMLInputElement>('[data-role="import-input"]');
   const passedEl = host.querySelector<HTMLElement>('[data-role="passed"]');
 
   // 先恢复分栏宽度、编辑器占比与面板显隐，再创建 Monaco，避免首帧后布局重排引发 CLS。
@@ -697,6 +699,38 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     window.clearTimeout(draftTimer);
     saveDraft(draftKey, model.getValue());
   };
+
+  // 与导出成对的导入入口：限制 256 KiB，读取后立即落盘草稿并回到文件开头。
+  const IMPORT_MAX_BYTES = 256 * 1024;
+  importEl?.addEventListener('click', () => importInputEl?.click());
+  importInputEl?.addEventListener('change', () => {
+    const input = importInputEl;
+    if (!input) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (file.size > IMPORT_MAX_BYTES) {
+      log(t.logImportFailed(`${Math.ceil(file.size / 1024)} KB > 256 KB`));
+      input.value = '';
+      return;
+    }
+    file
+      .text()
+      .then((text) => {
+        model.setValue(text);
+        saveDraftNow();
+        editor.setPosition({ lineNumber: 1, column: 1 });
+        editor.revealLine(1);
+        editor.focus();
+        log(t.logCodeImported(file.name));
+      })
+      .catch((error: unknown) => {
+        log(t.logImportFailed(error instanceof Error ? error.message : String(error)));
+      })
+      .finally(() => {
+        // 清空 value 才能重复导入同名文件。
+        input.value = '';
+      });
+  });
 
   let lastEditAt = 0;
   let lastDiagnostics: LspDiagnostic[] = [];

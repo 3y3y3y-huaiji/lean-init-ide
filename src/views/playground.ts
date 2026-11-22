@@ -1,4 +1,4 @@
-import { resolveChallengeParam } from '../challenges';
+import { playgroundStarter, resolveChallengeParam } from '../challenges';
 import { renderLeanMarkup, showEditorLoadFailure } from '../components/lean-markup';
 import { currentMemoryTier } from '../device';
 import { draftKeyFor, readDraft } from '../draft';
@@ -99,13 +99,14 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   const slug = new URLSearchParams(location.search).get('lesson');
   const lesson = slug ? (await loadLessons(locale)).find((item) => item.slug === slug) : undefined;
   const challenge = lesson ? undefined : resolveChallengeParam(location.search);
+  const challengeStarter = challenge ? playgroundStarter(challenge, locale) : undefined;
   const code =
-    lesson?.exercise?.starter ??
-    challenge?.starter[locale] ??
-    messagesFor(locale).playground.defaultCode;
+    lesson?.exercise?.starter ?? challengeStarter ?? messagesFor(locale).playground.defaultCode;
   const draftKey = draftKeyFor(lesson?.slug);
   const draft = challenge ? readDraft(draftKey) : null;
-  const hasPersonalDraft = Boolean(challenge && draft && draft.code !== challenge.starter[locale]);
+  const hasPersonalDraft = Boolean(
+    challenge && draft && challengeStarter !== undefined && draft.code !== challengeStarter,
+  );
 
   // 课程页带过来的练习如果声明了 requires，跳转后自动挂载对应扩展库；
   // 没有声明的老课程再按 starter 里的 import 兜底。
@@ -160,7 +161,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   notice
     .querySelector<HTMLButtonElement>('[data-role="challenge-load"]')
     ?.addEventListener('click', () => {
-      panel.setCode(challenge.starter[locale], { focus: true });
+      panel.setCode(playgroundStarter(challenge, locale), { focus: true });
       if (statusEl) statusEl.textContent = messagesFor(locale).playground.challengeLoaded;
     });
   notice

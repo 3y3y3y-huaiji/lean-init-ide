@@ -133,6 +133,15 @@ export const en: Messages = {
       handcrafted: '🛠️ Artisan',
       termMode: 'λ Type Theorist',
     },
+    cardSolved: '✓ Cleared',
+    cardBestChars: (count) => `Best ${count} chars`,
+    backup: {
+      exportButton: 'Export progress',
+      importButton: 'Import progress',
+      exported: 'Progress backup exported (JSON)',
+      imported: 'Progress imported and refreshed',
+      importFailed: 'Import failed: invalid JSON backup',
+    },
     editorTitle: 'Proof practice',
     intro: {
       title: 'First time here? 30 seconds to understand this page',
@@ -159,9 +168,10 @@ export const en: Messages = {
       goalsRemaining: (count) => `${count} goal${count === 1 ? '' : 's'} left to prove`,
       goalsNone:
         'No goals right now: put the cursor inside the proof and the Goal panel updates live',
-      tacticsTitle: 'Play cards: one click writes the sorry for you',
+      tacticsTitle: 'Play cards: one click loads a full proof in that style',
       tacticsHint:
-        'Click any play card: it smartly replaces the first sorry in the editor with a complete proof. If there is no sorry left, it replaces the current theorem’s proof instead.',
+        'Click any play card to load a complete, compilable proof in that style into the editor—or edit the code directly below and watch Lean respond live.',
+      verdictTacticsDisclosure: 'Stuck? Reveal play cards (contains truth spoiler)',
       verdictTitle: 'Pick a stance first',
       verdictHint:
         'The prompt does not reveal the answer. Load the template for one stance; you can switch back at any time.',
@@ -178,6 +188,11 @@ export const en: Messages = {
       openInPlayground: 'Open in the editor',
       starterNote:
         'Lines starting with "--" are explanation comments that Lean ignores; replace sorry with a real proof to close the goal.',
+      prevChallenge: '← Previous',
+      nextChallenge: 'Next →',
+      nextChallengeCta: (title) => `Next: ${title} →`,
+      allClearedCta: 'Back to Proof Arcade',
+      existingRecord: (summary) => `Your record: ${summary}`,
       feedbackHint: 'Something wrong with this puzzle? Feedback includes the current challenge.',
       feedbackBug: 'Report a bug',
       feedbackIssueTitle: (title) => `[Challenge] ${title}`,

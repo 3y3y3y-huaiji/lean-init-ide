@@ -215,7 +215,7 @@ describe('isChallengeSolved 的其它判题模式', () => {
     ).toBe(false);
   });
 
-  it('悬赏厅逐层判断，完成铜牌或银牌即可通关', () => {
+  it('悬赏厅逐层判断，完成铜牌、银牌或传说任一层即可通关', () => {
     expect(bountySpec).toBeDefined();
     if (!bountySpec) return;
     const spec: ChallengeSpec = {
@@ -228,6 +228,9 @@ describe('isChallengeSolved 的其它判题模式', () => {
     const bronzeOnly = bountySpec.solution.zh.replace(/theorem tier_silver[\s\S]*$/, '');
     expect(solvedChallengeTiers(spec, bronzeOnly, [])).toEqual(['bronze']);
     expect(isChallengeSolved(spec, bronzeOnly, [])).toBe(true);
+    const legendOnly = `theorem tier_legend : True := trivial`;
+    expect(solvedChallengeTiers(spec, legendOnly, [])).toEqual(['legend']);
+    expect(isChallengeSolved(spec, legendOnly, [])).toBe(true);
     const noSlots = bountySpec.solution.zh.replace(/theorem tier_bronze[\s\S]*$/, '');
     expect(solvedChallengeTiers(spec, noSlots, [])).toEqual([]);
     expect(isChallengeSolved(spec, noSlots, [])).toBe(false);

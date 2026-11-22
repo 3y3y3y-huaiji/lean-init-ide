@@ -143,6 +143,15 @@ export type Messages = {
       handcrafted: string;
       termMode: string;
     };
+    cardSolved: string;
+    cardBestChars: (count: number) => string;
+    backup: {
+      exportButton: string;
+      importButton: string;
+      exported: string;
+      imported: string;
+      importFailed: string;
+    };
     /** 详情页里包裹 Lean 编辑器的标题，避免与题目本身重复。 */
     editorTitle: string;
     /** 第一次进入挑战区的零基础导览：Lean 是什么、页面怎么玩。 */
@@ -159,6 +168,7 @@ export type Messages = {
       goalsNone: string;
       tacticsTitle: string;
       tacticsHint: string;
+      verdictTacticsDisclosure: string;
       /** 真假审判庭：先选立场的开关。 */
       verdictTitle: string;
       verdictHint: string;
@@ -174,6 +184,11 @@ export type Messages = {
       loadSolution: string;
       openInPlayground: string;
       starterNote: string;
+      prevChallenge: string;
+      nextChallenge: string;
+      nextChallengeCta: (title: string) => string;
+      allClearedCta: string;
+      existingRecord: (summary: string) => string;
       /** 挑战详情页底部的反馈入口：自动带上当前挑战。 */
       feedbackHint: string;
       feedbackBug: string;

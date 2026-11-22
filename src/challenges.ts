@@ -22,8 +22,8 @@ export type LocalizedText = {
 };
 
 export type ChallengeTactic = {
-  /** 出招卡上显示的文案。 */
-  label: string;
+  /** 出招卡上显示的文案（中英文随界面切换）。 */
+  label: LocalizedText;
   /** 点击后写入编辑器的完整 Lean 代码（双语注释随语言切换）。 */
   insert: LocalizedText;
   /**
@@ -82,7 +82,7 @@ const text = (zh: string, en: string): LocalizedText => ({ zh, en });
 
 /** 出招卡：insert 默认是一份完整文件，点击后整段载入。 */
 const card = (
-  label: string,
+  label: LocalizedText,
   description: LocalizedText,
   code: LocalizedText | string,
 ): ChallengeTactic => ({
@@ -169,14 +169,24 @@ theorem verdict_false :
 `,
   );
 
-const COLLATZ_DEFS = `-- 考拉兹过程：偶数折半，奇数乘 3 加 1
+const collatzDefs = text(
+  `-- 考拉兹过程：偶数折半，奇数乘 3 加 1
 def collatzStep (n : Nat) : Nat :=
   if n % 2 = 0 then n / 2 else 3 * n + 1
 
 -- 从 n 出发，走 k 步是否到达 1
 def collatzReach (n : Nat) : Nat → Prop
   | 0 => n = 1
-  | k + 1 => collatzReach (collatzStep n) k`;
+  | k + 1 => collatzReach (collatzStep n) k`,
+  `-- Collatz step: halve evens, map odds to 3n + 1
+def collatzStep (n : Nat) : Nat :=
+  if n % 2 = 0 then n / 2 else 3 * n + 1
+
+-- Starting from n, does k steps reach 1?
+def collatzReach (n : Nat) : Nat → Prop
+  | 0 => n = 1
+  | k + 1 => collatzReach (collatzStep n) k`,
+);
 
 const COLLATZ_BRONZE = `theorem tier_bronze : collatzStep (collatzStep 6) = 10 := by
   decide`;
@@ -187,7 +197,8 @@ const COLLATZ_SILVER = `theorem tier_silver (n : Nat) : collatzStep (2 * (n + 1)
   rw [ite_eq_left hmod]
   omega`;
 
-const GOLDBACH_DEFS = `-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k
+const goldbachDefs = text(
+  `-- Even n 表示「n 是偶数」：存在某个自然数 k，使 n = 2 * k
 def Even (n : Nat) : Prop := ∃ k, n = 2 * k
 
 -- 只用试除法的素数判定：n 是否有 2 .. n-1 之间的因子
@@ -197,7 +208,25 @@ def hasProperDivisor (n : Nat) : Nat → Bool
   | d + 2 => if n % (d + 2) = 0 then true else hasProperDivisor n (d + 1)
 
 def isPrime (n : Nat) : Bool :=
-  decide (2 ≤ n) && !hasProperDivisor n (n - 1)`;
+  decide (2 ≤ n) && !hasProperDivisor n (n - 1)`,
+  `-- Even n means "n is even": there is a natural number k with n = 2 * k
+def Even (n : Nat) : Prop := ∃ k, n = 2 * k
+
+-- Trial-division primality: does n have a factor between 2 and n-1?
+def hasProperDivisor (n : Nat) : Nat → Bool
+  | 0 => false
+  | 1 => false
+  | d + 2 => if n % (d + 2) = 0 then true else hasProperDivisor n (d + 1)
+
+def isPrime (n : Nat) : Bool :=
+  decide (2 ≤ n) && !hasProperDivisor n (n - 1)`,
+);
+
+const localizedJoin = (...parts: Array<LocalizedText | string>): LocalizedText =>
+  text(
+    `${parts.map((part) => (typeof part === 'string' ? part : part.zh)).join('\n\n')}\n`,
+    `${parts.map((part) => (typeof part === 'string' ? part : part.en)).join('\n\n')}\n`,
+  );
 
 const GOLDBACH_BRONZE = `theorem tier_bronze :
     isPrime 2 = true ∧ isPrime 3 = true ∧ isPrime 7 = true ∧
@@ -288,7 +317,7 @@ theorem even_plus_even (a b : Nat) (ha : Even a) (hb : Even b) :
     },
     tactics: [
       card(
-        '⚡ 自动流：grind 收尾',
+        text('⚡ 自动流：grind 收尾', '⚡ Automation: grind closure'),
         text(
           '拆开两个偶数后，把剩下的乘法等式整段交给 grind。',
           'Unpack both evens, then hand the remaining multiplication equality to grind.',
@@ -302,7 +331,7 @@ ${EVEN_PLUS_EVEN_HEADER} := by
 `,
       ),
       card(
-        '🛠️ 手工流：只写 rw',
+        text('🛠️ 手工流：只写 rw', '🛠️ Handcrafted: rw only'),
         text(
           '不用自动化，只用一条乘法分配律 rw 把等式改写整齐。',
           'No automation: a single distributivity rewrite tidies the equality.',
@@ -316,7 +345,7 @@ ${EVEN_PLUS_EVEN_HEADER} := by
 `,
       ),
       card(
-        'λ 极客流：项式构造',
+        text('λ 极客流：项式构造', 'λ Type Theorist: proof term'),
         text(
           '不写 by，直接用 Exists.elim 交出证明项，点亮类型论极客勋章。',
           'No by block: build the proof term directly with Exists.elim.',
@@ -377,7 +406,7 @@ theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
     },
     tactics: [
       card(
-        '⚡ 自动流：omega',
+        text('⚡ 自动流：omega', '⚡ Automation: omega'),
         text(
           '不点名任何引理，让 omega 自己看出两边相等。',
           'Do not name a lemma; let omega notice both sides are equal.',
@@ -387,7 +416,7 @@ theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
 `,
       ),
       card(
-        '🛠️ 手工流：rw [Nat.add_comm]',
+        text('🛠️ 手工流：rw [Nat.add_comm]', '🛠️ Handcrafted: rw [Nat.add_comm]'),
         text(
           '明确调用交换律，把左边改写成右边。',
           'Call commutativity explicitly to rewrite the left side into the right one.',
@@ -397,7 +426,7 @@ theorem add_two_swap (a : Nat) : a + 2 = 2 + a := by
 `,
       ),
       card(
-        'λ 极客流：直接给证明项',
+        text('λ 极客流：直接给证明项', 'λ Type Theorist: direct term'),
         text(
           '把 Nat.add_comm 的实例本身当作证明，完全不用 by。',
           'Use the Nat.add_comm instance itself as the proof, with no by block.',
@@ -488,7 +517,7 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
     },
     tactics: [
       card(
-        '🛠️ 手工流：代换后收尾',
+        text('🛠️ 手工流：代换后收尾', '🛠️ Handcrafted: rewrite & close'),
         text(
           '把余 0 的等式代进余 1 的等式，再用 0 ≠ 1 结束。',
           'Substitute the remainder-0 equation into the remainder-1 equation, then use 0 ≠ 1.',
@@ -505,7 +534,7 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
 `,
       ),
       card(
-        '⚡ 自动流：omega 判矛盾',
+        text('⚡ 自动流：omega 判矛盾', '⚡ Automation: omega contradiction'),
         text(
           '同样代换出 0 = 1，让 omega 直接说「这不可能」。',
           'Substitute to 0 = 1 exactly the same way, then let omega declare it impossible.',
@@ -522,7 +551,7 @@ theorem not_even_and_odd (n : Nat) : ¬ (Even n ∧ Odd n) := by
 `,
       ),
       card(
-        'λ 极客流：一行项式',
+        text('λ 极客流：一行项式', 'λ Type Theorist: one-line term'),
         text(
           '用函数直接消费「同时成立」的证据，全程没有 by。',
           'Consume the “both hold” evidence with a function; there is no by at all.',
@@ -623,7 +652,7 @@ theorem double_eq_two_mul (n : Nat) : double n = 2 * n := by
     },
     tactics: [
       card(
-        '⚡ 自动流：归纳 + omega',
+        text('⚡ 自动流：归纳 + omega', '⚡ Automation: induction + omega'),
         text(
           '标准归纳：起点 rfl，递推里展开一步再让 omega 收尾。',
           'Standard induction: rfl at the base, unfold one step and let omega finish the successor case.',
@@ -640,7 +669,7 @@ ${DOUBLE_HEADER} := by
 `,
       ),
       card(
-        '🛠️ 手工流：只用 rw',
+        text('🛠️ 手工流：只用 rw', '🛠️ Handcrafted: rw only'),
         text(
           '不调用自动化，用乘法分配律把 2 * (n + 1) 改写整齐。',
           'No automation: use distributivity to tidy 2 * (n + 1).',
@@ -656,7 +685,7 @@ ${DOUBLE_HEADER} := by
 `,
       ),
       card(
-        'λ 极客流：Nat.rec 项式',
+        text('λ 极客流：Nat.rec 项式', 'λ Type Theorist: Nat.rec term'),
         text(
           '用自然数递归器直接写出证明项，不写 induction。',
           'Write the proof term with the natural-number recursor instead of induction.',
@@ -730,7 +759,7 @@ theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
     requiredConclusion: NAT_SUB_CONCLUSION,
     tactics: [
       card(
-        '🃏 填入反例 a=0, b=1',
+        text('🃏 填入反例 a=0, b=1', '🃏 Counterexample: a=0, b=1'),
         text(
           '0 - 1 被截断成 0，于是左边是 1、右边是 0，反例成立。',
           '0 - 1 truncates to 0, so the left side is 1 while the right side is 0.',
@@ -738,7 +767,7 @@ theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
         natSubCounter(0, 1),
       ),
       card(
-        '🃏 再试 a=1, b=2',
+        text('🃏 再试 a=1, b=2', '🃏 Counterexample: a=1, b=2'),
         text(
           '换一组更大的数，同样因为 b > a 而截断，反例依然成立。',
           'Try a larger pair; b > a still triggers truncation, so the counterexample holds.',
@@ -746,7 +775,7 @@ theorem verdict_false : (counter_a - counter_b) + counter_b ≠ counter_a := by
         natSubCounter(1, 2),
       ),
       card(
-        '🃏 再试 a=7, b=9',
+        text('🃏 再试 a=7, b=9', '🃏 Counterexample: a=7, b=9'),
         text(
           '把两个数字拉大，验证反例不是偶然。',
           'Scale the numbers up to check the counterexample is not a fluke.',
@@ -828,7 +857,7 @@ theorem verdict_false :
     requiredConclusion: EVEN_SUM_CONCLUSION,
     tactics: [
       card(
-        '🃏 填入反例 a=1, b=1',
+        text('🃏 填入反例 a=1, b=1', '🃏 Counterexample: a=1, b=1'),
         text(
           '1 + 1 = 2 是偶数，但两个加数都是奇数。',
           '1 + 1 = 2 is even, yet both addends are odd.',
@@ -836,7 +865,7 @@ theorem verdict_false :
         evenSumCounter(1, 1),
       ),
       card(
-        '🃏 再试 a=3, b=3',
+        text('🃏 再试 a=3, b=3', '🃏 Counterexample: a=3, b=3'),
         text(
           '换一对奇数，和仍然是偶数，反例依旧成立。',
           'Another pair of odd numbers still sums to an even number.',
@@ -844,7 +873,7 @@ theorem verdict_false :
         evenSumCounter(3, 3),
       ),
       card(
-        '🃏 再试 a=5, b=7',
+        text('🃏 再试 a=5, b=7', '🃏 Counterexample: a=5, b=7'),
         text(
           '把数字拉大，验证反例不是偶然。',
           'Scale the numbers up to check the counterexample is not a fluke.',
@@ -915,19 +944,26 @@ theorem verdict_false : ∃ P : Prop, ¬¬P ∧ ¬P := by
     requiredConclusion: '(P : Prop) (h : P) : ¬¬P',
     tactics: [
       card(
-        '🛠️ 分步流：intro + exact',
+        text('🛠️ 分步流：intro + exact', '🛠️ Handcrafted: intro + exact'),
         text(
           '先把「P 不成立」拿进来，再把手里的 P 丢给它。',
           'Bring in “P does not hold”, then hand it the known P.',
         ),
-        `-- 判真：P 成立时，「P 不成立」会直接与 h 冲突
+        text(
+          `-- 判真：P 成立时，「P 不成立」会直接与 h 冲突
 theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
   intro hn
   exact hn h
 `,
+          `-- Judged true: when P holds, "P does not hold" clashes directly with h
+theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
+  intro hn
+  exact hn h
+`,
+        ),
       ),
       card(
-        'λ 极客流：一行函数',
+        text('λ 极客流：一行函数', 'λ Type Theorist: one-line function'),
         text(
           '整条证明就是一个把 h 交给否定假设的函数。',
           'The whole proof is a function that hands h to the negated assumption.',
@@ -937,7 +973,7 @@ theorem verdict_true (P : Prop) (h : P) : ¬¬P := by
 `,
       ),
       card(
-        '⚡ 自动流：grind',
+        text('⚡ 自动流：grind', '⚡ Automation: grind'),
         text(
           '不解释步骤，让 grind 自己发现两条假设互相矛盾。',
           'Skip the steps and let grind discover the contradiction.',
@@ -1026,7 +1062,7 @@ theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
     requiredConclusion: 'lo ≤ clamp lo hi x ∧ clamp lo hi x ≤ hi',
     tactics: [
       card(
-        '🔧 修分支 + 补前提',
+        text('🔧 修分支 + 补前提', '🔧 Fix branches + add premise'),
         text(
           '把两个 if 分支换回 lo / hi，并补上 lo ≤ hi 的前提。',
           'Swap the two if branches back to lo / hi and add the lo ≤ hi premise.',
@@ -1047,7 +1083,7 @@ theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
 `,
       ),
       card(
-        '🩹 用 split 拆 if',
+        text('🩹 用 split 拆 if', '🩹 Handcrafted: split branches'),
         text(
           '展开 clamp 后让 split 自动分成三段，再分别处理。',
           'Unfold clamp and let split produce the three cases, then handle each.',
@@ -1066,7 +1102,7 @@ theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
 `,
       ),
       card(
-        '⚡ 自动流：simp 拆完再 omega',
+        text('⚡ 自动流：simp 拆完再 omega', '⚡ Automation: simp + omega'),
         text(
           '用 simp 配合分支假设展开目标，最后交给 omega。',
           'Use simp with the branch hypotheses to unfold the goal, then finish with omega.',
@@ -1083,6 +1119,123 @@ theorem clamp_in_range (lo hi x : Nat) (h : lo ≤ hi) :
     · simp [h1, h2, h]
     · simp [h1, h2]
       omega
+`,
+      ),
+    ],
+  },
+  {
+    slug: 'budget-withdraw',
+    mode: 'bugfix',
+    title: {
+      zh: '修复账户扣款的余额守恒漏洞',
+      en: 'Fix the balance-conservation hole in account withdrawal',
+    },
+    summary: {
+      zh: 'withdraw 声称扣完再加回一定等于原余额，但它既把减法写成了加法，又漏掉了 amount ≤ balance 的前提。',
+      en: 'withdraw claims withdrawing and adding back restores the balance, yet it adds instead of subtracting and omits amount ≤ balance.',
+    },
+    body: {
+      zh: '数字钱包的扣款函数本来应该在余额充足时返回 balance - amount，却被粗心写成了 balance + amount（越扣钱越多！）。更隐蔽的是，定理本身也没有要求 amount ≤ balance，自然数透支截断到 0 后照样守恒不了。像排查线上故障一样：修好扣款公式、补上前提，同时保持核心守恒结论不变。',
+      en: 'A wallet withdrawal function should return balance - amount when funds are sufficient, but a bug turned minus into plus (free money!). Worse, the theorem omits the premise amount ≤ balance, so natural-number truncation breaks conservation when overdrawing. Patch the formula and add the missing premise while keeping the core conservation equation intact.',
+    },
+    hint: {
+      zh: '先把 `withdraw` 分支里的 `balance + amount` 改回 `balance - amount`，再给定理参数加上 `(h : amount ≤ balance)`；展开 `withdraw` 后用 `ite_eq_left h` 与 `Nat.sub_add_cancel h`（或 `omega`）收尾。',
+      en: 'Change `balance + amount` back to `balance - amount` in `withdraw`, and add `(h : amount ≤ balance)` to the theorem; unfold `withdraw` and close with `ite_eq_left h` plus `Nat.sub_add_cancel h` (or `omega`).',
+    },
+    starter: {
+      zh: `-- 钱包扣款：当余额够扣时本应扣减 amount，但下面错写成了加法
+-- 漏洞：1) if 分支错写成 balance + amount  2) 定理漏掉了 (h : amount ≤ balance) 前提
+def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance + amount else balance
+
+-- 目标：扣款后加回 amount 仍然等于原余额（请保留核心等式结论）
+theorem withdraw_conserves (balance amount : Nat) :
+    withdraw balance amount + amount = balance := by
+  sorry
+`,
+      en: `-- Wallet withdrawal: when funds cover amount it should subtract, not add
+-- Holes: 1) the if branch adds instead of subtracting  2) the theorem omits (h : amount ≤ balance)
+def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance + amount else balance
+
+-- Goal: withdrawing amount and adding it back equals the original balance
+theorem withdraw_conserves (balance amount : Nat) :
+    withdraw balance amount + amount = balance := by
+  sorry
+`,
+    },
+    solution: {
+      zh: `-- 修复实现：余额充足时返回 balance - amount
+def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance - amount else balance
+
+-- 补上前提 (h : amount ≤ balance)，核心结论保持不变
+theorem withdraw_conserves (balance amount : Nat) (h : amount ≤ balance) :
+    withdraw balance amount + amount = balance := by
+  unfold withdraw
+  rw [ite_eq_left h]
+  omega
+`,
+      en: `-- Fix the formula: return balance - amount when funds suffice
+def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance - amount else balance
+
+-- Add the missing premise (h : amount ≤ balance) while keeping the core equation unchanged
+theorem withdraw_conserves (balance amount : Nat) (h : amount ≤ balance) :
+    withdraw balance amount + amount = balance := by
+  unfold withdraw
+  rw [ite_eq_left h]
+  omega
+`,
+    },
+    requiredConclusion: 'withdraw balance amount + amount = balance',
+    tactics: [
+      card(
+        text('⚡ 自动流：展开 + omega', '⚡ Automation: unfold + omega'),
+        text(
+          '先把减法与前提修好，展开 withdraw 并代入条件 h 后交给 omega 收尾。',
+          'Fix the subtraction and premise, unfold withdraw with h, and let omega close it.',
+        ),
+        `def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance - amount else balance
+
+theorem withdraw_conserves (balance amount : Nat) (h : amount ≤ balance) :
+    withdraw balance amount + amount = balance := by
+  unfold withdraw
+  rw [ite_eq_left h]
+  omega
+`,
+      ),
+      card(
+        text('🛠️ 手工流：split 分支', '🛠️ Handcrafted: split branches'),
+        text(
+          '不用自动化：用 split 拆开 if，再用 Nat.sub_add_cancel 和 contradiction 分别收尾。',
+          'No automation: split the if branch, then finish with Nat.sub_add_cancel and contradiction.',
+        ),
+        `def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance - amount else balance
+
+theorem withdraw_conserves (balance amount : Nat) (h : amount ≤ balance) :
+    withdraw balance amount + amount = balance := by
+  unfold withdraw
+  split
+  · exact Nat.sub_add_cancel h
+  · contradiction
+`,
+      ),
+      card(
+        text('λ 极客流：一行项式', 'λ Type Theorist: one-line term'),
+        text(
+          '不用 by，直接组合 ite_eq_left、congrArg 与 Nat.sub_add_cancel 交出证明项。',
+          'No by block: compose ite_eq_left, congrArg and Nat.sub_add_cancel directly as a proof term.',
+        ),
+        `def withdraw (balance amount : Nat) : Nat :=
+  if amount ≤ balance then balance - amount else balance
+
+theorem withdraw_conserves (balance amount : Nat) (h : amount ≤ balance) :
+    withdraw balance amount + amount = balance :=
+  Eq.trans (congrArg (· + amount) (show withdraw balance amount = balance - amount from ite_eq_left h))
+    (Nat.sub_add_cancel h)
 `,
       ),
     ],
@@ -1199,39 +1352,28 @@ theorem tier_silver (n : Nat) : collatzStep (2 * (n + 1)) = n + 1 := by
     bounty: { bronze: 'tier_bronze', silver: 'tier_silver', legend: 'tier_legend' },
     tactics: [
       card(
-        '🏅 一键点亮铜牌 + 银牌',
+        text('🏅 一键点亮铜牌 + 银牌', '🏅 Claim Bronze + Silver'),
         text(
           '铜牌交给 decide，银牌展开一步后交给 omega，两枚一起拿下。',
           'decide takes bronze, and omega finishes silver after one unfold—both badges at once.',
         ),
-        `${COLLATZ_DEFS}
-
-${COLLATZ_BRONZE}
-
-${COLLATZ_SILVER}
-`,
+        localizedJoin(collatzDefs, COLLATZ_BRONZE, COLLATZ_SILVER),
       ),
       card(
-        '🥉 只拿铜牌',
+        text('🥉 只拿铜牌', '🥉 Claim Bronze only'),
         text(
           '只验证 6 → 3 → 10 这个具体例子，银牌留给自己。',
           'Verify only the concrete example 6 → 3 → 10 and leave silver for later.',
         ),
-        `${COLLATZ_DEFS}
-
-${COLLATZ_BRONZE}
-`,
+        localizedJoin(collatzDefs, COLLATZ_BRONZE),
       ),
       card(
-        '🥈 只拿银牌',
+        text('🥈 只拿银牌', '🥈 Claim Silver only'),
         text(
           '跳过铜牌，直接证明所有偶数 2 * (n + 1) 一步折半。',
           'Skip bronze and prove that every even 2 * (n + 1) halves in one step.',
         ),
-        `${COLLATZ_DEFS}
-
-${COLLATZ_SILVER}
-`,
+        localizedJoin(collatzDefs, COLLATZ_SILVER),
       ),
     ],
   },
@@ -1369,39 +1511,28 @@ theorem tier_silver (n : Nat) :
     bounty: { bronze: 'tier_bronze', silver: 'tier_silver', legend: 'tier_legend' },
     tactics: [
       card(
-        '🏅 一键点亮铜牌 + 银牌',
+        text('🏅 一键点亮铜牌 + 银牌', '🏅 Claim Bronze + Silver'),
         text(
           '铜牌让 decide 试除，银牌拆成 2 与 2 * n，两枚一起拿下。',
           'decide trial-divides for bronze, and silver splits into 2 and 2 * n—both at once.',
         ),
-        `${GOLDBACH_DEFS}
-
-${GOLDBACH_BRONZE}
-
-${GOLDBACH_SILVER}
-`,
+        localizedJoin(goldbachDefs, GOLDBACH_BRONZE, GOLDBACH_SILVER),
       ),
       card(
-        '🥉 只拿铜牌',
+        text('🥉 只拿铜牌', '🥉 Claim Bronze only'),
         text(
           '只验证 4 = 2 + 2 与 10 = 3 + 7 的素性，银牌留给自己。',
           'Verify only the primality behind 4 = 2 + 2 and 10 = 3 + 7.',
         ),
-        `${GOLDBACH_DEFS}
-
-${GOLDBACH_BRONZE}
-`,
+        localizedJoin(goldbachDefs, GOLDBACH_BRONZE),
       ),
       card(
-        '🥈 只拿银牌',
+        text('🥈 只拿银牌', '🥈 Claim Silver only'),
         text(
           '跳过铜牌，直接证明每个偶数都能拆成两个偶数。',
           'Skip bronze and prove directly that every even number splits into two evens.',
         ),
-        `${GOLDBACH_DEFS}
-
-${GOLDBACH_SILVER}
-`,
+        localizedJoin(goldbachDefs, GOLDBACH_SILVER),
       ),
     ],
   },
@@ -1423,4 +1554,24 @@ export const challengePath = (locale: Locale, slug: string): string =>
 export const resolveChallengeParam = (search: string): Challenge | undefined => {
   const slug = new URLSearchParams(search).get('challenge');
   return challengeBySlug(slug ?? undefined);
+};
+
+/**
+ * 为 Playground 提供立即可编译的初始代码：
+ * 真假审判庭的详情页 starter 会引导点「上方立场按钮」，但在 Playground 里没有这组按钮，
+ * 改为直接提供激活的「判真」模板 + 折叠注释的「判假」模板（不剧透）。
+ */
+export const playgroundStarter = (challenge: Challenge, locale: Locale): string => {
+  if (challenge.mode !== 'verdict' || !challenge.verdictBranches) {
+    return challenge.starter[locale];
+  }
+  const header =
+    locale === 'zh'
+      ? '-- 真假审判庭（Playground 自由探索）：默认载入「尝试证明」分支；若判断为假，删去上方定理并取消下方反例的 /- ... -/ 注释即可。'
+      : '-- Truth Court (Playground): "try to prove it" is active below; if you judge it false, delete that theorem and uncomment the counterexample in /- ... -/.';
+  const falseLabel =
+    locale === 'zh'
+      ? '判假分支（取消整块注释即可启用）：'
+      : 'False branch (remove /- and -/ to activate):';
+  return `${header}\n\n${challenge.verdictBranches.trueStarter[locale].trimEnd()}\n\n/-\n${falseLabel}\n${challenge.verdictBranches.falseStarter[locale].trimEnd()}\n-/\n`;
 };

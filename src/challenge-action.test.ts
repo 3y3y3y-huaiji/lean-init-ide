@@ -3,7 +3,7 @@ import { applyChallengeTactic, challengeTacticAction } from './challenge-action'
 import type { ChallengeTactic } from './challenges';
 
 const tactic = (overrides: Partial<ChallengeTactic> = {}): ChallengeTactic => ({
-  label: '测试出招卡',
+  label: { zh: '测试出招卡', en: 'Test card' },
   insert: { zh: 'by decide', en: 'by decide' },
   description: { zh: '测试', en: 'test' },
   ...overrides,

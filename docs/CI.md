@@ -4,8 +4,8 @@
 
 # CI / CD 工作流地图
 
-Actions 里按职责划分工作流：应用 CI / PR 刷新、生产部署、运行时构建、线上巡检。
-名称统一用 `CI ·` / `Deploy ·` / `Runtime ·` / `Smoke ·` / `Cleanup ·` 前缀，运行记录用 `run-name` 标出分支或动作，避免同类运行混在一起。
+Actions 里按职责划分工作流：应用 CI / PR 刷新、安全扫描、生产部署、运行时构建、线上巡检。
+名称统一用 `CI ·` / `Security ·` / `Deploy ·` / `Runtime ·` / `Smoke ·` / `Cleanup ·` 前缀，运行记录用 `run-name` 标出分支或动作，避免同类运行混在一起。
 
 | 工作流 | 触发 | 用途 | 产物 / 影响 |
 | --- | --- | --- | --- |
@@ -19,6 +19,8 @@ Actions 里按职责划分工作流：应用 CI / PR 刷新、生产部署、运
 | [depth-probe.yml](../.github/workflows/depth-probe.yml) `Depth probe` | push `main`（探针路径）、手动 | 浏览器 Worker 递归上界、JSPI/ASYNCIFY/tail-call 对照、WHNF 尾调用审计 | artifact，只读 |
 | [modelscope.yml](../.github/workflows/modelscope.yml) `Runtime · 魔搭镜像` | 手动 | 单独重传或校验魔搭镜像 | ModelScope |
 | [smoke.yml](../.github/workflows/smoke.yml) `Smoke · 线上巡检` | 每天 01:00 UTC、手动 | 首页、COOP/COEP、`sw.js`、`/cdn/` Range、白名单 404 巡检 | 只读 |
+| [codeql.yml](../.github/workflows/codeql.yml) `Security · CodeQL` | PR / push `main`、每周一 03:17 UTC、手动 | `javascript-typescript` SAST 静态安全分析并上传 SARIF | GitHub Security 告警 |
+| [scorecard.yml](../.github/workflows/scorecard.yml) `Security · OpenSSF Scorecard` | 分支保护变更、push `main`、每周一 04:23 UTC、手动 | OpenSSF 供应链安全评分、发布结果并上传 SARIF | OpenSSF Scorecard / SARIF |
 
 > `CI · 应用` 对外的 required check 固定为：`static` / `test` / `build` / `浏览器端到端` / `audit`（另有 `changes` / `docs-check` / `actionlint`）。纯文档改动走 `changes` + 5 秒 `docs-check`（无 `pnpm install`）；`浏览器端到端` 聚合 `e2e-ui`、`e2e-smoke`、`e2e-lessons-full`、`e2e-lessons-changed`。内部 job 调整不影响分支保护。
 

@@ -2,6 +2,8 @@
 
 # Lean Init IDE
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/3y3y3y-huaiji/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/3y3y3y-huaiji/lean-init-ide)
+
 **在浏览器里，跑一个真的定理证明器。**
 
 不是演示，不是正则模拟，也不是把你的代码悄悄发到云端。Lean 4.35.0 被编译成 WebAssembly，

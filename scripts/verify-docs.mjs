@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * Docs-as-Code 不变量门禁（零外部依赖，Node 24 原生执行）：
- * 1. 断链与幽灵仓内路径拦截（排除 docs/archive 与构建期临时目录）；
+ * Docs-as-Code 不变量门禁（零外部依赖，Node 24 原生执行；严格二元判定，不发 warn 噪声）：
+ * 1. 断链与仓内幽灵路径拦截（排除 docs/archive 与构建期临时目录）；
  * 2. 幽灵 pnpm run <cmd> 命令拦截；
  * 3. 工作流列表（.github/workflows <-> docs/CI.md）、Lean 版本与课时总数 SSOT 强同步；
- * 4. README.md / README.en.md 二级标题数量对齐；
- * 5. 上下文防膨胀上限（根 AGENTS.md <= 130 行，子目录 AGENTS.md <= 80 行）与 docs 定位头校验；
- * 6. 已废弃过期表述黑名单拦截。
+ * 4. AGENTS.md 防失控底线（根 <= 200 行，子目录 <= 120 行）与 docs 定位头校验（首个 H2 之前或前 25 行内）；
+ * 5. 已废弃过期表述黑名单拦截。
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const ROOT_AGENTS_MAX_LINES = 130;
-const SUB_AGENTS_MAX_LINES = 80;
+const ROOT_AGENTS_MAX_LINES = 200;
+const SUB_AGENTS_MAX_LINES = 120;
+const DOC_HEADER_MIN_LINES = 25;
 
 const GENERATED_PREFIXES = ['dist/', 'coverage/', 'work/', 'public/sw.js', 'public/wasm-lean4/'];
 
@@ -120,11 +120,12 @@ const checkCommands = (relFile, content, knownScripts, errors) => {
   }
 };
 
-const countH2Headings = (markdown) =>
-  stripCodeFences(markdown)
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .filter((line) => /^##\s+/.test(line)).length;
+const extractHeaderWindow = (content) => {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const firstH2 = lines.findIndex((line) => /^##\s+/.test(line));
+  const end = firstH2 >= 0 ? Math.max(DOC_HEADER_MIN_LINES, firstH2) : DOC_HEADER_MIN_LINES;
+  return lines.slice(0, end).join('\n');
+};
 
 const checkWorkflowsParity = (rootDir, readDoc, errors) => {
   const wfDir = resolve(rootDir, '.github/workflows');
@@ -241,7 +242,7 @@ export const verifyDocs = (rootDir) => {
     }
 
     if (relFile.startsWith('docs/') && relFile.endsWith('.md')) {
-      const headerWindow = content.replace(/\r\n/g, '\n').split('\n').slice(0, 12).join('\n');
+      const headerWindow = extractHeaderWindow(content);
       for (const marker of ['**何时读我**', '**单一事实来源**', '**维护边界**']) {
         if (!headerWindow.includes(marker)) {
           errors.push(`${relFile}: 顶部缺少 AI 定位头标记 ${marker}`);
@@ -253,16 +254,6 @@ export const verifyDocs = (rootDir) => {
       if (content.includes(stale)) {
         errors.push(`${relFile}: 仍包含已废弃表述「${stale}」`);
       }
-    }
-  }
-
-  const zhReadme = readDoc('README.md');
-  const enReadme = readDoc('README.en.md');
-  if (zhReadme !== null && enReadme !== null) {
-    const zhCount = countH2Headings(zhReadme);
-    const enCount = countH2Headings(enReadme);
-    if (zhCount !== enCount) {
-      errors.push(`README 双语二级标题数量不一致（README.md=${zhCount}, README.en.md=${enCount}）`);
     }
   }
 

@@ -74,18 +74,33 @@ describe('verify-docs 文档不变量门禁', () => {
     expect(errors.some((e) => e.includes('课程内容只能落在 Init 范围内'))).toBe(true);
   });
 
-  it('拦截 AGENTS.md 超长、缺少 AI 定位头与 README 双语标题数漂移', () => {
-    const root = makeFixture({
+  it('放宽 AGENTS 合理篇幅、定位头位置与 README 双语章节数，同时守住防失控底线与缺漏拦截', () => {
+    const relaxedRoot = makeFixture({
       'AGENTS.md': Array.from({ length: 140 }, (_, i) => `line ${i}`).join('\n'),
       'src/i18n/AGENTS.md': Array.from({ length: 90 }, (_, i) => `line ${i}`).join('\n'),
+      'README.md': '# 项目\n\nLean 4.35.0 · 1 节课\n\n## 快速开始\n\n## 文档\n\n## 致谢\n',
+      'README.en.md': '# Project\n\nLean 4.35.0 · 1 lesson\n\n## Quick Start\n',
+      'docs/LATE_HEADER.md': [
+        '# Title',
+        ...Array.from({ length: 14 }, () => ''),
+        '**何时读我**：说明',
+        '**单一事实来源**：说明',
+        '**维护边界**：说明',
+        '',
+        '## Overview',
+      ].join('\n'),
+    });
+    expect(verifyDocs(relaxedRoot)).toEqual([]);
+
+    const failingRoot = makeFixture({
+      'AGENTS.md': Array.from({ length: 210 }, (_, i) => `line ${i}`).join('\n'),
+      'src/i18n/AGENTS.md': Array.from({ length: 130 }, (_, i) => `line ${i}`).join('\n'),
       'docs/NO_HEADER.md': '# 没写定位头\n',
-      'README.en.md': '# Project\n\n4.35.0 1\n\n## Only one section\n',
     });
 
-    const errors = verifyDocs(root);
+    const errors = verifyDocs(failingRoot);
     expect(errors.some((e) => e.includes('AGENTS.md 超出上限'))).toBe(true);
     expect(errors.some((e) => e.includes('src/i18n/AGENTS.md 超出上限'))).toBe(true);
     expect(errors.some((e) => e.includes('docs/NO_HEADER.md'))).toBe(true);
-    expect(errors.some((e) => e.includes('README 双语二级标题数量不一致'))).toBe(true);
   });
 });

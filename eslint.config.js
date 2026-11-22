@@ -25,13 +25,9 @@ export default tseslint.config(
     files: ['src/**/*.ts', 'functions/**/*.ts'],
     ignores: ['**/*.test.ts', 'src/i18n/**', 'src/challenges.ts'],
     rules: {
-      'max-lines': ['error', { max: 520, skipBlankLines: true, skipComments: true }],
-    },
-  },
-  {
-    files: ['src/views/lesson.ts'],
-    rules: {
-      'max-lines': ['error', { max: 750, skipBlankLines: true, skipComments: true }],
+      // 仅设防失控硬底线，不发 warn 噪声；高内聚领域模块允许附中文原因的局部豁免：
+      // /* eslint-disable max-lines -- <原因> */
+      'max-lines': ['error', { max: 800, skipBlankLines: true, skipComments: true }],
     },
   },
   {

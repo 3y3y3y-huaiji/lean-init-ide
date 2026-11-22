@@ -18,11 +18,12 @@
 - **魔搭镜像扁平约束**：`upload-modelscope.mjs` 与 `src/asset-sources.mjs` 共用扁平目录 `<prefix>/<asset.name>`，严禁引入嵌套子目录差异（见 [ADR-02](../docs/DECISIONS.md#adr-02)）。
 - **禁止静默吞错与假通过**：任何资产校验、GitHub Release 上传、`.patch` 锚点 `grep` 断言失败必须显式非零退出，禁止用 `continue-on-error: true` 掩盖构建或缓存失效。
 
-## 3. wasm64 Pin 与补丁联动
+## 3. 强联动与 wasm64 Pin
 
-- Lean 版本唯一定点在 `scripts/pin-lean.ts`（`LEAN_PIN`）；改 pin 时必须同步验证三份补丁与 `scripts/wasm64-patch-equivalence.ts` 差分语料（[ADR-03](../docs/DECISIONS.md#adr-03)）。
+- **CI 变更分档与工作流清单**：`scripts/detect-changes.mjs` ↔ `.github/workflows/ci.yml`；`scripts/verify-docs.mjs` ↔ `docs/CI.md` 与 `package.json`。
+- **wasm64 Pin 与补丁联动**：Lean 版本唯一定点在 `scripts/pin-lean.ts`（`LEAN_PIN`）；改 pin 时必须同步三份补丁与 `scripts/wasm64-patch-equivalence.ts` 差分语料（[ADR-03](../docs/DECISIONS.md#adr-03)）。
 
-## 4. 改完必跑
+## 4. 验收标准
 
 ```bash
 pnpm run format:check && pnpm run lint && pnpm run verify:manifest && pnpm run verify:docs

@@ -37,6 +37,12 @@ const WORKFLOW_RAW_MODULES = import.meta.glob('../.github/workflows/*.yml', {
   eager: true,
 }) as Record<string, string>;
 
+const VIEW_RAW_MODULES = import.meta.glob('./views/*.ts', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
 describe('架构与 CI 防呆不变量', () => {
   it('锁定 vitest.config.ts 的 coverage.exclude 白名单，禁止擅自塞入逻辑文件', () => {
     const blockMatch = /exclude:\s*\[([\s\S]*?)\]/.exec(vitestConfigSource);
@@ -108,11 +114,22 @@ describe('架构与 CI 防呆不变量', () => {
       'modelscope.yml',
       'pr-cleanup.yml',
       'cpp-gate.yml',
+      'codeql.yml',
+      'scorecard.yml',
     ]);
     for (const [path, content] of Object.entries(WORKFLOW_RAW_MODULES)) {
       const name = path.split('/').pop() ?? '';
       if (!gatedNames.has(name)) continue;
       expect(content, name).not.toMatch(/continue-on-error:\s*true/);
+    }
+  });
+
+  it('视图层不直接跨层导入 Service Worker、Range 分片、资产源清单与服务端函数模块', () => {
+    const forbiddenImport =
+      /(?:from\s+|import\s*\()\s*['"][^'"]*(?:\/sw(?:-[a-z-]+)?|\/cdn-range|\/asset-sources(?:\.mjs)?|\bfunctions\/)[^'"]*['"]/;
+    for (const [path, content] of Object.entries(VIEW_RAW_MODULES)) {
+      if (path.endsWith('.test.ts')) continue;
+      expect(content, path).not.toMatch(forbiddenImport);
     }
   });
 

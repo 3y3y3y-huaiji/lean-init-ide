@@ -238,6 +238,10 @@ describe('wasm64-process-worker 消息与运行生命周期', () => {
     // activeLean 已就绪，再次 pollMemory 会上报当前内存。
     fakeSelf.onmessage?.({ data: { type: 'pollMemory' } } as MessageEvent);
     expect(posted.at(-1)).toEqual({ memoryBytes: 8192 });
+
+    // 带 id 的 pollMemory 返回定向 memorySample。
+    fakeSelf.onmessage?.({ data: { type: 'pollMemory', id: 7 } } as MessageEvent);
+    expect(posted.at(-1)).toEqual({ type: 'memorySample', id: 7, memoryBytes: 8192 });
   });
 
   it('捕获 error/unhandledrejection、callMain 非零返回、locateFile 与 instantiateWasm 异常', async () => {

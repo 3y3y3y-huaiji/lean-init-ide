@@ -35,13 +35,6 @@ export default tseslint.config(
     },
   },
   {
-    // PR B2 将把 lean-panel.ts 拆成职责单一的子模块并移除本豁免。
-    files: ['src/components/lean-panel.ts'],
-    rules: {
-      'max-lines': 'off',
-    },
-  },
-  {
     files: ['src/**/*.ts'],
     languageOptions: { globals: globals.browser },
   },

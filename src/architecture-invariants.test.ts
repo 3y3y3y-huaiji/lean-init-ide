@@ -23,6 +23,7 @@ const EXPECTED_COVERAGE_EXCLUDE = [
   'src/i18n/types.ts',
   'src/monaco-contrib.ts',
   'src/components/lean-panel.ts',
+  'src/components/lean-panel/editor-bindings.ts',
   'src/runtime-extensions.ts',
   'src/main.ts',
   'src/sw.ts',

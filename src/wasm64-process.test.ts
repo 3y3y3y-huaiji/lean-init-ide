@@ -248,4 +248,30 @@ describe('createWasm64ProcessFactory', () => {
     expect(failures).toEqual(['Lean wasm64 process worker failed.']);
     warn.mockRestore();
   });
+
+  it('sampleMemoryBytes 发送 pollMemory 并接收 memorySample；超时与 dispose 安全返回 null', async () => {
+    vi.useFakeTimers();
+    try {
+      const { process, worker, memory } = setup();
+      void process.ready.catch(() => undefined);
+
+      const samplePromise = process.sampleMemoryBytes!();
+      expect(worker.posted.at(-1)).toEqual({ type: 'pollMemory', id: 1 });
+      post(worker, { type: 'memorySample', id: 1, memoryBytes: 4096 });
+      expect(await samplePromise).toBe(4096);
+      // 定向采样不会重复触发广播回调，由 MemoryGuard.pollOnce 统一消费。
+      expect(memory).toEqual([]);
+
+      const timeoutPromise = process.sampleMemoryBytes!();
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await timeoutPromise).toBeNull();
+
+      const pendingOnDispose = process.sampleMemoryBytes!();
+      process.dispose();
+      expect(await pendingOnDispose).toBeNull();
+      expect(await process.sampleMemoryBytes!()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

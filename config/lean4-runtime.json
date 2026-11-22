@@ -152,7 +152,7 @@
       "local": "scripts/assets/runner-worker.js",
       "source": "runner-worker.js",
       "bytes": 16049,
-      "sha256": "3611a263c4304246c9ee2967c07be2a1c70764a39d642db87ba0b86bfbe9d519",
+      "sha256": "85110ec465ef34de8ff2a03431e848a65483f7c8f03aa642e103abd3ec66f7e1",
       "contentType": "text/javascript"
     }
   ],

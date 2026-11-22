@@ -2,7 +2,7 @@ import manifest from '../../config/lean4-runtime.json';
 import wasm64Manifest from '../../config/lean4-wasm64-runtime.json';
 import { parseRangeHeader, type ByteRange } from '../../src/cdn-range';
 
-type RuntimeAsset = { key: string; bytes: number; contentType: string };
+type RuntimeAsset = { key: string; bytes: number; contentType: string; sha256: string };
 type R2ObjectMeta = {
   size: number;
   etag?: string;
@@ -63,10 +63,11 @@ const getEdgeCache = (): Cache | null => {
   return store?.default ?? null;
 };
 
-/** Range 在请求头里而不是 URL 上，必须编进 cache key，否则不同分片会互相覆盖。 */
-const buildCacheKey = (request: Request, range: ByteRange | null): Request => {
+/** Range 在请求头里而不是 URL 上，必须编进 cache key，否则不同分片会互相覆盖；同时编入资产短 sha256，使单文件更新可立即失效边缘缓存而无需转动全局 cacheKey。 */
+const buildCacheKey = (request: Request, range: ByteRange | null, sha256: string): Request => {
   const url = new URL(request.url);
   if (range) url.searchParams.set('range', `${range.start}-${range.end}`);
+  url.searchParams.set('sha', sha256.slice(0, 12));
   return new Request(url.toString(), { method: 'GET' });
 };
 
@@ -110,7 +111,7 @@ export const onRequest = async ({
 
   // HEAD 可以命中已有的 GET 缓存，但绝不写入缓存（空 body 会污染后续 GET）。
   const cache = getEdgeCache();
-  const cacheKey = cache ? buildCacheKey(request, range) : null;
+  const cacheKey = cache ? buildCacheKey(request, range, asset.sha256) : null;
 
   if (cache && cacheKey) {
     const cached = await cache.match(cacheKey);

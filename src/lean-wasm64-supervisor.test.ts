@@ -93,7 +93,7 @@ describe('createWasm64Supervisor', () => {
       jsonrpc: '2.0',
       id: 2,
       method: 'textDocument/hover',
-      params: { textDocument: { uri: URI.toLowerCase().replace('main', 'main') } },
+      params: { textDocument: { uri: URI.toLowerCase() } },
     });
     expect(file.sent.at(-1)?.method).toBe('textDocument/hover');
   });

@@ -124,13 +124,18 @@ await check('跨源隔离头', async () => {
 await check('安全响应头', async () => {
   const response = await request(`${origin}/`);
   const csp = response.headers.get('content-security-policy') ?? '';
-  assert(csp.includes("'wasm-unsafe-eval'"), `CSP 缺少 wasm-unsafe-eval：${csp || '(缺失)'}`);
-  assert(csp.includes('blob:'), 'CSP 缺少 blob:（Worker 动态模块需要）');
+  const cspDirectives = csp
+    .split(';')
+    .map((directive) => directive.trim())
+    .filter(Boolean);
+  const cspTokens = new Set(cspDirectives.flatMap((directive) => directive.split(/\s+/)));
+  assert(cspTokens.has("'wasm-unsafe-eval'"), `CSP 缺少 wasm-unsafe-eval：${csp || '(缺失)'}`);
+  assert(cspTokens.has('blob:'), 'CSP 缺少 blob:（Worker 动态模块需要）');
   assert(
-    csp.includes('https://static.cloudflareinsights.com'),
+    cspTokens.has('https://static.cloudflareinsights.com'),
     'CSP 未放行 Cloudflare Web Analytics',
   );
-  assert(csp.includes("frame-ancestors 'none'"), 'CSP 缺少 frame-ancestors');
+  assert(cspDirectives.includes("frame-ancestors 'none'"), 'CSP 缺少 frame-ancestors');
   assert(
     (response.headers.get('strict-transport-security') ?? '').includes('max-age=31536000'),
     `Strict-Transport-Security=${response.headers.get('strict-transport-security') ?? '(缺失)'}`,

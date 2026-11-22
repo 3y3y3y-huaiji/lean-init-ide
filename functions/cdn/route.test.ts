@@ -4,7 +4,7 @@ import manifest from '../../config/lean4-runtime.json';
 import wasm64Manifest from '../../config/lean4-wasm64-runtime.json';
 import { onRequest } from './[[path]]';
 
-type Asset = { key: string; bytes: number; contentType: string };
+type Asset = { key: string; bytes: number; contentType: string; sha256: string };
 type Ctx = Parameters<typeof onRequest>[0];
 
 const assets = manifest.assets as Asset[];
@@ -321,5 +321,26 @@ describe('边缘缓存', () => {
 
     expect(response.status).toBe(206);
     expect(response.headers.get('Content-Range')).toBe(`bytes 0-15/${wasm64Sample.bytes}`);
+  });
+
+  it('把资产短 sha256 编入 cache key，单资产更新可绕开同 ?r= 旧边缘缓存', async () => {
+    const cache = {
+      match: vi.fn<(request: Request) => Promise<Response | undefined>>(async () => undefined),
+      put: vi.fn<(request: Request, response: Response) => Promise<undefined>>(
+        async () => undefined,
+      ),
+    };
+    vi.stubGlobal('caches', { default: cache });
+    const worker = assets.find((asset) => asset.key.endsWith('/runner-worker.js'))!;
+
+    await onRequest({
+      request: new Request(`https://example.test/cdn/${worker.key}?r=${manifest.cacheKey}`),
+      env: createEnv(() => hit(worker.bytes)),
+      params: { path: worker.key },
+    });
+
+    const expectedSha = `sha=${worker.sha256.slice(0, 12)}`;
+    expect(cache.match.mock.calls[0]?.[0].url).toContain(expectedSha);
+    expect(cache.put.mock.calls[0]?.[0].url).toContain(expectedSha);
   });
 });

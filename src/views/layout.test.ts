@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { messagesFor } from '../i18n';
 import { setAutoStart } from '../settings';
 import { getThemePreference, setThemePreference } from '../theme';
-import { bindLayout, renderLayout } from './layout';
+import { bindLayout, renderLayout, resolveSwitchHref } from './layout';
 
 const { clearRuntimeCache } = vi.hoisted(() => ({
   clearRuntimeCache: vi.fn(async () => undefined),
@@ -64,6 +64,39 @@ describe('页面骨架渲染', () => {
     const enHome = renderLayout('en', 'home', '');
     expect(enHome).toContain('href="/zh/"');
     expect(enHome).toContain('href="/"');
+  });
+
+  it('语言切换 href 转义查询串与锚点中的 HTML 破坏字符，防止 DOM-XSS', () => {
+    const html = renderLayout('zh', 'playground', '', {
+      pathname: '/zh/playground',
+      search: '?x="><img src=x onerror=alert(1)>',
+      hash: '#"><svg data-xss=1>',
+    });
+    document.body.innerHTML = html;
+
+    expect(document.body.querySelectorAll('img')).toHaveLength(0);
+    expect(
+      Array.from(document.body.querySelectorAll('svg')).every(
+        (el) => el.closest('#theme-toggle, #settings-toggle') !== null,
+      ),
+    ).toBe(true);
+    const link = document.body.querySelector<HTMLAnchorElement>('#lang-switch');
+    expect(link?.getAttribute('href')).toBe(
+      '/en/playground?x=%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E#%22%3E%3Csvg%20data-xss=1%3E',
+    );
+
+    const multiParam = renderLayout('zh', 'playground', '', {
+      pathname: '/zh/playground',
+      search: '?lesson=induction&mode=1',
+    });
+    expect(multiParam).toContain('href="/en/playground?lesson=induction&amp;mode=1"');
+    expect(
+      resolveSwitchHref({ pathname: '/zh/playground', search: '?a=1&b=2', hash: '#top' }, 'zh'),
+    ).toBe('/en/playground?a=1&b=2#top');
+
+    setPath('/zh/playground?q=%22%3E%3Cimg%20src=x%3E');
+    document.body.innerHTML = renderLayout('zh', 'playground', '');
+    expect(document.body.querySelectorAll('img')).toHaveLength(0);
   });
 
   it('playground 页面让主区域撑满宽度', () => {

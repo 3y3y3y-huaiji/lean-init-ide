@@ -12,6 +12,7 @@ import { clearRuntimeCache } from '../runtime-cache';
 import { getAutoStart, setAutoStart } from '../settings';
 import { cycleThemePreference, getThemePreference } from '../theme';
 import type { ThemePreference } from '../theme';
+import { escapeHtml } from './html';
 
 export type ActivePage =
   'home' | 'lesson' | 'playground' | 'privacy' | 'reference' | 'challenges' | 'challenge';
@@ -33,6 +34,20 @@ export type LayoutUrl = {
   hash?: string;
 };
 
+/** 规范化语言切换目标，确保结果始终停留在站内相对路径并隔离畸形输入。 */
+export const resolveSwitchHref = (url: LayoutUrl, locale: Locale): string => {
+  const raw = `${swapLocalePath(url.pathname, locale)}${url.search ?? ''}${url.hash ?? ''}`;
+  try {
+    const parsed = new URL(raw, 'https://lean-init-ide.invalid');
+    if (parsed.origin === 'https://lean-init-ide.invalid') {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch {
+    // 畸形路径回落到目标语言首页，避免拼出非法 href。
+  }
+  return localeHomePath(otherLocale(locale));
+};
+
 export const renderLayout = (
   locale: Locale,
   active: ActivePage,
@@ -43,8 +58,7 @@ export const renderLayout = (
   const other = otherLocale(locale);
   const homeHref = localeHomePath(locale);
   // 切换语言时保留查询串：练习页的 ?lesson= 不能丢，否则会退回空白编辑器。
-  const suffix = `${url.search ?? ''}${url.hash ?? ''}`;
-  const switchHref = `${swapLocalePath(url.pathname, locale)}${suffix}`;
+  const switchHref = escapeHtml(resolveSwitchHref(url, locale));
   const pref = getThemePreference();
   const themeLabel = `${t.theme.label} · ${t.theme[pref]}`;
 

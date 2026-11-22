@@ -62,13 +62,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 安装构建依赖
         run: sudo apt-get update && sudo apt-get install -y cmake zstd
 
       - name: 缓存 Emscripten 6.0.0
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: emsdk
           key: wasm32-emsdk-6.0.0-v1
@@ -123,7 +123,7 @@ jobs:
           grep -n -- '-O3\|STACK_SIZE\|PTHREAD_STACK_SIZE' producer/lean-browser/scripts/build.sh
 
       - name: 缓存 4.35 源码与引导包
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/lean4
@@ -145,7 +145,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh fetch
 
       - name: 缓存 runtime 产物
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/build-wasm
@@ -162,7 +162,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh emsdk runtime
 
       - name: 缓存 cgen
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/cgen
           key: wasm435-cgen-v1
@@ -182,9 +182,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -192,7 +192,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake zstd
 
       - name: 缓存 Emscripten 6.0.0
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: emsdk
           key: wasm32-emsdk-6.0.0-v1
@@ -244,7 +244,7 @@ jobs:
           grep -n -- '-O3\|STACK_SIZE\|PTHREAD_STACK_SIZE' producer/lean-browser/scripts/build.sh
 
       - name: 恢复 4.35 源码与引导包
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/lean4
@@ -252,7 +252,7 @@ jobs:
           key: wasm435-src-v1
 
       - name: 恢复 runtime 产物
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/build-wasm
@@ -260,7 +260,7 @@ jobs:
           key: wasm435-runtime-v1
 
       - name: 恢复 cgen
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/cgen
           key: wasm435-cgen-v1
@@ -275,7 +275,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh emsdk
 
       - name: 缓存 objects
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/obj
           key: wasm435-obj-o3-v1
@@ -293,7 +293,7 @@ jobs:
       - name: 立即保存 objects 缓存
         if: always() && steps.objects.outcome == 'success'
         continue-on-error: true
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/obj
           key: wasm435-obj-o3-v1
@@ -316,7 +316,7 @@ jobs:
           wc -l "$GITHUB_WORKSPACE/work/modules.txt"
 
       - name: 缓存 4.35 Init oleans
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/olean32
           key: wasm435-olean32-v1
@@ -358,7 +358,7 @@ jobs:
 
       - name: 缓存 4.35 Std 扩展 oleans
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/std-olean32
           key: wasm435-std-olean32-v1
@@ -408,7 +408,7 @@ jobs:
 
       - name: 上传 Std 扩展 pack
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm32-std-pack
           path: work/extensions/std/**
@@ -416,7 +416,7 @@ jobs:
 
       - name: 缓存 Batteries 源码
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/batteries
           key: batteries-v4.35.0
@@ -433,7 +433,7 @@ jobs:
 
       - name: 缓存 Batteries oleans
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/batteries-olean32
           key: wasm435-batteries-olean32-v1
@@ -479,7 +479,7 @@ jobs:
       - name: 保存 Batteries oleans（失败也保留进度）
         if: always() && github.event_name == 'workflow_dispatch' && inputs.build_extensions
         continue-on-error: true
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/batteries-olean32
           key: wasm435-batteries-olean32-v1
@@ -503,7 +503,7 @@ jobs:
 
       - name: 上传 Batteries 扩展 pack
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm32-batteries-pack
           path: work/extensions/batteries/**
@@ -522,7 +522,7 @@ jobs:
 
       - name: 上传 4.35 运行时与 Init 资产
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm32-runtime-4.35.0
           path: |
@@ -545,13 +545,13 @@ jobs:
       PUBLISH_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_scope || 'all' }}
       VERIFY_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_only || 'false' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
           version: 12.18.0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: pnpm
@@ -576,7 +576,7 @@ jobs:
           fi
 
       # 产物里的路径是 work/artifact/**，所以解压到 work 才能还原原目录。
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: wasm32-runtime-4.35.0
           path: work
@@ -599,14 +599,14 @@ jobs:
       # 扩展包与 Init 一起发布：只做上传，客户端仍然按需下载。
       - name: 下载 Std 扩展包
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: wasm32-std-pack
           path: work/extensions/std
 
       - name: 下载 Batteries 扩展包
         if: github.event_name == 'workflow_dispatch' && inputs.build_extensions
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: wasm32-batteries-pack
           path: work/extensions/batteries
@@ -628,7 +628,7 @@ jobs:
 
       # 先保存候选清单：即使后面 R2 / 魔搭发布失败，也能拿到清单排查或重试。
       - name: 保存候选清单
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: runtime-manifest-4.35.0
           path: |

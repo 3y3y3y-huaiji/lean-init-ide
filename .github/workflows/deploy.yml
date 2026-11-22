@@ -25,7 +25,7 @@ jobs:
       direct: ${{ steps.detect.outputs.direct }}
       deployable: ${{ steps.classify.outputs.deployable }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: 是否为 PR 合并提交
@@ -84,13 +84,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: 主机参数
         uses: ./.github/actions/host-info
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
           version: 12.18.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: pnpm
@@ -116,7 +116,7 @@ jobs:
           [ "$code" = "200" ] || exit 1
       # 必须用完整 build：build:web 会跳过约 102 MB 兜底副本，丢掉 SW 的第三级回退。
       - name: 缓存 Lean 资产
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: public/wasm-lean4
           key: lean-assets-${{ hashFiles('config/lean4-runtime.json') }}

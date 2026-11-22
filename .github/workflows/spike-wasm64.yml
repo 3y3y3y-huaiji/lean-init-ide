@@ -91,7 +91,7 @@ jobs:
     outputs:
       run_build: ${{ steps.dedup.outputs.run_build }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: PR 合并去重（避免与刚通过的 PR smoke 重复运行）
         id: dedup
@@ -112,7 +112,7 @@ jobs:
             echo "run_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -137,7 +137,7 @@ jobs:
       - name: GitHub Actions 语法检查
         # 与 ci.yml 用同一个固定版本镜像，并保留 shellcheck：
         # 只关掉 shellcheck 会漏掉 run 脚本里的真实告警，PR 仍会被 CI 拦下。
-        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
 
   prepare:
     needs: lint
@@ -145,9 +145,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -155,7 +155,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
 
       - name: 缓存 Emscripten 6.0.0
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: emsdk
           key: wasm64-emsdk-6.0.0-v1
@@ -193,7 +193,7 @@ jobs:
           node probe.mjs
 
       - name: 缓存 GMP（wasm64）
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/gmp-install
@@ -214,7 +214,7 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       - name: 缓存 Lean 源码与引导包
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/lean4
@@ -255,7 +255,7 @@ jobs:
           grep -q 'simpLoopStep' "$WASM_LLVM_LEAN_WORK_DIR/lean4/src/Lean/Meta/Tactic/Simp/Main.lean"
 
       - name: 缓存 runtime 产物
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/build-wasm
@@ -272,7 +272,7 @@ jobs:
           bash producer/lean-browser/scripts/build.sh emsdk runtime
 
       - name: 缓存 cgen（机器生成的 C 源码）
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/cgen
           key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
@@ -296,9 +296,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -306,7 +306,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
 
       - name: 缓存 Emscripten 6.0.0
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: emsdk
           key: wasm64-emsdk-6.0.0-v1
@@ -321,7 +321,7 @@ jobs:
           emcc --version | head -n 2
 
       - name: 缓存 GMP（wasm64）
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/gmp-install
@@ -342,7 +342,7 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/pin-lean.ts" "$GITHUB_WORKSPACE"
 
       - name: 恢复 Lean 源码与引导包
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/lean4
@@ -368,7 +368,7 @@ jobs:
           grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean
 
       - name: 恢复 runtime 产物
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/build-wasm
@@ -376,13 +376,13 @@ jobs:
           key: wasm64-runtime-v16-${{ hashFiles('scripts/pin-lean.ts', 'scripts/ci/backport-wasm64.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-replace-fn-iterative.patch') }}
 
       - name: 恢复 cgen
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/cgen
           key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: 缓存 objects
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/obj
           key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
@@ -411,7 +411,7 @@ jobs:
       - name: 立即保存 objects 缓存
         if: always() && steps.objects.outcome == 'success'
         continue-on-error: true
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/obj
           key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
@@ -591,7 +591,7 @@ jobs:
       # 失败立即留证据，不等到最后；后续步骤也不会再跑。
       - name: 失败时上传 Init LSP 日志
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm64-init-failure
           path: |
@@ -601,7 +601,7 @@ jobs:
 
       # smoke 不传 100MB 级 wasm：deep 会用缓存重新 link，比下载+解压更稳。
       - name: 保存 smoke 摘要
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm64-smoke
           path: |
@@ -621,9 +621,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -631,7 +631,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake zstd patch
 
       - name: 缓存 Emscripten 6.0.0
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: emsdk
           key: wasm64-emsdk-6.0.0-v1
@@ -646,7 +646,7 @@ jobs:
           emcc --version | head -n 2
 
       - name: 缓存 GMP（wasm64）
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/gmp-install
@@ -659,7 +659,7 @@ jobs:
           bash scripts/build-wasm64-gmp.sh "$GITHUB_WORKSPACE/work/gmp-install"
 
       - name: 恢复 Lean 源码与引导包
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/lean4
@@ -685,7 +685,7 @@ jobs:
           grep -q 'simpLoopStep' work/lean4/src/Lean/Meta/Tactic/Simp/Main.lean
 
       - name: 恢复 runtime 产物
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             work/build-wasm
@@ -695,13 +695,13 @@ jobs:
       # deep 会重新生成 symtab.c 并重链：若不恢复 work/cgen，gen-symtab.py 只能扫到 0 个 C 文件，
       # 导致 symtab 丢失所有 Init/Std/Lean 符号，线上 #eval 触发 Init.Data.Random 初始化器报错。
       - name: 恢复 cgen
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/cgen
           key: wasm64-cgen-v4-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
 
       - name: 恢复 objects（smoke 已显式保存）
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/obj
           key: wasm64-obj-v11-${{ hashFiles('scripts/pin-lean.ts', 'scripts/patch-wasm64.sh', 'scripts/patches/lean-whnf-stack.patch', 'scripts/patches/lean-simp-loop-stack.patch') }}
@@ -765,7 +765,7 @@ jobs:
       # 真实依赖：从 Mathlib 源码裁出目标模块的静态 import 闭包，再用 wasm64 编译器逐个重编。
       # 只做静态分析，不需要官方 Linux 工具链；闭包超过上限时脚本以 3 退出，后续步骤跳过编译。
       - name: 缓存 Mathlib 源码
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/mathlib
           key: wasm64-mathlib-src-v3
@@ -925,7 +925,7 @@ jobs:
           fi
 
       - name: 恢复 Mathlib 裁切编译产物
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/mathlib-lib
           key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-${{ github.run_number }}
@@ -990,7 +990,7 @@ jobs:
       - name: 保存 Mathlib 裁切编译产物
         if: always()
         continue-on-error: true
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: work/mathlib-lib
           key: wasm64-mathlib-lib3-${{ hashFiles('scripts/pin-lean.ts') }}-${{ github.run_number }}-${{ github.run_attempt }}
@@ -1131,7 +1131,7 @@ jobs:
           ls -lh work/wasm64-runtime
 
       - name: 保存实验性 wasm64 运行时产物
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm64-runtime-release
           path: work/wasm64-runtime/**
@@ -1168,7 +1168,7 @@ jobs:
 
       - name: 保存 deep 产物与日志
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm64-deep
           path: |
@@ -1199,19 +1199,19 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         if: github.event.inputs.mode != 'publish'
         with:
           name: wasm64-runtime-release
           path: runtime
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         if: github.event.inputs.mode == 'publish'
         with:
           name: wasm64-runtime-release
@@ -1259,7 +1259,7 @@ jobs:
             process.stdout.write(fs.readFileSync(path, "utf8"));
           '
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wasm64-runtime-manifest
           path: runtime/wasm64-runtime-manifest.json

@@ -2,6 +2,8 @@
 
 # Lean Init IDE
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/3y3y3y-huaiji/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/3y3y3y-huaiji/lean-init-ide)
+
 **A real theorem prover, running in your browser.**
 
 Not a demo, not a regex mock, and your code is never quietly shipped to a server. Lean 4.35.0 is

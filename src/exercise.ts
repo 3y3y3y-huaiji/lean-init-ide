@@ -194,8 +194,7 @@ export const isChallengeSolved = (
 ): boolean => {
   if (spec.mode === 'classic') return isExerciseSolved(spec.starter, current, diagnostics);
   if (spec.mode === 'bounty') {
-    const tiers = solvedChallengeTiers(spec, current, diagnostics);
-    return tiers.includes('bronze') || tiers.includes('silver');
+    return solvedChallengeTiers(spec, current, diagnostics).length > 0;
   }
 
   const active = stripComments(current);

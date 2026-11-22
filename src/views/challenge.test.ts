@@ -56,7 +56,7 @@ describe('挑战列表渲染', () => {
     }
   });
 
-  it('挂载列表页时从 localStorage 读取通关数与卡片勋章', () => {
+  it('挂载列表页时从 localStorage 读取通关数、卡片勋章、悬赏层数、最短字符，并支持导入导出实时刷新', async () => {
     localStorage.setItem(
       'lean-init-ide:challenge-progress:v1',
       JSON.stringify({
@@ -68,6 +68,12 @@ describe('挑战列表渲染', () => {
             tiers: [],
             bestChars: 42,
           },
+          'collatz-bounty': {
+            solved: true,
+            badges: ['automation'],
+            tiers: ['bronze', 'silver'],
+            bestChars: 96,
+          },
         },
       }),
     );
@@ -76,16 +82,62 @@ describe('挑战列表渲染', () => {
 
     const t = messagesFor('zh').challenges;
     expect(document.body.querySelector('[data-role="summary-solved"]')?.textContent).toBe(
-      t.summary.solved(1, CHALLENGES.length),
+      t.summary.solved(2, CHALLENGES.length),
     );
     expect(document.body.querySelector('[data-role="summary-badges"]')?.textContent).toBe(
-      t.summary.badges(1, 0, 1),
+      t.summary.badges(2, 0, 1),
     );
     const card = document.body.querySelector('[data-challenge-slug="double-induction"]');
+    expect(card?.className).toContain('border-ok/40');
     expect(card?.querySelector('[data-role="card-badges"]')?.textContent).toBe(
       `${t.badgeLabels.automation} · ${t.badgeLabels.termMode}`,
     );
+    expect(card?.querySelector<HTMLElement>('[data-role="card-best"]')?.hidden).toBe(false);
+    expect(card?.querySelector('[data-role="card-best"]')?.textContent).toBe(t.cardBestChars(42));
+
+    const bountyCard = document.body.querySelector('[data-challenge-slug="collatz-bounty"]');
+    expect(bountyCard?.querySelector('[data-role="card-badges"]')?.textContent).toBe(
+      `${t.badgeLabels.automation} · ${t.detail.tierLabels.bronze} · ${t.detail.tierLabels.silver}`,
+    );
+
     const untouched = document.body.querySelector('[data-challenge-slug="add-comm"]');
+    expect(untouched?.querySelector('[data-role="card-badges"]')?.textContent).toBe('');
+    expect(untouched?.querySelector<HTMLElement>('[data-role="card-best"]')?.hidden).toBe(true);
+
+    // 导入新的 JSON 备份后，列表统计与卡片实时刷新。
+    const input = document.body.querySelector<HTMLInputElement>(
+      '[data-role="progress-import-input"]',
+    )!;
+    Object.defineProperty(input, 'files', {
+      value: [
+        {
+          text: async () =>
+            JSON.stringify({
+              version: 1,
+              challenges: {
+                'budget-withdraw': {
+                  solved: true,
+                  badges: ['handcrafted'],
+                  tiers: [],
+                  bestChars: 88,
+                },
+              },
+            }),
+        },
+      ],
+      configurable: true,
+    });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() =>
+      expect(document.body.querySelector('[data-role="summary-solved"]')?.textContent).toBe(
+        t.summary.solved(1, CHALLENGES.length),
+      ),
+    );
+    expect(
+      document.body
+        .querySelector('[data-challenge-slug="budget-withdraw"]')
+        ?.querySelector('[data-role="card-badges"]')?.textContent,
+    ).toBe(t.badgeLabels.handcrafted);
     expect(untouched?.querySelector('[data-role="card-badges"]')?.textContent).toBe('');
   });
 });
@@ -104,16 +156,38 @@ describe('挑战详情渲染', () => {
     expect(html).toContain('data-role="challenge-panel"');
     expect(html).toContain('data-role="goal-progress"');
     expect(html).toContain('data-role="challenge-intro"');
+    expect(html).not.toContain('data-role="challenge-intro" open');
     expect(html).toContain('data-role="challenge-tactics"');
+    expect(html).not.toContain('data-role="verdict-tactics-disclosure"');
     expect(html).toContain('data-role="load-solution"');
     expect(html).toContain('data-role="copy-link"');
+    expect(html).toContain('data-role="challenge-nav"');
+    expect(html).toContain('data-role="next-challenge-cta"');
     expect(html).toContain(`href="/zh/playground?challenge=${challenge.slug}"`);
     expect(html).toContain(t.detail.tacticsTitle);
     expect(html).toContain(t.detail.tacticsHint);
     for (const tactic of challenge.tactics) {
-      expect(html).toContain(tactic.label);
+      expect(html).toContain(escapeHtml(tactic.label.zh));
       expect(html).toContain(escapeHtml(tactic.description.zh));
     }
+
+    const enHtml = renderChallenge('en', challenge.slug);
+    for (const tactic of challenge.tactics) {
+      expect(enHtml).toContain(escapeHtml(tactic.label.en));
+    }
+    expect(enHtml.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(/[\u4e00-\u9fff]/);
+  });
+
+  it('真假审判庭详情页默认折叠出招卡以防剧透，且最后一关跳转回挑战大厅', () => {
+    const verdictHtml = renderChallenge('zh', 'nat-sub-trap');
+    expect(verdictHtml).toContain('<details data-role="verdict-tactics-disclosure"');
+    expect(verdictHtml).not.toContain('data-role="verdict-tactics-disclosure" open');
+
+    const last = CHALLENGES[CHALLENGES.length - 1]!;
+    const lastHtml = renderChallenge('en', last.slug);
+    const t = messagesFor('en').challenges;
+    expect(lastHtml).toContain(`data-role="next-challenge-cta" href="/en/challenges"`);
+    expect(lastHtml).toContain(escapeHtml(t.detail.allClearedCta));
   });
 
   it('未知 slug 回退到 404 视图而不是抛错', () => {
@@ -175,12 +249,15 @@ describe('挑战页挂载', () => {
     expect(panel.insert).not.toHaveBeenCalled();
   });
 
-  it('真假审判庭渲染两个立场按钮，点击后载入对应独立模板', async () => {
+  it('真假审判庭渲染两个立场按钮，点击及草稿恢复时自动同步 aria-pressed 状态', async () => {
     const verdict = CHALLENGES.find((item) => item.slug === 'nat-sub-trap')!;
+    const falsePanel = makePanel();
+    falsePanel.getCode.mockReturnValue(verdict.verdictBranches!.falseStarter.zh);
+    createLeanPanel.mockReturnValueOnce(falsePanel);
+
     document.body.innerHTML = renderChallenge('zh', verdict.slug);
     await mountChallenge(document.body, 'zh', verdict.slug);
 
-    const panel = createLeanPanel.mock.results[0]!.value as ReturnType<typeof makePanel>;
     const buttons = document.body.querySelectorAll<HTMLButtonElement>(
       '[data-role="verdict-branch"]',
     );
@@ -189,20 +266,24 @@ describe('挑战页挂载', () => {
     expect(buttons[1]!.dataset.branch).toBe('false');
     expect(buttons[0]!.textContent).toBe(messagesFor('zh').challenges.detail.verdictTrue);
     expect(buttons[1]!.textContent).toBe(messagesFor('zh').challenges.detail.verdictFalse);
+    expect(buttons[0]!.getAttribute('aria-pressed')).toBe('false');
+    expect(buttons[1]!.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[1]!.className).toContain('border-warn');
+
+    buttons[0]!.click();
+    expect(falsePanel.setCode).toHaveBeenCalledWith(verdict.verdictBranches!.trueStarter.zh, {
+      focus: true,
+    });
+    expect(buttons[0]!.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0]!.className).toContain('border-warn');
+    expect(buttons[1]!.getAttribute('aria-pressed')).toBe('false');
 
     buttons[1]!.click();
-    expect(panel.setCode).toHaveBeenCalledWith(verdict.verdictBranches!.falseStarter.zh, {
+    expect(falsePanel.setCode).toHaveBeenCalledWith(verdict.verdictBranches!.falseStarter.zh, {
       focus: true,
     });
     expect(buttons[1]!.getAttribute('aria-pressed')).toBe('true');
     expect(buttons[0]!.getAttribute('aria-pressed')).toBe('false');
-
-    buttons[0]!.click();
-    expect(panel.setCode).toHaveBeenCalledWith(verdict.verdictBranches!.trueStarter.zh, {
-      focus: true,
-    });
-    expect(buttons[0]!.getAttribute('aria-pressed')).toBe('true');
-    expect(buttons[1]!.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('载入参考解法并标记面板模式', async () => {
@@ -289,6 +370,19 @@ describe('挑战页挂载', () => {
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining(`${share}\n${location.origin}/zh/challenges/${challenge.slug}`),
     );
+
+    const next = CHALLENGES[CHALLENGES.findIndex((item) => item.slug === challenge.slug) + 1]!;
+    expect(
+      result
+        .querySelector<HTMLAnchorElement>('[data-role="next-challenge-cta"]')
+        ?.getAttribute('href'),
+    ).toBe(`/zh/challenges/${next.slug}`);
+    const existingRecord = document.body.querySelector<HTMLElement>(
+      '[data-role="challenge-record"]',
+    )!;
+    expect(existingRecord.hidden).toBe(false);
+    expect(existingRecord.textContent).toContain(t.badgeLabels.automation);
+    expect(existingRecord.textContent).toContain(t.cardBestChars(chars));
 
     options.onDiagnostics([{ severity: 1 }]);
     expect(result.hidden).toBe(true);

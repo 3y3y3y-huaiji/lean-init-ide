@@ -6,8 +6,10 @@ import {
   challengePath,
   challengesPath,
   CHALLENGES,
+  playgroundStarter,
   resolveChallengeParam,
 } from './challenges';
+import { isChallengeSolved, type ChallengeSpec } from './exercise';
 
 describe('挑战数据源', () => {
   it('slug 唯一且是可直接进 URL 的小写短横线格式', () => {
@@ -16,12 +18,11 @@ describe('挑战数据源', () => {
     for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
-  it('四大主题区合计至少 10 道题，且每道的双语文案都齐全', () => {
-    expect(CHALLENGES.length).toBeGreaterThanOrEqual(10);
-    expect(CHALLENGES.length).toBeLessThanOrEqual(11);
+  it('四大主题区合计 11 道题，且每道的双语文案都齐全', () => {
+    expect(CHALLENGES).toHaveLength(11);
     const counts = { classic: 0, verdict: 0, bugfix: 0, bounty: 0 };
     for (const challenge of CHALLENGES) counts[challenge.mode] += 1;
-    expect(counts).toEqual({ classic: 4, verdict: 3, bugfix: 1, bounty: 2 });
+    expect(counts).toEqual({ classic: 4, verdict: 3, bugfix: 2, bounty: 2 });
     for (const challenge of CHALLENGES) {
       for (const locale of ['zh', 'en'] as const) {
         expect(
@@ -116,33 +117,80 @@ describe('挑战数据源', () => {
     }
   });
 
-  it('出招卡是完整 Lean 文件，不再出现半截语法', () => {
+  it('出招卡是完整 Lean 文件，不再出现半截语法，且英文文案不泄漏中文', () => {
     const halfSyntax =
       /^(?:rcases|exact|refine|unfold|by_cases|rw\s*\[|intro|induction|simp|omega|decide)\s*$/;
+    const cjk = /[\u4e00-\u9fff]/;
     for (const challenge of CHALLENGES) {
+      expect(challenge.title.en, `${challenge.slug}.title.en`).not.toMatch(cjk);
+      expect(challenge.summary.en, `${challenge.slug}.summary.en`).not.toMatch(cjk);
+      expect(challenge.body.en, `${challenge.slug}.body.en`).not.toMatch(cjk);
+      expect(challenge.hint.en, `${challenge.slug}.hint.en`).not.toMatch(cjk);
+      expect(challenge.starter.en, `${challenge.slug}.starter.en`).not.toMatch(cjk);
+      expect(challenge.solution.en, `${challenge.slug}.solution.en`).not.toMatch(cjk);
+      if (challenge.verdictBranches) {
+        expect(
+          challenge.verdictBranches.trueStarter.en,
+          `${challenge.slug}.trueStarter.en`,
+        ).not.toMatch(cjk);
+        expect(
+          challenge.verdictBranches.falseStarter.en,
+          `${challenge.slug}.falseStarter.en`,
+        ).not.toMatch(cjk);
+      }
+
       expect(challenge.tactics.length, challenge.slug).toBeGreaterThanOrEqual(3);
       for (const tactic of challenge.tactics) {
-        expect(tactic.label.trim().length).toBeGreaterThan(0);
-        expect(tactic.action, `${challenge.slug}.${tactic.label}`).toMatch(
+        expect(tactic.label.zh.trim().length, `${challenge.slug}.label.zh`).toBeGreaterThan(0);
+        expect(tactic.label.en.trim().length, `${challenge.slug}.label.en`).toBeGreaterThan(0);
+        expect(tactic.label.en, `${challenge.slug}.${tactic.label.zh}.label.en`).not.toMatch(cjk);
+        expect(tactic.action, `${challenge.slug}.${tactic.label.zh}`).toMatch(
           /^(?:replace-sorry|set-code)$/,
         );
         for (const locale of ['zh', 'en'] as const) {
           const insert = tactic.insert[locale];
           expect(
             insert.trim().length,
-            `${challenge.slug}.${tactic.label}.${locale}`,
+            `${challenge.slug}.${tactic.label[locale]}.${locale}`,
           ).toBeGreaterThan(0);
-          expect(insert, `${challenge.slug}.${tactic.label}.${locale}`).not.toMatch(halfSyntax);
-          expect(insert, `${challenge.slug}.${tactic.label}.${locale}`).toMatch(
+          expect(insert, `${challenge.slug}.${tactic.label[locale]}.${locale}`).not.toMatch(
+            halfSyntax,
+          );
+          expect(insert, `${challenge.slug}.${tactic.label[locale]}.${locale}`).toMatch(
             /\b(?:theorem|lemma|def)\b/,
           );
-          expect(insert, `${challenge.slug}.${tactic.label}.${locale}`).not.toMatch(
+          expect(insert, `${challenge.slug}.${tactic.label[locale]}.${locale}`).not.toMatch(
             /Mathlib|Lake|\bsorry\b/,
           );
           expect(
             tactic.description[locale].trim().length,
-            `${challenge.slug}.${tactic.label}.${locale}`,
+            `${challenge.slug}.${tactic.label[locale]}.${locale}`,
           ).toBeGreaterThan(0);
+        }
+        expect(tactic.insert.en, `${challenge.slug}.${tactic.label.en}.insert.en`).not.toMatch(cjk);
+        expect(
+          tactic.description.en,
+          `${challenge.slug}.${tactic.label.en}.description.en`,
+        ).not.toMatch(cjk);
+      }
+    }
+  });
+
+  it('全部出招卡均能通过对应题目的判题器', () => {
+    for (const challenge of CHALLENGES) {
+      for (const locale of ['zh', 'en'] as const) {
+        const spec: ChallengeSpec = {
+          mode: challenge.mode,
+          starter: challenge.starter[locale],
+          verdict: challenge.verdict,
+          requiredConclusion: challenge.requiredConclusion,
+          bounty: challenge.bounty,
+        };
+        for (const tactic of challenge.tactics) {
+          expect(
+            isChallengeSolved(spec, tactic.insert[locale], []),
+            `${challenge.slug}.${locale}.${tactic.label[locale]}`,
+          ).toBe(true);
         }
       }
     }
@@ -196,7 +244,10 @@ describe('挑战数据源', () => {
     }
 
     const bugfix = CHALLENGES.filter((challenge) => challenge.mode === 'bugfix');
-    expect(bugfix.map((challenge) => challenge.slug)).toEqual(['clamp-contract']);
+    expect(bugfix.map((challenge) => challenge.slug)).toEqual([
+      'clamp-contract',
+      'budget-withdraw',
+    ]);
     for (const challenge of bugfix) {
       expect(challenge.requiredConclusion, challenge.slug).toBeTruthy();
       for (const locale of ['zh', 'en'] as const) {
@@ -250,5 +301,20 @@ describe('挑战路径与参数', () => {
     expect(resolveChallengeParam('?challenge=unknown')).toBeUndefined();
     expect(resolveChallengeParam('?lesson=induction')).toBeUndefined();
     expect(resolveChallengeParam('')).toBeUndefined();
+  });
+
+  it('playgroundStarter 为 verdict 题提供立即可用的探索模板且不含死提示', () => {
+    const classic = challengeBySlug('add-comm')!;
+    expect(playgroundStarter(classic, 'zh')).toBe(classic.starter.zh);
+
+    const verdict = challengeBySlug('nat-sub-trap')!;
+    for (const locale of ['zh', 'en'] as const) {
+      const starter = playgroundStarter(verdict, locale);
+      expect(starter).toContain('theorem verdict_true');
+      expect(starter).toContain('theorem verdict_false');
+      expect(starter).not.toContain('先在上方选择你的立场');
+      expect(starter).not.toContain('Pick a stance above');
+    }
+    expect(playgroundStarter(verdict, 'en')).not.toMatch(/[\u4e00-\u9fff]/);
   });
 });

@@ -176,6 +176,20 @@ describe('playground 页面', () => {
     expect(status.textContent).toBe(messagesFor('en').playground.challengeLoaded);
   });
 
+  it('带 ?challenge= 指向 verdict 题时提供立即可用的模板，不含「点上方按钮」死提示', async () => {
+    const verdict = challengeBySlug('nat-sub-trap')!;
+    history.replaceState(null, '', '/zh/playground?challenge=nat-sub-trap');
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const [, options] = createLeanPanel.mock.calls[0] as [HTMLElement, { code: string }];
+    expect(options.code).toContain('theorem verdict_true');
+    expect(options.code).toContain('theorem verdict_false');
+    expect(options.code).not.toContain('先在上方选择你的立场');
+    expect(options.code).not.toBe(verdict.starter.zh);
+  });
+
   it('未知 ?challenge= 参数安静回退到默认 playground', async () => {
     history.replaceState(null, '', '/zh/playground?challenge=unknown');
     document.body.innerHTML = renderPlayground('zh');

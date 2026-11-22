@@ -2,11 +2,11 @@
  * 挑战区的纯渲染与浏览器挂载。
  *
  * 渲染函数不读 location、不写 localStorage，SSG 与运行时回退共用；
- * 只有 mountChallenge 里才绑定编辑器与剪贴板，符合 views 层的边界约定。
+ * 只有 mountChallenge / mountChallenges 里才绑定编辑器、本地战绩与剪贴板，符合 views 层的边界约定。
  */
 import { applyChallengeTactic } from '../challenge-action';
 import { countGoalTargets } from '../challenge-goal';
-import { ChallengeProgressStore } from '../challenge-progress';
+import { ChallengeProgressStore, type ChallengeRecord } from '../challenge-progress';
 import {
   challengeBySlug,
   challengePath,
@@ -24,14 +24,18 @@ import {
   solvedChallengeTiers,
   type ChallengeMode,
   type ChallengeSpec,
-  type ProofBadge,
 } from '../exercise';
 import { issueUrl } from '../feedback';
 import { messagesFor, type Locale } from '../i18n';
 import { renderNotFound } from '../page-meta';
+import {
+  badgeLabel,
+  bindProgressBackup,
+  formatCardBadges,
+  formatRecordSummary,
+  renderProgressBackup,
+} from './challenge-progress-ui';
 import { escapeHtml } from './html';
-
-type ChallengeMessages = ReturnType<typeof messagesFor>['challenges'];
 
 /** 把判题需要的最小结构拼出来，视图不需要知道数据表的其余字段。 */
 const challengeSpec = (challenge: Challenge, locale: Locale): ChallengeSpec => ({
@@ -41,13 +45,6 @@ const challengeSpec = (challenge: Challenge, locale: Locale): ChallengeSpec => (
   requiredConclusion: challenge.requiredConclusion,
   bounty: challenge.bounty,
 });
-
-const badgeLabel = (t: ChallengeMessages, badge: ProofBadge): string =>
-  badge === 'automation'
-    ? t.badgeLabels.automation
-    : badge === 'handcrafted'
-      ? t.badgeLabels.handcrafted
-      : t.badgeLabels.termMode;
 
 /** 每道题一份独立草稿，避免不同题目的骨架互相覆盖。 */
 export const challengeDraftKey = (slug: string): string => draftKeyFor(`challenge-${slug}`);
@@ -82,11 +79,15 @@ const SECTION_STYLE: Record<ChallengeMode, { frame: string; accent: string; chip
   },
 };
 
+const ACTIVE_VERDICT_CLASS = `${ghostButtonClass} border-warn bg-warn/15 text-fg`;
+const SOLVED_CARD_CLASS = 'flex flex-col rounded-xl border border-ok/40 bg-panel-soft p-4';
+const DEFAULT_CARD_CLASS = 'flex flex-col rounded-xl border border-line bg-panel-soft p-4';
+
 /**
  * 零基础导览：先说明 Lean 在做什么，再给出「读题 → 看 Goal → 补证明」三步。
- * 默认展开，避免小白直接面对一块没有任何上下文的编辑器。
+ * 列表页默认展开；详情页默认折叠，把首屏让给题面与真实编辑器。
  */
-const renderIntro = (locale: Locale): string => {
+const renderIntro = (locale: Locale, open = true): string => {
   const t = messagesFor(locale).challenges.intro;
   const steps = t.steps
     .map(
@@ -98,7 +99,7 @@ const renderIntro = (locale: Locale): string => {
     )
     .join('');
   return `
-    <details data-role="challenge-intro" open class="rounded-2xl border border-line bg-panel p-5">
+    <details data-role="challenge-intro"${open ? ' open' : ''} class="rounded-2xl border border-line bg-panel p-5">
       <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-sm font-[650]">${escapeHtml(t.title)}</summary>
       <p class="mt-2 mb-0 max-w-[720px] text-sm leading-relaxed text-muted">${escapeHtml(t.body)}</p>
       <ol class="m-0 mt-3 grid list-none grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2 p-0">${steps}</ol>
@@ -110,14 +111,15 @@ const challengeCard = (locale: Locale, challenge: Challenge, index: number): str
   const t = messagesFor(locale).challenges;
   const style = SECTION_STYLE[challenge.mode];
   return `
-    <article data-challenge-slug="${escapeHtml(challenge.slug)}" class="flex flex-col rounded-xl border border-line bg-panel-soft p-4">
+    <article data-challenge-slug="${escapeHtml(challenge.slug)}" class="${DEFAULT_CARD_CLASS}">
       <div class="mb-2 flex items-center justify-between gap-2">
-        <p class="m-0 text-xs uppercase tracking-[0.08em] text-muted">0${index + 1}</p>
+        <p class="m-0 text-xs uppercase tracking-[0.08em] text-muted">${String(index + 1).padStart(2, '0')}</p>
         <span class="rounded-full border px-2 py-0.5 text-[11px] font-[650] ${style.chip}">${escapeHtml(t.modes[challenge.mode])}</span>
       </div>
       <h3 class="m-0 mb-2 text-[16px] font-bold">${escapeHtml(challenge.title[locale])}</h3>
       <p class="m-0 mb-3 flex-1 text-sm leading-relaxed text-muted">${escapeHtml(challenge.summary[locale])}</p>
-      <p data-role="card-badges" class="m-0 mb-3 text-xs leading-relaxed text-ok"></p>
+      <p data-role="card-badges" class="m-0 mb-1.5 text-xs leading-relaxed text-ok"></p>
+      <p data-role="card-best" class="m-0 mb-3 text-xs text-muted" hidden></p>
       <div class="flex flex-wrap gap-2">
         <a class="${buttonClass}" href="${challengePath(locale, challenge.slug)}">${t.cardCta}</a>
         <a class="${ghostButtonClass}" href="${playgroundLink(locale, challenge.slug)}">${t.detail.openInPlayground}</a>
@@ -157,12 +159,13 @@ export const renderChallenges = (locale: Locale): string => {
     </section>
     <section
       data-role="challenge-summary"
-      class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] font-[650]"
+      class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] font-[650]"
     >
       <span data-role="summary-solved">${escapeHtml(t.summary.solved(0, CHALLENGES.length))}</span>
       <span data-role="summary-badges" class="text-muted">${escapeHtml(t.summary.badges(0, 0, 0))}</span>
+      ${renderProgressBackup(t)}
     </section>
-    <section class="mt-[clamp(24px,3.4vw,36px)] max-w-[760px]">${renderIntro(locale)}</section>
+    <section class="mt-[clamp(24px,3.4vw,36px)] max-w-[760px]">${renderIntro(locale, true)}</section>
     <section
       data-role="challenge-list"
       class="mt-[clamp(28px,4vw,44px)] flex flex-col gap-4"
@@ -170,37 +173,54 @@ export const renderChallenges = (locale: Locale): string => {
   `;
 };
 
-/** 浏览器挂载列表页：读取本地战绩并刷新顶部统计与卡片勋章。 */
+/** 浏览器挂载列表页：读取本地战绩、刷新卡片勋章并绑定 JSON 备份导入导出。 */
 export const mountChallenges = (root: HTMLElement, locale: Locale): void => {
   const t = messagesFor(locale).challenges;
   const store = new ChallengeProgressStore();
-  const summary = store.summary(CHALLENGES.map((challenge) => challenge.slug));
+  const slugs = CHALLENGES.map((challenge) => challenge.slug);
 
-  const solvedEl = root.querySelector<HTMLElement>('[data-role="summary-solved"]');
-  if (solvedEl) solvedEl.textContent = t.summary.solved(summary.solved, CHALLENGES.length);
-  const badgesEl = root.querySelector<HTMLElement>('[data-role="summary-badges"]');
-  if (badgesEl) {
-    badgesEl.textContent = t.summary.badges(
-      summary.badges.automation,
-      summary.badges.handcrafted,
-      summary.badges['term-mode'],
-    );
-  }
+  const refreshProgress = () => {
+    const summary = store.summary(slugs);
+    const solvedEl = root.querySelector<HTMLElement>('[data-role="summary-solved"]');
+    if (solvedEl) solvedEl.textContent = t.summary.solved(summary.solved, CHALLENGES.length);
+    const badgesEl = root.querySelector<HTMLElement>('[data-role="summary-badges"]');
+    if (badgesEl) {
+      badgesEl.textContent = t.summary.badges(
+        summary.badges.automation,
+        summary.badges.handcrafted,
+        summary.badges['term-mode'],
+      );
+    }
 
-  for (const card of root.querySelectorAll<HTMLElement>('[data-challenge-slug]')) {
-    const slug = card.dataset.challengeSlug;
-    const slot = card.querySelector<HTMLElement>('[data-role="card-badges"]');
-    if (!slug || !slot) continue;
-    const record = store.get(slug);
-    slot.textContent = record.solved
-      ? record.badges.map((badge) => badgeLabel(t, badge)).join(' · ')
-      : '';
-  }
+    for (const card of root.querySelectorAll<HTMLElement>('[data-challenge-slug]')) {
+      const slug = card.dataset.challengeSlug;
+      const slot = card.querySelector<HTMLElement>('[data-role="card-badges"]');
+      const bestEl = card.querySelector<HTMLElement>('[data-role="card-best"]');
+      if (!slug || !slot) continue;
+      const record = store.get(slug);
+      card.className = record.solved ? SOLVED_CARD_CLASS : DEFAULT_CARD_CLASS;
+      slot.textContent = formatCardBadges(t, record);
+      if (bestEl) {
+        const showBest = record.solved && record.bestChars !== null;
+        bestEl.hidden = !showBest;
+        bestEl.textContent =
+          showBest && record.bestChars !== null ? t.cardBestChars(record.bestChars) : '';
+      }
+    }
+  };
+
+  refreshProgress();
+  bindProgressBackup(root, t, store, refreshProgress);
 };
 
 export const renderChallenge = (locale: Locale, slug: string | undefined): string => {
   const challenge = challengeBySlug(slug);
   if (!challenge) return renderNotFound(locale);
+
+  const index = CHALLENGES.findIndex((item) => item.slug === challenge.slug);
+  const prevChallenge = index > 0 ? CHALLENGES[index - 1] : undefined;
+  const nextChallenge =
+    index >= 0 && index + 1 < CHALLENGES.length ? CHALLENGES[index + 1] : undefined;
 
   const messages = messagesFor(locale);
   const t = messages.challenges;
@@ -212,42 +232,46 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
   };
   const tactics = challenge.tactics
     .map(
-      (tactic, index) => `
+      (tactic, tacticIndex) => `
         <div class="rounded-lg border border-line bg-panel-soft p-2.5">
-          <button type="button" class="${toolbarButtonClass}" data-tactic-index="${index}">${escapeHtml(tactic.label)}</button>
+          <button type="button" class="${toolbarButtonClass}" data-tactic-index="${tacticIndex}">${escapeHtml(tactic.label[locale])}</button>
           <p class="mt-1.5 mb-0 text-xs leading-relaxed text-muted">${escapeHtml(tactic.description[locale])}</p>
         </div>`,
     )
     .join('');
 
+  const tacticsBody = `
+    <p class="mt-1.5 mb-0 text-xs leading-relaxed text-muted">${detail.tacticsHint}</p>
+    <div class="mt-2.5 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2">${tactics}</div>
+  `;
+  const tacticsSectionContent =
+    challenge.mode === 'verdict'
+      ? `<details data-role="verdict-tactics-disclosure" class="mt-2">
+          <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-xs font-[650] text-muted hover:text-fg">${escapeHtml(detail.verdictTacticsDisclosure)}</summary>
+          ${tacticsBody}
+        </details>`
+      : tacticsBody;
+
   const verdictSwitch =
     challenge.mode === 'verdict' && challenge.verdictBranches
       ? `
-      <section
-        data-role="verdict-switch"
-        class="mt-4 max-w-[760px] rounded-2xl border border-warn/40 bg-panel-soft p-4"
-      >
+      <section data-role="verdict-switch" class="mt-4 max-w-[760px] rounded-2xl border border-warn/40 bg-panel-soft p-4">
         <p class="m-0 text-[15px] font-bold text-warn">${escapeHtml(detail.verdictTitle)}</p>
         <p class="mt-1.5 mb-0 text-sm leading-relaxed text-muted">${escapeHtml(detail.verdictHint)}</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="${ghostButtonClass}"
-            data-role="verdict-branch"
-            data-branch="true"
-            aria-pressed="false"
-          >${escapeHtml(detail.verdictTrue)}</button>
-          <button
-            type="button"
-            class="${ghostButtonClass}"
-            data-role="verdict-branch"
-            data-branch="false"
-            aria-pressed="false"
-          >${escapeHtml(detail.verdictFalse)}</button>
+          <button type="button" class="${ghostButtonClass}" data-role="verdict-branch" data-branch="true" aria-pressed="false">${escapeHtml(detail.verdictTrue)}</button>
+          <button type="button" class="${ghostButtonClass}" data-role="verdict-branch" data-branch="false" aria-pressed="false">${escapeHtml(detail.verdictFalse)}</button>
         </div>
         <p class="mt-2 mb-0 text-xs leading-relaxed text-muted">${escapeHtml(detail.verdictNoSpoiler)}</p>
       </section>`
       : '';
+
+  const nextHref = nextChallenge
+    ? challengePath(locale, nextChallenge.slug)
+    : challengesPath(locale);
+  const nextLabel = nextChallenge
+    ? detail.nextChallengeCta(nextChallenge.title[locale])
+    : detail.allClearedCta;
 
   return `
     <section data-role="challenge" class="pb-4">
@@ -256,63 +280,38 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
         <p class="m-0 mb-2 text-xs uppercase tracking-[0.12em] text-accent">${t.eyebrow}</p>
         <h1 class="mt-0 mb-3 text-[clamp(26px,4vw,38px)] tracking-[-0.02em]">${escapeHtml(challenge.title[locale])}</h1>
         <p class="m-0 text-[15px] leading-relaxed text-muted">${escapeHtml(challenge.body[locale])}</p>
+        <p data-role="challenge-record" class="mt-2 mb-0 text-xs font-[650] text-ok" hidden></p>
       </div>
 
-      <div class="mt-4 max-w-[760px]">${renderIntro(locale)}</div>
+      <div class="mt-4 max-w-[760px]">${renderIntro(locale, false)}</div>
 
       ${verdictSwitch}
 
       <div class="mt-4 flex flex-wrap items-center gap-2">
         <a class="${ghostButtonClass}" href="${playgroundLink(locale, challenge.slug)}">${detail.openInPlayground}</a>
         <button class="${ghostButtonClass}" type="button" data-role="copy-link">${detail.copyLink}</button>
-        <span
-          data-role="copy-status"
-          role="status"
-          aria-live="polite"
-          class="min-w-0 text-xs text-muted"
-          hidden
-        ></span>
+        <span data-role="copy-status" role="status" aria-live="polite" class="min-w-0 text-xs text-muted" hidden></span>
       </div>
 
-      <section
-        data-role="challenge-tactics"
-        class="mt-6 rounded-xl border border-line bg-panel p-3.5"
-      >
+      <section data-role="challenge-tactics" class="mt-6 rounded-xl border border-line bg-panel p-3.5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span data-role="goal-progress" class="text-[13px] font-[650] text-fg">${detail.goalsNone}</span>
           <span class="text-xs uppercase tracking-[0.08em] text-muted">${detail.tacticsTitle}</span>
         </div>
-        <p class="mt-1.5 mb-0 text-xs leading-relaxed text-muted">${detail.tacticsHint}</p>
-        <div class="mt-2.5 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2">${tactics}</div>
+        ${tacticsSectionContent}
       </section>
 
-      <div data-role="challenge-panel" class="mt-3">${renderLeanMarkup(
-        locale,
-        'full',
-        panelMessages,
-        undefined,
-        { heading: false },
-      )}</div>
+      <div data-role="challenge-panel" class="mt-3">${renderLeanMarkup(locale, 'full', panelMessages, undefined, { heading: false })}</div>
 
-      <section
-        data-role="challenge-result"
-        class="mt-4 rounded-xl border border-ok/40 bg-ok/10 p-4 text-ok"
-        aria-live="polite"
-        hidden
-      >
+      <section data-role="challenge-result" class="mt-4 rounded-xl border border-ok/40 bg-ok/10 p-4 text-ok" aria-live="polite" hidden>
         <p data-role="result-title" class="m-0 text-[15px] font-bold"></p>
         <p data-role="result-badges" class="m-0 mt-1.5 text-sm"></p>
         <p data-role="result-tiers" class="m-0 mt-1 text-sm" hidden></p>
         <p data-role="result-chars" class="m-0 mt-1 text-sm"></p>
         <div class="mt-3 flex flex-wrap items-center gap-2">
+          <a class="${buttonClass}" data-role="next-challenge-cta" href="${nextHref}">${escapeHtml(nextLabel)}</a>
           <button class="${ghostButtonClass}" type="button" data-role="copy-card">${detail.copyCard}</button>
-          <span
-            data-role="result-copy-status"
-            role="status"
-            aria-live="polite"
-            class="min-w-0 text-xs"
-            hidden
-          ></span>
+          <span data-role="result-copy-status" role="status" aria-live="polite" class="min-w-0 text-xs" hidden></span>
         </div>
       </section>
 
@@ -325,11 +324,14 @@ export const renderChallenge = (locale: Locale, slug: string | undefined): strin
           <summary class="flex min-h-9 max-[1024px]:min-h-11 touch:min-h-11 cursor-pointer items-center text-[13px] font-[650]">${detail.solutionTitle}</summary>
           <p class="mt-2 mb-2 text-sm leading-relaxed text-muted">${detail.solutionHint}</p>
           <button class="${ghostButtonClass}" type="button" data-role="load-solution">${detail.loadSolution}</button>
-          <pre class="mt-3 mb-0 overflow-auto rounded-lg border border-line bg-panel-soft p-3 font-mono text-xs leading-[1.65] text-fg"><code>${escapeHtml(
-            challenge.solution[locale],
-          )}</code></pre>
+          <pre class="mt-3 mb-0 overflow-auto rounded-lg border border-line bg-panel-soft p-3 font-mono text-xs leading-[1.65] text-fg"><code>${escapeHtml(challenge.solution[locale])}</code></pre>
         </details>
       </div>
+
+      <nav data-role="challenge-nav" class="mt-6 flex flex-wrap items-center justify-between gap-2">
+        ${prevChallenge ? `<a class="${ghostButtonClass}" data-role="prev-challenge" href="${challengePath(locale, prevChallenge.slug)}">${escapeHtml(detail.prevChallenge)} · ${escapeHtml(prevChallenge.title[locale])}</a>` : '<span></span>'}
+        ${nextChallenge ? `<a class="${ghostButtonClass}" data-role="next-challenge" href="${challengePath(locale, nextChallenge.slug)}">${escapeHtml(nextChallenge.title[locale])} ${escapeHtml(detail.nextChallenge)}</a>` : ''}
+      </nav>
 
       <div class="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
         <span class="mr-1 text-xs text-muted">${escapeHtml(detail.feedbackHint)}</span>
@@ -408,6 +410,7 @@ export const mountChallenge = async (
 
   const store = new ChallengeProgressStore();
   const spec = challengeSpec(challenge, locale);
+  const existingRecordEl = root.querySelector<HTMLElement>('[data-role="challenge-record"]');
   const resultEl = root.querySelector<HTMLElement>('[data-role="challenge-result"]');
   const resultTitleEl = root.querySelector<HTMLElement>('[data-role="result-title"]');
   const resultBadgesEl = root.querySelector<HTMLElement>('[data-role="result-badges"]');
@@ -416,6 +419,13 @@ export const mountChallenge = async (
   const copyCardStatus = root.querySelector<HTMLElement>('[data-role="result-copy-status"]');
   let shareText = '';
   let readCode = () => challenge.starter[locale];
+
+  const paintExistingRecord = (record: ChallengeRecord) => {
+    if (!existingRecordEl) return;
+    const summary = formatRecordSummary(t, record);
+    existingRecordEl.hidden = !summary;
+    existingRecordEl.textContent = summary ? t.detail.existingRecord(summary) : '';
+  };
 
   const paintResult = (diagnostics: Parameters<typeof isChallengeSolved>[2]) => {
     if (!resultEl) return;
@@ -433,6 +443,7 @@ export const mountChallenge = async (
       tiers,
       codeChars: style.codeChars,
     });
+    paintExistingRecord(record);
     const labels = style.badges.map((badge) => badgeLabel(t, badge));
     const badgeText = labels.length > 0 ? labels.join(' · ') : '—';
 
@@ -462,6 +473,7 @@ export const mountChallenge = async (
     onDiagnostics: paintResult,
   });
   readCode = panel.getCode;
+  paintExistingRecord(store.get(challenge.slug));
 
   const copyCardButton = root.querySelector<HTMLButtonElement>('[data-role="copy-card"]');
   copyCardButton?.addEventListener('click', async () => {
@@ -479,8 +491,7 @@ export const mountChallenge = async (
     const tactic = challenge.tactics[Number(button.dataset.tacticIndex)];
     if (!tactic) continue;
     button.addEventListener('click', () => {
-      // 不再盲目 insert 到第 1 行第 1 列：先把当前代码读出来，
-      // 再按出招卡声明的 action 智能替换 sorry 或整段载入完整解法。
+      // 点击出招卡后读出当前代码，按声明的 action 整段载入或替换 sorry。
       const next = applyChallengeTactic(readCode(), tactic, locale);
       panel.setCode(next, { focus: true });
       if (panelHost.dataset.mode === 'solution') delete panelHost.dataset.mode;
@@ -490,16 +501,26 @@ export const mountChallenge = async (
   const branchButtons = Array.from(
     root.querySelectorAll<HTMLButtonElement>('[data-role="verdict-branch"]'),
   );
+  const syncVerdictButtons = (active: 'true' | 'false' | null) => {
+    for (const button of branchButtons) {
+      const pressed = active !== null && button.dataset.branch === active;
+      button.setAttribute('aria-pressed', String(pressed));
+      button.className = pressed ? ACTIVE_VERDICT_CLASS : ghostButtonClass;
+    }
+  };
+  const initialCode = readCode();
+  if (/\btheorem\s+verdict_true\b/.test(initialCode)) syncVerdictButtons('true');
+  else if (/\btheorem\s+verdict_false\b/.test(initialCode)) syncVerdictButtons('false');
+
   for (const button of branchButtons) {
-    const branch = button.dataset.branch === 'false' ? 'falseStarter' : 'trueStarter';
+    const branchKey = button.dataset.branch === 'false' ? 'false' : 'true';
+    const branch = branchKey === 'false' ? 'falseStarter' : 'trueStarter';
     button.addEventListener('click', () => {
       const starter = challenge.verdictBranches?.[branch];
       if (!starter) return;
       panel.setCode(starter[locale], { focus: true });
       panelHost.dataset.mode = 'starter';
-      for (const other of branchButtons) {
-        other.setAttribute('aria-pressed', String(other === button));
-      }
+      syncVerdictButtons(branchKey);
     });
   }
 

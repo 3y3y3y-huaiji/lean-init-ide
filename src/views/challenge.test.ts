@@ -175,7 +175,14 @@ describe('挑战详情渲染', () => {
     for (const tactic of challenge.tactics) {
       expect(enHtml).toContain(escapeHtml(tactic.label.en));
     }
-    expect(enHtml.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(/[\u4e00-\u9fff]/);
+    const doc = new DOMParser().parseFromString(enHtml, 'text/html');
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_COMMENT);
+    const comments: Comment[] = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      comments.push(node as Comment);
+    }
+    for (const comment of comments) comment.remove();
+    expect(doc.body.innerHTML).not.toMatch(/[\u4e00-\u9fff]/);
   });
 
   it('真假审判庭详情页默认折叠出招卡以防剧透，且最后一关跳转回挑战大厅', () => {

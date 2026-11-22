@@ -1,6 +1,8 @@
+// @vitest-environment node
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
@@ -19,7 +21,15 @@ describe('首页入口与边缘安全/路由契约', () => {
     expect(scriptSrc).toContain('blob:');
     expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
 
-    const inlineScripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g), (m) => m[1]);
+    const executableTypes = new Set(['', 'module', 'text/javascript', 'application/javascript']);
+    const doc = new JSDOM(html).window.document;
+    const inlineScripts = Array.from(doc.querySelectorAll('script'))
+      .filter((el) => {
+        if (el.hasAttribute('src')) return false;
+        const type = (el.getAttribute('type') ?? '').trim().toLowerCase();
+        return executableTypes.has(type);
+      })
+      .map((el) => el.textContent ?? '');
     expect(inlineScripts.length).toBeGreaterThan(0);
     for (const body of inlineScripts) {
       const hash = `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`;

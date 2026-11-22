@@ -7,12 +7,12 @@ import {
   readLocalePreference,
   shouldLocalizeRoot,
 } from './i18n';
-import { applyPageMeta, swapLocalePath } from './meta';
+import { applyPageMeta } from './meta';
 import { pageDescription, pageTitle, renderNotFound } from './page-meta';
 import { readCompleted, readProgress } from './progress';
 import { canonicalRoutePath, resolveRoute, type Route } from './router';
 import { initTelemetry, track } from './telemetry';
-import { bindLayout, renderLayout } from './views/layout';
+import { bindLayout, renderLayout, resolveSwitchHref } from './views/layout';
 import { hydrateHome, renderHome } from './views/home';
 import { renderPrivacy } from './views/privacy';
 
@@ -47,7 +47,7 @@ const boot = async (route: Route, root: HTMLElement) => {
     if (location.search || location.hash) {
       const langSwitch = root.querySelector<HTMLAnchorElement>('#lang-switch');
       if (langSwitch) {
-        langSwitch.href = `${swapLocalePath(location.pathname, route.locale)}${location.search}${location.hash}`;
+        langSwitch.href = resolveSwitchHref(location, route.locale);
       }
     }
     bindLayout(root, route.locale);

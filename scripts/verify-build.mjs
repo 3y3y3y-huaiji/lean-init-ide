@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { JSDOM } from 'jsdom';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
@@ -186,8 +187,20 @@ if (!(await exists(headersPath))) {
   if (scriptSrc.includes("'unsafe-inline'")) {
     fail("_headers 的 script-src 不应保留 'unsafe-inline'");
   }
-  for (const match of indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
-    const hash = `'sha256-${createHash('sha256').update(match[1], 'utf8').digest('base64')}'`;
+  const EXECUTABLE_SCRIPT_TYPES = new Set([
+    '',
+    'module',
+    'text/javascript',
+    'application/javascript',
+  ]);
+  const indexDoc = new JSDOM(indexHtml).window.document;
+  for (const script of indexDoc.querySelectorAll('script')) {
+    if (script.hasAttribute('src')) continue;
+    const type = (script.getAttribute('type') ?? '').trim().toLowerCase();
+    if (!EXECUTABLE_SCRIPT_TYPES.has(type)) continue;
+    const hash = `'sha256-${createHash('sha256')
+      .update(script.textContent ?? '', 'utf8')
+      .digest('base64')}'`;
     if (!scriptSrc.includes(hash)) {
       fail(`_headers 的 script-src 缺少内联脚本哈希 ${hash}`);
     }
@@ -270,17 +283,22 @@ if (await exists(sitemapPath)) {
   }
 
   const locs = Array.from(xml.matchAll(/<loc>([^<]+)<\/loc>/g), (match) => match[1]);
+  const locSet = new Set(locs);
   if (locs.length === 0) fail('sitemap.xml 没有任何 <loc>');
-  if (new Set(locs).size !== locs.length) fail('sitemap.xml 存在重复 URL');
+  if (locSet.size !== locs.length) fail('sitemap.xml 存在重复 URL');
   for (const loc of locs) {
-    if (!loc.startsWith('https://criticalthinking.de5.net/')) {
-      fail(`sitemap.xml 含非本站 URL：${loc}`);
+    try {
+      if (new URL(loc).origin !== 'https://criticalthinking.de5.net') {
+        fail(`sitemap.xml 含非本站 URL：${loc}`);
+      }
+    } catch {
+      fail(`sitemap.xml 含非法 URL：${loc}`);
     }
   }
-  if (!locs.includes('https://criticalthinking.de5.net/')) {
+  if (!locSet.has('https://criticalthinking.de5.net/')) {
     fail('sitemap.xml 缺少英文首页规范 URL https://criticalthinking.de5.net/');
   }
-  if (locs.includes('https://criticalthinking.de5.net/en/')) {
+  if (locSet.has('https://criticalthinking.de5.net/en/')) {
     fail('sitemap.xml 不应包含重复的英文首页 https://criticalthinking.de5.net/en/');
   }
   for (const match of xml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)) {
@@ -303,7 +321,7 @@ if (await exists(sitemapPath)) {
     }
     for (const page of pages) {
       const slug = page.slice(0, -'.html'.length);
-      if (!locs.includes(`https://criticalthinking.de5.net/${locale}/learn/${slug}`)) {
+      if (!locSet.has(`https://criticalthinking.de5.net/${locale}/learn/${slug}`)) {
         fail(`sitemap.xml 缺少课程 URL /${locale}/learn/${slug}`);
       }
     }

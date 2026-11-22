@@ -41,34 +41,7 @@ export type ExtensionControllerOptions = {
   readonly isWasm64Published?: typeof wasm64Available;
 };
 
-export type ExtensionController = {
-  readonly getSelectedArch: () => LeanRuntimeArch;
-  readonly getActiveExtensions: () => RuntimeExtensionId[];
-  readonly getExtensionPacks: () => ExtensionPacks;
-  readonly shouldResumeRuntime: () => boolean;
-  readonly wasAutoSwitchedFromWasm64: () => boolean;
-  readonly restoreSavedExtensions: () => Promise<void>;
-  readonly drainExtensionSelections: () => Promise<void>;
-  readonly enableFromQuickFix: (id: RuntimeExtensionId) => void;
-  readonly persistSession: (active: boolean) => void;
-  readonly invalidateRestore: () => void;
-};
-
-const isRuntimeExtensionId = (id: string): id is RuntimeExtensionId =>
-  runtimeExtensions.some((extension) => extension.id === id);
-
-const isReloadNavigation = (): boolean => {
-  try {
-    const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-    return entry?.type === 'reload';
-  } catch {
-    return false;
-  }
-};
-
-export const createExtensionController = (
-  options: ExtensionControllerOptions,
-): ExtensionController => {
+export const createExtensionController = (options: ExtensionControllerOptions) => {
   const {
     host,
     t,
@@ -78,14 +51,10 @@ export const createExtensionController = (
     closeMenus,
     isSessionActive,
     restartSession,
-    onArchChanged,
-    loadPacks = loadExtensionPacks,
-    probeMemory64 = probeMemory64Support,
-    isWasm64Published = wasm64Available,
   } = options;
-
-  const memory64Supported = probeMemory64();
-  const wasm64Published = isWasm64Published();
+  const loadPacks = options.loadPacks ?? loadExtensionPacks;
+  const memory64Supported = (options.probeMemory64 ?? probeMemory64Support)();
+  const wasm64Published = (options.isWasm64Published ?? wasm64Available)();
   let selectedArch: LeanRuntimeArch =
     getRuntimeArch() === 'wasm64' && memory64Supported && wasm64Published
       ? 'wasm64'
@@ -100,12 +69,16 @@ export const createExtensionController = (
     setRuntimeArch(selectedArch);
   }
 
+  const isRuntimeExtensionId = (id: string): id is RuntimeExtensionId =>
+    runtimeExtensions.some((extension) => extension.id === id);
   const savedSession = readRuntimeSession();
   const sessionExtensionIds = (savedSession?.extensions ?? []).filter(isRuntimeExtensionId);
   const defaultExtensions = new Set<RuntimeExtensionId>(
     getDefaultExtensions().filter(isRuntimeExtensionId),
   );
-  const resumeRuntime = savedSession?.active === true && !isReloadNavigation();
+  const navEntry = performance?.getEntriesByType?.('navigation')[0] as
+    PerformanceNavigationTiming | undefined;
+  const resumeRuntime = savedSession?.active === true && navEntry?.type !== 'reload';
 
   const extensionPackCache = new Map<RuntimeExtensionId, ExtensionPacks>();
   const activeExtensions = new Set<RuntimeExtensionId>();
@@ -179,32 +152,30 @@ export const createExtensionController = (
   }
   syncDefaultCheckboxes();
 
+  const wasm64Note = () =>
+    !memory64Supported
+      ? t.runtimeWasm64Unsupported
+      : !wasm64Published
+        ? t.runtimeWasm64NotPublished
+        : wasm64BlockedByExtensions
+          ? t.runtimeWasm64NoLibraries
+          : '';
+
   const syncRuntimeArchUi = () => {
     if (runtimeArchLabelEl) {
       runtimeArchLabelEl.textContent = `${t.runtimeTitle}: ${selectedArch === 'wasm64' ? t.runtimeWasm64 : 'wasm32'}`;
     }
+    const wasm64Unavailable = wasm64Note() !== '';
     for (const button of runtimeArchButtons) {
       const arch = button.dataset.runtimeArch as LeanRuntimeArch;
       const active = arch === selectedArch;
       button.dataset.active = String(active);
       button.setAttribute('aria-checked', String(active));
-      if (
-        arch === 'wasm64' &&
-        (!memory64Supported || wasm64BlockedByExtensions || !wasm64Published)
-      ) {
-        button.disabled = true;
-      }
+      if (arch === 'wasm64' && wasm64Unavailable) button.disabled = true;
     }
     if (runtimeArchNoteEl) {
-      runtimeArchNoteEl.textContent = !memory64Supported
-        ? t.runtimeWasm64Unsupported
-        : !wasm64Published
-          ? t.runtimeWasm64NotPublished
-          : wasm64BlockedByExtensions
-            ? t.runtimeWasm64NoLibraries
-            : selectedArch === 'wasm64'
-              ? t.runtimeWasm64AssetNote
-              : '';
+      runtimeArchNoteEl.textContent =
+        wasm64Note() || (selectedArch === 'wasm64' ? t.runtimeWasm64AssetNote : '');
     }
     syncDefaultCheckboxes();
     syncLibraryButtons();
@@ -213,18 +184,11 @@ export const createExtensionController = (
   for (const button of runtimeArchButtons) {
     button.addEventListener('click', () => {
       const nextArch = button.dataset.runtimeArch as LeanRuntimeArch;
-      if (nextArch === 'wasm64') {
-        if (!memory64Supported || !wasm64Published || wasm64BlockedByExtensions) {
-          log(
-            !memory64Supported
-              ? t.runtimeWasm64Unsupported
-              : !wasm64Published
-                ? t.runtimeWasm64NotPublished
-                : t.runtimeWasm64NoLibraries,
-          );
-          syncRuntimeArchUi();
-          return;
-        }
+      const blockedReason = nextArch === 'wasm64' ? wasm64Note() : '';
+      if (blockedReason) {
+        log(blockedReason);
+        syncRuntimeArchUi();
+        return;
       }
       if (nextArch === selectedArch) return;
       selectedArch = nextArch;
@@ -236,7 +200,7 @@ export const createExtensionController = (
       }
       desiredExtensions = new Set(activeExtensions);
       restorePromise = null;
-      onArchChanged?.(nextArch);
+      options.onArchChanged?.(nextArch);
       syncRuntimeArchUi();
       log(t.logRuntimeArchSelected(nextArch === 'wasm64' ? t.runtimeWasm64 : t.runtimeWasm32));
       if (nextArch === 'wasm64') log(t.runtimeWasm64AssetNote);
@@ -246,6 +210,35 @@ export const createExtensionController = (
   }
   syncRuntimeArchUi();
 
+  const commitExtensionSet = (ids: Iterable<RuntimeExtensionId>, buildPacks = true) => {
+    const list = [...ids];
+    extensionPacks = buildPacks
+      ? Object.assign({}, ...(list.length ? list.map((id) => extensionPackCache.get(id)) : []))
+      : {};
+    activeExtensions.clear();
+    for (const id of list) activeExtensions.add(id);
+    desiredExtensions = new Set(activeExtensions);
+  };
+
+  const prunePackCache = (keep: ReadonlySet<RuntimeExtensionId>) => {
+    for (const id of [...extensionPackCache.keys()]) {
+      if (!keep.has(id)) extensionPackCache.delete(id);
+    }
+  };
+
+  const loadMissingPacks = async (ids: readonly RuntimeExtensionId[], showProgress = false) => {
+    for (const id of ids) {
+      if (extensionPackCache.has(id)) continue;
+      const packs = await (showProgress
+        ? loadPacks([id], (ratio) => {
+            const button = libraryButtons.find((item) => item.dataset.library === id);
+            if (button) button.textContent = t.libraryLoading(`${Math.round(ratio * 100)}%`);
+          })
+        : loadPacks([id]));
+      extensionPackCache.set(id, packs);
+    }
+  };
+
   const restoreSavedExtensions = (): Promise<void> => {
     if (restorePromise) return restorePromise;
     const arch = selectedArch;
@@ -253,14 +246,8 @@ export const createExtensionController = (
       [...sessionExtensionIds, ...defaultExtensions, ...requiredExtensions],
       arch,
     );
-    if (ids.length === 0) {
-      restorePromise = Promise.resolve();
-      return restorePromise;
-    }
-    if (arch === 'wasm64') {
-      activeExtensions.clear();
-      for (const id of ids) activeExtensions.add(id);
-      desiredExtensions = new Set(activeExtensions);
+    if (ids.length === 0 || arch === 'wasm64') {
+      if (arch === 'wasm64') commitExtensionSet(ids, false);
       restorePromise = Promise.resolve();
       return restorePromise;
     }
@@ -270,14 +257,8 @@ export const createExtensionController = (
       for (const button of libraryButtons) button.disabled = true;
       setStatus(t.libraryRestarting, 'loading');
       try {
-        for (const id of ids) {
-          if (extensionPackCache.has(id)) continue;
-          extensionPackCache.set(id, await loadPacks([id]));
-        }
-        extensionPacks = Object.assign({}, ...ids.map((id) => extensionPackCache.get(id)));
-        activeExtensions.clear();
-        for (const id of ids) activeExtensions.add(id);
-        desiredExtensions = new Set(activeExtensions);
+        await loadMissingPacks(ids);
+        commitExtensionSet(ids);
       } catch (error) {
         log(t.libraryError(error instanceof Error ? error.message : String(error)));
         writeRuntimeSession({ active: false, extensions: [] });
@@ -292,58 +273,28 @@ export const createExtensionController = (
   const applyExtensionSelection = async (next: Set<RuntimeExtensionId>) => {
     const previous = new Set(activeExtensions);
     const resolved = resolveExtensionIds(next, selectedArch);
-    const resolvedSet = new Set(resolved);
     const wasActive = isSessionActive();
-    if (selectedArch === 'wasm64') {
-      activeExtensions.clear();
-      for (const id of resolved) activeExtensions.add(id);
-      desiredExtensions = new Set(activeExtensions);
-      syncLibraryButtons();
-      if (wasActive) {
-        setStatus(t.libraryRestarting, 'loading');
-        await restartSession();
-      }
-      persistSession(isSessionActive());
-      return;
-    }
     try {
-      for (const id of resolved) {
-        if (extensionPackCache.has(id)) continue;
-        const packs = await loadPacks([id], (ratio) => {
-          const button = libraryButtons.find((item) => item.dataset.library === id);
-          if (button) button.textContent = t.libraryLoading(`${Math.round(ratio * 100)}%`);
-        });
-        extensionPackCache.set(id, packs);
+      if (selectedArch === 'wasm64') {
+        commitExtensionSet(resolved, false);
+      } else {
+        await loadMissingPacks(resolved, true);
+        prunePackCache(new Set(resolved));
+        commitExtensionSet(resolved);
       }
-      for (const id of [...extensionPackCache.keys()]) {
-        if (!resolvedSet.has(id)) extensionPackCache.delete(id);
-      }
-      extensionPacks = Object.assign({}, ...resolved.map((id) => extensionPackCache.get(id)));
-      activeExtensions.clear();
-      for (const id of resolved) activeExtensions.add(id);
-      desiredExtensions = new Set(activeExtensions);
       syncLibraryButtons();
       if (wasActive) {
         setStatus(t.libraryRestarting, 'loading');
         await restartSession();
       }
-      persistSession(isSessionActive());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(t.libraryError(message));
       setStatus(t.libraryError(message), 'error');
-      for (const id of [...extensionPackCache.keys()]) {
-        if (!previous.has(id)) extensionPackCache.delete(id);
-      }
-      extensionPacks = Object.assign(
-        {},
-        ...(previous.size ? [...previous].map((id) => extensionPackCache.get(id)) : []),
-      );
-      activeExtensions.clear();
-      for (const id of previous) activeExtensions.add(id);
-      desiredExtensions = new Set(activeExtensions);
-      persistSession(isSessionActive());
+      prunePackCache(previous);
+      commitExtensionSet(previous);
     }
+    persistSession(isSessionActive());
   };
 
   const drainExtensionSelections = async () => {
@@ -405,14 +356,13 @@ export const createExtensionController = (
         selectedArch = DEFAULT_RUNTIME_ARCH;
         setRuntimeArch(selectedArch);
         restorePromise = null;
-        onArchChanged?.(selectedArch);
+        options.onArchChanged?.(selectedArch);
         syncRuntimeArchUi();
       }
       enqueueExtensionSelection(new Set([...desiredExtensions, id]));
     },
     persistSession,
-    invalidateRestore: () => {
-      restorePromise = null;
-    },
   };
 };
+
+export type ExtensionController = ReturnType<typeof createExtensionController>;

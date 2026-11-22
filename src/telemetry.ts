@@ -11,7 +11,7 @@ export const TELEMETRY_ENDPOINT = '/api/telemetry';
 
 /** 服务端只接受这些事件名，新增时两端同时改。 */
 export type TelemetryEventName =
-  'boot' | 'sw' | 'assets' | 'lsp_ready' | 'first_diagnostics' | 'runtime_error';
+  'boot' | 'sw' | 'assets' | 'lsp_ready' | 'first_diagnostics' | 'memory_warning' | 'runtime_error';
 
 export type TelemetryFields = Record<string, number | boolean | string>;
 

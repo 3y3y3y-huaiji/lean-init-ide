@@ -31,6 +31,7 @@ const EVENT_NAMES = new Set([
   'assets',
   'lsp_ready',
   'first_diagnostics',
+  'memory_warning',
   'runtime_error',
 ]);
 

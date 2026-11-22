@@ -180,7 +180,12 @@ describe('架构与 CI 防呆不变量', () => {
 
     const syntheticW64 = collectManifestAssets({
       assets: [
-        { key: 'wasm-lean4/test/core.bin', bytes: 128, contentType: 'application/octet-stream' },
+        {
+          key: 'wasm-lean4/test/core.bin',
+          bytes: 128,
+          contentType: 'application/octet-stream',
+          sha256: '0'.repeat(64),
+        },
       ],
       extensions: [
         {
@@ -189,6 +194,7 @@ describe('架构与 CI 防呆不变量', () => {
               key: 'wasm-lean4/test/extensions/mathlib/mathlib.index.json',
               bytes: 64,
               contentType: 'application/json',
+              sha256: '0'.repeat(64),
             },
           ],
         },

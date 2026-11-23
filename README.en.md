@@ -192,7 +192,7 @@ not be discussed in public.
 
 Dual-licensed; pick either:
 
-- [Apache License 2.0](LICENSE-APACHE)
+- [Apache License 2.0](LICENSE)
 - [Mulan Permissive Software License v2](LICENSE-MULAN)
 
 SPDX identifier: `(Apache-2.0 OR MulanPSL-2.0)`.

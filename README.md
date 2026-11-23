@@ -161,7 +161,7 @@ pnpm run smoke       # 线上冒烟，发版后跑
 
 本项目采用 **双协议**，你可以任选其一：
 
-- [Apache License 2.0](LICENSE-APACHE)
+- [Apache License 2.0](LICENSE)
 - [木兰宽松许可证，第 2 版](LICENSE-MULAN)（Mulan Permissive Software License v2）
 
 SPDX 标识：`(Apache-2.0 OR MulanPSL-2.0)`。

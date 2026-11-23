@@ -3,7 +3,7 @@
  *
  * 只负责拼 URL，不读 DOM 也不发请求，方便 SSG 与运行时回退共用。
  */
-export const REPO_URL = 'https://github.com/3y3y3y-huaiji/lean-init-ide';
+export const REPO_URL = 'https://github.com/lean-online/lean-init-ide';
 
 export type FeedbackTemplate = 'lesson-bug.yml' | 'clarity-gap.yml' | 'new-puzzle.yml';
 

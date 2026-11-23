@@ -9,7 +9,7 @@
   },
   "fallback": {
     "label": "GitHub release",
-    "baseUrl": "https://github.com/3y3y3y-huaiji/lean-init-ide/releases/download/runtime-v4.35.0/"
+    "baseUrl": "https://github.com/lean-online/lean-init-ide/releases/download/runtime-v4.35.0/"
   },
   "mirror": {
     "label": "ModelScope",

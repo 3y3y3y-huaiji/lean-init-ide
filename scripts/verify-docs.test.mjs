@@ -16,7 +16,6 @@ const makeFixture = (files) => {
     }),
     'config/lean4-runtime.json': JSON.stringify({ runtime: 'Lean 4.35.0 Init' }),
     'src/i18n/lesson-catalog.ts': "export const LESSON_CATALOG = [{ slug: 'what-is-lean' }];",
-    'scripts/pin-lean.ts': "export const LEAN_PIN = { version: '4.36.0-rc2' };",
     '.github/workflows/ci.yml': 'name: CI\n',
     'AGENTS.md': '# AGENTS\n\n## Map\n`src/i18n/lesson-catalog.ts`\n',
     'src/i18n/AGENTS.md': '# i18n AGENTS\n',
@@ -25,10 +24,8 @@ const makeFixture = (files) => {
     'README.en.md': '# Project\n\nLean 4.35.0 · 1 lesson\n\n## Quick Start\n\n## Docs\n',
     'docs/CI.md':
       '**何时读我**：CI\n**单一事实来源**：[ci.yml](../.github/workflows/ci.yml)\n**维护边界**：CI\n\n# CI\n',
-    'docs/WASM64-SPIKE.md':
-      '**何时读我**：w64\n**单一事实来源**：pin\n**维护边界**：w64\n\nLean 4.36.0-rc2\n',
     'docs/README.md':
-      '**何时读我**：索引\n**单一事实来源**：清单\n**维护边界**：目录\n\nLean 4.35.0 · 4.36.0-rc2 · 1\n',
+      '**何时读我**：索引\n**单一事实来源**：清单\n**维护边界**：目录\n\nLean 4.35.0 · 1\n',
   };
   const merged = { ...base, ...files };
   for (const [relPath, content] of Object.entries(merged)) {

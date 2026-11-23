@@ -111,9 +111,7 @@ describe('架构与 CI 防呆不变量', () => {
       'ci-refresh-open-prs.yml',
       'deploy.yml',
       'smoke.yml',
-      'modelscope.yml',
       'pr-cleanup.yml',
-      'cpp-gate.yml',
       'codeql.yml',
       'scorecard.yml',
     ]);

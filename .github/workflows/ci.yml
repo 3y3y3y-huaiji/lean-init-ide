@@ -33,7 +33,6 @@ jobs:
       static: ${{ steps.detect.outputs.static }}
       test: ${{ steps.detect.outputs.test }}
       deps: ${{ steps.detect.outputs.deps }}
-      spike_scripts: ${{ steps.detect.outputs.spike_scripts }}
       build: ${{ steps.detect.outputs.build }}
       ui: ${{ steps.detect.outputs.ui }}
       smoke: ${{ steps.detect.outputs.smoke }}
@@ -123,12 +122,6 @@ jobs:
         run: pnpm run verify:manifest
       - name: 文档不变量校验
         run: pnpm run verify:docs
-      - name: Spike 脚本静态检查
-        if: needs.changes.outputs.spike_scripts == 'true'
-        run: |
-          pnpm run format:check:spike
-          pnpm run lint:spike
-          pnpm run typecheck:spike
 
   actionlint:
     name: Actions 工作流静态检查
@@ -162,9 +155,6 @@ jobs:
       - run: pnpm install --frozen-lockfile --prefer-offline
       # 覆盖率阈值写在 vitest.config.ts，低于阈值即失败。
       - run: pnpm test
-      - name: Spike 脚本单元测试
-        if: needs.changes.outputs.spike_scripts == 'true'
-        run: pnpm run test:spike
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:

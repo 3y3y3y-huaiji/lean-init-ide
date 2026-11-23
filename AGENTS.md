@@ -2,16 +2,15 @@
 
 面向在本仓库工作的 AI Agent 与协作者。**按任务懒加载子目录指南与 `docs/` 专题文档，不在无关改动时通读历史日志。**
 
-## 1. 四大子系统地形图
+## 1. 三大子系统地形图
 
 | 子系统 | 职责与核心路径 | 进一步阅读 | 默认快速验证 |
 | --- | --- | --- | --- |
 | **前端 SPA + SSG** | `src/`（路由 `src/main.ts`、视图 `src/views/`、编辑器 `src/components/`、双语课程 `src/i18n/`、`src/challenges.ts`） | [DEVELOPMENT](docs/DEVELOPMENT.md)；改课程先读 [i18n 指南](src/i18n/AGENTS.md) | `pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test` |
 | **边缘网关与 SW** | `functions/cdn/[[path]].ts`（R2 网关）、`functions/api/`（遥测/限流）、`src/sw.ts` + `src/sw-*.ts`、`src/cdn-range.ts` | [ARCHITECTURE](docs/ARCHITECTURE.md)、[OPERATIONS](docs/OPERATIONS.md) | `pnpm exec vitest run functions/ src/sw-*.test.ts src/cdn-range.test.ts` |
-| **生产 wasm32 资产与 E2E** | `scripts/*.mjs`（资产下载压缩 `scripts/fetch-assets.mjs`、上传、清单/产物/文档校验、Playwright `scripts/e2e-*.mjs`） | 脚手架细节见 [scripts 指南](scripts/AGENTS.md)；工作流见 [CI](docs/CI.md) | `pnpm run verify:manifest && pnpm run verify:docs && pnpm run build:web && pnpm run verify:build` |
-| **实验 wasm64 工具链** | `scripts/*.ts` + `scripts/lib/` + `scripts/ci/` + `scripts/patches/`（pin **4.36.0-rc2**、三份堆栈补丁、差分等价门禁） | 规范与升级流程见 [WASM64-SPIKE](docs/WASM64-SPIKE.md) 与 [scripts 指南](scripts/AGENTS.md) | `pnpm run format:check:spike && pnpm run lint:spike && pnpm run typecheck:spike && pnpm run test:spike` |
+| **应用脚本、资产消费与 E2E** | `scripts/*.mjs`（资产下载 `scripts/fetch-assets.mjs`、LSP 补丁、SEO/预渲染、清单/产物/文档校验、Playwright `scripts/e2e-*.mjs`） | 脚手架细节见 [scripts 指南](scripts/AGENTS.md)；工作流见 [CI](docs/CI.md) | `pnpm run verify:manifest && pnpm run verify:docs && pnpm run build:web && pnpm run verify:build` |
 
-> **历史归档红线**：[docs/archive/](docs/archive/) 仅保留早期实验与自我推翻的探针过程日志，**严禁将归档内容当作当前架构设计或开发规范**。关键不可回退决定见 [DECISIONS](docs/DECISIONS.md)。
+> **运行时构建链与历史归档边界**：Lean WASM（wasm32 4.35.0 及实验性 wasm64 工具链、堆栈补丁、C/C++ 探针、R2 / 魔搭发布脚本）已独立拆分为 [3y3y3y-huaiji/lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)；关键不可回退决定见 [DECISIONS](docs/DECISIONS.md)。
 
 ## 2. 单一事实来源（SSOT）与强联动表
 
@@ -19,14 +18,13 @@
 
 | 单一事实来源 | 必须同步的消费者与注意点 |
 | --- | --- |
-| `config/lean4-runtime.json` | `src/sw.ts`、`functions/cdn/`、`scripts/fetch-assets.mjs`、上传脚本、`verify-manifest`、`pnpm run patch:lsp`、CI 缓存键 |
-| `config/lean4-wasm64-runtime.json` | `src/lean-wasm64-*.ts`、`src/runtime-extensions.ts`、`functions/cdn/`（需同步注册扩展键）、上传/校验脚本 |
+| `config/lean4-runtime.json` | `src/sw.ts`、`functions/cdn/`、`scripts/fetch-assets.mjs`、`verify-manifest`、`pnpm run patch:lsp`、CI 缓存键 |
+| `config/lean4-wasm64-runtime.json` | `src/lean-wasm64-*.ts`、`src/runtime-extensions.ts`、`functions/cdn/` |
 | `src/asset-sources.mjs` | `src/sw*.ts`、`src/asset-source.ts`、`src/runtime-extensions.ts`、`scripts/`（TypeScript 声明同步 `src/asset-sources.d.mts`） |
 | `src/cdn-range.ts` | `functions/cdn/[[path]].ts`、`src/cdn-range.test.ts` |
 | `public/_headers` / `public/_routes.json` | `scripts/verify-build.mjs`、`scripts/local-gateway.mjs`、`scripts/smoke.mjs`（仅限 `/cdn/*` 与 `/api/telemetry`） |
 | `wrangler.toml` | `LEAN_ASSETS` binding 必须同时出现在顶层、`env.preview`、`env.production` |
 | `patches/` 或清单 SHA-256 | 重跑 `pnpm run patch:lsp && pnpm install --no-frozen-lockfile`，确认 `src/lsp-patches.test.ts` |
-| `scripts/pin-lean.ts` (`LEAN_PIN`) | `scripts/patches/lean-*.patch`、`.github/workflows/spike-wasm64.yml` 缓存键、`scripts/wasm64-patch-equivalence.ts`、`docs/` |
 
 ## 3. 机器难拦的物理与平台红线
 

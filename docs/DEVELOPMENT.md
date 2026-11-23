@@ -46,23 +46,9 @@ pnpm exec vitest run src/lsp-patches.test.ts
 FileWorker 偶发重复精化导致的「already declared」假阳性。先确认上游是否已修复；已修复就删除这段
 过滤并更新相关单测，未修复则保留。
 
-## wasm64 运行时与栈补丁
+## wasm64 运行时与构建链
 
-wasm64 构建链、Lean 版本 pin（默认 4.36.0-rc2，可用 `LEAN_PIN_*` 覆盖）与三处栈补丁只在
-`.github/workflows/spike-wasm64.yml` 里跑，本地只做静态检查与门禁单测：
-
-```bash
-pnpm run typecheck:spike      # tsconfig.spike.json
-pnpm run lint:spike           # 只扫 scripts/**/*.ts
-pnpm run format:check:spike
-pnpm run test:spike           # vitest.spike.config.ts
-pnpm run test:spike:coverage  # CI 用，阈值 75% 行 / 60% 函数
-pnpm run check:cpp            # 手写 C/C++ 的 clang-format + clang-tidy
-```
-
-真正的行为基准是 `scripts/wasm64-patch-equivalence.ts`：同一批 Lean 源文件分别用官方
-未打补丁的原生 Lean 与打补丁的 wasm64 编译，比较退出码与 stdout。它需要完整构建产物，
-所以只在 Actions 的 smoke job 里执行。设计细节与踩坑记录见 [WASM64-SPIKE](WASM64-SPIKE.md)。
+Lean wasm32 与实验性 wasm64 的编译器构建、版本 pin、三份堆栈补丁及 `wasm64-patch-equivalence` 差分门禁已拆分至独立仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)，详见其 [WASM64-SPIKE](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime/blob/main/docs/WASM64-SPIKE.md)。本仓只保留浏览器端适配与清单消费逻辑（`config/lean4-wasm64-runtime.json`、`src/lean-wasm64-*.ts`）。
 
 ## 质量门禁
 

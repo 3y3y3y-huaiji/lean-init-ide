@@ -114,7 +114,7 @@
   失败回退魔搭镜像与同源静态副本；`Init` 约 102MB，`Std` 约 75MB，`Batteries` 约 5.7MB，按需加载。
 - **应用层**：静态站点，路由 / i18n / 主题都在前端；Pages Functions 只提供资产网关与指标接收端。
 
-实现细节见 [架构与运行时分发](docs/ARCHITECTURE.md)。
+实现细节见 [架构与运行时分发](docs/ARCHITECTURE.md)；wasm32 / wasm64 编译器构建与资产发布工具链已拆分为独立仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)。
 
 ## 本地开发
 

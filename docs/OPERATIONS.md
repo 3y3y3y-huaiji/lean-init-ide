@@ -20,8 +20,7 @@ direct push main → Deploy · 应用（CI · 应用 → build + deploy + smoke�
 `Deploy · 应用` 只在 push `main`、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
 它跑完整 `pnpm run build`（含约 102 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
-仍失败则整条流水线标红。运行时资产由 `Runtime · Lean 4.35 wasm32` 的 publish，或维护者用
-`pnpm run upload:assets` 上传；应用 CI 与 Deploy 都不写 R2。换 `cacheKey` 后先传资产、再部署页面。
+仍是失败则整条流水线标红。运行时资产由独立仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime) 上传到 R2；应用 CI 与 Deploy 都不写 R2。换 `cacheKey` 后先传资产、再部署页面。
 
 ### 首次启用
 
@@ -148,64 +147,22 @@ bucket_name = "lean4-ide-releases"
 `functions/cdn/[[path]].ts` 是网关实现，`public/_routes.json` 把 Functions 限制在 `/cdn/*` 与 `/api/telemetry`。
 若改用 Dashboard 配置绑定，名称必须同样是 `LEAN_ASSETS`。
 
-## 资产维护
+## 资产维护与发布说明
+
+R2（S3 上传）、魔搭镜像上传（`--prune` / `--metadata`）与运行时打包发布脚本已迁往独立工具链仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)（参见该仓库的 `upload:assets` / `upload:modelscope`）。本仓仅负责**消费**清单并在构建期下载校验静态回退副本：
 
 ```bash
-pnpm dlx wrangler login
-pnpm run fetch:assets                # 下载并校验到 public/wasm-lean4/
-pnpm run upload:assets -- --dry-run  # 预览将上传的对象
-pnpm run upload:assets               # 上传缺失/变更的对象，经同源网关复核 ETag 与长度
-pnpm run upload:assets -- --verify-only
-pnpm run upload:modelscope -- --verify-only          # 只校验魔搭镜像
-pnpm run upload:modelscope -- --prune --metadata     # 同步资产、清理旧 revision、写数据集卡片
-# 扩展库（Std / Batteries）：把构建产物解压到 work/extensions/ 后带上 --extensions
-pnpm run upload:assets -- --s3 --extensions work/extensions
-pnpm run upload:modelscope -- --extensions work/extensions --metadata
+pnpm run fetch:assets         # 下载并校验运行时资产到 public/wasm-lean4/
+pnpm run verify:manifest      # 校验 config/lean4-runtime.json 与 wasm64 清单结构
 ```
 
-- 扩展包不进构建期下载目录（`public/wasm-lean4/`），由编辑器按需拉取；上传脚本通过 `--extensions`（或 `LEAN_EXTENSION_DIR`）定位文件。
-- 浏览器 E2E 需要真实编译 Std / Batteries 课程，CI 的课程分片 job 用 `LEAN_FETCH_EXTENSIONS=1 pnpm run fetch:assets` 临时把扩展分片放进 `public/wasm-lean4/`，只供本地网关使用，不进入部署产物；这部分资产用独立的 `-extensions` 缓存键，避免每次从远端重下约 75 MB。
-- 扩展资产登记在 `config/lean4-runtime.json` 的 `extensions` 数组里，key 位于 `wasm-lean4/<version>/extensions/<id>/`；魔搭镜像仍是扁平目录。
-
-- `--prune` 只删除仓库根目录下十六进制命名的旧 revision 目录（如 `14ea5ec/`），保留 `wasm-lean4/4.35.0/` 与实验性 `wasm-lean4/4.36.0-rc2-wasm64/`。`wasm-lean4/` 根下 4.34 的旧文件以及 R2 桶根目录的 4.34 旧对象已手动删除，当前只保留 4.35.0（稳定默认）与 4.36.0-rc2-wasm64（实验性）。
-- `--metadata` 会写 `README.md`（模型卡）、`LICENSE`（Apache-2.0）、`.gitattributes`（含 `*.zst` / `*.bin` LFS 规则）和 `wasm-lean4/4.35.0/SHA256SUMS`。
-- 删除工作区文件不会回收 Git LFS 历史对象；要彻底回收魔搭存储，需要重建数据集或改写历史。
-- `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给构建/上传脚本提供探测用的站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
-- `--local` 写入本地 miniflare 桶用于离线调试，`--bucket` 指定其它桶。
-
-### 用桶级 R2 S3 凭证上传
-
-如果不想依赖 Wrangler 的账号级 OAuth，可以给 R2 创建**只限当前桶**的 API token，
-用 S3 兼容端点上传。推荐配置：
-
-1. Cloudflare Dashboard → R2 → Manage R2 API Tokens → Create API Token：
-   - Permissions 选 **Object Read & Write**；
-   - Specify bucket 选 `lean4-ide-releases`；
-   - 不要授予账号级管理权限。
-2. 把 Access Key ID / Secret Access Key 写入本机 `~/.aws/credentials` 的 `lean-r2` profile，
-   并在 `~/.aws/config` 指定 endpoint：
-
-   ```ini
-   [profile lean-r2]
-   region = auto
-   endpoint_url = https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-   ```
-
-3. 在仓库外的 `~/.config/lean-init/assets.env` 填 `R2_ENDPOINT`、`R2_BUCKET`、`AWS_PROFILE`
-   （模板见该文件注释；脚本会自动读取，已存在的环境变量优先）。
-4. 先只读校验，再上传：
-
-   ```bash
-   pnpm run upload:assets -- --s3 --verify-only
-   pnpm run upload:assets -- --s3
-   ```
-
-`--s3` 模式用 `HeadObject` 的 `Content-Length` 和自定义 `sha256` metadata 校验远端；
-大文件走单次 `PutObject`，不走 multipart，因此 ETag 也可以作为 MD5 回退校验。
-魔搭上传脚本同样读取 `~/.config/lean-init/assets.env` 里的 `MODELSCOPE_*` 变量。
+- 扩展包不进构建目录（`public/wasm-lean4/`），线上由编辑器按需从 `/cdn/` 或魔搭拉取；CI 课程分片 E2E 通过 `LEAN_FETCH_EXTENSIONS=1 pnpm run fetch:assets` 临时放进本地网关目录，只进 CI 工件，不参与 Pages 部署。
+- 魔搭镜像统一采用扁平目录 `<prefix>/<asset.name>`（见 [ADR-02](DECISIONS.md#adr-02)）。
+- `LEAN_ASSET_ORIGIN`（默认 `https://criticalthinking.de5.net`）给本仓构建/探针脚本提供站点域名；`LEAN_ASSET_BASE_URL` 可完全覆盖主源。
+- 桶级 R2 凭据最小权限原则：本仓线上 Pages 仅依赖 `LEAN_ASSETS` binding（只读），无需任何 R2 S3 写入密钥。
 
 资产清单与分发源由 `config/lean4-runtime.json` + `src/asset-sources.mjs` 统一定义，
-`functions/`、`scripts/fetch-assets.mjs`、`src/sw.ts` 和 `scripts/upload-assets.mjs` 共用，避免字节数或键名漂移。
+`functions/`、`scripts/fetch-assets.mjs` 与 `src/sw.ts` 共用，避免字节数或键名漂移。
 
 清单里 `encoding: "zstd"` 的资产保留上游 `.gz.bin` 键名，但交付字节是 zstd；`fetch:assets` 会优先从 R2 `/cdn/` 或魔搭镜像直接拉取匹配 `bytes`/`sha256` 的 zstd 字节，缺失或不一致时再从 GitHub Release 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩（构建机需要 **Node 24+** 内置 `zlib.zstdCompressSync`）。
 R2 与魔搭镜像托管 zstd 字节；Release 没有 CORS 响应头且在 COOP/COEP 下无法跨源读取，浏览器端已禁用 GitHub Release（仅服务构建期与版本归档，见 [ADR-01](DECISIONS.md#adr-01)），最终回退为同源静态副本。

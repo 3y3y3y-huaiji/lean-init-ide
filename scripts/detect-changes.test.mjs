@@ -17,7 +17,6 @@ const flags = (paths) => {
     static: result.static,
     test: result.test,
     deps: result.deps,
-    spikeScripts: result.spikeScripts,
     build: result.build,
     ui: result.ui,
     smoke: result.smoke,
@@ -46,7 +45,6 @@ describe('CI 变更分类', () => {
     expect(result.static).toBe(false);
     expect(result.test).toBe(false);
     expect(result.deps).toBe(false);
-    expect(result.spikeScripts).toBe(false);
     expect(result.build).toBe(false);
     expect(result.ui).toBe(false);
     expect(result.smoke).toBe(false);
@@ -80,18 +78,6 @@ describe('CI 变更分类', () => {
     expect(result.build).toBe(false);
     expect(result.ui).toBe(false);
     expect(result.smoke).toBe(false);
-    expect(result.deployable).toBe(false);
-  });
-
-  it('仅修改 spike TS 脚本时走 spike 静态检查与单测，不进前端构建或部署', () => {
-    const result = flags(['scripts/pin-lean.ts', 'scripts/wasm64-patch-equivalence.ts']);
-    expect(result.static).toBe(true);
-    expect(result.test).toBe(true);
-    expect(result.spikeScripts).toBe(true);
-    expect(result.build).toBe(false);
-    expect(result.ui).toBe(false);
-    expect(result.smoke).toBe(false);
-    expect(result.fullLessons).toBe(false);
     expect(result.deployable).toBe(false);
   });
 
@@ -220,7 +206,6 @@ describe('CI 变更分类', () => {
     expect(result.smoke).toBe(true);
     expect(result.fullLessons).toBe(true);
     expect(result.deps).toBe(true);
-    expect(result.spikeScripts).toBe(true);
     expect(result.deployable).toBe(true);
   });
 });

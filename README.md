@@ -3,6 +3,8 @@
 # Lean Init IDE
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lean-online/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/lean-online/lean-init-ide)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17023/badge)](https://www.bestpractices.dev/projects/17023)
+[![阮一峰周刊 #420](https://img.shields.io/badge/%E9%98%AE%E4%B8%80%E5%B3%B0%E5%91%A8%E5%88%8A-%E7%AC%AC420%E6%9C%9F%E6%94%B6%E5%BD%95-orange)](https://github.com/ruanyf/weekly/blob/master/docs/issue-420.md)
 
 **在浏览器里，跑一个真的定理证明器。**
 

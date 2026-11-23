@@ -3,6 +3,8 @@
 # Lean Init IDE
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lean-online/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/lean-online/lean-init-ide)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17023/badge)](https://www.bestpractices.dev/projects/17023)
+[![Ruanyf Weekly #420](https://img.shields.io/badge/Ruanyf%20Weekly-Issue%20420-orange)](https://github.com/ruanyf/weekly/blob/master/docs/issue-420.md)
 
 **A real theorem prover, running in your browser.**
 

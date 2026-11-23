@@ -186,20 +186,6 @@ const checkSingleSourcesOfTruth = (rootDir, readDoc, errors) => {
       }
     }
   }
-
-  const pinPath = resolve(rootDir, 'scripts/pin-lean.ts');
-  if (existsSync(pinPath)) {
-    const pinText = readFileSync(pinPath, 'utf8');
-    const pinVersion = /LEAN_PIN[\s\S]*?version:\s*'([^']+)'/.exec(pinText)?.[1];
-    if (pinVersion) {
-      for (const file of ['docs/README.md', 'docs/WASM64-SPIKE.md']) {
-        const text = readDoc(file);
-        if (text !== null && !text.includes(pinVersion)) {
-          errors.push(`${file}: 未与 scripts/pin-lean.ts 版本 ${pinVersion} 同步`);
-        }
-      }
-    }
-  }
 };
 
 /** 校验仓内文档不变量，返回人类可读的错误列表。 */

@@ -3,7 +3,6 @@
  * CI 变更分类：按改动类型决定门禁重量。
  *
  * - 纯文档 / 纯工作流改动：只跑轻量检查，不进 install / build / e2e。
- * - 纯 wasm64 / spike 脚本改动（scripts/*.ts）：跑静态检查 + spike 单测，不触发前端 build / E2E / 部署。
  * - 纯课程或挑战内容改动：只跑改动到的那几节课程（增量），不跑全量。
  * - 课程 / 挑战视图改动：跑轻量多视口 UI E2E + 对应金丝雀课/挑战 E2E，不跑全量。
  * - 纯 UI / 样式 / 英文课程 / SEO 改动：跑轻量多视口 UI E2E，不启动 102MB WASM。
@@ -31,20 +30,11 @@ const TEST_FILE = /\.test\.(?:ts|mjs)$/;
 
 const DEPS_FILES = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);
 
-const SPIKE_CONFIG_FILES = new Set([
-  'tsconfig.spike.json',
-  'eslint.spike.config.mjs',
-  'vitest.spike.config.ts',
-]);
-
 const isDocFile = (file) =>
   file.startsWith('docs/') ||
   /^[^/]+\.md$/i.test(file) ||
   file.startsWith('LICENSE') ||
   /(?:^|\/)AGENTS\.md$/i.test(file);
-
-const isSpikeScriptFile = (file) =>
-  (file.startsWith('scripts/') && file.endsWith('.ts')) || SPIKE_CONFIG_FILES.has(file);
 
 /** 只有这些路径的改动才需要全量课程 E2E：它们决定 Lean 运行时、资产分发或 LSP 行为。 */
 const RUNTIME_EXACT = new Set([
@@ -130,7 +120,7 @@ const isShippedFile = (file) =>
 
 const isDeployableFile = (file) => {
   if (isDocFile(file) || file.startsWith('.github/') || TEST_FILE.test(file)) return false;
-  if (isSpikeScriptFile(file) || UI_ONLY_SCRIPTS.has(file)) return false;
+  if (UI_ONLY_SCRIPTS.has(file)) return false;
   return (
     file.startsWith('src/') ||
     file.startsWith('functions/') ||
@@ -161,7 +151,6 @@ export const classifyFiles = (paths) => {
     app: false,
     smoke: false,
     deps: false,
-    spikeScripts: false,
     deployable: false,
     canaryLesson: false,
     canaryChallenge: false,
@@ -175,10 +164,6 @@ export const classifyFiles = (paths) => {
     }
     if (file.startsWith('.github/')) continue;
     if (DEPS_FILES.has(file)) flags.deps = true;
-    if (isSpikeScriptFile(file)) {
-      flags.spikeScripts = true;
-      continue;
-    }
     if (isDeployableFile(file)) flags.deployable = true;
     if (TEST_FILE.test(file)) continue;
 
@@ -206,7 +191,6 @@ export const classifyFiles = (paths) => {
     flags.lessonsAll = true;
     flags.smoke = true;
     flags.deps = true;
-    flags.spikeScripts = true;
     flags.deployable = true;
   }
 
@@ -394,7 +378,6 @@ const main = () => {
     static: String(result.static),
     test: String(result.test),
     deps: String(result.deps),
-    spike_scripts: String(result.spikeScripts),
     build: String(result.build),
     ui: String(result.ui),
     smoke: String(result.smoke),

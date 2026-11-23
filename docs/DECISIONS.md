@@ -12,13 +12,13 @@
 
 ## ADR-02：魔搭镜像统一采用扁平目录结构 {#adr-02}
 
-- **决定**：ModelScope 数据集镜像（[scripts/upload-modelscope.mjs](../scripts/upload-modelscope.mjs) 与 [src/asset-sources.mjs](../src/asset-sources.mjs)）对基础资产与扩展包统一使用 `<prefix>/<asset.name>` 扁平布局，而非 R2 的子目录树。
+- **决定**：ModelScope 数据集镜像（维护于 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime/blob/main/scripts/upload-modelscope.mjs) 的上传脚本与本仓 [src/asset-sources.mjs](../src/asset-sources.mjs)）对基础资产与扩展包统一使用 `<prefix>/<asset.name>` 扁平布局，而非 R2 的子目录树。
 - **原因**：魔搭数据集仓库以单一路径拉取为主，`src/asset-sources.mjs` 的 `addMirror` 基于 `${prefix}/${asset.name}` 构造直链；混入 `extensions/<id>/` 子目录会导致上传与下载路径错位 404。
 - **禁止回退的方案**：禁止上传脚本按 `asset.key` 原样落盘到带多级 `extensions/<id>/` 的魔搭子目录而前端仍拼扁平 URL。
 
 ## ADR-03：wasm64 打补丁后必须使用同源源码自洽构建 `.olean` {#adr-03}
 
-- **决定**：只要 [scripts/patches/](../scripts/patches/) 对 `.lean` 内核或策略源码做了签名/导出改动（如 `WHNF.lean`、`Simp/Main.lean`），就必须用同一份打过补丁的源码（保持相同 `LEAN_GITHASH` 与 `USE_GMP=ON`）自洽编译 `.olean`。
+- **决定**：只要 [lean4-wasm-runtime 补丁集](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime/tree/main/scripts/patches) 对 `.lean` 内核或策略源码做了签名/导出改动（如 `WHNF.lean`、`Simp/Main.lean`），就必须用同一份打过补丁的源码（保持相同 `LEAN_GITHASH` 与 `USE_GMP=ON`）自洽编译 `.olean`。
 - **原因**：实测已证明如 `simpLoop.visitPreContinue` 等参数签名变更后，混用官方未打补丁 `.olean` 会触发链接符号或运行时结构错位。
 - **禁止回退的方案**：禁止为了省去编译步骤而用 `continue-on-error: true` 掩盖 `lake exe cache get` 等失败后把未打补丁 `.olean` 直接塞进扩展包。
 

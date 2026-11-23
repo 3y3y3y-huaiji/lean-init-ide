@@ -2,7 +2,7 @@
 
 # Lean Init IDE
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/3y3y3y-huaiji/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/3y3y3y-huaiji/lean-init-ide)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lean-online/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/lean-online/lean-init-ide)
 
 **在浏览器里，跑一个真的定理证明器。**
 
@@ -140,8 +140,8 @@ pnpm run smoke       # 线上冒烟，发版后跑
 
 反馈请先走公开渠道，这样别人也能搜到答案，维护者也不用重复回答：
 
-- **发现 Bug、课程内容有误、想要新功能** → 去 [Issues](https://github.com/3y3y3y-huaiji/lean-init-ide/issues) 提一个，附上复现步骤或页面链接。
-- **已经想好怎么改** → 直接开 [Pull Request](https://github.com/3y3y3y-huaiji/lean-init-ide/pulls)，先读 [AGENTS.md](AGENTS.md) 再动手。
+- **发现 Bug、课程内容有误、想要新功能** → 去 [Issues](https://github.com/lean-online/lean-init-ide/issues) 提一个，附上复现步骤或页面链接。
+- **已经想好怎么改** → 直接开 [Pull Request](https://github.com/lean-online/lean-init-ide/pulls)，先读 [AGENTS.md](AGENTS.md) 再动手。
 - **别的正经事情**（合作、授权、安全问题等不方便公开的内容）→ 才发邮件到 <sumingkai1@outlook.com>。
 
 简单说：能用 Issue / PR 解决的，就别发邮件；邮箱留给真的不适合公开讨论的事。

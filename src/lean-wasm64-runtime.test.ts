@@ -465,7 +465,7 @@ describe('loadWasm64Runtime', () => {
       fallback: {
         label: 'GitHub release',
         baseUrl:
-          'https://github.com/3y3y3y-huaiji/lean-init-ide/releases/download/runtime-v4.36.0-rc2-wasm64/',
+          'https://github.com/lean-online/lean-init-ide/releases/download/runtime-v4.36.0-rc2-wasm64/',
       },
       mirror: {
         label: '魔搭镜像（国内）',

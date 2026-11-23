@@ -2,7 +2,7 @@
 
 # Lean Init IDE
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/3y3y3y-huaiji/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/3y3y3y-huaiji/lean-init-ide)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lean-online/lean-init-ide/badge)](https://scorecard.dev/viewer/?uri=github.com/lean-online/lean-init-ide)
 
 **A real theorem prover, running in your browser.**
 
@@ -167,9 +167,9 @@ Here is how to make it better:
 Please use the public channels first, so others can find the answer and maintainers do not repeat
 themselves:
 
-- **Found a bug, a wrong lesson, or want a feature** → open an [Issue](https://github.com/3y3y3y-huaiji/lean-init-ide/issues)
+- **Found a bug, a wrong lesson, or want a feature** → open an [Issue](https://github.com/lean-online/lean-init-ide/issues)
   with reproduction steps or a page link.
-- **Already know how to fix it** → send a [Pull Request](https://github.com/3y3y3y-huaiji/lean-init-ide/pulls);
+- **Already know how to fix it** → send a [Pull Request](https://github.com/lean-online/lean-init-ide/pulls);
   read [AGENTS.md](AGENTS.md) before you start.
 - **Anything else** (partnerships, licensing, security reports and other things that should not be
   public) → email <sumingkai1@outlook.com>.

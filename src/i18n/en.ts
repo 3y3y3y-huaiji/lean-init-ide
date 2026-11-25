@@ -464,10 +464,10 @@ end
     runtimeWasm64Unsupported:
       'Memory64 is not supported in this browser; staying on the stable wasm32 runtime',
     runtimeWasm64AssetNote:
-      'Experimental note: wasm64 uses a separate 64-bit Lean 4.36.0-rc2 runtime and can load the Std / Lean core and a Mathlib teaching subset from the libraries menu. Manual trial only, not for production.',
+      'Experimental note: wasm64 uses a separate 64-bit Lean 4.36.0 runtime and can load the Std / Lean core and a Mathlib teaching subset from the libraries menu. Manual trial only, not for production.',
     runtimeWasm64NotPublished:
       'No published wasm64 runtime assets are configured yet; falling back to stable wasm32',
-    logWasm64Loading: 'Loading experimental wasm64 runtime pack (64-bit Lean 4.36.0-rc2 + Init)…',
+    logWasm64Loading: 'Loading experimental wasm64 runtime pack (64-bit Lean 4.36.0 + Init)…',
     logWasm64Stage: (stage) => `wasm64 asset: ${stage}`,
     logRuntimeArchSelected: (arch) => `Runtime preference switched to ${arch}`,
   },

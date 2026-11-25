@@ -314,7 +314,7 @@ describe('边缘缓存', () => {
 
   it('同一个 /cdn 网关同样放行并切片 wasm64 清单资产', async () => {
     const wasm64Sample = wasm64Assets[0]!;
-    expect(wasm64Sample.key).toMatch(/^wasm-lean4\/4\.36\.0-rc2-wasm64\//);
+    expect(wasm64Sample.key).toMatch(/^wasm-lean4\/4\.36\.0-wasm64\//);
     const get = vi.fn(() => hit(16));
 
     const response = await call(createEnv(get), { path: wasm64Sample.key, range: 'bytes=0-15' });

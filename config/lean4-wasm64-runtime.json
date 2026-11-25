@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "experimental": true,
   "arch": "wasm64",
-  "leanVersion": "4.36.0-rc2",
-  "cacheKey": "w64-8205512c",
-  "runtime": "Lean 4.36.0-rc2 Init (wasm64 experimental)",
+  "leanVersion": "4.36.0",
+  "cacheKey": "w64-63b7ca01",
+  "runtime": "Lean 4.36.0 Init (wasm64 experimental)",
   "bucket": "lean4-ide-releases",
   "primary": {
     "label": "Pages Functions (R2)",
@@ -12,137 +12,521 @@
   },
   "fallback": {
     "label": "GitHub release",
-    "baseUrl": "https://github.com/lean-online/lean-init-ide/releases/download/runtime-v4.36.0-rc2-wasm64/"
+    "baseUrl": "https://github.com/lean-online/lean4-wasm/releases/download/runtime-v4.36.0-wasm64/"
   },
   "mirror": {
     "label": "魔搭镜像（国内）",
     "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/",
-    "prefix": "wasm-lean4/4.36.0-rc2-wasm64"
+    "prefix": "wasm-lean4/4.36.0-wasm64"
   },
   "assets": [
     {
       "name": "lean-lsp-adapted.mjs",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-lsp-adapted.mjs",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-lsp-adapted.mjs",
       "source": "lean-lsp-adapted.mjs",
       "bytes": 111484,
-      "sha256": "146cbeba24309cd8574e6e15132d24675f2f41ab03f34e601ee75f8a6f083716",
+      "sha256": "ed565d4ced67be1786585431b34082a014cacd7e71a8926c5ea2b58e93a1eeea",
       "contentType": "text/javascript"
     },
     {
       "name": "lean-lsp.wasm.zst",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-lsp.wasm.zst",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-lsp.wasm.zst",
       "source": "lean-lsp.wasm.zst",
-      "bytes": 11373279,
-      "sha256": "5b0d646fb075fb05ad7bd96e17d30a695cd54190ab13f557df4a611d3770ec4b",
+      "bytes": 11372602,
+      "sha256": "b13c083dbd1aa120c027b89fc37bd5b2563fa8de8f02b3f622807c6f1d3f50bd",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
-      "uncompressedBytes": 119432545,
-      "uncompressedSha256": "59eb0ea1e76b14737bcca478122dfa5b1a61c8894ce60de853543fcaa58bbf22"
+      "uncompressedBytes": 119474799,
+      "uncompressedSha256": "1864fac6596c18f88ac933f54b678dead81ea3b35df31e892a9f7d834fabfc3e"
     },
     {
       "name": "lean-init-64.index.json",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64.index.json",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64.index.json",
       "source": "lean-init-64.index.json",
       "bytes": 212599,
-      "sha256": "85a119b2d89662e57663a54e733c872b6e9298918dcc769996314de71df0c30b",
+      "sha256": "201274c68a161ce5fe8a8061e399da7c484fddd24658de94360f6a85d02e3ac4",
       "contentType": "application/json"
     },
     {
       "name": "lean-init-64-00.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-00.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-00.pack.zst.bin",
       "source": "lean-init-64-00.pack.zst.bin",
-      "bytes": 12893887,
-      "sha256": "de7e9b40feba17a1a173bbdb35c63672493a0715fc95b19111b60581530905bb",
+      "bytes": 12895799,
+      "sha256": "d62c69177fbb723f0fd9a8e716e2387c5faf4ae10c773ca5c3f86a59e6f9411e",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "10f37d84fd48962e5fd65de5d2e16311ee46941bd49ba83b92192fc48a617de8"
+      "uncompressedSha256": "3b0803e56797d37bddea0f6b03d52ad4f7d84f8d7651494ff6d671d41b2e1946"
     },
     {
       "name": "lean-init-64-01.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-01.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-01.pack.zst.bin",
       "source": "lean-init-64-01.pack.zst.bin",
-      "bytes": 13305692,
-      "sha256": "106db2acbcda087016073f2730e4845bed8e2b397262eb281bb212099cf7adb0",
+      "bytes": 13303256,
+      "sha256": "9320961b90c7246015ba99d53d3b0ce41476fec902e71ae2ebb6a8c26babaf0e",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "245eba26705bb5d6a4d9c5713ec5e5630f931b2f8bcf33786f5690d4545ad753"
+      "uncompressedSha256": "6ba2e04a93fc2baafc2e4304ed196a589beb3ccc0691dd7ec8c311a10f7d4fc7"
     },
     {
       "name": "lean-init-64-02.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-02.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-02.pack.zst.bin",
       "source": "lean-init-64-02.pack.zst.bin",
-      "bytes": 13189492,
-      "sha256": "acddd0207486eee57145e028787cd9873d871a53c3af274847ed04cdaa0d36c4",
+      "bytes": 13188610,
+      "sha256": "1bc321eac7e23a47b9a943c46d22a59105cc9cae87d1e3d01ac1c671bbf5def4",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "5a72a1b88081944354afe53409d92662417d6fa768f2e31b0d1ab6712b164d64"
+      "uncompressedSha256": "126454e15d0d45e3363e4f5ce2665a87c42fba29c78ff22a48d84fe99acde713"
     },
     {
       "name": "lean-init-64-03.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-03.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-03.pack.zst.bin",
       "source": "lean-init-64-03.pack.zst.bin",
-      "bytes": 13375652,
-      "sha256": "c29c5e9566e61badab59c443f4c65522bc586f9a8dae95b0400ca105e52ed36b",
+      "bytes": 13375573,
+      "sha256": "2ae4bb2694870e87a1c0b39bc1c38aa58c1d4d240ca2cca953329d6951ef987c",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "b99c10df67a74a89e01b08c5d62efb5912990dba7d05dec63c282737c433f34d"
+      "uncompressedSha256": "c84c70e5750c989f5543e0ae0488d554259cdb9583210807d65d1f3fa623db83"
     },
     {
       "name": "lean-init-64-04.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-04.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-04.pack.zst.bin",
       "source": "lean-init-64-04.pack.zst.bin",
-      "bytes": 12041204,
-      "sha256": "94a2a4380f383f675b06de1a3a486584936091c1cecb74e80372f6921ee7cfff",
+      "bytes": 12043023,
+      "sha256": "423eefe827158a06748a8370cb5670da67ae37ca5bd550456e73cf226c6632d7",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "f12caf517ffce7c5e58a6c2cc47597c25480dd714e57abbd8a7a0e97a9eb959d"
+      "uncompressedSha256": "de77fc6bd5afb7af5329f12963fc7bfc5af9b0912c68a4e2a5b042a5539c5377"
     },
     {
       "name": "lean-init-64-05.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-05.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-05.pack.zst.bin",
       "source": "lean-init-64-05.pack.zst.bin",
-      "bytes": 12017532,
-      "sha256": "027a311ce2c930e91b5d2ac1f84ecb7fcbb242feb29d8d7cc1870902adc548c7",
+      "bytes": 12003167,
+      "sha256": "84e144d87528c237b58259a2bf5d39909d987dc2d724c892515c33670be56151",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "616fbc47911b3c3f31b58230ee3d090687e07bb851da7041dc6cdaddd09ef6da"
+      "uncompressedSha256": "cbae2cd0abcc146bb975b8e6401101549ebf4d1eee47b774763f5dc4b2223f2b"
     },
     {
       "name": "lean-init-64-06.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-06.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-06.pack.zst.bin",
       "source": "lean-init-64-06.pack.zst.bin",
-      "bytes": 12634656,
-      "sha256": "b6923936977c98a5b159630f10b57fb678fb07af3842bb5b035c3d7c7d6745fc",
+      "bytes": 12633507,
+      "sha256": "bc709dd5782a823982b31072b886cf4ac58058ac792246b6039203bb9ad4e265",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "755398d7e612ddb4234a458475d7bb259cccc21eb5cb79498d101821ce7f5be3"
+      "uncompressedSha256": "d829735b9a197e9cf01f6be311c8a5a6ba0afdbf11dd16ccab55c30ed05d5860"
     },
     {
       "name": "lean-init-64-07.pack.zst.bin",
-      "key": "wasm-lean4/4.36.0-rc2-wasm64/lean-init-64-07.pack.zst.bin",
+      "key": "wasm-lean4/4.36.0-wasm64/lean-init-64-07.pack.zst.bin",
       "source": "lean-init-64-07.pack.zst.bin",
-      "bytes": 7279703,
-      "sha256": "56601eb4a3629e6d6593241f938ff952e29fe9b85b43defeae67536e4054c5e9",
+      "bytes": 7271751,
+      "sha256": "f9cf6a711d1f838f57c44c8b64e4eda2203ad76d2f25ac1b53cd13bb5e3001af",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
-      "uncompressedBytes": 34769971,
-      "uncompressedSha256": "2f1058659fdee83575d878fa6f80b5c3fdaeb1807426e56ae7f3566fde3b8f4a"
+      "uncompressedBytes": 34737014,
+      "uncompressedSha256": "2aec03bd923929372d3d8d8a086b8367fc44c2fc6c8bd510bab86aa86470e569"
+    }
+  ],
+  "extensions": [
+    {
+      "id": "std",
+      "label": "Std / Lean",
+      "requires": [],
+      "assets": [
+        {
+          "name": "lean-std-64.index.json",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64.index.json",
+          "source": "lean-std-64.index.json",
+          "bytes": 630580,
+          "sha256": "3bb162eb490e13a85f13c25b294584b2f6f9f501340ea6facff6337abda01269",
+          "contentType": "application/json"
+        },
+        {
+          "name": "lean-std-64-00.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-00.pack.zst.bin",
+          "source": "lean-std-64-00.pack.zst.bin",
+          "bytes": 9774137,
+          "sha256": "2e3893c20152e78fbab166b847efc8a67211fce7dc70a0baede245248cf7e302",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "5ae5ecf7c37f3adf685efdf6f84941db7d44df0b7a7993c3800eb898742fc00a"
+        },
+        {
+          "name": "lean-std-64-01.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-01.pack.zst.bin",
+          "source": "lean-std-64-01.pack.zst.bin",
+          "bytes": 9787807,
+          "sha256": "4192b3874af612dd6092f73ed9544b0e81312b642c107123a9641919b4d856d0",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "3a3327db3a1752fab9a467d9e85fe5bb9b849ee2d87fb8940a6cbde184467eb8"
+        },
+        {
+          "name": "lean-std-64-02.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-02.pack.zst.bin",
+          "source": "lean-std-64-02.pack.zst.bin",
+          "bytes": 9947158,
+          "sha256": "bf18ed65f47a671930804429d36e8dd0f9da5bfae5a353c045ed34a43146e50f",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "9b80fc4da38ed23131912b6a7a76d915f303ffaed1b98b74eafcc0b8f776d9d5"
+        },
+        {
+          "name": "lean-std-64-03.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-03.pack.zst.bin",
+          "source": "lean-std-64-03.pack.zst.bin",
+          "bytes": 9945641,
+          "sha256": "2dc8b29559451c7f8bec8b4f7f2456e354aa866c2b568cd70c8e09424b5aefb3",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "07476e5aac8d9a616efe82e138ceb8d6a575716d5aa2b77b69db67734fce0ad8"
+        },
+        {
+          "name": "lean-std-64-04.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-04.pack.zst.bin",
+          "source": "lean-std-64-04.pack.zst.bin",
+          "bytes": 10293164,
+          "sha256": "adfdd337005c00d5d5fba3517ec2afde0c252deb78a886ee6a66df8f0a9b362c",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "2ddb3f1a2f45b0b7e6a51bffbe4e3703a907ebd66c076c4b8c631e5384878ba4"
+        },
+        {
+          "name": "lean-std-64-05.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-05.pack.zst.bin",
+          "source": "lean-std-64-05.pack.zst.bin",
+          "bytes": 9756283,
+          "sha256": "aba1e428f6190fe6439ef24d72b5a9429c0fb955e3180c8fce2a2dbab84e4cfc",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "9fcf019e9171e9d981681391ed4a0cad492c0f35548b3e103c933df97aa7e379"
+        },
+        {
+          "name": "lean-std-64-06.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-06.pack.zst.bin",
+          "source": "lean-std-64-06.pack.zst.bin",
+          "bytes": 9722255,
+          "sha256": "fbfbf094b8ac7156ec3af7f027c2d71fce3710c114ab92e0f38ae0b9d1c07e12",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "fa25db605c3eb5862b3e8e82f427cb26d61809bb61d6631411dee06ab7b9910a"
+        },
+        {
+          "name": "lean-std-64-07.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-07.pack.zst.bin",
+          "source": "lean-std-64-07.pack.zst.bin",
+          "bytes": 9995616,
+          "sha256": "eb3f4eea106b946859ebff3d79624ee58868aa8413f266715580cb804b9970d4",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "3abad6c71f19fb4331f1a556e0a814cda44ea7ae68cd0883151956499a78b944"
+        },
+        {
+          "name": "lean-std-64-08.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-08.pack.zst.bin",
+          "source": "lean-std-64-08.pack.zst.bin",
+          "bytes": 9760709,
+          "sha256": "e136b4735343b2095e7a3c09b7640b02eaeaf71f903bf5941801dee28f1e1911",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "e67205bbb851d3eb1a9dde1c9ea521e517d27e163f327810ee662847b90b106a"
+        },
+        {
+          "name": "lean-std-64-09.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-09.pack.zst.bin",
+          "source": "lean-std-64-09.pack.zst.bin",
+          "bytes": 9617125,
+          "sha256": "99a8f4ac9165a571b421747f7512914cd9c6edf031a30624dbae0d0f9f08942c",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "e30b57789b9572a8ca1e0c601f7ee7b3e32478b01d764d379e5bc22a49cfd8fa"
+        },
+        {
+          "name": "lean-std-64-10.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-10.pack.zst.bin",
+          "source": "lean-std-64-10.pack.zst.bin",
+          "bytes": 9570166,
+          "sha256": "ca4f3fb7b80c45501ffbca9485a52b488706c58ce6a6b29a93679e27fab9a943",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "1c2d104cf81e5d4f920ea9ab789566c8b53d902f3f1d413873de5a30d6e31ae7"
+        },
+        {
+          "name": "lean-std-64-11.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-11.pack.zst.bin",
+          "source": "lean-std-64-11.pack.zst.bin",
+          "bytes": 9799127,
+          "sha256": "97ea69332c55eaae9b87e522683f79817abfedd09b69ea1bd2ea2529f51bb491",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "af8c4ede1ec8a04dcfce1b12f84aaffdd1d6dbddbf6c2361be62e9adc5825238"
+        },
+        {
+          "name": "lean-std-64-12.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-12.pack.zst.bin",
+          "source": "lean-std-64-12.pack.zst.bin",
+          "bytes": 10153703,
+          "sha256": "748f2887ee7068ba25e0fbd3bd3c60e73f9f0bcd623e570ce7972edf92901bac",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "48b5328d3e217c579660482a05ceb37c0e0b1befb494c5afc6cbe75a6351fd1b"
+        },
+        {
+          "name": "lean-std-64-13.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-13.pack.zst.bin",
+          "source": "lean-std-64-13.pack.zst.bin",
+          "bytes": 9797133,
+          "sha256": "04821b827605686f51ab039bef75bbc75d26ef93ed44261ae44ccf95d7e91c4e",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "870e86951e71d3b4ea6c2baee9715f0eee907c84e21e76cebb13f057794bfa1c"
+        },
+        {
+          "name": "lean-std-64-14.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-14.pack.zst.bin",
+          "source": "lean-std-64-14.pack.zst.bin",
+          "bytes": 9664807,
+          "sha256": "52d51d73b2792b1d77a2d76b037a6935ea6122cb54fc559a8fa1f285d8fa4883",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "816d65e3d18348aafdb192f79fe8ddeb723fd4a0d861cad5e8e8d98946a31848"
+        },
+        {
+          "name": "lean-std-64-15.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-15.pack.zst.bin",
+          "source": "lean-std-64-15.pack.zst.bin",
+          "bytes": 9564685,
+          "sha256": "01378f3714a88916b27e329570bd48c1ece509ca4225b969d8075c270c77cf2d",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "3938425ed501b306365354365bc3cd6394093b79deb4fe118e97410698c283e1"
+        },
+        {
+          "name": "lean-std-64-16.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-16.pack.zst.bin",
+          "source": "lean-std-64-16.pack.zst.bin",
+          "bytes": 9501766,
+          "sha256": "0b2ebbb261f9f6818e2a7769cf33ebb3d89d5acf63b78027d1c3816b52fe7c94",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "7d81d06f8ad6e5c7b5dd25a465965979dafc7eae4a5768d1e74a6abaa5e12544"
+        },
+        {
+          "name": "lean-std-64-17.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-17.pack.zst.bin",
+          "source": "lean-std-64-17.pack.zst.bin",
+          "bytes": 9347793,
+          "sha256": "765dd2601d631bce38ae5631f9749100f74e18a6bdbf18dded64d85ae2b9a57a",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "0fd23f6acb57211cd4017b362fae7e6c9c01afe462fad7a929fe84627527cb5c"
+        },
+        {
+          "name": "lean-std-64-18.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-18.pack.zst.bin",
+          "source": "lean-std-64-18.pack.zst.bin",
+          "bytes": 9609386,
+          "sha256": "89b7454a649c438871e695a2a8b581ac1ce1ae256f377725ce17f1e693f79e8d",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "5fd7b286aacc39843192cd3b80875e54c36496ada02d1fe65e910b6b186bf7f6"
+        },
+        {
+          "name": "lean-std-64-19.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-19.pack.zst.bin",
+          "source": "lean-std-64-19.pack.zst.bin",
+          "bytes": 9720535,
+          "sha256": "c2592fca370a9d103c17b1f6d493477da519723946f3e3d63a973edfe9d3c8de",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "29b37e244a0edc5f1f2bc14c4b4bba2d8396745eae961e3a08619240a410725b"
+        },
+        {
+          "name": "lean-std-64-20.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-20.pack.zst.bin",
+          "source": "lean-std-64-20.pack.zst.bin",
+          "bytes": 9779677,
+          "sha256": "59cdd1f5f08e686065fcd533817f61d52e17f445fc3996f552c09f601094f71b",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "50d686c146e2c4e37a9ff376be7f5f5de2f7bce91df1d00020904893ae816b48"
+        },
+        {
+          "name": "lean-std-64-21.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-21.pack.zst.bin",
+          "source": "lean-std-64-21.pack.zst.bin",
+          "bytes": 9791749,
+          "sha256": "af61bf5c15a11de1f16db6d788521f920d33cd83a2cc33891da5f9a0b0231540",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "ab79a9ad5d40a25cf1962026a16518f5af39ed6d0eacb59b3e18b3cb65940054"
+        },
+        {
+          "name": "lean-std-64-22.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-22.pack.zst.bin",
+          "source": "lean-std-64-22.pack.zst.bin",
+          "bytes": 10158295,
+          "sha256": "7765677513a8ceb8a14156773b8dcd36f185aa3939f9ad9f1875ecff9952d2eb",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "920a419ce8bb878dfe59d850b09d04b5500a84290dc6047b7bb313322ccaa110"
+        },
+        {
+          "name": "lean-std-64-23.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-23.pack.zst.bin",
+          "source": "lean-std-64-23.pack.zst.bin",
+          "bytes": 11365788,
+          "sha256": "23bda829159fcbb8f1942b9d593892f01be04c35aff81452acace0d8d6b5da3a",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "fa84af1554310bd26c0d5bd80d3e12485d52ec363825e9d71e50a09a2317eee7"
+        },
+        {
+          "name": "lean-std-64-24.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-24.pack.zst.bin",
+          "source": "lean-std-64-24.pack.zst.bin",
+          "bytes": 11868827,
+          "sha256": "78d7fb915c2c9e06c9eb56e796587f24a0e80ad7899bc63a8708f12b1b709095",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "91423a382950ac04417347023d688936c74e43b1f35ec87155984b017578a6c6"
+        },
+        {
+          "name": "lean-std-64-25.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-25.pack.zst.bin",
+          "source": "lean-std-64-25.pack.zst.bin",
+          "bytes": 11210328,
+          "sha256": "f328950aceb17819007ce07e8fcece7d3214dda7dc2751937ca33f201c4f407d",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "2426d37a1bcf2cc142540608764588f99951ceb8db4953b4721460ece676f97f"
+        },
+        {
+          "name": "lean-std-64-26.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-26.pack.zst.bin",
+          "source": "lean-std-64-26.pack.zst.bin",
+          "bytes": 10918928,
+          "sha256": "e39a44d2ce694ff8b8ce279ff4d3c0dea4b04d40e7fef8c382cf58df29b3f5dd",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "84d1130639c0e2b4093654c50f54de245dd5439c06bc612fb3161a1b14c78c5a"
+        },
+        {
+          "name": "lean-std-64-27.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-27.pack.zst.bin",
+          "source": "lean-std-64-27.pack.zst.bin",
+          "bytes": 11450649,
+          "sha256": "85292fda765f88d169d24c74639126cb2313f1ceed5f1b78983597422f7ed873",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "dc567fd18cddf919999a9310f9d7f62b839e05794ff8c7e775c74696ea1df57f"
+        },
+        {
+          "name": "lean-std-64-28.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-28.pack.zst.bin",
+          "source": "lean-std-64-28.pack.zst.bin",
+          "bytes": 11392759,
+          "sha256": "4f5c9de2637c54ea9abb1d342ef4aaa655a5b7123e913258c5a18e6263881096",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "6856a2b77468b519462db1f7ffd16fe36a11c8ba549c6d3b7c43786986d784e0"
+        },
+        {
+          "name": "lean-std-64-29.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/std/lean-std-64-29.pack.zst.bin",
+          "source": "lean-std-64-29.pack.zst.bin",
+          "bytes": 2748768,
+          "sha256": "6eeb56e0c96076445eefcf15895efdcd1118e2c522b22bb550c31f4f2c90596c",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 13125933,
+          "uncompressedSha256": "11d81d9bc595eb5d832003315bc1510ca22bc2cba58ce310864706d19dc02feb"
+        }
+      ]
+    },
+    {
+      "id": "mathlib",
+      "label": "Mathlib",
+      "requires": ["std"],
+      "assets": [
+        {
+          "name": "lean-mathlib-64.index.json",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/mathlib/lean-mathlib-64.index.json",
+          "source": "lean-mathlib-64.index.json",
+          "bytes": 23880,
+          "sha256": "a77fc479d38a244e8c4e0c5c97f8ffbc2eaa1b96305708643b1f6dc155bef0c1",
+          "contentType": "application/json"
+        },
+        {
+          "name": "lean-mathlib-64-00.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/mathlib/lean-mathlib-64-00.pack.zst.bin",
+          "source": "lean-mathlib-64-00.pack.zst.bin",
+          "bytes": 9858875,
+          "sha256": "13f6cb17f435100e432a66a1aca8c9670f59f7ac1c472f209bcbd61fcbfb5c60",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 50331648,
+          "uncompressedSha256": "358ca94e09bc31ffa192301886cb658430a733daf07ae045911e7fb00997eba5"
+        },
+        {
+          "name": "lean-mathlib-64-01.pack.zst.bin",
+          "key": "wasm-lean4/4.36.0-wasm64/extensions/mathlib/lean-mathlib-64-01.pack.zst.bin",
+          "source": "lean-mathlib-64-01.pack.zst.bin",
+          "bytes": 7418468,
+          "sha256": "029aec850a419056d4f053710d4e24ae9b23ca611a4b0a1ace8e0b1b80820225",
+          "contentType": "application/octet-stream",
+          "encoding": "zstd",
+          "uncompressedBytes": 39119552,
+          "uncompressedSha256": "17c5c7279d4adb65304a80debcd190b900e2f65c567b603a88c203b8d8cc39c2"
+        }
+      ]
     }
   ]
 }

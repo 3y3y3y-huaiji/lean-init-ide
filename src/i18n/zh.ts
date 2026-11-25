@@ -444,9 +444,9 @@ end
     libraryQuickFixDone: (library) => `已启用 ${library}，正在重启 Lean…`,
     runtimeWasm64Unsupported: '当前浏览器不支持 Memory64，将继续使用 wasm32 运行时',
     runtimeWasm64AssetNote:
-      '实验性提醒：wasm64（64 位 Memory64）使用独立 64 位 Lean 4.36.0-rc2 运行包，可在扩展库菜单加载 Std / Lean 核心与 Mathlib 教学子集；仅作手动试用，请勿用于生产。',
+      '实验性提醒：wasm64（64 位 Memory64）使用独立 64 位 Lean 4.36.0 运行包，可在扩展库菜单加载 Std / Lean 核心与 Mathlib 教学子集；仅作手动试用，请勿用于生产。',
     runtimeWasm64NotPublished: '当前未配置已发布的 wasm64 运行包，本次将继续使用稳定版 wasm32',
-    logWasm64Loading: '正在加载实验性 wasm64 运行包（64 位 Lean 4.36.0-rc2 + Init）…',
+    logWasm64Loading: '正在加载实验性 wasm64 运行包（64 位 Lean 4.36.0 + Init）…',
     logWasm64Stage: (stage) => `wasm64 资产：${stage}`,
     logRuntimeArchSelected: (arch) => `已切换运行时偏好：${arch}`,
   },

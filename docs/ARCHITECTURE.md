@@ -41,7 +41,7 @@
   清单里的 GitHub Release 只服务构建期（`fetch:assets` 拉上游 gzip）：Release 下载不带 CORS
   响应头，浏览器无法跨源读取，而且 zstd 资产本来就会跳过 fallback。
 - **版本键**：4.35 的对象 key 带 `wasm-lean4/4.35.0/` 前缀；URL 仍带 `?r=<cacheKey>` 绕开旧缓存
-  （`config/lean4-runtime.json`）。实验性 wasm64（`config/lean4-wasm64-runtime.json`，前缀 `wasm-lean4/4.36.0-rc2-wasm64/`）
+  （`config/lean4-runtime.json`）。实验性 wasm64（`config/lean4-wasm64-runtime.json`，前缀 `wasm-lean4/4.36.0-wasm64/`）
   共用同一个 `/cdn/` Pages Function 与 R2 / 魔搭分发路径，仅在用户手动切换时加载，默认仍是 wasm32。
 - **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。
 - **单一入口**：`criticalthinking.de5.net` 是 Pages 自定义域，页面与 `/cdn/` 资产共用同一条连接；`*.pages.dev` 仅作回退。
@@ -70,7 +70,7 @@ worker 启动时用 `public/vendor/zstddec.mjs` 的同源 wasm 解码，解压�
 
 ### 实验性 wasm64
 
-- 独立清单 `config/lean4-wasm64-runtime.json`，资产前缀 `wasm-lean4/4.36.0-rc2-wasm64/`，
+- 独立清单 `config/lean4-wasm64-runtime.json`，资产前缀 `wasm-lean4/4.36.0-wasm64/`，
   与 wasm32 共用 `/cdn/` 网关、R2 桶和魔搭镜像；默认仍加载 wasm32。
 - `src/lean-wasm64-runtime.ts` 逐资产校验字节数与 SHA-256、解 zstd 并校验解压回执；
   单个源默认 60 分钟预算，失败按魔搭 / 同源 `/cdn/` 顺序回退。
@@ -78,7 +78,7 @@ worker 启动时用 `public/vendor/zstddec.mjs` 的同源 wasm 解码，解压�
   文件进程负责文档；每个进程一个 Worker，stdin 走 SharedArrayBuffer 环形缓冲。
 - FileWorker 以退出码 2 请求重启时重放 initialize + didOpen；启动后 15s 内反复退出
   会触发重启风暴保护，避免无限重挂上百 MB 的库。
-- wasm64 只带 Init；需要 Std / Batteries 的课程会自动回退 wasm32，扩展库选择在 wasm64 下禁用。
+- wasm64 默认加载 Init，支持按需挂载 `Std / Lean` 与 `Mathlib` 教学子集扩展；需要 `Batteries` 的课程（wasm64 暂未提供 Batteries 包）会自动回退 wasm32。
 
 ## 目录结构
 

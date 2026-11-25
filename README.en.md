@@ -164,20 +164,27 @@ Here is how to make it better:
   Batteries for engineering lessons).
 - User-visible copy must be added in both languages; a parity test enforces the key set.
 
-## Contact
+## Contact & Community
 
 Please use the public channels first, so others can find the answer and maintainers do not repeat
 themselves:
 
-- **Found a bug, a wrong lesson, or want a feature** → open an [Issue](https://github.com/lean-online/lean-init-ide/issues)
-  with reproduction steps or a page link.
+- **Discussions & community roadmap ([Discussions](https://github.com/lean-online/lean-init-ide/discussions))** →
+  follow the [Public Roadmap & TODO (#74)](https://github.com/lean-online/lean-init-ide/discussions/74),
+  submit puzzles in [Proof Arcade Community Challenges (#75)](https://github.com/lean-online/lean-init-ide/discussions/75),
+  or share proposals in [Ideas](https://github.com/lean-online/lean-init-ide/discussions/categories/ideas).
+- **Found a bug, a wrong lesson, or tracking planned work** → open or pick up an
+  [Issue](https://github.com/lean-online/lean-init-ide/issues) (e.g.
+  [`wasm32 v4.36.0` upgrade #76](https://github.com/lean-online/lean-init-ide/issues/76),
+  [`wasm64` Mathlib dependencies #77](https://github.com/lean-online/lean-init-ide/issues/77)) with
+  reproduction steps or a page link.
 - **Already know how to fix it** → send a [Pull Request](https://github.com/lean-online/lean-init-ide/pulls);
   read [AGENTS.md](AGENTS.md) before you start.
 - **Anything else** (partnerships, licensing, security reports and other things that should not be
   public) → email <sumingkai1@outlook.com>.
 
-In short: if an Issue or PR can handle it, skip the email; keep the inbox for what genuinely should
-not be discussed in public.
+In short: if a Discussion, Issue or PR can handle it, skip the email; keep the inbox for what
+genuinely should not be discussed in public.
 
 ## Docs
 

@@ -138,15 +138,16 @@ pnpm run smoke       # 线上冒烟，发版后跑
 - 一个提交只做一件事；课程代码只能在运行时可加载的范围内（Init，工程课可用 Std / Batteries）
 - 用户可见文案必须中英文同时补齐，`locale-parity` 测试会校验键集合
 
-## 联系与反馈
+## 联系、讨论与反馈
 
-反馈请先走公开渠道，这样别人也能搜到答案，维护者也不用重复回答：
+反馈与协作请优先走公开渠道，这样别人也能搜到答案，维护者也不用重复回答：
 
-- **发现 Bug、课程内容有误、想要新功能** → 去 [Issues](https://github.com/lean-online/lean-init-ide/issues) 提一个，附上复现步骤或页面链接。
+- **公开讨论与社区共创（[Discussions](https://github.com/lean-online/lean-init-ide/discussions)）**：查看/参与[项目路线图与公开 TODO（#74）](https://github.com/lean-online/lean-init-ide/discussions/74)、[Proof Arcade 题库共创征集（#75）](https://github.com/lean-online/lean-init-ide/discussions/75)，或在 [Ideas](https://github.com/lean-online/lean-init-ide/discussions/categories/ideas) 提出想法。
+- **发现 Bug、课程内容有误、追踪已知待办** → 去 [Issues](https://github.com/lean-online/lean-init-ide/issues) 提交或认领（如 `wasm32 v4.36.0` 升级 [#76](https://github.com/lean-online/lean-init-ide/issues/76)、`wasm64` Mathlib 扩展依赖 [#77](https://github.com/lean-online/lean-init-ide/issues/77)），附上复现步骤或页面链接。
 - **已经想好怎么改** → 直接开 [Pull Request](https://github.com/lean-online/lean-init-ide/pulls)，先读 [AGENTS.md](AGENTS.md) 再动手。
-- **别的正经事情**（合作、授权、安全问题等不方便公开的内容）→ 才发邮件到 <sumingkai1@outlook.com>。
+- **别的正经事情**（合作、授权、安全问题等不方便公开的内容）→ 发邮件到 <sumingkai1@outlook.com>。
 
-简单说：能用 Issue / PR 解决的，就别发邮件；邮箱留给真的不适合公开讨论的事。
+简单说：能用 Discussion / Issue / PR 解决的，就别发邮件；邮箱留给真的不适合公开讨论的事。
 
 ## 文档
 

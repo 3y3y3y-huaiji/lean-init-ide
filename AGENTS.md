@@ -43,3 +43,4 @@
 - **重型门禁交给 `CI · 应用`**：本地只跑轻量检查（`verify:docs` / `format:check` / `lint` / `typecheck` / 目标单测）；`CI · 应用` 会通过 `scripts/detect-changes.mjs` 自动按档裁剪，纯文档改动 5 秒完结，门禁升级时 [ci-refresh-open-prs.yml](.github/workflows/ci-refresh-open-prs.yml) 会自动刷新在途 PR。
 - **用户可见文本双语同步**：任何前端文案、课程或挑战必须同步更新 `src/i18n/`（通过 `locale-parity.test.ts` 与 `curriculum-invariants.test.ts`）。
 - **文档改动同步触发 `verify:docs`**：修改架构、工作流、脚本、版本、课时数或 ADR 时，同步对应唯一的权威文档。
+- **公开协作入口**：路线图与题库征集见 [Discussions](https://github.com/lean-online/lean-init-ide/discussions)（`#74` / `#75`），跨仓排期与缺陷追踪统一建在 [Issues](https://github.com/lean-online/lean-init-ide/issues)（如 `#76` / `#77`，因 `lean4-wasm` 禁用 Issues），代码合入走 [Pull Requests](https://github.com/lean-online/lean-init-ide/pulls)。

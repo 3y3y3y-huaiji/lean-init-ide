@@ -1,1 +1,14 @@
 blank_issues_enabled: true
+contact_links:
+  - name: 路线图与公开待办 / Roadmap & Public TODO
+    url: https://github.com/lean-online/lean-init-ide/discussions/74
+    about: 先看这里：P0 / P1 排期、版本节点、当前阻塞项与可认领任务
+  - name: 提问与想法 / Questions & ideas
+    url: https://github.com/lean-online/lean-init-ide/discussions/categories/ideas
+    about: 用法疑问、方案讨论，以及不确定算不算 Bug 的情况
+  - name: Proof Arcade 题库共创 / Puzzle ideas
+    url: https://github.com/lean-online/lean-init-ide/discussions/75
+    about: 投稿趣味挑战题目，或认领题库任务
+  - name: Lean 4 Wasm 运行时仓库 / lean4-wasm
+    url: https://github.com/lean-online/lean4-wasm
+    about: 编译器与资产发布工具链所在仓库；该仓已关闭 Issues，运行时问题请回到本仓选「引擎 / 运行时问题」提交

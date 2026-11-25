@@ -17,6 +17,11 @@
 
 在线使用：<https://criticalthinking.de5.net>（备用：<https://lean-init-ide.pages.dev>）
 
+> **路线图与公开待办**：[Discussion #74](https://github.com/lean-online/lean-init-ide/discussions/74) —— P0 / P1 的版本节点、
+> 当前阻塞项（[#76](https://github.com/lean-online/lean-init-ide/issues/76) 默认 wasm32 内核同源、
+> [#77](https://github.com/lean-online/lean-init-ide/issues/77) wasm64 Mathlib 依赖）以及标注了「可认领」的任务都在那里。
+> 准备动手改代码前先读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 ## 30 秒上手
 
 打开 <https://criticalthinking.de5.net>，先看再写，按需加载：
@@ -134,9 +139,12 @@ pnpm run smoke       # 线上冒烟，发版后跑
 
 帮它变得更好，从这几处入手：
 
+- 完整参与流程（本地开发、门禁档位、分支与提交规范）见 [CONTRIBUTING.md](CONTRIBUTING.md)
 - 改代码前先读 [AGENTS.md](AGENTS.md)：硬约束、模块边界与已知陷阱都在那里
 - 一个提交只做一件事；课程代码只能在运行时可加载的范围内（Init，工程课可用 Std / Batteries）
 - 用户可见文案必须中英文同时补齐，`locale-parity` 测试会校验键集合
+- 第一次参与：挑 [#74](https://github.com/lean-online/lean-init-ide/discussions/74) 里标了「可认领」的任务，或按
+  [`good first issue`](https://github.com/lean-online/lean-init-ide/labels/good%20first%20issue) 标签找
 
 ## 联系、讨论与反馈
 

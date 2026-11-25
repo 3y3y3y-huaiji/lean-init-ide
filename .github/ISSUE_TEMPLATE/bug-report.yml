@@ -1,0 +1,120 @@
+name: 引擎 / 运行时问题 · Engine bug
+description: 启动失败、白屏、诊断不出结果、内存溢出，或 wasm32 / wasm64 运行时行为异常
+title: '[引擎] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        运行时与编译器工具链已拆到 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)，
+        但那个仓库**关闭了 Issues**，所以运行时 / 资产分发的问题统一在这里提交，不用去隔壁开单。
+
+        提交前请先搜一遍现有 Issue 与[路线图与公开待办 #74](https://github.com/lean-online/lean-init-ide/discussions/74)，
+        描述「在什么环境下做了什么、看到什么」就够了，不需要自己定位到具体模块。
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: 引擎与扩展包 / Engine and extension packs
+      description: 编辑器右侧「引擎」菜单里当前挂载的配置
+      multiple: true
+      options:
+        - wasm32 · Init（默认）
+        - wasm32 · + Std
+        - wasm32 · + Batteries
+        - wasm64 · Init / Std（实验）
+        - wasm64 · + Mathlib 教学子集
+        - 不确定 / 还没启动起来
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: 运行时版本与 cacheKey
+      description: 控制台会打印清单里的版本与 cacheKey，用于判断是不是资产版本问题
+      placeholder: Lean 4.35.0 / zff98dcf5
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: 资产来源 / Asset source
+      description: 看 Network 里 `/cdn/*` 的请求，或控制台是否有镜像回退提示
+      options:
+        - 同源 R2 网关（/cdn/*）
+        - 魔搭 ModelScope 镜像回退
+        - 同源静态副本（/wasm-lean4/*）
+        - 不确定
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器与版本
+      description: 需要 cross-origin isolation（COOP/COEP）+ SharedArrayBuffer，Chromium 系外的表现也值得记录
+      placeholder: Chrome 131 / Safari 18 / Edge 131
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 系统、设备与内存
+      description: 低内存设备（deviceMemory ≤ 4）不会自动下载运行时，内存相关的坑需要这行信息
+      placeholder: Windows 11 / R7 32GB
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: 复现链接
+      description: 编辑器「分享」生成的 `#codez=` 链接，或课程 / Playground 的完整地址
+      placeholder: https://criticalthinking.de5.net/zh/playground#codez=...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开页面开始写，包括是否等到了「下载运行时」完成
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 白屏？卡在下载进度？Goal 面板空白？给出看到的现象与大致耗时
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 控制台与诊断输出（可选）
+      description: '可直接粘贴 Worker 报错，例如 RuntimeError: unreachable、maximum recursion depth exceeded'
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前自查
+      options:
+        - label: 我已搜索过现有 Issue 与 Discussion #74，确认没有重复
+          required: true
+        - label: 我确认没有粘贴个人 token、私有代码或设备指纹
+          required: true

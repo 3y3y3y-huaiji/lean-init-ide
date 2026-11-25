@@ -18,6 +18,12 @@ Beyond `Init`, it mounts `Std` and `Batteries` on demand across **27 bilingual i
 
 Live: <https://criticalthinking.de5.net> (fallback: <https://lean-init-ide.pages.dev>)
 
+> **Roadmap & public TODO**: [Discussion #74](https://github.com/lean-online/lean-init-ide/discussions/74) —
+> version targets for P0 / P1, the current blockers
+> ([#76](https://github.com/lean-online/lean-init-ide/issues/76) wasm32 unified kernel,
+> [#77](https://github.com/lean-online/lean-init-ide/issues/77) wasm64 Mathlib dependencies), and the tasks
+> marked as claimable. Read [CONTRIBUTING.md](CONTRIBUTING.md) before you start coding.
+
 ## Start in 30 seconds
 
 Open <https://criticalthinking.de5.net>, explore first, and download only when needed:
@@ -159,10 +165,15 @@ Run the full gate before committing; commands and coverage thresholds are in
 
 Here is how to make it better:
 
+- The full workflow (local setup, gate tiers, branch and commit conventions) is in
+  [CONTRIBUTING.md](CONTRIBUTING.md).
 - Read [AGENTS.md](AGENTS.md) first: hard constraints, module boundaries and known traps (in Chinese).
 - One concern per commit; lesson code must stay within what the runtime can load (Init, plus Std /
   Batteries for engineering lessons).
 - User-visible copy must be added in both languages; a parity test enforces the key set.
+- New here? Pick a task marked *claimable* in
+  [Discussion #74](https://github.com/lean-online/lean-init-ide/discussions/74), or filter by the
+  [`good first issue`](https://github.com/lean-online/lean-init-ide/labels/good%20first%20issue) label.
 
 ## Contact & Community
 

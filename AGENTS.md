@@ -44,3 +44,4 @@
 - **用户可见文本双语同步**：任何前端文案、课程或挑战必须同步更新 `src/i18n/`（通过 `locale-parity.test.ts` 与 `curriculum-invariants.test.ts`）。
 - **文档改动同步触发 `verify:docs`**：修改架构、工作流、脚本、版本、课时数或 ADR 时，同步对应唯一的权威文档。
 - **公开协作入口**：路线图与题库征集见 [Discussions](https://github.com/lean-online/lean-init-ide/discussions)（`#74` / `#75`），跨仓排期与缺陷追踪统一建在 [Issues](https://github.com/lean-online/lean-init-ide/issues)（如 `#76` / `#77`，因 `lean4-wasm` 禁用 Issues），代码合入走 [Pull Requests](https://github.com/lean-online/lean-init-ide/pulls)。
+- **面向人类的完整流程**（本地开发、门禁档位、分支与提交规范、Issue/PR 模板约定）写在 [CONTRIBUTING.md](CONTRIBUTING.md)；本文件只保留 Agent 必须遵守的硬约束。

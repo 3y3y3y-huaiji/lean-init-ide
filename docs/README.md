@@ -17,6 +17,7 @@ Lean Init IDE 的文档按「先读什么」组织，避免在 README、运维�
 其他入口：
 
 - 项目介绍与 **27** 节双语课程：[README](../README.md) / [English](../README.en.md)
+- 参与流程（本地开发、门禁档位、分支与提交规范）：[CONTRIBUTING](../CONTRIBUTING.md)
 - AI 协作总地图与技术约束：[AGENTS](../AGENTS.md)
 - 运行时工具链仓库（wasm32 / wasm64 编译与资产发布）：[lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)
 

@@ -1,0 +1,81 @@
+name: 功能建议 / ADR 提案 · Feature or ADR proposal
+description: 想加的功能、想改的交互，或需要一条架构决策记录（ADR）的改动
+title: '[提案] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        还没想清楚要不要做，去 [Ideas](https://github.com/lean-online/lean-init-ide/discussions/categories/ideas) 先聊；
+        已经知道要改什么、想推动它进路线图，用这个模板。排期最终统一登记在[路线图与公开待办 #74](https://github.com/lean-online/lean-init-ide/discussions/74)。
+
+        涉及平台红线的提案（COOP/COEP、`cacheKey`、R2 binding、单域名、遥测字段）必须在「影响面与回退」里写清楚，
+        红线清单见 [AGENTS.md](https://github.com/lean-online/lean-init-ide/blob/main/AGENTS.md)。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 落点模块 / Area
+      multiple: true
+      options:
+        - 前端交互与编辑器（src/）
+        - 课程与挑战内容（src/i18n/）
+        - 运行时与资产分发（config/、functions/cdn/、src/sw-*.ts）
+        - CI 与工程化（.github/workflows/、scripts/）
+        - 文档与协作规范（docs/、模板）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: adr
+    attributes:
+      label: 是否需要 ADR
+      description: 决策类型与既有编号见 docs/DECISIONS.md
+      options:
+        - 需要新增 ADR
+        - 需要修订现有 ADR
+        - 不需要（改动局部、可随时回退）
+    validations:
+      required: true
+
+  - type: input
+    id: adr-ref
+    attributes:
+      label: 关联 ADR 编号（可选）
+      placeholder: ADR-06
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 现在哪里不舒服、影响谁，有量化指标更好（启动耗时、内存、课时通过率、体积）
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案与取舍
+      description: 为什么不用更简单的做法；如果做过对比实验，把结论贴上来
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响面与回退
+      description: 是否跨仓（lean4-wasm）、是否改资产清单或 cacheKey、是否让老用户重下缓存、如何回退
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前自查
+      options:
+        - label: 我理解这不是排期承诺，优先级会在 Discussion #74 统一确认
+          required: true
+        - label: 涉及用户可见文案时，我会同时补齐中英文（locale-parity 测试会校验）

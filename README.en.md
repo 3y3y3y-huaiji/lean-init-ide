@@ -140,7 +140,7 @@ Page views and Core Web Vitals are collected by Cloudflare Web Analytics.
 
 Technical docs are currently in Chinese: [architecture](docs/ARCHITECTURE.md),
 [development](docs/DEVELOPMENT.md), [operations](docs/OPERATIONS.md). The wasm32/wasm64 runtime
-builder, stack patches and asset publisher live in [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime).
+builder, stack patches and asset publisher live in [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm).
 
 ## Local development
 

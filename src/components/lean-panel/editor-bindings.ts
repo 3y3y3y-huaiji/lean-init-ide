@@ -7,6 +7,7 @@ import * as monaco from 'monaco-editor/editor/editor.api';
 // 补全、悬停、查找等交互能力需要单独引入。
 import '../../monaco-contrib';
 import editorWorker from '../../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
+import { MAX_SHARE_CODE_BYTES, buildShareUrl } from '../../code-share';
 import { clearDraft, readDraft, saveDraft } from '../../draft';
 import type { Messages } from '../../i18n/types';
 import {
@@ -32,6 +33,7 @@ export type EditorBindingsOptions = {
   readonly starterCode: string;
   readonly lessonSlug?: string;
   readonly draftKey?: string;
+  readonly ignoreDraft?: boolean;
   readonly t: Messages['playground'];
   readonly log: (message: string) => void;
   readonly onContentChange: () => void;
@@ -47,8 +49,18 @@ const severityOf = (s?: number): monaco.MarkerSeverity =>
         : monaco.MarkerSeverity.Error;
 
 export const createEditorBindings = (options: EditorBindingsOptions) => {
-  const { host, uri, starterCode, lessonSlug, draftKey, t, log, onContentChange } = options;
-  const draft = draftKey ? readDraft(draftKey) : null;
+  const {
+    host,
+    uri,
+    starterCode,
+    lessonSlug,
+    draftKey,
+    ignoreDraft = false,
+    t,
+    log,
+    onContentChange,
+  } = options;
+  const draft = !ignoreDraft && draftKey ? readDraft(draftKey) : null;
   const cleanups: Array<() => void> = [];
   const disposables: monaco.IDisposable[] = [];
 
@@ -225,6 +237,10 @@ export const createEditorBindings = (options: EditorBindingsOptions) => {
   const exportEl = host.querySelector<HTMLButtonElement>('[data-role="export"]');
   const importEl = host.querySelector<HTMLButtonElement>('[data-role="import"]');
   const importInputEl = host.querySelector<HTMLInputElement>('[data-role="import-input"]');
+  const shareEl = host.querySelector<HTMLButtonElement>('[data-role="share"]');
+  const shareStatusEl = host.querySelector<HTMLElement>('[data-role="share-status"]');
+  const symbolsToggleEl = host.querySelector<HTMLButtonElement>('[data-role="symbols-toggle"]');
+  const symbolsBarEl = host.querySelector<HTMLElement>('[data-role="symbols-bar"]');
   const passedEl = host.querySelector<HTMLElement>('[data-role="passed"]');
 
   const replaceContentAtStart = (next: string, shouldFocus = true) => {
@@ -303,6 +319,56 @@ export const createEditorBindings = (options: EditorBindingsOptions) => {
         importInputEl.value = '';
       });
   });
+
+  let shareTimer: number | undefined;
+  cleanups.push(() => window.clearTimeout(shareTimer));
+  const showShareStatus = (text: string) => {
+    if (!shareStatusEl) return;
+    shareStatusEl.textContent = text;
+    window.clearTimeout(shareTimer);
+    shareTimer = window.setTimeout(() => {
+      shareStatusEl.textContent = '';
+    }, 2800);
+  };
+  shareEl?.addEventListener('click', () => {
+    const code = model.getValue();
+    if (new TextEncoder().encode(code).byteLength > MAX_SHARE_CODE_BYTES) {
+      showShareStatus(t.shareCodeTooLong);
+      return;
+    }
+    void buildShareUrl(code, location.href)
+      .then(async (url) => {
+        try {
+          history.replaceState(null, '', url);
+        } catch {
+          // URL 同步失败不阻断剪贴板写入。
+        }
+        await navigator.clipboard.writeText(url);
+        showShareStatus(t.shareCodeCopied);
+        log(t.logShareCopied);
+      })
+      .catch(() => {
+        showShareStatus(t.shareCodeFailed);
+      });
+  });
+
+  symbolsToggleEl?.addEventListener('click', () => {
+    if (!symbolsBarEl) return;
+    const nextHidden = !symbolsBarEl.hidden;
+    symbolsBarEl.hidden = nextHidden;
+    symbolsToggleEl.setAttribute('aria-expanded', String(!nextHidden));
+  });
+  for (const button of host.querySelectorAll<HTMLButtonElement>('[data-insert-symbol]')) {
+    button.addEventListener('click', () => {
+      const symbol = button.dataset.insertSymbol;
+      if (!symbol) return;
+      const selection = editor.getSelection() ?? new monaco.Selection(1, 1, 1, 1);
+      editor.executeEdits('quick-symbol', [
+        { range: selection, text: symbol, forceMoveMarkers: true },
+      ]);
+      editor.focus();
+    });
+  }
 
   disposables.push(
     model.onDidChangeContent((event) => {

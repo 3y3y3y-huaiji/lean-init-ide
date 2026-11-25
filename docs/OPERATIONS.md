@@ -20,7 +20,7 @@ direct push main → Deploy · 应用（CI · 应用 → build + deploy + smoke�
 `Deploy · 应用` 只在 push `main`、且仓库变量 `CD_ENABLED=true` 时执行，其余情况自动跳过。
 它跑完整 `pnpm run build`（含约 102 MB 同源兜底副本，`build:web` 会省掉这一层），
 用 `wrangler pages deploy` 推送，成功后立刻对新版本跑冒烟；失败重试 5 次（间隔 10 秒），
-仍是失败则整条流水线标红。运行时资产由独立仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime) 上传到 R2；应用 CI 与 Deploy 都不写 R2。换 `cacheKey` 后先传资产、再部署页面。
+仍是失败则整条流水线标红。运行时资产由独立仓库 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm) 上传到 R2；应用 CI 与 Deploy 都不写 R2。换 `cacheKey` 后先传资产、再部署页面。
 
 ### 首次启用
 
@@ -149,7 +149,7 @@ bucket_name = "lean4-ide-releases"
 
 ## 资产维护与发布说明
 
-R2（S3 上传）、魔搭镜像上传（`--prune` / `--metadata`）与运行时打包发布脚本已迁往独立工具链仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)（参见该仓库的 `upload:assets` / `upload:modelscope`）。本仓仅负责**消费**清单并在构建期下载校验静态回退副本：
+R2（S3 上传）、魔搭镜像上传（`--prune` / `--metadata`）与运行时打包发布脚本已迁往独立工具链仓库 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)（参见该仓库的 `upload:assets` / `upload:modelscope`）。本仓仅负责**消费**清单并在构建期下载校验静态回退副本：
 
 ```bash
 pnpm run fetch:assets         # 下载并校验运行时资产到 public/wasm-lean4/

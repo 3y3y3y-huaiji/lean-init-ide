@@ -1,6 +1,6 @@
 **何时读我**：首次了解项目技术文档地图、查找主题对应文档或核对当前运行时版本基线时阅读。
 **单一事实来源**：运行时消费清单见 [lean4-runtime.json](../config/lean4-runtime.json)，课程总数见 [lesson-catalog.ts](../src/i18n/lesson-catalog.ts)。
-**维护边界**：只做总索引与版本概览，不复制细节章节；编译器构建与堆栈补丁 SOP 见独立仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)。
+**维护边界**：只做总索引与版本概览，不复制细节章节；编译器构建与堆栈改造 SOP 见独立仓库 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)。
 
 # 文档索引
 
@@ -18,10 +18,10 @@ Lean Init IDE 的文档按「先读什么」组织，避免在 README、运维�
 
 - 项目介绍与 **27** 节双语课程：[README](../README.md) / [English](../README.en.md)
 - AI 协作总地图与技术约束：[AGENTS](../AGENTS.md)
-- 运行时工具链仓库（wasm32 / wasm64 编译与资产发布）：[lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)
+- 运行时工具链仓库（wasm32 / wasm64 编译与资产发布）：[lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)
 
 ## 当前运行时
 
 - 生产默认：Lean **4.35.0** Init（`-O3`，wasm32），**Std / Batteries 已在生产按需加载**（工程课通过 `requires` 自动挂载，编辑器支持按需加载与手动释放）
-- 实验性分支运行时：wasm64（Memory64 + GMP，消费端配置在 `config/lean4-wasm64-runtime.json`），编译器构建与升级流程维护在 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)
+- 实验性分支运行时：wasm64（Memory64 + GMP，消费端配置在 `config/lean4-wasm64-runtime.json`），编译器构建与升级流程维护在 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)
 - 资产清单：[config/lean4-runtime.json](../config/lean4-runtime.json)（约 102 MB zstd 分片，含 `extensions` 扩展分包）与 [config/lean4-wasm64-runtime.json](../config/lean4-wasm64-runtime.json)

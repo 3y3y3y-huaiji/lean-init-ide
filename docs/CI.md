@@ -1,6 +1,6 @@
 **何时读我**：修改 `.github/workflows/`、变更分类规则、PR 检查档位、分支保护 required checks 或触发线上部署/巡检时阅读。
 **单一事实来源**：变更分档逻辑见 [detect-changes.mjs](../scripts/detect-changes.mjs)，各工作流实现见 `.github/workflows/*.yml`。
-**维护边界**：本文件只管本仓 GitHub Actions 工作流、触发矩阵与 Secrets；文档清单与工作流文件名必须保持 1:1 严格一致（`verify:docs` 强制校验）。运行时构建工作流见 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)。
+**维护边界**：本文件只管本仓 GitHub Actions 工作流、触发矩阵与 Secrets；文档清单与工作流文件名必须保持 1:1 严格一致（`verify:docs` 强制校验）。运行时构建工作流见 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)。
 
 # CI / CD 工作流地图
 
@@ -21,7 +21,7 @@ Actions 里按职责划分工作流：应用 CI / PR 刷新、安全扫描、生
 
 ## 命名与触发约定
 
-- 应用 CI 只叫 `CI · 应用`。Lean wasm32 4.35 与实验性 wasm64 的编译器构建、堆栈补丁、差分等价门禁及 R2 / 魔搭上传工作流已拆入 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)。
+- 应用 CI 只叫 `CI · 应用`。Lean wasm32 4.35 与软 Fork wasm64 4.36 的编译器构建、堆栈改造、5 层一致性门禁及 R2 / 魔搭上传工作流已拆入 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)。
 - `delete_branch_on_merge` 与 `pr-cleanup.yml` 保障 PR 合并后自动清理临时分支；`main` 保护采用 `strict: false` + `ci-refresh-open-prs.yml` + `changes` 门禁新鲜度硬校验组合（见 [DECISIONS](DECISIONS.md#adr-04)），日常并行 PR 无需为了无关提交重跑，但一旦门禁升级全体在途 PR 必须重过新版 CI。
 
 > 合并前必须让 PR 的 `CI · 应用` 全绿。**日常改动无需在本地硬跑重型 E2E**——推送分支提 PR 即由 GitHub Actions 自动验证。direct push `main` 会先复用 `CI · 应用` 再部署。

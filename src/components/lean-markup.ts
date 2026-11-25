@@ -1,6 +1,7 @@
 import { LESSON_CATALOG, type Locale } from '../i18n';
 import runtimeManifest from '../../config/lean4-runtime.json';
 import { REPO_URL } from '../feedback';
+import { QUICK_SYMBOLS } from '../lean-abbreviations';
 import { runtimeExtensions } from '../runtime-extensions';
 import type { Messages } from '../i18n/types';
 import { buttonClass, ghostButtonClass, toolbarButtonClass } from './ui';
@@ -387,7 +388,22 @@ export const renderLeanMarkup = (
           <button class="${ghostButtonClass}" type="button" data-role="export">${t.exportCode}</button>
           <button class="${ghostButtonClass}" type="button" data-role="import">${t.importCode}</button>
           <input type="file" accept=".lean,.txt,text/plain" data-role="import-input" hidden />
+          <button class="${ghostButtonClass}" type="button" data-role="share">${t.shareCode}</button>
+          <button class="${ghostButtonClass}" type="button" data-role="symbols-toggle" aria-expanded="false" aria-controls="lean-symbols-bar" title="${t.symbolsHint}">${t.symbolsTitle}</button>
+          <span data-role="share-status" role="status" aria-live="polite" class="text-xs text-muted"></span>
           <span data-role="passed" hidden class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-ok/45 bg-ok/10 px-3 py-1 text-xs font-[650] text-ok">✓ ${t.lessonPassed}</span>
+        </div>
+        <div
+          id="lean-symbols-bar"
+          data-role="symbols-bar"
+          hidden
+          class="flex flex-wrap items-center gap-1 border-b border-line bg-panel-soft gutter-x py-1.5"
+          aria-label="${t.symbolsHint}"
+        >
+          ${QUICK_SYMBOLS.map(
+            ({ symbol, abbr }) =>
+              `<button type="button" class="inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-md border border-line bg-panel px-2 py-0.5 font-mono text-sm text-fg hover:border-line-strong hover:bg-panel-soft" data-insert-symbol="${symbol}" title="\\${abbr}">${symbol}</button>`,
+          ).join('')}
         </div>
         ${renderWorkspace(t, false)}
       </section>

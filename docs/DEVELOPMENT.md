@@ -48,7 +48,7 @@ FileWorker 偶发重复精化导致的「already declared」假阳性。先确�
 
 ## wasm64 运行时与构建链
 
-Lean wasm32 与实验性 wasm64 的编译器构建、版本 pin、三份堆栈补丁及 `wasm64-patch-equivalence` 差分门禁已拆分至独立仓库 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)，详见其 [WASM64-SPIKE](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime/blob/main/docs/WASM64-SPIKE.md)。本仓只保留浏览器端适配与清单消费逻辑（`config/lean4-wasm64-runtime.json`、`src/lean-wasm64-*.ts`）。
+Lean wasm32 与软 Fork wasm64 的编译器构建、版本 pin、三处堆栈改造及 5 层行为一致性门禁已拆分至独立仓库 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)，详见其 [WASM64-SPIKE](https://github.com/lean-online/lean4-wasm/blob/wasm64-v4.36.0/wasm-foundry/docs/WASM64-SPIKE.md)。本仓只保留浏览器端适配与清单消费逻辑（`config/lean4-wasm64-runtime.json`、`src/lean-wasm64-*.ts`）。
 
 ## 质量门禁
 

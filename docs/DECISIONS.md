@@ -12,13 +12,13 @@
 
 ## ADR-02：魔搭镜像统一采用扁平目录结构 {#adr-02}
 
-- **决定**：ModelScope 数据集镜像（维护于 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime/blob/main/scripts/upload-modelscope.mjs) 的上传脚本与本仓 [src/asset-sources.mjs](../src/asset-sources.mjs)）对基础资产与扩展包统一使用 `<prefix>/<asset.name>` 扁平布局，而非 R2 的子目录树。
+- **决定**：ModelScope 数据集镜像（维护于 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm/blob/wasm64-v4.36.0/wasm-foundry/scripts/upload-modelscope.mjs) 的上传脚本与本仓 [src/asset-sources.mjs](../src/asset-sources.mjs)）对基础资产与扩展包统一使用 `<prefix>/<asset.name>` 扁平布局，而非 R2 的子目录树。
 - **原因**：魔搭数据集仓库以单一路径拉取为主，`src/asset-sources.mjs` 的 `addMirror` 基于 `${prefix}/${asset.name}` 构造直链；混入 `extensions/<id>/` 子目录会导致上传与下载路径错位 404。
 - **禁止回退的方案**：禁止上传脚本按 `asset.key` 原样落盘到带多级 `extensions/<id>/` 的魔搭子目录而前端仍拼扁平 URL。
 
 ## ADR-03：wasm64 打补丁后必须使用同源源码自洽构建 `.olean` {#adr-03}
 
-- **决定**：只要 [lean4-wasm-runtime 补丁集](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime/tree/main/scripts/patches) 对 `.lean` 内核或策略源码做了签名/导出改动（如 `WHNF.lean`、`Simp/Main.lean`），就必须用同一份打过补丁的源码（保持相同 `LEAN_GITHASH` 与 `USE_GMP=ON`）自洽编译 `.olean`。
+- **决定**：只要 [lean4-wasm 软 Fork 源码](https://github.com/lean-online/lean4-wasm/tree/wasm64-v4.36.0/src) 对 `.lean` 内核或策略源码做了签名/导出改动（如 `WHNF.lean`、`Simp/Main.lean`），就必须用同一份打过补丁的源码（保持相同 `LEAN_GITHASH` 与 `USE_GMP=ON`）自洽编译 `.olean`。
 - **原因**：实测已证明如 `simpLoop.visitPreContinue` 等参数签名变更后，混用官方未打补丁 `.olean` 会触发链接符号或运行时结构错位。
 - **禁止回退的方案**：禁止为了省去编译步骤而用 `continue-on-error: true` 掩盖 `lake exe cache get` 等失败后把未打补丁 `.olean` 直接塞进扩展包。
 
@@ -33,3 +33,15 @@
 - **决定**：业务、视图、运行时逻辑文件一律保持模块化上限受控并纳入 `vitest.config.ts` 覆盖率统计；`coverage.exclude` 仅允许保留无法单测的纯入口/工具配置白名单，不能成为规避测试的垃圾桶。
 - **原因**：千行级大文件（如未拆解前的装配组件）一旦被长期排除出覆盖率，后续 AI 改动极易把核心内存/状态逻辑堆进免检区，导致无测试保护的回归。
 - **禁止回退的方案**：禁止通过放宽或扩大 `vitest.config.ts` 的 `coverage.exclude` 来让覆盖率阈值过关。
+
+## ADR-06：默认 `wasm32` 生产引擎统一合入 `lean4-wasm` 同源内核（`-O3` + 显式栈） {#adr-06}
+
+- **决定**：将默认 `wasm32` 与实验性 `wasm64` 生产构建统一到 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm) 同一棵软 Fork 源码树编出，使全量默认用户直接获得 `-O3` 优化与经 5 层行为一致性门禁 + `leanchecker` / Rust `nanoda_bin` 双检验器认证的显式栈防溢出内核。
+- **原因**：双套源码维护成本高，且 5 层门禁与双独立数学检验器已验证软 Fork 语义等价性，在上线前跑通全量 `e2e:lessons` 回归并保留旧版 `cacheKey` 回退即可安全消除 Worker 1MB 栈溢出风险。
+- **禁止回退的方案**：禁止长期维护两棵独立 Lean 源码补丁树，或未经全量 `e2e:lessons` 回归与旧版回退预案就直接原地覆盖线上 `cacheKey`。
+
+## ADR-07：`wasm32` 极简 Mathlib 战术子集可选扩展受严格内存预算约束 {#adr-07}
+
+- **决定**：在 `lean4-wasm` 先使用 `mathlib-slice.ts` 实测 `Mathlib.Tactic.Ring` / `Tauto` 等最小闭包的模块数与解压体积，仅当在 1 GiB 线性内存安全预算内（解压后 `<= 150–200 MB`）才编译 32 位 `.olean` 可选扩展包，并在前端启用更严格的 `MemoryGuard`（低内存/移动端禁用、75% 空闲软回收）。
+- **原因**：`wasm32` 受限于浏览器单页 1–2 GiB 线性内存上限，若不加裁切与硬性内存守卫直接挂载大包会触发 OOM 标签页崩溃。
+- **禁止回退的方案**：禁止未测算闭合体积就在 `wasm32` 打包全量 Mathlib，或绕过 `MemoryGuard` 在低内存设备开放大扩展包。

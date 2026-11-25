@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEAN_ABBREVIATIONS,
+  QUICK_SYMBOLS,
   abbreviationSuggestions,
   findAbbreviationQuery,
   matchAbbreviation,
@@ -67,5 +68,14 @@ describe('abbreviationSuggestions', () => {
   it('按前缀筛选并保留大小写', () => {
     expect(abbreviationSuggestions('Ga')).toEqual([{ name: 'Gamma', symbol: 'Γ' }]);
     expect(abbreviationSuggestions('zzz')).toEqual([]);
+  });
+});
+
+describe('QUICK_SYMBOLS', () => {
+  it('每项均与 LEAN_ABBREVIATIONS 完全一致', () => {
+    expect(QUICK_SYMBOLS.length).toBeGreaterThan(10);
+    for (const item of QUICK_SYMBOLS) {
+      expect(LEAN_ABBREVIATIONS[item.abbr]).toBe(item.symbol);
+    }
   });
 });

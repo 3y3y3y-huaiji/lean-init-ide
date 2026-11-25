@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { challengeBySlug } from '../challenges';
+import { encodeSharedCode } from '../code-share';
 import { messagesFor } from '../i18n';
 
 const { createLeanPanel } = vi.hoisted(() => ({ createLeanPanel: vi.fn() }));
@@ -211,6 +212,23 @@ describe('playground 页面', () => {
       HTMLElement,
       { requiredExtensions?: string[] },
     ];
+    expect(options.requiredExtensions).toEqual(['std']);
+  });
+
+  it('带 #code= / #codez= 分享链接时忽略本地草稿并推断扩展库', async () => {
+    const shared = 'import Std.Data.HashMap\n#eval 1 + 1\n';
+    const hash = await encodeSharedCode(shared);
+    history.replaceState(null, '', `/zh/playground${hash}`);
+    document.body.innerHTML = renderPlayground('zh');
+
+    await mountPlayground(document.body, 'zh');
+
+    const [, options] = createLeanPanel.mock.calls[0] as [
+      HTMLElement,
+      { code: string; ignoreDraft?: boolean; requiredExtensions?: string[] },
+    ];
+    expect(options.code).toBe(shared);
+    expect(options.ignoreDraft).toBe(true);
     expect(options.requiredExtensions).toEqual(['std']);
   });
 

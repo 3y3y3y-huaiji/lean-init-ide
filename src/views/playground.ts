@@ -1,4 +1,5 @@
 import { playgroundStarter, resolveChallengeParam } from '../challenges';
+import { decodeSharedCode } from '../code-share';
 import { renderLeanMarkup, showEditorLoadFailure } from '../components/lean-markup';
 import { currentMemoryTier } from '../device';
 import { draftKeyFor, readDraft } from '../draft';
@@ -100,8 +101,12 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
   const lesson = slug ? (await loadLessons(locale)).find((item) => item.slug === slug) : undefined;
   const challenge = lesson ? undefined : resolveChallengeParam(location.search);
   const challengeStarter = challenge ? playgroundStarter(challenge, locale) : undefined;
+  const sharedCode = !lesson && !challenge ? await decodeSharedCode(location.hash) : null;
   const code =
-    lesson?.exercise?.starter ?? challengeStarter ?? messagesFor(locale).playground.defaultCode;
+    lesson?.exercise?.starter ??
+    challengeStarter ??
+    sharedCode ??
+    messagesFor(locale).playground.defaultCode;
   const draftKey = draftKeyFor(lesson?.slug);
   const draft = challenge ? readDraft(draftKey) : null;
   const hasPersonalDraft = Boolean(
@@ -135,6 +140,7 @@ export const mountPlayground = async (root: HTMLElement, locale: Locale): Promis
     locale,
     lessonSlug: lesson?.slug,
     draftKey,
+    ...(sharedCode !== null ? { ignoreDraft: true } : {}),
     autoStart: getAutoStart() && currentMemoryTier() !== 'low',
     startImmediately: startRequested,
     ...(requiredExtensions.length ? { requiredExtensions } : {}),

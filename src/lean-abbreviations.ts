@@ -162,3 +162,26 @@ export const abbreviationSuggestions = (query: string): Array<{ name: string; sy
     .filter(([name]) => name.startsWith(query))
     .sort(([a], [b]) => (a === query ? -1 : b === query ? 1 : 0))
     .map(([name, symbol]) => ({ name, symbol }));
+
+/** 编辑器快捷工具栏常用数学符号（与 LEAN_ABBREVIATIONS 严格同源）。 */
+export const QUICK_SYMBOLS: ReadonlyArray<{ readonly symbol: string; readonly abbr: string }> = [
+  { symbol: '→', abbr: 'to' },
+  { symbol: '←', abbr: 'leftarrow' },
+  { symbol: '↔', abbr: 'iff' },
+  { symbol: '∀', abbr: 'forall' },
+  { symbol: '∃', abbr: 'exists' },
+  { symbol: '∧', abbr: 'and' },
+  { symbol: '∨', abbr: 'or' },
+  { symbol: '¬', abbr: 'not' },
+  { symbol: '≤', abbr: 'le' },
+  { symbol: '≥', abbr: 'ge' },
+  { symbol: '≠', abbr: 'ne' },
+  { symbol: '⟨', abbr: 'langle' },
+  { symbol: '⟩', abbr: 'rangle' },
+  { symbol: 'λ', abbr: 'lam' },
+  { symbol: '×', abbr: 'times' },
+  { symbol: '∘', abbr: 'circ' },
+  { symbol: '∈', abbr: 'in' },
+  { symbol: '⊆', abbr: 'subseteq' },
+  { symbol: '⊢', abbr: 'vdash' },
+];

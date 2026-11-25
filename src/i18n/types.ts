@@ -317,6 +317,15 @@ export type Messages = {
     exportCode: string;
     /** 与导出成对的 .lean 导入入口。 */
     importCode: string;
+    /** 零后端 URL hash 代码分享按钮与反馈文案。 */
+    shareCode: string;
+    shareCodeCopied: string;
+    shareCodeFailed: string;
+    shareCodeTooLong: string;
+    logShareCopied: string;
+    /** 常用 Unicode 数学符号快捷栏。 */
+    symbolsTitle: string;
+    symbolsHint: string;
     /** 导入成功后写入日志面板的文案。 */
     logCodeImported: (name: string) => string;
     /** 导入失败（如文件过大或读取失败）时写入日志面板的文案。 */

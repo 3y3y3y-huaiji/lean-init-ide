@@ -38,6 +38,7 @@ export type LeanPanelOptions = {
   startImmediately?: boolean;
   lessonSlug?: string;
   draftKey?: string;
+  ignoreDraft?: boolean;
   onProgress?: (progress: LeanPanelProgress) => void;
   onGoal?: (goalText: string) => void;
   onDiagnostics?: (diagnostics: LspDiagnostic[]) => void;
@@ -65,6 +66,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     startImmediately = false,
     lessonSlug,
     draftKey,
+    ignoreDraft = false,
     onProgress,
     onGoal,
     onDiagnostics,
@@ -126,6 +128,7 @@ export const createLeanPanel = (host: HTMLElement, options: LeanPanelOptions): L
     starterCode: code,
     lessonSlug,
     draftKey,
+    ignoreDraft,
     t,
     log,
     onContentChange: () => onModelContentChange(),

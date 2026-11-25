@@ -135,4 +135,35 @@ describe('createExtensionController', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(controller.getActiveExtensions()).toEqual([]);
   });
+
+  it('wasm64 已发布对应扩展时保留 wasm64 架构并在 quick-fix 中不误回退 wasm32', async () => {
+    localStorage.setItem('lean:runtime-arch', 'wasm64');
+    const host = buildHost();
+    const onArchChanged = vi.fn();
+    const controller = createExtensionController({
+      host,
+      t,
+      requiredExtensions: ['std'],
+      log: () => {},
+      setStatus: () => {},
+      closeMenus: () => {},
+      isSessionActive: () => false,
+      restartSession: async () => {},
+      onArchChanged,
+      hasExtensionOnArch: () => true,
+      resolveIds: (ids) => [...ids],
+      probeMemory64: () => true,
+      isWasm64Published: () => true,
+    });
+
+    expect(controller.getSelectedArch()).toBe('wasm64');
+    expect(controller.wasAutoSwitchedFromWasm64()).toBe(false);
+
+    controller.enableFromQuickFix('std');
+    await Promise.resolve();
+    await controller.drainExtensionSelections();
+    expect(controller.getSelectedArch()).toBe('wasm64');
+    expect(onArchChanged).not.toHaveBeenCalled();
+    expect(controller.getActiveExtensions()).toEqual(['std']);
+  });
 });

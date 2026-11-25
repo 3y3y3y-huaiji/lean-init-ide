@@ -36,6 +36,8 @@ export type ExtensionControllerOptions = {
   readonly isSessionActive: () => boolean;
   readonly restartSession: () => Promise<void>;
   readonly onArchChanged?: (arch: LeanRuntimeArch) => void;
+  readonly hasExtensionOnArch?: (arch: RuntimeArch, id: RuntimeExtensionId) => boolean;
+  readonly resolveIds?: typeof resolveExtensionIds;
   readonly loadPacks?: typeof loadExtensionPacks;
   readonly probeMemory64?: typeof probeMemory64Support;
   readonly isWasm64Published?: typeof wasm64Available;
@@ -61,9 +63,14 @@ export const createExtensionController = (options: ExtensionControllerOptions) =
       : DEFAULT_RUNTIME_ARCH;
 
   // 课程声明 requires 但 wasm64 尚未发布对应扩展时，先把实验性 wasm64 退回稳定版。
-  const extensionAvailableOn = (arch: RuntimeArch, id: RuntimeExtensionId) =>
-    extensionById(id, arch)?.arch === arch;
-  const autoStableFromWasm64 = requiredExtensions.length > 0 && selectedArch === 'wasm64';
+  const resolveForArch = options.resolveIds ?? resolveExtensionIds;
+  const extensionAvailableOn =
+    options.hasExtensionOnArch ??
+    ((arch: RuntimeArch, id: RuntimeExtensionId) => extensionById(id, arch)?.arch === arch);
+  const wasm64BlockedByExtensions = requiredExtensions.some(
+    (id) => !extensionAvailableOn('wasm64', id),
+  );
+  const autoStableFromWasm64 = wasm64BlockedByExtensions && selectedArch === 'wasm64';
   if (autoStableFromWasm64) {
     selectedArch = DEFAULT_RUNTIME_ARCH;
     setRuntimeArch(selectedArch);
@@ -94,9 +101,6 @@ export const createExtensionController = (options: ExtensionControllerOptions) =
   const runtimeArchLabelEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-label"]');
   const runtimeArchNoteEl = host.querySelector<HTMLElement>('[data-role="runtime-arch-note"]');
   const runtimeArchButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-runtime-arch]')];
-  const wasm64BlockedByExtensions = requiredExtensions.some(
-    (id) => !extensionAvailableOn('wasm64', id),
-  );
 
   const librariesUnavailable = () =>
     selectedArch === 'wasm64' && runtimeExtensionsFor('wasm64').length === 0;
@@ -137,7 +141,7 @@ export const createExtensionController = (options: ExtensionControllerOptions) =
       if (librariesUnavailable() || archOfElement(input) !== selectedArch) return;
       const id = input.dataset.libraryDefault as RuntimeExtensionId;
       if (input.checked) {
-        for (const dependency of resolveExtensionIds([id], selectedArch)) {
+        for (const dependency of resolveForArch([id], selectedArch)) {
           defaultExtensions.add(dependency);
         }
       } else {
@@ -242,7 +246,7 @@ export const createExtensionController = (options: ExtensionControllerOptions) =
   const restoreSavedExtensions = (): Promise<void> => {
     if (restorePromise) return restorePromise;
     const arch = selectedArch;
-    const ids = resolveExtensionIds(
+    const ids = resolveForArch(
       [...sessionExtensionIds, ...defaultExtensions, ...requiredExtensions],
       arch,
     );
@@ -272,7 +276,7 @@ export const createExtensionController = (options: ExtensionControllerOptions) =
 
   const applyExtensionSelection = async (next: Set<RuntimeExtensionId>) => {
     const previous = new Set(activeExtensions);
-    const resolved = resolveExtensionIds(next, selectedArch);
+    const resolved = resolveForArch(next, selectedArch);
     const wasActive = isSessionActive();
     try {
       if (selectedArch === 'wasm64') {
@@ -352,7 +356,7 @@ export const createExtensionController = (options: ExtensionControllerOptions) =
     restoreSavedExtensions,
     drainExtensionSelections,
     enableFromQuickFix: (id: RuntimeExtensionId) => {
-      if (selectedArch === 'wasm64') {
+      if (selectedArch === 'wasm64' && !extensionAvailableOn('wasm64', id)) {
         selectedArch = DEFAULT_RUNTIME_ARCH;
         setRuntimeArch(selectedArch);
         restorePromise = null;

@@ -2,7 +2,7 @@
 
 仅在修改 `scripts/` 下构建、校验或 E2E 编排脚本时阅读本指南。工作流全貌见 [CI.md](../docs/CI.md)。
 
-> Lean WASM 编译器构建、堆栈补丁与 R2 / 魔搭上传工具链已独立迁移至 [lean4-wasm-runtime](https://github.com/3y3y3y-huaiji/lean4-wasm-runtime)。
+> Lean WASM 编译器构建、堆栈改造与 R2 / 魔搭上传工具链已独立迁移至 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)。
 
 ## 1. 脚本职责与运行环境
 

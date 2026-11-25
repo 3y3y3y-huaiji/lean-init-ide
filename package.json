@@ -14,7 +14,7 @@
     "build": "vite build && node scripts/generate-seo.mjs && node scripts/prerender.mjs",
     "prebuild": "node scripts/fetch-assets.mjs && pnpm run build:sw",
     "build:web": "pnpm run build:sw && vite build && node scripts/generate-seo.mjs && node scripts/prerender.mjs",
-    "build:sw": "esbuild src/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js",
+    "build:sw": "pnpm run sync:profile && esbuild src/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js",
     "preview": "vite preview",
     "gateway": "node scripts/local-gateway.mjs",
     "e2e": "node scripts/e2e-lean.mjs",
@@ -32,7 +32,8 @@
     "verify:build": "node scripts/verify-build.mjs",
     "verify:docs": "node scripts/verify-docs.mjs",
     "probe:sources": "node scripts/probe-sources.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "sync:profile": "node scripts/sync-lsp-profile.mjs"
   },
   "dependencies": {
     "@wasm-idle/core": "^1.4.0",

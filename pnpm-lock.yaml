@@ -174,8 +174,8 @@ importers:
   .:
     dependencies:
       '@wasm-idle/core':
-        specifier: ^1.3.0
-        version: 1.3.0(patch_hash=fd2d65bbb446d8ae66f0cde3cee4ef8aff59cb948d9981bd1d9cec901d02dc15)
+        specifier: ^1.4.0
+        version: 1.4.0
       '@wasm-idle/lsp':
         specifier: 1.3.0
         version: 1.3.0(patch_hash=91c9f16f4c8d1d67e1dc77e04f7b982edff953afd9b1bd3bf70eaf758462d8bd)(typescript@6.0.3)
@@ -869,6 +869,9 @@ packages:
 
   '@wasm-idle/core@1.3.0':
     resolution: {integrity: sha512-EflvlKNL9lITcNExzuRZyhbU61J8tRRCqw0VqRaI00D3QppwA1WDr6mZI0Lje+GpO4jpvuTh8kCq6PB3ZJdAPw==}
+
+  '@wasm-idle/core@1.4.0':
+    resolution: {integrity: sha512-Fzb5OfI8aEpaXCK04LDUtiSYxY2BsIYoXSoj6Bg6omwrMA7xqHWjkvwDDsjEexqBGEL1jS0s4z8CZZhMnz5QoQ==}
 
   '@wasm-idle/llvm-core@1.3.0':
     resolution: {integrity: sha512-eEbkWziftWDHOD8/1t0KHDQzCFPz+XEDN67/t1evPiBTR/tTt2EH/62mD3w3OsNKqAM0VFEQ34ID0lO2y2I6ig==}
@@ -2063,6 +2066,10 @@ snapshots:
   '@vitest/spy@5.1.0': {}
 
   '@wasm-idle/core@1.3.0(patch_hash=fd2d65bbb446d8ae66f0cde3cee4ef8aff59cb948d9981bd1d9cec901d02dc15)':
+    dependencies:
+      fflate: 0.8.3
+
+  '@wasm-idle/core@1.4.0':
     dependencies:
       fflate: 0.8.3
 

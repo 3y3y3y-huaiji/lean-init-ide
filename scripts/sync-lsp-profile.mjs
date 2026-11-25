@@ -34,9 +34,17 @@ const logicalNameOf = (name) => {
   return match?.[1];
 };
 
-const nextAssets = {};
+// 只更新包内 profile 已有的条目：新增/删除条目会改变运行时的校验集合
+// （例如凭空给 runner-worker.js 补一条会触发 MIME 校验），这里保持 profile 的资产
+// 集合不变，只把清单里的数值同步进去。
+const nextAssets = { ...profile.assets };
+const missingInProfile = [];
 for (const asset of manifest.assets) {
-  const previous = profile.assets[asset.name] ?? {};
+  const previous = profile.assets[asset.name];
+  if (previous === undefined) {
+    missingInProfile.push(asset.name);
+    continue;
+  }
   const entry = { ...previous };
   entry.upstream = previous.upstream ?? asset.source ?? asset.name;
   const logicalName = previous.logicalName ?? logicalNameOf(asset.name);
@@ -53,7 +61,6 @@ for (const asset of manifest.assets) {
   nextAssets[asset.name] = entry;
 }
 
-const removed = Object.keys(profile.assets).filter((name) => nextAssets[name] === undefined);
 
 profile.version = runtimeVersion;
 profile.profileId = String(profile.profileId).replace(/\d+\.\d+\.\d+/, runtimeVersion);
@@ -79,5 +86,5 @@ if (!check.includes(`"version": ${JSON.stringify(runtimeVersion)}`)) {
 
 console.log(
   `lsp profile synced: ${profile.profileId} · ${manifest.assets.length} assets` +
-    (removed.length ? ` · 移除清单外条目 ${removed.join(', ')}` : ''),
+    (missingInProfile.length ? ` · profile 未登记（保持原状）: ${missingInProfile.join(', ')}` : ''),
 );

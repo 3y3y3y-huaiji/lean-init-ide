@@ -23,6 +23,6 @@ Lean Init IDE 的文档按「先读什么」组织，避免在 README、运维�
 
 ## 当前运行时
 
-- 生产默认：Lean **4.35.0** Init（`-O3`，wasm32），**Std / Batteries 已在生产按需加载**（工程课通过 `requires` 自动挂载，编辑器支持按需加载与手动释放）
+- 生产默认：Lean **4.36.0** Init（`-O3`，wasm32），**Std / Batteries 已在生产按需加载**（工程课通过 `requires` 自动挂载，编辑器支持按需加载与手动释放）
 - 实验性分支运行时：wasm64（Memory64 + GMP，消费端配置在 `config/lean4-wasm64-runtime.json`），编译器构建与升级流程维护在 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)
 - 资产清单：[config/lean4-runtime.json](../config/lean4-runtime.json)（约 102 MB zstd 分片，含 `extensions` 扩展分包）与 [config/lean4-wasm64-runtime.json](../config/lean4-wasm64-runtime.json)

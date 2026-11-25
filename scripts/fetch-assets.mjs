@@ -6,7 +6,7 @@ import { gunzipSync, zstdCompressSync, constants as zlibConstants } from 'node:z
 import { assetSources } from '../src/asset-sources.mjs';
 
 /**
- * Downloads the pinned Lean 4.35.0 Init runtime used by @wasm-idle/lsp.
+ * Downloads the pinned Lean 4.36.0 Init runtime used by @wasm-idle/lsp.
  *
  * The manifest in config/lean4-runtime.json is shared with the Service Worker and
  * Pages Functions: the primary source is the same-origin /cdn/ gateway; the

@@ -10,7 +10,7 @@
 | **边缘网关与 SW** | `functions/cdn/[[path]].ts`（R2 网关）、`functions/api/`（遥测/限流）、`src/sw.ts` + `src/sw-*.ts`、`src/cdn-range.ts` | [ARCHITECTURE](docs/ARCHITECTURE.md)、[OPERATIONS](docs/OPERATIONS.md) | `pnpm exec vitest run functions/ src/sw-*.test.ts src/cdn-range.test.ts` |
 | **应用脚本、资产消费与 E2E** | `scripts/*.mjs`（资产下载 `scripts/fetch-assets.mjs`、LSP 补丁、SEO/预渲染、清单/产物/文档校验、Playwright `scripts/e2e-*.mjs`） | 脚手架细节见 [scripts 指南](scripts/AGENTS.md)；工作流见 [CI](docs/CI.md) | `pnpm run verify:manifest && pnpm run verify:docs && pnpm run build:web && pnpm run verify:build` |
 
-> **运行时构建链与历史归档边界**：Lean WASM（wasm32 4.35.0 及软 Fork wasm64 4.36.0 工具链、堆栈改造、5 层一致性门禁、R2 / 魔搭发布脚本）已独立拆分为 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)；关键不可回退决定见 [DECISIONS](docs/DECISIONS.md)。
+> **运行时构建链与历史归档边界**：Lean WASM（wasm32 / wasm64 共用同一份 Lean 4.36.0 软 Fork 源码树、堆栈改造、5 层一致性门禁、R2 / 魔搭发布脚本）已独立拆分为 [lean-online/lean4-wasm](https://github.com/lean-online/lean4-wasm)；关键不可回退决定见 [DECISIONS](docs/DECISIONS.md)。
 
 ## 2. 单一事实来源（SSOT）与强联动表
 

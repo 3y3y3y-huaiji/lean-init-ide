@@ -1,7 +1,7 @@
 {
   "revision": "14ea5ecbc514b0c87338aebf8f2b567020be5750",
-  "cacheKey": "zff98dcf5",
-  "runtime": "Lean 4.35.0 Init",
+  "cacheKey": "z5ea18057",
+  "runtime": "Lean 4.36.0 Init",
   "bucket": "lean4-ide-releases",
   "primary": {
     "label": "Pages Functions (R2)",
@@ -9,146 +9,146 @@
   },
   "fallback": {
     "label": "GitHub release",
-    "baseUrl": "https://github.com/lean-online/lean-init-ide/releases/download/runtime-v4.35.0/"
+    "baseUrl": "https://github.com/lean-online/lean4-wasm/releases/download/runtime-v4.36.0/"
   },
   "mirror": {
     "label": "ModelScope",
     "baseUrl": "https://modelscope.cn/datasets/HQZMSu/lean4-assets/resolve/master/",
-    "prefix": "wasm-lean4/4.35.0"
+    "prefix": "wasm-lean4/4.36.0"
   },
   "assets": [
     {
       "name": "producer-receipt.json",
-      "key": "wasm-lean4/4.35.0/producer-receipt.json",
+      "key": "wasm-lean4/4.36.0/producer-receipt.json",
       "source": "producer-receipt.json",
       "bytes": 4700,
-      "sha256": "207e2193b727bda76f925aaaa9c3da610dfaf27dea1fac93e39ec90f190ebff3",
+      "sha256": "7ea5a87a2340cbe30bb3d6e6fc3e7d5f7f5cc3e4899b0edb267f5f546bc3f9bd",
       "contentType": "application/json"
     },
     {
       "name": "lean.mjs",
-      "key": "wasm-lean4/4.35.0/lean.mjs",
+      "key": "wasm-lean4/4.36.0/lean.mjs",
       "source": "lean.mjs",
       "bytes": 106811,
-      "sha256": "c564d204e5e328dd440630c13c5f2f197c426a1a8aa0de542e8f63a1d43ef97d",
+      "sha256": "7785defcccb210663e1ccb49da901524524349ae2b43120675291b82172790f1",
       "contentType": "text/javascript"
     },
     {
       "name": "lean.wasm.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean.wasm.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean.wasm.gz.bin",
       "source": "lean.wasm.gz",
-      "bytes": 10514726,
-      "sha256": "a8d1c927dd7ae390866f19d19d059d1edc37a164309af4e601a5682e9fcde22f",
+      "bytes": 10849456,
+      "sha256": "32fc4314598c397d34a5e1b96e75e2ffa60ef7f13fae0ad5f6b6066225657ace",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean.wasm.gz",
-      "upstreamBytes": 19574356,
-      "upstreamSha256": "3b4a131f21899f0b66216a51e3946f2f8da612bbb7f4329d2f23ca4c4d671723",
-      "uncompressedBytes": 110440906,
-      "uncompressedSha256": "27f0366f874e1abcc241d65caf675cb5a21ceddb2566aa52cd9166e1ced6818e"
+      "upstreamBytes": 20216479,
+      "upstreamSha256": "3ccd9f1a7fed0d52c5c97d8c78e0bb6bc88d2f50bbd81bc83923ad247eb8e9c0",
+      "uncompressedBytes": 114541789,
+      "uncompressedSha256": "b41fa87d1bd3e57db012f7d528e136354e5ea581dc84cd92db5501ec1fed2f4f"
     },
     {
       "name": "lean-init.index.json",
-      "key": "wasm-lean4/4.35.0/lean-init.index.json",
+      "key": "wasm-lean4/4.36.0/lean-init.index.json",
       "source": "lean-init.index.json",
-      "bytes": 323793,
-      "sha256": "1d34b2c73cf9a57955d7b8a54f60306401f88e8e470196d69de9fde2b4f08547",
+      "bytes": 331244,
+      "sha256": "94302f41317f9b808231e7362444c72b39207964dc36edf7ea9ebc0a9a86c516",
       "contentType": "application/json"
     },
     {
       "name": "lean-init-00.pack.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean-init-00.pack.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean-init-00.pack.gz.bin",
       "source": "lean-init-00.pack.gz",
-      "bytes": 18279146,
-      "sha256": "670383cfd44e4bdd70ab85c69ff0a83acd7197a8393405d0b54e8cb8842bfbaa",
+      "bytes": 18378509,
+      "sha256": "984dc0ae8e9e9c57376ee1ec403d5beb5de45938aa89caaf915827762b96dfbf",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean-init-00.pack.gz",
-      "upstreamBytes": 22673005,
-      "upstreamSha256": "0678aca32134c2161e7ade6de711a57bda478e7217874444cc86c44780381b10",
+      "upstreamBytes": 22773990,
+      "upstreamSha256": "f9c72befa142be7396e8673b60ac7e395306cb1f671b32bd048e18cee68f6eda",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "573ca1797bfb130b0ad56b17e6297e12cd54259ceacb4c2adff98a38f8205426"
+      "uncompressedSha256": "917e92951e827ef2ebc60ed53404eb8eda87dec81a4278b261dae041d5f8571a"
     },
     {
       "name": "lean-init-01.pack.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean-init-01.pack.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean-init-01.pack.gz.bin",
       "source": "lean-init-01.pack.gz",
-      "bytes": 17968875,
-      "sha256": "f7d5c0b682b2c7b4a547c1a02bf22f0977ef8232e68ddf926ee1448eb6f798b2",
+      "bytes": 17966358,
+      "sha256": "09d4dba267b2da2dc20e38c94603d66fa331b23c001e5109655a4b0a176e3312",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean-init-01.pack.gz",
-      "upstreamBytes": 22680711,
-      "upstreamSha256": "3a59a7b36b7adf31c0782569a542f9f89a9a20cb6ab69aed35dec1eafa726468",
+      "upstreamBytes": 22707644,
+      "upstreamSha256": "26d0cff95c2673c1adeef503fa5b29d6e054cec4d33fcb552384117d61f7954a",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "a45cb77ff52c851539c29e5f4ba37969327408b4dead1cb7789e51611b958146"
+      "uncompressedSha256": "1a8d2aa946ae1bbd95b478c8ff35972def6722973381db51940a73f0a42fe669"
     },
     {
       "name": "lean-init-02.pack.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean-init-02.pack.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean-init-02.pack.gz.bin",
       "source": "lean-init-02.pack.gz",
-      "bytes": 18339269,
-      "sha256": "d60b8ac410db29712fa0bf2edc2174234f2d40501f9112a7bc0dcfe0e154dda0",
+      "bytes": 18350244,
+      "sha256": "366da1d323d54431e4922bc422f39d374165e5c98f214ed7272063b371227ff7",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean-init-02.pack.gz",
-      "upstreamBytes": 23067556,
-      "upstreamSha256": "b155d4a5922552281eb9522b450feb93d9820fb4996ad2b05362298027ef4156",
+      "upstreamBytes": 23074139,
+      "upstreamSha256": "f082d51e3a895bda405955cbd07fc2223756e3d7e4da6eb93259ce01c6a21972",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "b88966f349ebe76df41b5bd2b4484f654bea79e95db29626e03fc0e726ef3339"
+      "uncompressedSha256": "13a9a1a9fe4889c8c86465a42c745c8a4ec69840b77944cb97b8556c066907b1"
     },
     {
       "name": "lean-init-03.pack.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean-init-03.pack.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean-init-03.pack.gz.bin",
       "source": "lean-init-03.pack.gz",
-      "bytes": 17545240,
-      "sha256": "20fa26d87b37df5fcfcf29e8db7f0ca40e0fa09d90e48872f4ec7c990c5ee55c",
+      "bytes": 17580361,
+      "sha256": "605b28f7dd309e10eaaadb6c6fe27912d6d9c3429c0789de3f36224055c75d85",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean-init-03.pack.gz",
-      "upstreamBytes": 22424172,
-      "upstreamSha256": "12df210ceb247d73c56d19ebf14bc99f93f87c9f0f19fcc93b301e1eb0293d5f",
+      "upstreamBytes": 22478607,
+      "upstreamSha256": "786c100c360915e9382dbe7772633bca42e20a9e1ba926995f41b562d3030c52",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "be1402783966d0f0cb3d37d9d9ee06cc29f4ed3bad209a69ff7ea5b4f3f5f027"
+      "uncompressedSha256": "5185e641833b10854822960b0331010664efb75f21072dbf13ac84f5c0d221b8"
     },
     {
       "name": "lean-init-04.pack.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean-init-04.pack.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean-init-04.pack.gz.bin",
       "source": "lean-init-04.pack.gz",
-      "bytes": 17107939,
-      "sha256": "78bc27f0321094d1ea25fc7728ddc736a764c50705375ff315c99d4253c0707a",
+      "bytes": 17137579,
+      "sha256": "30c4c852c06049139c4273a5b548221158e50986223487ddcd799db3cecf0d45",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean-init-04.pack.gz",
-      "upstreamBytes": 21826704,
-      "upstreamSha256": "29b80207810f2b27783042e08462dd600839d18b1b84d734b75229a11dff6b88",
+      "upstreamBytes": 21886395,
+      "upstreamSha256": "e5a7a565a9b1f23a92e39acdba8f0aaf88e368aeb0267f11e773939004f98537",
       "uncompressedBytes": 50331648,
-      "uncompressedSha256": "4a31c510a1106824a09d049529ae436f295a08c42021110daca3553852b22311"
+      "uncompressedSha256": "68423b0a9bb6ec6908f69fe2973a1d376c3814a2f8a77fe62102d6360e28531e"
     },
     {
       "name": "lean-init-05.pack.gz.bin",
-      "key": "wasm-lean4/4.35.0/lean-init-05.pack.gz.bin",
+      "key": "wasm-lean4/4.36.0/lean-init-05.pack.gz.bin",
       "source": "lean-init-05.pack.gz",
-      "bytes": 6398473,
-      "sha256": "ebe6d424d21b9286066449d25dc118b359a5634ae73b159eadfb6b59bdf058fe",
+      "bytes": 6275913,
+      "sha256": "8b90c70f931c1e001660be5eb04b6ff7cb4ff9f8980297461f4f96c0431d6592",
       "contentType": "application/octet-stream",
       "ranged": true,
       "encoding": "zstd",
       "upstream": "lean-init-05.pack.gz",
-      "upstreamBytes": 8485321,
-      "upstreamSha256": "3bbc5c9c277350c246f72d5d0fdc81af097c6170370efa7e46c8ee93843cbab9",
-      "uncompressedBytes": 21585632,
-      "uncompressedSha256": "3338bec4e5b4dac95c565173910b7a02bfcebb5fe49ba7a9a55037a0bf512175"
+      "upstreamBytes": 8326951,
+      "upstreamSha256": "cadab5b99741a37a9a4f4f7fca99e97af6e890443ce18f04e17edc752e835b91",
+      "uncompressedBytes": 21112180,
+      "uncompressedSha256": "7285a20b930349dc5cb91bf9a341fa645f5d6942def77ace0606a206dd804946"
     },
     {
       "name": "runner-worker.js",
-      "key": "wasm-lean4/4.35.0/runner-worker.js",
+      "key": "wasm-lean4/4.36.0/runner-worker.js",
       "local": "scripts/assets/runner-worker.js",
       "source": "runner-worker.js",
       "bytes": 16049,
@@ -165,44 +165,44 @@
       "assets": [
         {
           "name": "lean-std-00.pack.gz.bin",
-          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-00.pack.gz.bin",
-          "bytes": 17089330,
-          "sha256": "1d42200cde9f6c2d56b4f961e62b5f73f5206c55575afa2ff13c3c1310ca9ee0",
+          "key": "wasm-lean4/4.36.0/extensions/std/lean-std-00.pack.gz.bin",
+          "bytes": 16959031,
+          "sha256": "af5b784e03e4538f91acaf3c28edd67bd0915442ff25c638e8707f49405cd13c",
           "contentType": "application/octet-stream"
         },
         {
           "name": "lean-std-01.pack.gz.bin",
-          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-01.pack.gz.bin",
-          "bytes": 16993170,
-          "sha256": "70dcdb9db4030e77048e01c5ee987217636db046b1efd484aca9dc451e4612aa",
+          "key": "wasm-lean4/4.36.0/extensions/std/lean-std-01.pack.gz.bin",
+          "bytes": 17144335,
+          "sha256": "1ce1319d8d197b9f74abba6bf5078ab7f089efbc7618440361d30cde2752568e",
           "contentType": "application/octet-stream"
         },
         {
           "name": "lean-std-02.pack.gz.bin",
-          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-02.pack.gz.bin",
-          "bytes": 15588270,
-          "sha256": "9acd813218a3757bfac6bc692e5764aa38f51a60d56d7effc3fdf458fe632cc7",
+          "key": "wasm-lean4/4.36.0/extensions/std/lean-std-02.pack.gz.bin",
+          "bytes": 15568579,
+          "sha256": "3c8bafc6ccc85c56847ed140aedcddab2d1860a3dc38a081ae70e98492cc2ec7",
           "contentType": "application/octet-stream"
         },
         {
           "name": "lean-std-03.pack.gz.bin",
-          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-03.pack.gz.bin",
-          "bytes": 16737439,
-          "sha256": "2a8d1366803d53712b18a498260bcb799fd2f8c69ff452ba23e6b1496bbbe65f",
+          "key": "wasm-lean4/4.36.0/extensions/std/lean-std-03.pack.gz.bin",
+          "bytes": 16685769,
+          "sha256": "3043feb68de4cadaf4be625b905b18d973bc74ca9d6120f7f7e5ad0e8ba1edda",
           "contentType": "application/octet-stream"
         },
         {
           "name": "lean-std-04.pack.gz.bin",
-          "key": "wasm-lean4/4.35.0/extensions/std/lean-std-04.pack.gz.bin",
-          "bytes": 6161083,
-          "sha256": "9d9885d43be5cde0f922964fb5e6fdae2d7f5543c3fbd9c2d73b06824f0771e4",
+          "key": "wasm-lean4/4.36.0/extensions/std/lean-std-04.pack.gz.bin",
+          "bytes": 5031988,
+          "sha256": "0b073151bd0f932ec5fa9dbd6fb151587ae08eef9b25e849530138a62d906404",
           "contentType": "application/octet-stream"
         },
         {
           "name": "lean-std.index.json",
-          "key": "wasm-lean4/4.35.0/extensions/std/lean-std.index.json",
-          "bytes": 259150,
-          "sha256": "0bfcb7a6a94521513475fcdfaaabbe4e4aca12305e0d0372be5c63761b03c668",
+          "key": "wasm-lean4/4.36.0/extensions/std/lean-std.index.json",
+          "bytes": 261456,
+          "sha256": "7b7105b004f4399bae6500841ae4e368e43a50ed786edfc7afe241a473cada51",
           "contentType": "application/json"
         }
       ]
@@ -211,20 +211,22 @@
       "id": "batteries",
       "label": "Batteries",
       "prefix": "Batteries",
-      "requires": ["std"],
+      "requires": [
+        "std"
+      ],
       "assets": [
         {
           "name": "lean-batteries-00.pack.gz.bin",
-          "key": "wasm-lean4/4.35.0/extensions/batteries/lean-batteries-00.pack.gz.bin",
-          "bytes": 5891844,
-          "sha256": "4367a2e21f70a766311e291cb1724f94f074da99f137184fc74c5af89ab31cb2",
+          "key": "wasm-lean4/4.36.0/extensions/batteries/lean-batteries-00.pack.gz.bin",
+          "bytes": 4946600,
+          "sha256": "d04d2a2f05f5393c74856eee5bf33a93499f223f4f2ac07d45ea6e7c815e51f1",
           "contentType": "application/octet-stream"
         },
         {
           "name": "lean-batteries.index.json",
-          "key": "wasm-lean4/4.35.0/extensions/batteries/lean-batteries.index.json",
-          "bytes": 39890,
-          "sha256": "2a81320feda25cd5e74aa9c6714fb6ce0ba3a4fb8abdb4998cd795ff8c8b373e",
+          "key": "wasm-lean4/4.36.0/extensions/batteries/lean-batteries.index.json",
+          "bytes": 41940,
+          "sha256": "9391ee4688e8698e02eac87cc3fad1f1e67155aa6c71c0fa02831e7488377942",
           "contentType": "application/json"
         }
       ]

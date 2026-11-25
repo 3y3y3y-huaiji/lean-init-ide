@@ -17,7 +17,7 @@
 应用层   src/main.ts → views/ → components/lean-panel.ts
          路由、i18n、主题；渲染函数只产出字符串，事件在 bind* 里绑定
           ↓
-语言层   Monaco 编辑器 + @wasm-idle/lsp（Web Worker 内的 Lean 4.35.0）
+语言层   Monaco 编辑器 + @wasm-idle/lsp（Web Worker 内的 Lean 4.36.0）
          LSP over postMessage：诊断、悬停、补全、跳转定义、$/lean/plainGoal
           ↓
 资产层   Service Worker → /cdn/<key> → Pages Functions → R2
@@ -32,7 +32,7 @@
 
 ## 运行时分发（同源 R2 网关）
 
-约 102MB 的 Lean 4.35.0 Init 资产放在 R2 桶 `lean4-ide-releases`。
+约 102MB 的 Lean 4.36.0 Init 资产放在 R2 桶 `lean4-ide-releases`。
 浏览器**只请求站点自己的域名**：Pages Functions 的 `/cdn/<key>` 通过 R2 binding
 在 Cloudflare 内网读取对象，不需要公网 R2 自定义域、不需要证书/DNS、不需要跨源 CORS。
 
@@ -40,7 +40,7 @@
 - **回退**：网关不可用 → 魔搭镜像（配置且可用时）→ 同源 `dist/wasm-lean4/` 全量请求。
   清单里的 GitHub Release 只服务构建期（`fetch:assets` 拉上游 gzip）：Release 下载不带 CORS
   响应头，浏览器无法跨源读取，而且 zstd 资产本来就会跳过 fallback。
-- **版本键**：4.35 的对象 key 带 `wasm-lean4/4.35.0/` 前缀；URL 仍带 `?r=<cacheKey>` 绕开旧缓存
+- **版本键**：4.35 的对象 key 带 `wasm-lean4/4.36.0/` 前缀；URL 仍带 `?r=<cacheKey>` 绕开旧缓存
   （`config/lean4-runtime.json`）。实验性 wasm64（`config/lean4-wasm64-runtime.json`，前缀 `wasm-lean4/4.36.0-wasm64/`）
   共用同一个 `/cdn/` Pages Function 与 R2 / 魔搭分发路径，仅在用户手动切换时加载，默认仍是 wasm32。
 - **完整性**：清单固定每个资产的字节数与 SHA-256；构建期下载、SW 组装、上传前后分别校验。

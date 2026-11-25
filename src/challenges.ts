@@ -11,7 +11,7 @@
  * 每张卡的 `insert` 都是一份完整、可独立编译的 Lean 文件，点击后由视图层
  * 通过 `panel.getCode()` + `panel.setCode()` 智能替换，玩家不敲键盘也能通关。
  *
- * 约束：所有代码只使用 Lean 4.35.0 `Init`，不得引入 Mathlib / Lake / Std。
+ * 约束：所有代码只使用 Lean 4.36.0 `Init`，不得引入 Mathlib / Lake / Std。
  */
 import type { ChallengeMode } from './exercise';
 import type { Locale } from './i18n';

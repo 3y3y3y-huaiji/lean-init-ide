@@ -35,13 +35,13 @@ export const en: Messages = {
     clearCacheFailed: 'Could not clear the cache. Try again.',
   },
   home: {
-    eyebrow: 'Lean 4.35.0 · Init + Std + Batteries · LSP in the browser',
+    eyebrow: 'Lean 4.36.0 · Init + Std + Batteries · LSP in the browser',
     title: 'Run a real Lean 4 theorem prover in your browser',
     lead: 'Not a regex mock, and not code shipped to a server: the full compiler and language server live in a Web Worker. Open the page and write your first proof in 30 seconds.',
     seoDescription:
-      'Run Lean 4.35.0 in your browser: the real compiler and language server run as WebAssembly in a Web Worker, with Init, Std and Batteries and zero backend.',
+      'Run Lean 4.36.0 in your browser: the real compiler and language server run as WebAssembly in a Web Worker, with Init, Std and Batteries and zero backend.',
     facts: (lessonCount) =>
-      `Lean 4.35.0 runtime · client-side Web Worker · Init built in, Std and Batteries on demand · zero backend · ${lessonCount} bilingual lessons · open source`,
+      `Lean 4.36.0 runtime · client-side Web Worker · Init built in, Std and Batteries on demand · zero backend · ${lessonCount} bilingual lessons · open source`,
     factsRepo: 'GitHub repository',
     heroNote:
       'Unit tests only cover the cases you remembered to write. Lean uses mathematical logic to rule out every possible input at once, and the compiler stops you with a red line the moment a step breaks.',
@@ -52,7 +52,7 @@ export const en: Messages = {
     features: [
       {
         title: 'A real compiler, not a mock',
-        body: 'The Lean 4.35.0 compiler and language server are compiled to WebAssembly and run in a Web Worker, handling parsing, elaboration and diagnostics. No regex shortcut ever decides whether a proof is valid.',
+        body: 'The Lean 4.36.0 compiler and language server are compiled to WebAssembly and run in a Web Worker, handling parsing, elaboration and diagnostics. No regex shortcut ever decides whether a proof is valid.',
       },
       {
         title: 'Cross-origin isolation for wasm threads',
@@ -277,7 +277,7 @@ export const en: Messages = {
     seoDescription:
       'Open the Lean 4 Playground: a browser-based editor and language server run as WebAssembly in a Web Worker, with Init built in, Std and Batteries on demand, and no backend.',
     facts: (lessonCount) =>
-      `Lean 4.35.0 · WebAssembly in a Web Worker · Init built in, Std and Batteries on demand · zero backend · ${lessonCount} bilingual lessons · open source`,
+      `Lean 4.36.0 · WebAssembly in a Web Worker · Init built in, Std and Batteries on demand · zero backend · ${lessonCount} bilingual lessons · open source`,
     factsRepo: 'GitHub repository',
     defaultCode: `open Classical
 

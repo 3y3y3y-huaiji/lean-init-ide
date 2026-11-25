@@ -55,7 +55,7 @@ const truncateEnglishDescription = (value: string, max: number): string => {
 };
 
 const EN_DESCRIPTION_CLAUSES = [
-  ' Lean 4.35.0 runs as WebAssembly inside a Web Worker.',
+  ' Lean 4.36.0 runs as WebAssembly inside a Web Worker.',
   ' Init is built in, while Std and Batteries load on demand.',
   ' There is no backend, no install, and your code never leaves the browser.',
 ];
@@ -67,7 +67,7 @@ const EN_DESCRIPTION_FILLERS = [
 ];
 
 const ZH_DESCRIPTION_CLAUSES = [
-  'Lean 4.35.0 在浏览器内以 WebAssembly 运行，代码不会上传到服务器。',
+  'Lean 4.36.0 在浏览器内以 WebAssembly 运行，代码不会上传到服务器。',
   'Init 已内置，Std 与 Batteries 可按需加载，无需安装工具链或后端。',
   '站点提供双语课程、速查表与在线编辑器，并在 GitHub 开源。',
 ];

@@ -4,7 +4,7 @@
 
 ## 1. 目标与运行时边界
 
-- **入门/数学篇（01–22 课）与趣味挑战仅允许依赖 `Init`**：Lean 4.35.0 `Init` 已内置 `omega` / `grind` / `decide` / `simp` / `rw`；**严禁**引入 Mathlib 幽灵战术（`ring`、`linarith`、`nlinarith`、`norm_num`）。
+- **入门/数学篇（01–22 课）与趣味挑战仅允许依赖 `Init`**：Lean 4.36.0 `Init` 已内置 `omega` / `grind` / `decide` / `simp` / `rw`；**严禁**引入 Mathlib 幽灵战术（`ring`、`linarith`、`nlinarith`、`norm_num`）。
 - **工程实战篇（23–27 课）按需挂载扩展包**：依赖 `Std.*` 或 `Batteries.*` 的课程必须在元数据声明对应 `requires`（如 `['std']`）。
 - **正文零未完成代码**：除第 21 课 `math-axioms` 外，课程正文 `{ kind: 'code' }` **禁止留 `sorry`**，且练习不得直接复用正文已证明的同名定理。
 - **Goal 面板隐性约定**：`{ kind: 'goal' }` 中的解释文字以 `说明：...` / `Note: ...` 单独成行（由 `src/views/lesson-goal-steps.ts` 解析，勿拆出伪步骤），步骤代码尽量对齐左侧代码块以便高亮定位。

@@ -8,7 +8,7 @@
 
 **A real theorem prover, running in your browser.**
 
-Not a demo, not a regex mock, and your code is never quietly shipped to a server. Lean 4.35.0 is
+Not a demo, not a regex mock, and your code is never quietly shipped to a server. Lean 4.36.0 is
 compiled to WebAssembly and packed into a Web Worker together with the full language server. You write
 a proof, the compiler judges it on the spot — and your code never leaves your machine.
 
@@ -42,7 +42,7 @@ Open <https://criticalthinking.de5.net>, explore first, and download only when n
 Spot-checking a few test values only verifies those examples. Lean checks mathematical logic across every
 possible input at once.
 
-- **A real compiler, not a mock.** Lean 4.35.0 is compiled to WebAssembly, so parsing, elaboration and
+- **A real compiler, not a mock.** Lean 4.36.0 is compiled to WebAssembly, so parsing, elaboration and
   diagnostics all happen in a local Web Worker. No regex ever guesses whether a proof is valid.
 - **Step-by-step Goal panel & live diagnostics.** All 27 lessons include a sticky **Goal panel** that
   steps through the target state and updates live when you run snippets; opening an exercise or challenge
@@ -134,7 +134,7 @@ Page views and Core Web Vitals are collected by Cloudflare Web Analytics.
 
 ## Under the hood
 
-- **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.35.0 runs in a Web Worker and speaks LSP over postMessage.
+- **Language layer**: Monaco + `@wasm-idle/lsp`; Lean 4.36.0 runs in a Web Worker and speaks LSP over postMessage.
 - **Cross-origin isolation**: COOP/COEP and SharedArrayBuffer let the wasm threading model run unchanged,
   which is what makes a real compiler possible in the page.
 - **Asset layer**: a Service Worker fetches assets from R2 through the same-origin `/cdn/` gateway in

@@ -76,8 +76,10 @@ const progressTracker64 = createProgressTracker(sumBytes(RANGE_ASSETS_64));
 
 // 运行时预取同时下载 6 个资产，每个资产再并发分片，所以这里的并发是全局并发的乘数。
 // 4MiB 对齐魔搭 CDN 的缓存块；实测 12–24 条流就到吞吐平台（约 400–500Mbps 链路），
-// 36 条不再更快。取 4 → 最多 24 条流，兼顾冷启动和内存占用。单分片 120s 预算
-//（4MiB 只需 35KB/s），预算耗尽后自动二分重试，慢片不会让整个资产重下。
+// 36 条不再更快。取 4 且由 src/sw-download.ts 的共享信号量兜底（全局最多 6 条在途
+// Range 请求），多个资产同时预取也不会把并发叠成尖峰。单分片 120s 预算
+//（4MiB 只需 35KB/s），预算耗尽后自动二分重试；遇到 429/503 则按 Retry-After 退避、
+// 禁止二分拆分，快速失败交给下一源，避免限流窗口内放大请求。
 const CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_PARALLEL = 4;
 const RETRIES = 3;

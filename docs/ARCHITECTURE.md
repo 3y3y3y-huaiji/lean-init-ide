@@ -37,6 +37,8 @@
 在 Cloudflare 内网读取对象，不需要公网 R2 自定义域、不需要证书/DNS、不需要跨源 CORS。
 
 - **主源**：同源 `/cdn/` 网关，支持 Range；Service Worker 按 4MB 分片并行下载后组装成同源响应。
+  跨资产共享全局在途请求上限（6 条）；遇到 `429/503` 时按 `Retry-After` 或指数退避 + 抖动等待，
+  且**禁止二分拆分**——限流窗口内拆分会把一次失败放大成数十次请求，改为快速失败交给下一源。
 - **回退**：网关不可用 → 魔搭镜像（配置且可用时）→ 同源 `dist/wasm-lean4/` 全量请求。
   清单里的 `fallback`（GitHub Release）只作可选归档与构建期参考（`fetch:assets` 拉上游 gzip）：
   Release 下载不带 CORS 响应头且在 COOP/COEP 下会被拦截，**浏览器端无 Release 回退源**；

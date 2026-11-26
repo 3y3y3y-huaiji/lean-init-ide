@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { downloadRanges, downloadStream, type DownloadOptions } from './sw-download';
+import {
+  createDownloadLimiter,
+  downloadRanges,
+  downloadStream,
+  parseRetryAfter,
+  type DownloadOptions,
+} from './sw-download';
 
 const bytes = (length: number) => Uint8Array.from({ length }, (_, index) => index % 251);
 
@@ -108,7 +114,9 @@ describe('downloadRanges', () => {
       return partial(body, range);
     });
 
-    const parts = await downloadRanges(base({ fetchImpl }));
+    const parts = await downloadRanges(
+      base({ fetchImpl, timeoutMs: 10_000, sleep: async () => undefined }),
+    );
 
     expect(new Uint8Array(parts.flatMap((part) => [...new Uint8Array(part)]))).toEqual(body);
     expect(calls.filter(([start, end]) => start === 0 && end === 3)).toHaveLength(1);
@@ -328,6 +336,93 @@ describe('downloadRanges', () => {
       ),
     ).rejects.toThrow('returned 2 bytes');
   });
+
+  it('429 按 Retry-After 退避重试，成功后不拆分放大请求', async () => {
+    const body = bytes(8);
+    const sleeps: number[] = [];
+    let calls = 0;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(null, { status: 429, headers: { 'Retry-After': '2' } });
+      }
+      return partial(body, rangeOf(init));
+    });
+
+    const parts = await downloadRanges(
+      base({
+        fetchImpl,
+        total: 8,
+        chunkBytes: 8,
+        retries: 1,
+        timeoutMs: 10_000,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      }),
+    );
+
+    expect(new Uint8Array(parts[0]!)).toEqual(body);
+    expect(sleeps).toEqual([2000]);
+    expect(calls).toBe(2);
+  });
+
+  it('429 重试耗尽后保留状态码并直接失败，不做二分拆分', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(null, { status: 429, headers: { 'Retry-After': '0' } }),
+    );
+
+    await expect(
+      downloadRanges(
+        base({
+          fetchImpl,
+          total: 8,
+          chunkBytes: 8,
+          retries: 1,
+          timeoutMs: 10_000,
+          sleep: async () => undefined,
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 429, retryAfterMs: 0 });
+    // 若触发二分拆分，请求数会从 2 放大到 2 + 2 + 4。
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('跨资产请求共享全局并发上限', async () => {
+    const limiter = createDownloadLimiter(3);
+    const body = bytes(12);
+    let inFlight = 0;
+    let peak = 0;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return partial(body, rangeOf(init));
+    });
+    const options = base({
+      fetchImpl,
+      limiter,
+      total: 12,
+      chunkBytes: 4,
+      parallel: 4,
+      retries: 0,
+    });
+
+    await Promise.all([downloadRanges(options), downloadRanges(options)]);
+
+    expect(peak).toBe(3);
+  });
+});
+
+describe('parseRetryAfter', () => {
+  it('解析秒数与 HTTP 日期，并限制最大值', () => {
+    expect(parseRetryAfter('2', 0)).toBe(2000);
+    expect(parseRetryAfter(new Date(5000).toUTCString(), 1000)).toBe(4000);
+    expect(parseRetryAfter('999999', 0)).toBe(60_000);
+    expect(parseRetryAfter(null, 0)).toBeNull();
+    expect(parseRetryAfter('', 0)).toBeNull();
+  });
 });
 
 describe('downloadStream', () => {
@@ -376,6 +471,34 @@ describe('downloadStream', () => {
 
     expect(new Uint8Array(parts[0]!)).toEqual(body);
     expect(progress).toEqual([4, 10]);
+  });
+
+  it('downloadStream 429 遵守 Retry-After 并重试成功', async () => {
+    const body = bytes(4);
+    const sleeps: number[] = [];
+    let calls = 0;
+
+    const parts = await downloadStream({
+      url: 'https://modelscope.cn/asset',
+      total: 4,
+      timeoutMs: 10_000,
+      retries: 1,
+      signal: new AbortController().signal,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      fetchImpl: vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(null, { status: 429, headers: { 'Retry-After': '1' } });
+        }
+        return new Response(body, { status: 200 });
+      }),
+    });
+
+    expect(calls).toBe(2);
+    expect(sleeps).toEqual([1000]);
+    expect(new Uint8Array(parts[0]!)).toEqual(body);
   });
 
   it('瞬时 HTTP 异常后会重试，超限则取消流并抛错', async () => {

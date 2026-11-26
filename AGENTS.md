@@ -40,9 +40,16 @@
 ## 4. PR 协作与 CI/CD 铁律
 
 - **永远从最新 `origin/main` 拉 clean 分支开 PR**：一件事一个 PR，提交规范 `<type>(<scope>): 一句话结论`，不直接 push 到 `main`（也不擅自代用户 merge PR）。
-- **Agent 只推分支、不代开 PR**：本仓库的 GitHub 凭据仅有 push 权限，`gh pr create` 与 REST 创建 PR 都会返回 `403 Resource not accessible by integration`，不要换账号或反复重试。推送 `trae/*` 分支后，把对比链接 `https://github.com/lean-online/lean-init-ide/compare/main...<fork-owner>:<branch>?expand=1` 连同建议标题与描述交给用户，由用户点击 “Create pull request”。
 - **重型门禁交给 `CI · 应用`**：本地只跑轻量检查（`verify:docs` / `format:check` / `lint` / `typecheck` / 目标单测）；`CI · 应用` 会通过 `scripts/detect-changes.mjs` 自动按档裁剪，纯文档改动 5 秒完结，门禁升级时 [ci-refresh-open-prs.yml](.github/workflows/ci-refresh-open-prs.yml) 会自动刷新在途 PR。
 - **用户可见文本双语同步**：任何前端文案、课程或挑战必须同步更新 `src/i18n/`（通过 `locale-parity.test.ts` 与 `curriculum-invariants.test.ts`）。
 - **文档改动同步触发 `verify:docs`**：修改架构、工作流、脚本、版本、课时数或 ADR 时，同步对应唯一的权威文档。
 - **公开协作入口**：路线图与题库征集见 [Discussions](https://github.com/lean-online/lean-init-ide/discussions)（`#74` / `#75`），跨仓排期与缺陷追踪统一建在 [Issues](https://github.com/lean-online/lean-init-ide/issues)（如 `#76` / `#77`，因 `lean4-wasm` 禁用 Issues），代码合入走 [Pull Requests](https://github.com/lean-online/lean-init-ide/pulls)。
 - **面向人类的完整流程**（本地开发、门禁档位、分支与提交规范、Issue/PR 模板约定）写在 [CONTRIBUTING.md](CONTRIBUTING.md)；本文件只保留 Agent 必须遵守的硬约束。
+
+## 5. Trae Agent 必看（仅限 Trae 执行环境）
+
+以下是 Trae Agent 沙箱的凭据限制，**不代表人类贡献者或其他 Agent**：
+
+- **只推分支、不代开 PR**：本环境 GitHub 凭据只有 push 权限，`gh pr create` 与 REST 创建 PR 都会返回 `403 Resource not accessible by integration`；不要换账号或反复重试。
+- **交付方式**：推送 `trae/*` 分支后，把对比链接 `https://github.com/lean-online/lean-init-ide/compare/main...<fork-owner>:<branch>?expand=1` 连同建议标题与描述交给用户，由用户点击 “Create pull request”。
+- **其他协作规则**（分支、提交、门禁、双语、文档）仍以上文第 4 节为准，不因本环境例外而放宽。

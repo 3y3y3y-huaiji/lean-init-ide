@@ -9,9 +9,9 @@ import { assetSources } from '../src/asset-sources.mjs';
  * Downloads the pinned Lean 4.36.0 Init runtime used by @wasm-idle/lsp.
  *
  * The manifest in config/lean4-runtime.json is shared with the Service Worker and
- * Pages Functions: the primary source is the same-origin /cdn/ gateway; the
- * fallback baseUrl points at the GitHub Release and is used here (Node) for
- * upstream artifacts. Upstream artifacts use `.gz` names while the runtime expects
+ * Pages Functions: the primary source is the same-origin /cdn/ gateway; the optional
+ * `fallback` baseUrl points at GitHub Releases for archival / Node build-time reference
+ * only (browsers have no Release fallback). Upstream artifacts use `.gz` names while the runtime expects
  * `.gz.bin`. Every file is verified against its pinned byte count and SHA-256.
  *
  * Node cannot fetch a relative /cdn/ URL without an origin. Set LEAN_ASSET_ORIGIN

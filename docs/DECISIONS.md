@@ -6,7 +6,7 @@
 
 ## ADR-01：浏览器侧绝不直接请求 GitHub Release {#adr-01}
 
-- **决定**：前端、Service Worker 与 browser-facing 文档只允许通过同源 `/cdn/` 网关或魔搭镜像拉取运行时资产，GitHub Release 仅服务构建期（`pnpm run fetch:assets`）与版本归档。
+- **决定**：前端、Service Worker 与 browser-facing 文档只允许通过同源 `/cdn/` 网关或魔搭镜像拉取运行时资产，GitHub Release 仅作可选归档发布与构建期参考（浏览器端无 Release 回退源；流水线不配 `RELEASE_TOKEN` 不影响线上 R2 主源与魔搭镜像）。
 - **原因**：GitHub Release 的下载 302 重定向链不返回 CORS 响应头，在站点强制开启的 `COOP + COEP (require-corp)` 跨源隔离下必然被浏览器拦截。
 - **禁止回退的方案**：禁止在前端源选择器、`sw.ts` 回退链或 CSP `connect-src` 中恢复 `github` / `raw.githubusercontent.com` 浏览器直连路径。
 

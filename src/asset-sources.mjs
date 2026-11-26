@@ -6,8 +6,8 @@
  * SHA-256 与键名统一来自 config/lean4-runtime.json，避免多处清单漂移。
  *
  * 主源是站点同源的 /cdn/ 路径（Pages Function → R2 binding），所以 baseUrl
- * 可以是相对路径；回退源仍是绝对 URL。Node 侧可以用 LEAN_ASSET_BASE_URL 或
- * LEAN_ASSET_ORIGIN 把相对主源解析成可 fetch 的绝对地址。
+ * 可以是相对路径；`fallback` 字段仅作可选归档发布与 Node 构建期参考（浏览器端无 Release 回退源）。
+ * Node 侧可以用 LEAN_ASSET_BASE_URL 或 LEAN_ASSET_ORIGIN 把相对主源解析成可 fetch 的绝对地址。
  */
 
 const isAbsoluteUrl = (value) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
@@ -36,8 +36,8 @@ const composeUrl = (baseUrl, path) => {
 };
 
 /**
- * 同源 Pages Function 优先，配置了 mirror 时按需插入魔搭镜像；非 zstd 资产再追加
- * GitHub Release 回退（该地址只供构建期使用，浏览器侧会被 CORS 拦掉）。
+ * 同源 Pages Function 优先，配置了 mirror 时按需插入魔搭镜像；非 zstd 资产在 Node 构建期可追加
+ * GitHub Release 可选归档地址（浏览器端无 Release 回退源，跨源会被 CORS/COEP 拦掉）。
  * 镜像文件按 <cacheKey>/<name> 存放，避免在 resolve 地址上再带 ?r= 查询参数。
  */
 export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
@@ -63,14 +63,14 @@ export const assetSources = (manifest, asset, primaryBaseUrl, options = {}) => {
   };
 
   const addFallback = () => {
-    // zstd 资产的 GitHub Release 上游仍是 gzip；字节格式不同，不能当回退源。
-    // 这类资产由 Service Worker 直接落到同源静态副本 / 已上传的镜像。
+    // zstd 资产不指向 GitHub Release（且浏览器端无 Release 回退源，仅作可选归档/构建期参考）。
+    // 浏览器侧由 Service Worker 走 R2 /cdn/、魔搭镜像与同源静态副本。
     if (asset.encoding === 'zstd') return;
     add(manifest.fallback.label, manifest.fallback.baseUrl, asset.source);
   };
 
   if (options.mirrorFirst) addMirror();
-  // 诊断用的强制源：GitHub 回退排最前；zstd 资产没有回退源时顺序不变。
+  // 诊断/构建用的可选强制源：GitHub 可选归档排最前；zstd 资产无此分支。
   if (options.githubFirst) addFallback();
   add(manifest.primary.label, primaryBaseUrl || manifest.primary.baseUrl, asset.key);
   if (options.includeMirror) addMirror();

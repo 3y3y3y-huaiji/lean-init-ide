@@ -107,7 +107,7 @@ SW 只在首次安装时 `skipWaiting`；已有旧版本时等所有受控页面
   `static.cloudflareinsights.com`，并保留 `'wasm-unsafe-eval'`（WebAssembly 编译需要）。
   `connect-src` 还要放行魔搭镜像（`modelscope.cn` 及其 `*.modelscope.cn` 重定向域名），
   否则 Service Worker 的跨源分片请求会被 CSP 拦掉，表现为镜像回退失败、只剩同源 R2 慢速下载。
-  `raw.githubusercontent.com` 已从放行列表移除：浏览器侧不访问 GitHub，GitHub Release 只服务构建期。
+  `raw.githubusercontent.com` 已从放行列表移除：浏览器侧不访问 GitHub（无 Release 回退源），GitHub Release 仅作可选归档与构建期参考。
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy`：关闭摄像头、麦克风、定位、支付与 USB。
 
@@ -165,7 +165,7 @@ pnpm run verify:manifest      # 校验 config/lean4-runtime.json 与 wasm64 清�
 `functions/`、`scripts/fetch-assets.mjs` 与 `src/sw.ts` 共用，避免字节数或键名漂移。
 
 清单里 `encoding: "zstd"` 的资产保留上游 `.gz.bin` 键名，但交付字节是 zstd；`fetch:assets` 会优先从 R2 `/cdn/` 或魔搭镜像直接拉取匹配 `bytes`/`sha256` 的 zstd 字节，缺失或不一致时再从 GitHub Release 下载上游 gzip、校验 `upstreamBytes`/`upstreamSha256`、解压后用 level 19 重新压缩（构建机需要 **Node 24+** 内置 `zlib.zstdCompressSync`）。
-R2 与魔搭镜像托管 zstd 字节；Release 没有 CORS 响应头且在 COOP/COEP 下无法跨源读取，浏览器端已禁用 GitHub Release（仅服务构建期与版本归档，见 [ADR-01](DECISIONS.md#adr-01)），最终回退为同源静态副本。
+R2 与魔搭镜像托管 zstd 字节；Release 没有 CORS 响应头且在 COOP/COEP 下无法跨源读取，**浏览器端无 Release 回退源**（仅作可选归档发布与构建期参考，见 [ADR-01](DECISIONS.md#adr-01)；发版工具链不配 `RELEASE_TOKEN` 不影响线上主源 R2 `/cdn/` 与魔搭镜像），浏览器最终回退为同源静态副本。
 
 修改清单里的资产字节数/SHA-256 或 `cacheKey` 后，必须重新生成 LSP 补丁，把交付哈希同步进包内 profile：
 

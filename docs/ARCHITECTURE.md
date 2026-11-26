@@ -38,8 +38,9 @@
 
 - **主源**：同源 `/cdn/` 网关，支持 Range；Service Worker 按 4MB 分片并行下载后组装成同源响应。
 - **回退**：网关不可用 → 魔搭镜像（配置且可用时）→ 同源 `dist/wasm-lean4/` 全量请求。
-  清单里的 GitHub Release 只服务构建期（`fetch:assets` 拉上游 gzip）：Release 下载不带 CORS
-  响应头，浏览器无法跨源读取，而且 zstd 资产本来就会跳过 fallback。
+  清单里的 `fallback`（GitHub Release）只作可选归档与构建期参考（`fetch:assets` 拉上游 gzip）：
+  Release 下载不带 CORS 响应头且在 COOP/COEP 下会被拦截，**浏览器端无 Release 回退源**；
+  发版流水线不配置 `RELEASE_TOKEN` 也不会影响线上主源 R2（`/cdn/`）与魔搭镜像。
 - **版本键**：4.35 的对象 key 带 `wasm-lean4/4.36.0/` 前缀；URL 仍带 `?r=<cacheKey>` 绕开旧缓存
   （`config/lean4-runtime.json`）。实验性 wasm64（`config/lean4-wasm64-runtime.json`，前缀 `wasm-lean4/4.36.0-wasm64/`）
   共用同一个 `/cdn/` Pages Function 与 R2 / 魔搭分发路径，仅在用户手动切换时加载，默认仍是 wasm32。
@@ -104,7 +105,7 @@ public/
   vendor/zstddec.mjs 同源 zstd wasm 解码器（worker 动态加载）
   _routes.json       仅 /cdn/* 与 /api/telemetry 走 Functions
 config/
-  lean4-runtime.json 资产清单、字节数/SHA-256、主源与回退源、缓存键
+  lean4-runtime.json 资产清单、字节数/SHA-256、主源与可选归档参考、缓存键
 scripts/             资产下载/上传、LSP 补丁、清单与产物校验、线上冒烟
 wrangler.toml        Pages 项目配置与 R2 binding
 ```

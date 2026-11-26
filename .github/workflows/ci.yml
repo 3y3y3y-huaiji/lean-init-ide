@@ -12,6 +12,12 @@ on:
         default: ''
   # 允许 deploy.yml 在 direct push 时复用同一套检查。
   workflow_call:
+    inputs:
+      full:
+        description: '强制全量检查（用于 workflow_dispatch 发布）'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -65,6 +71,8 @@ jobs:
             scripts/verify-build.mjs \
             scripts/verify-manifest.mjs \
             scripts/verify-docs.mjs \
+            scripts/patch-lsp.mjs \
+            scripts/generate-lsp-patch.mjs \
             eslint.config.js \
             vitest.config.ts \
             src/curriculum-invariants.test.ts \
@@ -78,7 +86,13 @@ jobs:
         env:
           # PR 用基线分支 tip；push 用上一次提交；手动刷新可显式传入 base；否则退回 HEAD^。
           BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.event.inputs.base }}
-        run: node scripts/detect-changes.mjs --base "$BASE"
+          FORCE_FULL: ${{ inputs.full && 'true' || 'false' }}
+        run: |
+          if [ "$FORCE_FULL" = "true" ]; then
+            node scripts/detect-changes.mjs --full
+          else
+            node scripts/detect-changes.mjs --base "$BASE"
+          fi
 
   docs-check:
     name: 文档不变量检查

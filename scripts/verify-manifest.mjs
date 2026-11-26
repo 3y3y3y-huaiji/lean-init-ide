@@ -252,6 +252,115 @@ console.log(
   `资产清单校验通过：${assets.length} 个资产，共 ${(totalBytes / 1024 / 1024).toFixed(2)} MiB，cacheKey=${manifest.cacheKey}`,
 );
 
+// Gate 1：强制校验 config/lean4-runtime.json 与 patches/@wasm-idle__lsp@<ver>.patch 的包内 profile 一致，
+// 防止升级清单后忘记重跑 pnpm run patch:lsp && pnpm install --no-frozen-lockfile，拖到 15 分钟后的 E2E 才炸。
+{
+  const pkgJson = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+  const lspSpec = String(pkgJson.dependencies?.['@wasm-idle/lsp'] ?? '').replace(/^[~^]/, '');
+  const patchPath = resolve(root, 'patches', `@wasm-idle__lsp@${lspSpec}.patch`);
+  const patchErrors = [];
+  const pFail = (msg) => patchErrors.push(msg);
+
+  let patchText;
+  try {
+    patchText = await readFile(patchPath, 'utf8');
+  } catch {
+    pFail(`缺少 LSP 补丁文件 patches/@wasm-idle__lsp@${lspSpec}.patch`);
+  }
+
+  if (patchText) {
+    const start = patchText.indexOf('diff --git a/dist/bundledLean4Runtime.js ');
+    const nextDiff = start === -1 ? -1 : patchText.indexOf('\ndiff --git ', start + 1);
+    const section =
+      start === -1 ? '' : patchText.slice(start, nextDiff === -1 ? undefined : nextDiff);
+    const hunkIdx = section.indexOf('\n@@ ');
+    const hunkBodyStart = hunkIdx === -1 ? -1 : section.indexOf('\n', hunkIdx + 1);
+    if (hunkBodyStart === -1) {
+      pFail('LSP 补丁缺少 dist/bundledLean4Runtime.js diff hunk');
+    } else {
+      const patchedLines = section
+        .slice(hunkBodyStart + 1)
+        .split('\n')
+        .filter((line) => line.startsWith(' ') || line.startsWith('+'))
+        .map((line) => line.slice(1))
+        .join('\n');
+      const braceStart = patchedLines.indexOf('{');
+      const braceEnd = patchedLines.lastIndexOf('};');
+      if (braceStart === -1 || braceEnd <= braceStart) {
+        pFail('无法从 LSP 补丁解析 WASM_LEAN4_PROFILE JSON');
+      } else {
+        let profile;
+        try {
+          profile = JSON.parse(patchedLines.slice(braceStart, braceEnd + 1));
+        } catch (err) {
+          pFail(`LSP 补丁中的 WASM_LEAN4_PROFILE JSON 解析失败: ${err.message}`);
+        }
+        if (profile) {
+          const expectedVersion = /(\d+\.\d+\.\d+)/.exec(String(manifest.runtime ?? ''))?.[1];
+          if (expectedVersion && profile.version !== expectedVersion) {
+            pFail(`profile.version=${profile.version} != runtime ${expectedVersion}`);
+          }
+          if (expectedVersion && !String(profile.profileId ?? '').includes(expectedVersion)) {
+            pFail(`profile.profileId (${profile.profileId}) 未包含 ${expectedVersion}`);
+          }
+          if (profile.assets?.['runner-worker.js'] !== undefined) {
+            pFail(
+              'profile.assets 禁止包含 runner-worker.js（应只在 workerReceipt，避免 MIME 校验误伤）',
+            );
+          }
+          const manifestByName = new Map(assets.map((asset) => [asset.name, asset]));
+          const expectedProfileNames = assets
+            .filter((asset) => asset.name !== 'runner-worker.js')
+            .map((asset) => asset.name)
+            .sort();
+          const actualProfileNames = Object.keys(profile.assets ?? {}).sort();
+          if (JSON.stringify(actualProfileNames) !== JSON.stringify(expectedProfileNames)) {
+            pFail(
+              `profile.assets 集合与清单不一致：补丁=[${actualProfileNames.join(', ')}] vs 清单=[${expectedProfileNames.join(', ')}]`,
+            );
+          }
+          for (const name of actualProfileNames) {
+            const m = manifestByName.get(name);
+            const p = profile.assets[name];
+            if (!m || !p) continue;
+            if (p.bytes !== m.bytes) pFail(`${name}.bytes: 补丁=${p.bytes} != 清单=${m.bytes}`);
+            if (p.sha256 !== m.sha256) pFail(`${name}.sha256 与清单不一致`);
+            if (m.encoding === 'zstd') {
+              if (p.encoding !== 'zstd') pFail(`${name}.encoding 应为 zstd`);
+              if (p.uncompressed?.bytes !== m.uncompressedBytes) {
+                pFail(
+                  `${name}.uncompressed.bytes: 补丁=${p.uncompressed?.bytes} != ${m.uncompressedBytes}`,
+                );
+              }
+              if (p.uncompressed?.sha256 !== m.uncompressedSha256) {
+                pFail(`${name}.uncompressed.sha256 与清单不一致`);
+              }
+            }
+          }
+          const worker = manifestByName.get('runner-worker.js');
+          if (worker) {
+            if (profile.workerReceipt?.bytes !== worker.bytes) {
+              pFail(`workerReceipt.bytes: 补丁=${profile.workerReceipt?.bytes} != ${worker.bytes}`);
+            }
+            if (profile.workerReceipt?.sha256 !== worker.sha256) {
+              pFail('workerReceipt.sha256 与清单不一致');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (patchErrors.length > 0) {
+    console.error(
+      `LSP 补丁锁与清单不一致（${patchErrors.length} 项）：请运行 pnpm run patch:lsp && pnpm install --no-frozen-lockfile`,
+    );
+    for (const err of patchErrors) console.error(`  - ${err}`);
+    process.exit(1);
+  }
+  console.log(`LSP 补丁一致性校验通过：patches/@wasm-idle__lsp@${lspSpec}.patch`);
+}
+
 // 同时校验实验性 wasm64 清单结构（允许 assets 为空表示尚未发布）。
 try {
   const w64Raw = await readFile(resolve(root, 'config/lean4-wasm64-runtime.json'), 'utf8');

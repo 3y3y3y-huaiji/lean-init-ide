@@ -60,8 +60,23 @@ const RUNTIME_EXACT = new Set([
   'scripts/e2e-lessons.mjs',
   'scripts/local-gateway.mjs',
   'scripts/fetch-assets.mjs',
+  'scripts/patch-lsp.mjs',
+  'scripts/generate-lsp-patch.mjs',
 ]);
 const RUNTIME_PREFIXES = ['config/', 'functions/', 'patches/', 'public/'];
+
+/** 明确只做离线校验 / 独立运维探活的脚本，修改它们不会影响构建或线上产物。 */
+const NON_DEPLOY_SCRIPTS = new Set([
+  'scripts/verify-docs.mjs',
+  'scripts/verify-manifest.mjs',
+  'scripts/detect-changes.mjs',
+  'scripts/probe-sources.mjs',
+  'scripts/smoke.mjs',
+  'scripts/e2e-ui.mjs',
+  'scripts/e2e-lean.mjs',
+  'scripts/e2e-lessons.mjs',
+  'scripts/local-gateway.mjs',
+]);
 
 /** E2E 准备流程本身变了，必须全量验证，否则可能用坏掉的编排跑出一片绿。 */
 const E2E_HARNESS = '.github/actions/e2e-prepare/action.yml';
@@ -129,9 +144,20 @@ const isDeployableFile = (file) => {
     file.startsWith('patches/') ||
     SHIPPED_EXACT.has(file) ||
     file.startsWith('scripts/assets/') ||
-    file === 'scripts/fetch-assets.mjs'
+    file === 'scripts/fetch-assets.mjs' ||
+    file === 'scripts/patch-lsp.mjs' ||
+    file === 'scripts/generate-lsp-patch.mjs' ||
+    (file.startsWith('scripts/') && !NON_DEPLOY_SCRIPTS.has(file) && !SHIPPED_EXACT.has(file))
   );
 };
+
+/** 未知 scripts/* 违例安全：只要不在非构建脚本白名单里，一律按全量运行时 + 可部署处理，避免新加打包脚本静默绕过 CI。 */
+const isUnknownDeployScript = (file) =>
+  file.startsWith('scripts/') &&
+  !NON_DEPLOY_SCRIPTS.has(file) &&
+  !SHIPPED_EXACT.has(file) &&
+  !isRuntimeFile(file) &&
+  !UI_ONLY_SCRIPTS.has(file);
 
 /**
  * 纯函数：把文件列表归类成 CI 需要执行的档位。
@@ -167,7 +193,7 @@ export const classifyFiles = (paths) => {
     if (isDeployableFile(file)) flags.deployable = true;
     if (TEST_FILE.test(file)) continue;
 
-    if (isRuntimeFile(file)) {
+    if (isRuntimeFile(file) || isUnknownDeployScript(file)) {
       flags.runtime = true;
       flags.smoke = true;
     } else if (file === LESSON_SOURCE) {
@@ -321,15 +347,16 @@ export const changedSlugs = ({ file, base, head }) => {
 const NONE = '-';
 
 const parseArgs = (argv) => {
-  const args = { base: '' };
+  const args = { base: '', full: false };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--base') args.base = argv[index + 1] ?? '';
+    if (argv[index] === '--full') args.full = true;
   }
   return args;
 };
 
 const main = () => {
-  const { base: rawBase } = parseArgs(process.argv.slice(2));
+  const { base: rawBase, full } = parseArgs(process.argv.slice(2));
   const head = 'HEAD';
   // PR 的 base.sha 是基线分支 tip；push 的 before 是上一次提交；手动触发退回 HEAD^。
   let base = 'HEAD^';
@@ -342,10 +369,12 @@ const main = () => {
   }
 
   let files = [];
-  try {
-    files = git(['diff', '--name-only', '--no-renames', base, head]).split('\n').filter(Boolean);
-  } catch {
-    // 基线不可用（例如浅克隆）时保持空列表，交给 classifyFiles 按全量处理。
+  if (!full) {
+    try {
+      files = git(['diff', '--name-only', '--no-renames', base, head]).split('\n').filter(Boolean);
+    } catch {
+      // 基线不可用（例如浅克隆）时保持空列表，交给 classifyFiles 按全量处理。
+    }
   }
 
   const result = classifyFiles(files);

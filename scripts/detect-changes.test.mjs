@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   classifyFiles,
@@ -207,6 +208,38 @@ describe('CI 变更分类', () => {
     expect(result.fullLessons).toBe(true);
     expect(result.deps).toBe(true);
     expect(result.deployable).toBe(true);
+  });
+
+  it('未知构建脚本 fails closed，LSP 补丁脚本触发全量运行时与部署', () => {
+    for (const file of [
+      'scripts/patch-lsp.mjs',
+      'scripts/generate-lsp-patch.mjs',
+      'scripts/new-build-hook.mjs',
+    ]) {
+      const result = flags([file]);
+      expect(result.runtime, file).toBe(true);
+      expect(result.build, file).toBe(true);
+      expect(result.smoke, file).toBe(true);
+      expect(result.fullLessons, file).toBe(true);
+      expect(result.deployable, file).toBe(true);
+    }
+  });
+
+  it('package.json 构建与补丁链路引用的所有脚本必须触发 build 且被视为可部署影响范围', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    const referenced = new Set();
+    for (const key of ['predev', 'prebuild', 'build', 'build:web', 'build:sw', 'patch:lsp']) {
+      const cmd = String(pkg.scripts?.[key] ?? '');
+      for (const match of cmd.matchAll(/\bscripts\/[A-Za-z0-9_.-]+\.mjs\b/g)) {
+        referenced.add(match[0]);
+      }
+    }
+    expect(referenced.size).toBeGreaterThan(0);
+    for (const file of referenced) {
+      const result = flags([file]);
+      expect(result.build, file).toBe(true);
+      expect(result.deployable, file).toBe(true);
+    }
   });
 });
 

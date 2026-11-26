@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import manifest from '../config/lean4-runtime.json';
+import { WASM_LEAN4_PROFILE } from '../node_modules/@wasm-idle/lsp/dist/bundledLean4Runtime.js';
 import assetsSource from '../node_modules/@wasm-idle/lsp/dist/lean4/assets.js?raw';
 import bundledRuntimeSource from '../node_modules/@wasm-idle/lsp/dist/bundledLean4Runtime.js?raw';
 import runtimeWorkerSource from '../node_modules/@wasm-idle/lsp/dist/lean4/runtime-worker.js?raw';
 import typesSource from '../node_modules/@wasm-idle/lsp/dist/types.d.ts?raw';
 import workerSource from '../node_modules/@wasm-idle/lsp/dist/lean4/worker.js?raw';
+import runnerWorkerSource from '../scripts/assets/runner-worker.js?raw';
 
 /**
  * 这些补丁由 pnpm-workspace.yaml 的 patchedDependencies 在安装时应用（patches/ 目录）。
@@ -65,5 +68,47 @@ describe('@wasm-idle/lsp 补丁', () => {
     expect(workerSource).toContain('processWasmMemory = undefined;');
     expect(workerSource).toContain("data?.type === 'pollMemory'");
     expect(workerSource).toContain("type: 'memorySample'");
+  });
+
+  it('已安装的 WASM_LEAN4_PROFILE 与 config/lean4-runtime.json 及 runner-worker.js 完全对齐', async () => {
+    const expectedVersion = /(\d+\.\d+\.\d+)/.exec(manifest.runtime)?.[1];
+    expect(WASM_LEAN4_PROFILE.version).toBe(expectedVersion);
+    expect(WASM_LEAN4_PROFILE.profileId).toContain(expectedVersion!);
+    const profileAssets = WASM_LEAN4_PROFILE.assets as Record<
+      string,
+      | {
+          bytes: number;
+          sha256: string;
+          encoding?: string;
+          uncompressed?: { bytes: number; sha256: string };
+        }
+      | undefined
+    >;
+    expect(profileAssets['runner-worker.js']).toBeUndefined();
+
+    const expectedNames = manifest.assets
+      .filter((asset) => asset.name !== 'runner-worker.js')
+      .map((asset) => asset.name)
+      .sort();
+    expect(Object.keys(profileAssets).sort()).toEqual(expectedNames);
+
+    for (const asset of manifest.assets) {
+      if (asset.name === 'runner-worker.js') continue;
+      const entry = profileAssets[asset.name]!;
+      expect(entry.bytes, asset.name).toBe(asset.bytes);
+      expect(entry.sha256, asset.name).toBe(asset.sha256);
+      if ('encoding' in asset && asset.encoding === 'zstd') {
+        expect(entry.encoding, asset.name).toBe('zstd');
+        expect(entry.uncompressed?.bytes, asset.name).toBe(asset.uncompressedBytes);
+        expect(entry.uncompressed?.sha256, asset.name).toBe(asset.uncompressedSha256);
+      }
+    }
+
+    const workerAsset = manifest.assets.find((asset) => asset.name === 'runner-worker.js')!;
+    expect(new TextEncoder().encode(runnerWorkerSource).byteLength).toBe(workerAsset.bytes);
+    expect(WASM_LEAN4_PROFILE.workerReceipt).toEqual({
+      bytes: workerAsset.bytes,
+      sha256: workerAsset.sha256,
+    });
   });
 });

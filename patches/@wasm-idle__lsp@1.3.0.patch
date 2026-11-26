@@ -1,5 +1,5 @@
 diff --git a/dist/bundledLean4Runtime.js b/dist/bundledLean4Runtime.js
-index fc49ac8..1f49ce0 100644
+index fc49ac8..0a6ed8c 100644
 --- a/dist/bundledLean4Runtime.js
 +++ b/dist/bundledLean4Runtime.js
 @@ -1,112 +1,111 @@
@@ -15,9 +15,9 @@ index fc49ac8..1f49ce0 100644
 -        revision: '14ea5ecbc514b0c87338aebf8f2b567020be5750',
 -        path: 'artifacts/lean-browser'
 +    "schemaVersion": 1,
-+    "profileId": "lean4-4.35.0-wasm32-emscripten-v1",
++    "profileId": "lean4-4.36.0-wasm32-emscripten-v1",
 +    "source": "5045d0056413266e57c625dcd7c365b10e377c52",
-+    "version": "4.35.0",
++    "version": "4.36.0",
 +    "license": "Apache-2.0 AND MIT",
 +    "producer": {
 +        "repository": "https://github.com/seo-rii/wasm-llvm",
@@ -33,7 +33,7 @@ index fc49ac8..1f49ce0 100644
 +        "producer-receipt.json": {
 +            "upstream": "producer-receipt.json",
 +            "bytes": 4700,
-+            "sha256": "207e2193b727bda76f925aaaa9c3da610dfaf27dea1fac93e39ec90f190ebff3"
++            "sha256": "7ea5a87a2340cbe30bb3d6e6fc3e7d5f7f5cc3e4899b0edb267f5f546bc3f9bd"
          },
 -        'lean.mjs': {
 -            upstream: 'lean.mjs',
@@ -42,7 +42,7 @@ index fc49ac8..1f49ce0 100644
 +        "lean.mjs": {
 +            "upstream": "lean.mjs",
 +            "bytes": 106811,
-+            "sha256": "c564d204e5e328dd440630c13c5f2f197c426a1a8aa0de542e8f63a1d43ef97d"
++            "sha256": "7785defcccb210663e1ccb49da901524524349ae2b43120675291b82172790f1"
          },
 -        'lean.wasm.gz.bin': {
 -            upstream: 'lean.wasm.gz',
@@ -57,11 +57,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean.wasm.gz",
 +            "logicalName": "lean.wasm",
 +            "encoding": "zstd",
-+            "bytes": 10514726,
-+            "sha256": "a8d1c927dd7ae390866f19d19d059d1edc37a164309af4e601a5682e9fcde22f",
++            "bytes": 10849456,
++            "sha256": "32fc4314598c397d34a5e1b96e75e2ffa60ef7f13fae0ad5f6b6066225657ace",
 +            "uncompressed": {
-+                "bytes": 110440906,
-+                "sha256": "27f0366f874e1abcc241d65caf675cb5a21ceddb2566aa52cd9166e1ced6818e"
++                "bytes": 114541789,
++                "sha256": "b41fa87d1bd3e57db012f7d528e136354e5ea581dc84cd92db5501ec1fed2f4f"
              }
          },
 -        'lean-init.index.json': {
@@ -70,8 +70,8 @@ index fc49ac8..1f49ce0 100644
 -            sha256: '030b375cee435f12f7163c58c16d128340f9e20fa27a77ab646198be61906555'
 +        "lean-init.index.json": {
 +            "upstream": "lean-init.index.json",
-+            "bytes": 323793,
-+            "sha256": "1d34b2c73cf9a57955d7b8a54f60306401f88e8e470196d69de9fde2b4f08547"
++            "bytes": 331244,
++            "sha256": "94302f41317f9b808231e7362444c72b39207964dc36edf7ea9ebc0a9a86c516"
          },
 -        'lean-init-00.pack.gz.bin': {
 -            upstream: 'lean-init-00.pack.gz',
@@ -86,11 +86,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean-init-00.pack.gz",
 +            "logicalName": "lean-init-00.pack",
 +            "encoding": "zstd",
-+            "bytes": 18279146,
-+            "sha256": "670383cfd44e4bdd70ab85c69ff0a83acd7197a8393405d0b54e8cb8842bfbaa",
++            "bytes": 18378509,
++            "sha256": "984dc0ae8e9e9c57376ee1ec403d5beb5de45938aa89caaf915827762b96dfbf",
 +            "uncompressed": {
 +                "bytes": 50331648,
-+                "sha256": "573ca1797bfb130b0ad56b17e6297e12cd54259ceacb4c2adff98a38f8205426"
++                "sha256": "917e92951e827ef2ebc60ed53404eb8eda87dec81a4278b261dae041d5f8571a"
              }
          },
 -        'lean-init-01.pack.gz.bin': {
@@ -106,11 +106,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean-init-01.pack.gz",
 +            "logicalName": "lean-init-01.pack",
 +            "encoding": "zstd",
-+            "bytes": 17968875,
-+            "sha256": "f7d5c0b682b2c7b4a547c1a02bf22f0977ef8232e68ddf926ee1448eb6f798b2",
++            "bytes": 17966358,
++            "sha256": "09d4dba267b2da2dc20e38c94603d66fa331b23c001e5109655a4b0a176e3312",
 +            "uncompressed": {
 +                "bytes": 50331648,
-+                "sha256": "a45cb77ff52c851539c29e5f4ba37969327408b4dead1cb7789e51611b958146"
++                "sha256": "1a8d2aa946ae1bbd95b478c8ff35972def6722973381db51940a73f0a42fe669"
              }
          },
 -        'lean-init-02.pack.gz.bin': {
@@ -126,11 +126,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean-init-02.pack.gz",
 +            "logicalName": "lean-init-02.pack",
 +            "encoding": "zstd",
-+            "bytes": 18339269,
-+            "sha256": "d60b8ac410db29712fa0bf2edc2174234f2d40501f9112a7bc0dcfe0e154dda0",
++            "bytes": 18350244,
++            "sha256": "366da1d323d54431e4922bc422f39d374165e5c98f214ed7272063b371227ff7",
 +            "uncompressed": {
 +                "bytes": 50331648,
-+                "sha256": "b88966f349ebe76df41b5bd2b4484f654bea79e95db29626e03fc0e726ef3339"
++                "sha256": "13a9a1a9fe4889c8c86465a42c745c8a4ec69840b77944cb97b8556c066907b1"
              }
          },
 -        'lean-init-03.pack.gz.bin': {
@@ -146,11 +146,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean-init-03.pack.gz",
 +            "logicalName": "lean-init-03.pack",
 +            "encoding": "zstd",
-+            "bytes": 17545240,
-+            "sha256": "20fa26d87b37df5fcfcf29e8db7f0ca40e0fa09d90e48872f4ec7c990c5ee55c",
++            "bytes": 17580361,
++            "sha256": "605b28f7dd309e10eaaadb6c6fe27912d6d9c3429c0789de3f36224055c75d85",
 +            "uncompressed": {
 +                "bytes": 50331648,
-+                "sha256": "be1402783966d0f0cb3d37d9d9ee06cc29f4ed3bad209a69ff7ea5b4f3f5f027"
++                "sha256": "5185e641833b10854822960b0331010664efb75f21072dbf13ac84f5c0d221b8"
              }
          },
 -        'lean-init-04.pack.gz.bin': {
@@ -166,11 +166,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean-init-04.pack.gz",
 +            "logicalName": "lean-init-04.pack",
 +            "encoding": "zstd",
-+            "bytes": 17107939,
-+            "sha256": "78bc27f0321094d1ea25fc7728ddc736a764c50705375ff315c99d4253c0707a",
++            "bytes": 17137579,
++            "sha256": "30c4c852c06049139c4273a5b548221158e50986223487ddcd799db3cecf0d45",
 +            "uncompressed": {
 +                "bytes": 50331648,
-+                "sha256": "4a31c510a1106824a09d049529ae436f295a08c42021110daca3553852b22311"
++                "sha256": "68423b0a9bb6ec6908f69fe2973a1d376c3814a2f8a77fe62102d6360e28531e"
              }
          },
 -        'lean-init-05.pack.gz.bin': {
@@ -186,11 +186,11 @@ index fc49ac8..1f49ce0 100644
 +            "upstream": "lean-init-05.pack.gz",
 +            "logicalName": "lean-init-05.pack",
 +            "encoding": "zstd",
-+            "bytes": 6398473,
-+            "sha256": "ebe6d424d21b9286066449d25dc118b359a5634ae73b159eadfb6b59bdf058fe",
++            "bytes": 6275913,
++            "sha256": "8b90c70f931c1e001660be5eb04b6ff7cb4ff9f8980297461f4f96c0431d6592",
 +            "uncompressed": {
-+                "bytes": 21585632,
-+                "sha256": "3338bec4e5b4dac95c565173910b7a02bfcebb5fe49ba7a9a55037a0bf512175"
++                "bytes": 21112180,
++                "sha256": "7285a20b930349dc5cb91bf9a341fa645f5d6942def77ace0606a206dd804946"
              }
          }
      },

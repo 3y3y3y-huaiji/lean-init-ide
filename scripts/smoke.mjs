@@ -288,6 +288,48 @@ await check('worker 资产与清单一致', async () => {
   return `200，${response.body.length} B，sha256 一致`;
 });
 
+const checkExtensions = async (archLabel, targetManifest) => {
+  for (const ext of targetManifest.extensions ?? []) {
+    const idxAsset = ext.assets.find((asset) => asset.name.endsWith('.index.json'));
+    const packAsset = ext.assets.find((asset) => /\.pack\.(?:gz|zst)\.bin$/.test(asset.name));
+    await check(`${archLabel} 扩展 ${ext.id} 索引与分片`, async () => {
+      assert(idxAsset, `${ext.id} 清单缺少 .index.json`);
+      const idxResp = await request(`${origin}/cdn/${idxAsset.key}?r=${targetManifest.cacheKey}`);
+      assert(idxResp.status === 200, `索引期望 200，实际 ${idxResp.status}`);
+      assert(
+        idxResp.body.length === idxAsset.bytes,
+        `索引字节数 ${idxResp.body.length}，期望 ${idxAsset.bytes}`,
+      );
+      const idxSha = createHash('sha256').update(idxResp.body).digest('hex');
+      assert(idxSha === idxAsset.sha256, `索引 sha256=${idxSha}，期望 ${idxAsset.sha256}`);
+
+      if (packAsset) {
+        const packResp = await request(
+          `${origin}/cdn/${packAsset.key}?r=${targetManifest.cacheKey}`,
+          {
+            headers: { Range: 'bytes=0-15' },
+          },
+        );
+        assert(packResp.status === 206, `${packAsset.name} 期望 206，实际 ${packResp.status}`);
+        const expectedRange = `bytes 0-15/${packAsset.bytes}`;
+        const actualRange = packResp.headers.get('content-range');
+        assert(
+          actualRange === expectedRange,
+          `${packAsset.name} Content-Range=${actualRange ?? '(缺失)'}，期望 ${expectedRange}`,
+        );
+        assert(
+          packResp.body.length === 16,
+          `${packAsset.name} 实际收到 ${packResp.body.length} 字节`,
+        );
+      }
+      return `索引 ${idxAsset.bytes} B + 分片 206 一致`;
+    });
+  }
+};
+
+await checkExtensions('wasm32', manifest);
+await checkExtensions('wasm64', wasm64Manifest);
+
 await check('/api/telemetry 路由已接管', async () => {
   const getResp = await request(`${origin}/api/telemetry`);
   assert(getResp.status === 405, `GET 期望 405，实际 ${getResp.status}（疑似回落到 SPA）`);

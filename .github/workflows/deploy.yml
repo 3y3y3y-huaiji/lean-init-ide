@@ -35,8 +35,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "direct=false" >> "$GITHUB_OUTPUT"
-            echo "workflow_dispatch: deploy current main directly"
+            echo "direct=true" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch: force full CI before deploy"
             exit 0
           fi
           merged=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.merged_at != null)] | length')
@@ -67,6 +67,8 @@ jobs:
       needs.gate.outputs.direct == 'true' &&
       needs.gate.outputs.deployable == 'true'
     uses: ./.github/workflows/ci.yml
+    with:
+      full: ${{ github.event_name == 'workflow_dispatch' }}
 
   deploy:
     name: 部署
